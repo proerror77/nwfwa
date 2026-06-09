@@ -1,0 +1,249 @@
+use super::validate_json_artifact_uri;
+use crate::{
+    error::ApiError,
+    routes::{
+        ops_models::{
+            ModelMonitoringReviewTask, SubmitMlopsMonitoringReportRequest,
+            SubmitModelMonitoringReviewTaskReviewRequest,
+        },
+        pii,
+    },
+};
+use axum::http::StatusCode;
+use serde_json::Value;
+
+pub(in crate::routes) fn validate_mlops_monitoring_report_request(
+    request: &SubmitMlopsMonitoringReportRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_MLOPS_MONITORING_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_MLOPS_MONITORING_NOTES",
+            "MLOps monitoring notes are required",
+        ),
+        (
+            request.report_uri.as_str(),
+            "INVALID_MLOPS_MONITORING_REPORT_URI",
+            "report_uri is required",
+        ),
+        (
+            request.model_version.as_str(),
+            "INVALID_MLOPS_MONITORING_MODEL_VERSION",
+            "model_version is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "mlops_monitoring_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REPORT_KIND",
+            "report_kind must be mlops_monitoring_report",
+        ));
+    }
+    if !matches!(
+        request.overall_status.as_str(),
+        "passed" | "watch" | "blocked"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_STATUS",
+            "overall_status must be passed, watch, or blocked",
+        ));
+    }
+    if !matches!(
+        request.retraining_recommendation.as_str(),
+        "monitor" | "prepare_retraining" | "blocked"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_RETRAINING_RECOMMENDATION",
+            "retraining_recommendation must be monitor, prepare_retraining, or blocked",
+        ));
+    }
+    validate_json_artifact_uri(
+        &request.report_uri,
+        "INVALID_MLOPS_MONITORING_REPORT_URI",
+        "MLOps monitoring report_uri must point to a JSON report",
+    )?;
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_EVIDENCE",
+            "MLOps monitoring evidence_refs are required",
+        ));
+    }
+    if request
+        .triggers
+        .iter()
+        .any(|trigger| trigger.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_TRIGGER",
+            "MLOps monitoring triggers must not be blank",
+        ));
+    }
+    if request
+        .review_tasks
+        .iter()
+        .any(|task| match task.as_object() {
+            Some(object) => object.is_empty(),
+            None => true,
+        })
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK",
+            "MLOps monitoring review_tasks must be non-empty objects",
+        ));
+    }
+    if request.overall_status != "passed" && request.review_tasks.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK",
+            "watch or blocked monitoring reports require review_tasks",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.actor.as_str())
+            .chain(std::iter::once(request.notes.as_str()))
+            .chain(std::iter::once(request.report_uri.as_str()))
+            .chain(request.triggers.iter().map(String::as_str))
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REPORT",
+            "MLOps monitoring actor, notes, report_uri, triggers, and evidence_refs must not contain PII",
+        ));
+    }
+    let review_task_text = request
+        .review_tasks
+        .iter()
+        .map(Value::to_string)
+        .collect::<Vec<_>>();
+    if pii::contains_pii(review_task_text.iter().map(String::as_str)) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REVIEW_TASK",
+            "MLOps monitoring review_tasks must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
+pub(in crate::routes) fn validate_monitoring_report_evidence(
+    request: &SubmitMlopsMonitoringReportRequest,
+) -> Result<(), ApiError> {
+    let expected_ref = format!("model_monitoring_reports:{}", request.report_uri);
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_EVIDENCE",
+            format!("MLOps monitoring evidence_refs must include {expected_ref}"),
+        ))
+    }
+}
+
+pub(in crate::routes) fn validate_monitoring_review_task_review_request(
+    request: &SubmitModelMonitoringReviewTaskReviewRequest,
+) -> Result<(), ApiError> {
+    if !matches!(
+        request.decision.as_str(),
+        "acknowledged"
+            | "rejected"
+            | "prepare_retraining"
+            | "open_shadow_review"
+            | "open_rollback_review"
+            | "closed"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK_DECISION",
+            "decision must be acknowledged, rejected, prepare_retraining, open_shadow_review, open_rollback_review, or closed",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK_NOTES",
+            "review notes are required",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE",
+            "monitoring review task evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.reviewer.as_str())
+            .chain(std::iter::once(request.notes.as_str()))
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REVIEW_TASK_REVIEW",
+            "monitoring review task reviewer, notes, and evidence_refs must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
+pub(in crate::routes) fn validate_monitoring_review_task_evidence(
+    evidence_refs: &[String],
+    task: &ModelMonitoringReviewTask,
+) -> Result<(), ApiError> {
+    let task_ref = format!("model_monitoring_review_tasks:{}", task.task_id);
+    if !evidence_refs.iter().any(|reference| reference == &task_ref) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE",
+            format!("monitoring review task evidence_refs must include {task_ref}"),
+        ));
+    }
+    let report_ref = format!("model_monitoring_reports:{}", task.report_uri);
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference == &report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE",
+            format!("monitoring review task evidence_refs must include {report_ref}"),
+        ));
+    }
+    Ok(())
+}
