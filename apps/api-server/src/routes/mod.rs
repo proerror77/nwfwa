@@ -42,4 +42,5 @@ pub mod ops_schemes;
 pub mod pii;
 pub mod pilot_loop;
 mod pilot_loop_alerts;
+mod pilot_loop_qa_queue;
 mod pilot_loop_types;
