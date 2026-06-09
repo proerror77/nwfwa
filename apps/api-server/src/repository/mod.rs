@@ -32,6 +32,7 @@ mod postgres_evidence;
 mod postgres_inbox;
 mod postgres_knowledge;
 mod postgres_routing_policies;
+mod postgres_webhooks;
 mod provider_helpers;
 mod row_types;
 mod rule_helpers;
