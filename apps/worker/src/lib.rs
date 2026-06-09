@@ -86,8 +86,11 @@ pub use rule_candidates::{mine_rule_candidates, run_rule_candidate_backtest};
 
 mod clustering;
 mod clustering_data;
+mod clustering_types;
 pub use clustering::{
     cluster_claim_entities, cluster_provider_graph_communities, cluster_provider_peers,
+};
+pub use clustering_types::{
     ClaimEntityAnomalyCandidate, ClaimEntityClusterAssignment, ClaimEntityClusterSummary,
     ClaimEntityClusteringReport, ClaimEntityReviewTask, ProviderGraphAnomalyCandidate,
     ProviderGraphCommunityAssignment, ProviderGraphCommunityReport, ProviderGraphCommunitySummary,
