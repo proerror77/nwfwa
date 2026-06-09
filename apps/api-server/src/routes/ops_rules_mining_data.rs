@@ -1,4 +1,4 @@
-use super::ops_rules_mining::MiningSample;
+use super::ops_rules_mining_samples::MiningSample;
 use anyhow::{bail, Context};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use rust_decimal::prelude::FromPrimitive;
