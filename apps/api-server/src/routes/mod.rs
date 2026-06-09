@@ -21,6 +21,7 @@ pub mod ops_medical;
 pub mod ops_models;
 mod ops_models_audit;
 mod ops_models_gates;
+mod ops_models_mlops;
 mod ops_models_types;
 mod ops_models_validation;
 pub mod ops_providers;
