@@ -1,28 +1,16 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::app::build_app;
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
 use tower::ServiceExt;
 
-fn test_config() -> AppConfig {
-    AppConfig {
-        api_key: "dev-secret".into(),
-        source_system: "tpa-demo".into(),
-        database_url: "postgres://unused".into(),
-        model_service_url: "heuristic://local".into(),
-        object_storage_uri: "local://demo-artifacts".into(),
-        customer_scope_id: "demo-customer".into(),
-        retention_policy_id: "demo-retention-policy".into(),
-        backup_restore_plan_id: "demo-backup-restore-plan".into(),
-        pii_masking_policy_id: "demo-pii-masking-policy".into(),
-        key_rotation_policy_id: "demo-key-rotation-policy".into(),
-        network_allowlist_id: "demo-network-allowlist".into(),
-        alert_routing_policy_id: "demo-alert-routing-policy".into(),
-        observability_exporter_endpoint: "local://demo-observability".into(),
-        agent_policy_id: "demo-agent-policy".into(),
-    }
-}
+#[path = "ops_openapi/core_tpa_contract.rs"]
+mod core_tpa_contract;
+#[path = "ops_openapi/support.rs"]
+mod support;
+
+use support::{assert_writeback_pii_contract, test_config};
 
 #[tokio::test]
 async fn openapi_includes_operations_paths() {
@@ -3143,168 +3131,5 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["MemberProfileSummaryResponse"]["properties"]
             ["evidence_refs"]["items"]["type"],
         "string"
-    );
-}
-
-#[tokio::test]
-async fn openapi_defines_core_tpa_integration_contract() {
-    let app = build_app(test_config());
-
-    let request = Request::builder()
-        .method("GET")
-        .uri("/api/openapi.json")
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(request).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let schema: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
-    assert_eq!(
-        schema["components"]["securitySchemes"]["ApiKeyAuth"],
-        serde_json::json!({
-            "type": "apiKey",
-            "in": "header",
-            "name": "x-api-key"
-        })
-    );
-
-    for (path, method, request_ref, response_ref, path_param, error_statuses) in [
-        (
-            "/api/v1/claims/score",
-            "post",
-            Some("#/components/schemas/ScoreClaimRequest"),
-            "#/components/schemas/ScoreClaimResponse",
-            None,
-            &["400", "401", "404", "502"][..],
-        ),
-        (
-            "/api/v1/members/{member_id}/profile-summary",
-            "get",
-            None,
-            "#/components/schemas/MemberProfileSummaryResponse",
-            Some("member_id"),
-            &["401", "404"][..],
-        ),
-        (
-            "/api/v1/knowledge/search-similar",
-            "post",
-            Some("#/components/schemas/SimilarCaseSearchRequest"),
-            "#/components/schemas/SimilarCaseSearchResponse",
-            None,
-            &["400", "401", "403"][..],
-        ),
-        (
-            "/api/v1/investigations/results",
-            "post",
-            Some("#/components/schemas/InvestigationResultRequest"),
-            "#/components/schemas/PilotWritebackResponse",
-            None,
-            &["400", "401", "404"][..],
-        ),
-        (
-            "/api/v1/qa/results",
-            "post",
-            Some("#/components/schemas/QaResultRequest"),
-            "#/components/schemas/PilotWritebackResponse",
-            None,
-            &["400", "401"][..],
-        ),
-        (
-            "/api/v1/audit/claims/{claim_id}",
-            "get",
-            None,
-            "#/components/schemas/ClaimAuditHistoryResponse",
-            Some("claim_id"),
-            &["401"][..],
-        ),
-    ] {
-        let operation = &schema["paths"][path][method];
-        assert!(operation.is_object(), "missing {method} {path}");
-        assert_eq!(
-            operation["security"],
-            serde_json::json!([{ "ApiKeyAuth": [] }]),
-            "missing API key security for {method} {path}"
-        );
-        assert_eq!(
-            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
-            response_ref,
-            "wrong 200 response schema for {method} {path}"
-        );
-
-        if let Some(request_ref) = request_ref {
-            assert_eq!(
-                operation["requestBody"]["required"], true,
-                "missing required request body for {method} {path}"
-            );
-            assert_eq!(
-                operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
-                request_ref,
-                "wrong request schema for {method} {path}"
-            );
-        } else {
-            assert!(
-                operation["requestBody"].is_null(),
-                "unexpected request body for {method} {path}"
-            );
-        }
-
-        if let Some(path_param) = path_param {
-            let params = operation["parameters"]
-                .as_array()
-                .unwrap_or_else(|| panic!("missing path parameters for {method} {path}"));
-            assert!(
-                params.iter().any(|param| {
-                    param["name"] == path_param
-                        && param["in"] == "path"
-                        && param["required"] == true
-                        && param["schema"]["type"] == "string"
-                }),
-                "missing {path_param} path parameter for {method} {path}"
-            );
-        }
-
-        for status in error_statuses {
-            assert_eq!(
-                operation["responses"][*status]["content"]["application/json"]["schema"]["$ref"],
-                "#/components/schemas/ErrorResponse",
-                "missing standard ErrorResponse for {method} {path} status {status}"
-            );
-        }
-    }
-
-    for field in ["code", "message"] {
-        assert!(
-            schema["components"]["schemas"]["ErrorResponse"]["required"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|required| required == field),
-            "missing ErrorResponse field {field}"
-        );
-        assert_eq!(
-            schema["components"]["schemas"]["ErrorResponse"]["properties"][field]["type"],
-            "string"
-        );
-    }
-}
-
-fn assert_writeback_pii_contract(schema: &serde_json::Value, schema_name: &str) {
-    let notes_description = schema["components"]["schemas"][schema_name]["properties"]["notes"]
-        ["description"]
-        .as_str()
-        .unwrap_or_default();
-    assert!(
-        notes_description.contains("must not contain PII"),
-        "missing {schema_name}.notes PII contract"
-    );
-    let evidence_description = schema["components"]["schemas"][schema_name]["properties"]
-        ["evidence_refs"]["description"]
-        .as_str()
-        .unwrap_or_default();
-    assert!(
-        evidence_description.contains("must not contain PII"),
-        "missing {schema_name}.evidence_refs PII contract"
     );
 }
