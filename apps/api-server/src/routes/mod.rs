@@ -13,6 +13,7 @@ pub mod ops_audit;
 pub mod ops_bootstrap;
 pub mod ops_cases;
 pub mod ops_datasets;
+mod ops_datasets_readiness;
 mod ops_datasets_types;
 pub mod ops_evidence;
 pub mod ops_medical;
