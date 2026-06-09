@@ -5,7 +5,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-pub(super) fn test_config() -> AppConfig {
+pub(crate) fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
         source_system: "tpa-demo".into(),
@@ -24,7 +24,7 @@ pub(super) fn test_config() -> AppConfig {
     }
 }
 
-pub(super) async fn get_json(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Value) {
+pub(crate) async fn get_json(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method("GET")
         .uri(uri)
@@ -38,7 +38,7 @@ pub(super) async fn get_json(app: axum::Router, uri: &str) -> (StatusCode, serde
     (status, body)
 }
 
-pub(super) async fn json_request(
+pub(crate) async fn json_request(
     app: axum::Router,
     method: &str,
     uri: &str,
@@ -58,11 +58,11 @@ pub(super) async fn json_request(
     (status, body)
 }
 
-pub(super) fn model_lifecycle_payload(model_key: &str, version: &str) -> String {
+pub(crate) fn model_lifecycle_payload(model_key: &str, version: &str) -> String {
     format!(r#"{{"evidence_refs":["model_versions:{model_key}:{version}"]}}"#)
 }
 
-pub(super) async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
+pub(crate) async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
@@ -73,7 +73,7 @@ pub(super) async fn register_model_dataset_for_test(app: axum::Router, suffix: &
     .await
 }
 
-pub(super) async fn register_unhealthy_model_dataset_for_test(
+pub(crate) async fn register_unhealthy_model_dataset_for_test(
     app: axum::Router,
     suffix: &str,
 ) -> String {
@@ -206,7 +206,7 @@ async fn register_model_dataset_for_test_with_profiles(
         .to_string()
 }
 
-pub(super) async fn register_activation_candidate(app: axum::Router) -> String {
+pub(crate) async fn register_activation_candidate(app: axum::Router) -> String {
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "activation").await;
 
     let (status, body) = json_request(
@@ -382,7 +382,7 @@ pub(super) async fn register_activation_candidate(app: axum::Router) -> String {
     candidate_version.to_string()
 }
 
-pub(super) async fn approve_activation_candidate(app: axum::Router, candidate_version: &str) {
+pub(crate) async fn approve_activation_candidate(app: axum::Router, candidate_version: &str) {
     let (status, review) = json_request(
         app,
         "POST",
@@ -401,7 +401,7 @@ pub(super) async fn approve_activation_candidate(app: axum::Router, candidate_ve
     assert_eq!(review["model_version"], candidate_version);
 }
 
-pub(super) async fn activate_candidate_for_test(app: axum::Router, candidate_version: &str) {
+pub(crate) async fn activate_candidate_for_test(app: axum::Router, candidate_version: &str) {
     approve_activation_candidate(app.clone(), candidate_version).await;
     let (status, activated) = json_request(
         app,
