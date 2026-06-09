@@ -12,6 +12,7 @@ pub mod openapi;
 pub mod ops_agents;
 pub mod ops_audit;
 pub mod ops_bootstrap;
+mod ops_bootstrap_types;
 pub mod ops_cases;
 pub mod ops_datasets;
 mod ops_datasets_readiness;
