@@ -49,6 +49,7 @@ mod saving_helpers;
 mod r#trait;
 mod triage_helpers;
 mod types;
+mod types_agents;
 mod types_cases;
 mod types_core;
 mod types_dashboard;
