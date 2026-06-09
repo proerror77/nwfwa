@@ -170,3 +170,25 @@ impl ModelScorer for HighRiskScorer {
         })
     }
 }
+
+#[derive(Debug)]
+pub(crate) struct RequestEchoScorer;
+
+#[async_trait]
+impl ModelScorer for RequestEchoScorer {
+    async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
+        Ok(ModelScore {
+            model_key: request.model_key,
+            model_version: request.model_version,
+            runtime_kind: "test_echo".into(),
+            execution_provider: "cpu".into(),
+            score: 72,
+            label: "ACTIVE_MODEL_USED".into(),
+            explanations: vec![],
+            metadata: serde_json::json!({
+                "endpoint_url": request.endpoint_url,
+            }),
+            latency_ms: 0,
+        })
+    }
+}
