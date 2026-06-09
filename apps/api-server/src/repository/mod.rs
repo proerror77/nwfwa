@@ -28,6 +28,7 @@ mod postgres_agents;
 mod postgres_audit;
 mod postgres_audit_samples;
 mod postgres_cases;
+mod postgres_claims;
 mod postgres_dashboard;
 mod postgres_datasets;
 mod postgres_evidence;
