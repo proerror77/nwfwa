@@ -200,6 +200,8 @@ async fn returns_invalid_model_response_code() {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
     assert!(body.contains("MODEL_RESPONSE_INVALID"));
+    assert!(body.contains("model response invalid"));
+    assert!(!body.contains("missing score"));
 
     let audit_request = Request::builder()
         .method("GET")

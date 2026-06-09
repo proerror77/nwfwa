@@ -1131,11 +1131,14 @@ fn model_runtime_error(error: ModelRuntimeError) -> ApiError {
             "MODEL_SERVICE_UNAVAILABLE",
             "model service unavailable",
         ),
-        ModelRuntimeError::InvalidResponse(message) => ApiError::new(
-            axum::http::StatusCode::BAD_GATEWAY,
-            "MODEL_RESPONSE_INVALID",
-            message,
-        ),
+        ModelRuntimeError::InvalidResponse(message) => {
+            tracing::error!(error = %message, "model response invalid");
+            ApiError::new(
+                axum::http::StatusCode::BAD_GATEWAY,
+                "MODEL_RESPONSE_INVALID",
+                "model response invalid",
+            )
+        }
     }
 }
 
