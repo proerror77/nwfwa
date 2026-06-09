@@ -28,6 +28,7 @@ pub mod ops_rules;
 mod ops_rules_audit;
 mod ops_rules_gates;
 mod ops_rules_mining;
+mod ops_rules_mining_data;
 mod ops_rules_types;
 mod ops_rules_validation;
 pub mod ops_sampling;
