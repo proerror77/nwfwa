@@ -1,3 +1,4 @@
+use super::claims_agent::{build_agent_investigation_prefill, build_agent_prefill_evidence_refs};
 use super::claims_canonical::{canonical_score_input, demo_context, duplicate_payload_fields};
 use super::claims_evidence::{
     apply_clinical_evidence_features, apply_provider_profile_features,
@@ -22,7 +23,7 @@ use fwa_audit::ActorContext;
 use fwa_clinical::{assess_clinical_evidence, ClinicalDocumentEvidence};
 use fwa_core::*;
 use fwa_features::{calculate_features, FeatureMap};
-use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest};
+use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
 use fwa_provider::{
     assess_provider_profile, assess_provider_relationship_graph, ProviderProfileInput,
     ProviderRelationshipGraphInput,
@@ -522,85 +523,6 @@ pub async fn score_claim(
         evidence_refs,
         agent_investigation_prefill,
     }))
-}
-
-fn build_agent_investigation_prefill(
-    context: &ClaimContext,
-    decision: &fwa_scoring::ScoringDecision,
-    similar_case_tags: &[String],
-    similar_cases: &[SimilarCaseRecord],
-    evidence_refs: Vec<String>,
-) -> AgentInvestigationPrefill {
-    AgentInvestigationPrefill {
-        claim_id: context.claim.external_claim_id.clone(),
-        risk_score: decision.risk_score.value(),
-        rag: agent_rag_label(decision.rag),
-        scheme_family: similar_cases.first().map(|case| case.scheme_family.clone()),
-        top_reasons: agent_top_reasons(decision),
-        similar_case_query: AgentInvestigationSimilarCaseQuery {
-            claim_id: context.claim.external_claim_id.clone(),
-            diagnosis_code: context.claim.diagnosis_code.clone(),
-            provider_region: context.provider.region.clone(),
-            tags: agent_similar_case_tags(similar_case_tags),
-        },
-        evidence_refs,
-    }
-}
-
-fn build_agent_prefill_evidence_refs(
-    similar_cases: &[SimilarCaseRecord],
-    model_score: &ModelScore,
-    alerts: &[AlertResponse],
-    run_id: &ScoringRunId,
-    audit_id: &AuditEventId,
-) -> Vec<String> {
-    let mut evidence_refs = vec![
-        format!("scoring_runs:{run_id}"),
-        format!("audit_events:{audit_id}"),
-        format!(
-            "model_versions:{}:{}",
-            model_score.model_key, model_score.model_version
-        ),
-    ];
-    evidence_refs.extend(
-        alerts
-            .iter()
-            .map(|alert| format!("rule_runs:{}", alert.alert_code)),
-    );
-    evidence_refs.extend(
-        similar_cases
-            .iter()
-            .flat_map(|case| case.provenance_refs.iter().chain(case.evidence_refs.iter()))
-            .cloned(),
-    );
-    evidence_refs.sort();
-    evidence_refs.dedup();
-    evidence_refs
-}
-
-fn agent_rag_label(rag: RiskLevel) -> String {
-    match rag {
-        RiskLevel::Green => "GREEN",
-        RiskLevel::Amber => "AMBER",
-        RiskLevel::Red => "RED",
-    }
-    .into()
-}
-
-fn agent_top_reasons(decision: &fwa_scoring::ScoringDecision) -> Vec<String> {
-    if decision.top_reasons.is_empty() {
-        vec![decision.routing_reason.clone()]
-    } else {
-        decision.top_reasons.clone()
-    }
-}
-
-fn agent_similar_case_tags(tags: &[String]) -> Vec<String> {
-    if tags.is_empty() {
-        vec!["runtime_scoring".into()]
-    } else {
-        tags.to_vec()
-    }
 }
 
 async fn load_scoring_ready_inbox_run(
