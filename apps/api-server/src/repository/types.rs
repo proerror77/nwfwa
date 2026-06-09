@@ -6,6 +6,7 @@ pub use super::types_cases::*;
 pub use super::types_core::*;
 pub use super::types_dashboard::*;
 pub use super::types_evidence::*;
+pub use super::types_knowledge::*;
 pub use super::types_models::*;
 pub use super::types_rules::*;
 
@@ -35,43 +36,6 @@ pub(super) const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "evidence.embedding_job.registered",
     "evidence.retrieval_audit.recorded",
 ];
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeCaseRecord {
-    pub case_id: String,
-    pub title: String,
-    pub fwa_type: String,
-    pub scheme_family: String,
-    pub diagnosis_code: String,
-    pub provider_region: String,
-    pub provider_type: String,
-    pub summary: String,
-    pub outcome: String,
-    pub tags: Vec<String>,
-    pub evidence_refs: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SimilarCaseQuery {
-    pub claim_id: Option<String>,
-    pub diagnosis_code: String,
-    pub provider_region: String,
-    pub tags: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SimilarCaseRecord {
-    pub case_id: String,
-    pub title: String,
-    pub scheme_family: String,
-    pub similarity_score: f64,
-    pub matched_signals: Vec<String>,
-    pub retrieval_method: String,
-    pub provenance_refs: Vec<String>,
-    pub summary: String,
-    pub outcome: String,
-    pub evidence_refs: Vec<String>,
-}
 
 #[derive(Debug, Clone)]
 pub struct PersistedAgentRun {
