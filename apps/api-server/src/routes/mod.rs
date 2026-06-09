@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod claims;
+mod claims_canonical;
 mod claims_validation;
 pub mod dashboard;
 pub mod health;
