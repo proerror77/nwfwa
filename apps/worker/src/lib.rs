@@ -65,8 +65,6 @@ pub use alertmanager::{
 };
 
 mod mlops_monitoring;
-#[cfg(test)]
-pub(crate) use mlops_monitoring::sha256_prefixed_hex;
 pub use mlops_monitoring::{
     build_mlops_monitoring_plan, build_mlops_monitoring_report,
     build_mlops_scheduler_execution_report, run_mlops_monitoring_plan,
@@ -74,6 +72,9 @@ pub use mlops_monitoring::{
     run_scheduled_mlops_monitoring_with_artifact_base_uri,
     run_scheduled_mlops_monitoring_with_options,
 };
+#[cfg(test)]
+pub(crate) use mlops_monitoring_runtime::sha256_prefixed_hex;
+mod mlops_monitoring_runtime;
 
 mod mlops_cycle;
 pub use mlops_cycle::{build_mlops_monitoring_cycle_evidence, run_mlops_monitoring_cycle};
