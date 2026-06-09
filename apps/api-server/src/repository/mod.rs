@@ -49,6 +49,7 @@ mod saving_helpers;
 mod r#trait;
 mod triage_helpers;
 mod types;
+mod types_core;
 mod webhook_helpers;
 
 use self::agent_helpers::agent_run_log_from_persisted;
