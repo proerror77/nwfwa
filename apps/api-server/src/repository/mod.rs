@@ -57,6 +57,7 @@ mod types_datasets;
 mod types_evidence;
 mod types_knowledge;
 mod types_models;
+mod types_outcomes;
 mod types_rules;
 mod webhook_helpers;
 
