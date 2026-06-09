@@ -43,6 +43,7 @@ mod postgres_scoring;
 mod postgres_webhooks;
 mod provider_helpers;
 mod row_types;
+mod rule_defaults;
 mod rule_helpers;
 mod rule_performance_helpers;
 mod saving_helpers;
@@ -111,10 +112,11 @@ use self::row_types::{
     inbox_claim_run_from_row, AgentApprovalRow, AgentPolicyCheckRow, ClaimContextRow, ClaimItemRow,
     IntoClaimContext,
 };
-pub use self::rule_helpers::default_runtime_rules;
+use self::rule_defaults::default_rule_details;
+pub use self::rule_defaults::default_runtime_rules;
 use self::rule_helpers::{
     apply_rule_backtest_metadata, apply_rule_status, default_routing_policies,
-    default_rule_backtest_summary, default_rule_details, default_rule_false_positive_history,
+    default_rule_backtest_summary, default_rule_false_positive_history,
     ensure_default_rules_seeded, ensure_rule_condition_library_table, latest_rule_backtest_for,
     normalize_review_mode, parse_recommended_action, review_mode_from_dsl,
     routing_policy_from_record, routing_policy_record, routing_policy_record_from_row,
