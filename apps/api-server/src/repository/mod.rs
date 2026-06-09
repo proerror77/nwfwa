@@ -53,6 +53,7 @@ mod types_agents;
 mod types_cases;
 mod types_core;
 mod types_dashboard;
+mod types_datasets;
 mod types_evidence;
 mod types_knowledge;
 mod types_models;
