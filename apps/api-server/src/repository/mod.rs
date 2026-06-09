@@ -34,6 +34,7 @@ mod postgres_evidence;
 mod postgres_inbox;
 mod postgres_knowledge;
 mod postgres_models;
+mod postgres_outcomes;
 mod postgres_providers;
 mod postgres_routing_policies;
 mod postgres_rules;
