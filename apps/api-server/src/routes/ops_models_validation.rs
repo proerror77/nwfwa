@@ -1,10 +1,15 @@
 mod alert_delivery;
+mod lifecycle;
 mod monitoring;
 mod rule_candidates;
 
 pub(super) use self::alert_delivery::{
     validate_alert_delivery_evidence, validate_alert_delivery_task_evidence,
     validate_alert_delivery_task_review_request, validate_mlops_alert_delivery_request,
+};
+pub(super) use self::lifecycle::{
+    validate_model_lifecycle_request, validate_model_promotion_review_request,
+    validate_target_model_version_evidence,
 };
 pub(super) use self::monitoring::{
     validate_mlops_monitoring_report_request, validate_monitoring_report_evidence,
