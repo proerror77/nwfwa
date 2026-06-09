@@ -1,6 +1,8 @@
 use api_server::app::build_app;
 use axum::http::StatusCode;
 
+#[path = "ops_rules/candidate_reviews.rs"]
+mod candidate_reviews;
 #[path = "ops_rules/discovery.rs"]
 mod discovery;
 #[path = "ops_rules/library.rs"]
