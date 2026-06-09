@@ -139,10 +139,8 @@ use self::triage_helpers::{
     triage_status_for_decision,
 };
 pub use self::types::*;
-use self::types::{
-    AuditSampleStrataContext, MemberProfileSummaryInput, QaFeedbackStatusUpdate,
-    SavingAttributionRecord,
-};
+use self::types::{MemberProfileSummaryInput, QaFeedbackStatusUpdate, SavingAttributionRecord};
+use self::types_cases::AuditSampleStrataContext;
 use self::webhook_helpers::{
     apply_webhook_delivery_state, next_webhook_attempt_at, sort_webhook_events,
     webhook_event_from_audit,

@@ -144,3 +144,10 @@ pub struct AuditSampleRecord {
     pub outcome_distribution: Value,
     pub created_at: Option<String>,
 }
+
+#[derive(Debug, Clone)]
+pub(super) struct AuditSampleStrataContext {
+    pub(super) provider_type: String,
+    pub(super) provider_region: String,
+    pub(super) policy_type: String,
+}

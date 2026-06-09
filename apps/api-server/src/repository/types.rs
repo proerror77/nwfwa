@@ -36,10 +36,3 @@ pub(super) const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "evidence.embedding_job.registered",
     "evidence.retrieval_audit.recorded",
 ];
-
-#[derive(Debug, Clone)]
-pub(super) struct AuditSampleStrataContext {
-    pub(super) provider_type: String,
-    pub(super) provider_region: String,
-    pub(super) policy_type: String,
-}
