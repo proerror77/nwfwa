@@ -51,6 +51,7 @@ mod triage_helpers;
 mod types;
 mod types_cases;
 mod types_core;
+mod types_dashboard;
 mod types_evidence;
 mod types_models;
 mod types_rules;
