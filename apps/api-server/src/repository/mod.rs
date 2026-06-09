@@ -39,6 +39,7 @@ mod postgres_outcomes;
 mod postgres_providers;
 mod postgres_routing_policies;
 mod postgres_rules;
+mod postgres_scoring;
 mod postgres_webhooks;
 mod provider_helpers;
 mod row_types;
