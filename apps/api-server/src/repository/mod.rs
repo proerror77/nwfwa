@@ -31,6 +31,7 @@ mod postgres_datasets;
 mod postgres_evidence;
 mod postgres_inbox;
 mod postgres_knowledge;
+mod postgres_providers;
 mod postgres_routing_policies;
 mod postgres_webhooks;
 mod provider_helpers;

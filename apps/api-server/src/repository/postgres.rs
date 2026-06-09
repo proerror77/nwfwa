@@ -1817,17 +1817,7 @@ impl ScoringRepository for PostgresScoringRepository {
     }
 
     async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
-        let rows: Vec<(Value,)> = sqlx::query_as(
-            "SELECT payload
-             FROM audit_events
-             WHERE event_type = 'scoring.completed'
-               AND event_status = 'succeeded'",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(summarize_provider_risk_profiles(
-            rows.iter().map(|(payload,)| payload),
-        ))
+        postgres_providers::provider_risk_summary(self).await
     }
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
