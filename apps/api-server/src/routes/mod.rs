@@ -48,3 +48,4 @@ pub mod pilot_loop;
 mod pilot_loop_alerts;
 mod pilot_loop_qa_queue;
 mod pilot_loop_types;
+mod pilot_loop_writebacks;
