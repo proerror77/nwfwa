@@ -18,17 +18,25 @@ use mlops_workspace_fields::{
 
 #[function_component(MlopsWorkspacePage)]
 pub fn mlops_workspace_page() -> Html {
+    // ── Common ───────────────────────────────────────────────────────────────
     let api_key = use_api_key();
     let model_key = use_state(|| "baseline_fwa".to_string());
     let actor = use_state(|| "mlops-operator".to_string());
     let reviewer = use_state(|| "risk-model-owner".to_string());
-    let promotion_decision = use_state(|| "approved".to_string());
+
+    // ── Monitoring task ──────────────────────────────────────────────────────
     let monitoring_task_id = use_state(String::new);
     let monitoring_decision = use_state(|| "acknowledged".to_string());
+
+    // ── Alert task ───────────────────────────────────────────────────────────
     let alert_task_id = use_state(String::new);
     let alert_decision = use_state(|| "receipt_confirmed".to_string());
+
+    // ── Retraining job ───────────────────────────────────────────────────────
     let retraining_job_id = use_state(String::new);
     let retraining_status = use_state(|| "validation".to_string());
+    // ── Candidate / promotion ────────────────────────────────────────────────
+    let promotion_decision = use_state(|| "approved".to_string());
     let candidate_model_version = use_state(|| "0.2.0-candidate".to_string());
     let candidate_artifact_uri = use_state(|| {
         "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json".to_string()
@@ -68,6 +76,7 @@ pub fn mlops_workspace_page() -> Html {
     let training_output_payload_json = use_state(|| {
         r#"{"candidate_model_version":"0.2.0-candidate","artifact_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json","artifact_sha256":"sha256:rust-serving-artifact","training_artifact_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib","training_artifact_sha256":"sha256:training-artifact","serving_manifest_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json","endpoint_url":"http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate","validation_report_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json","feature_importance_uri":"data/eval/provider_retraining_candidate/feature_importance.parquet","permutation_importance_uri":"data/eval/provider_retraining_candidate/permutation_importance.parquet","metrics_json":{"shadow_comparison_status":"passed","review_capacity_threshold_status":"passed","model_artifact_evaluation_status":"passed","model_artifact_evaluation_report_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json","rule_candidate_backtest_status":"passed","rule_candidate_backtest_report_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json","rule_candidate_review_tasks_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json","rule_library_writeback_status":"blocked_pending_human_review_and_policy_governance_approval"},"confusion_matrix_json":{"tp":64,"fp":18,"tn":820,"fn":36},"evidence_refs":["model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json","rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json","rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"],"mined_rule_candidates":[]}"#.to_string()
     });
+    // ── Anomaly candidate review ─────────────────────────────────────────────
     let anomaly_candidate_kind = use_state(|| "provider_peer_anomaly".to_string());
     let anomaly_candidate_id = use_state(|| "provider_peer:PRV-042:2026-05".to_string());
     let anomaly_source_report_uri = use_state(|| {
@@ -87,6 +96,7 @@ pub fn mlops_workspace_page() -> Html {
     let snapshot_state = use_state(|| ApiState::<MlopsWorkspaceSnapshot>::Idle);
     let action_state = use_state(|| ApiState::<Value>::Idle);
 
+    // ── Callbacks ────────────────────────────────────────────────────────────
     let load_workspace = {
         let api_key = api_key.clone();
         let model_key = model_key.clone();
