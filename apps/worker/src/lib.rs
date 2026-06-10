@@ -291,5 +291,7 @@ pub(crate) use retraining_output::{
     enrich_retraining_output_with_rust_feature_set, validate_onnx_parity_for_runtime,
 };
 
+pub mod commands;
+
 #[cfg(test)]
 mod tests;
