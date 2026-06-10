@@ -3,6 +3,7 @@ pub mod claims;
 mod claims_agent;
 mod claims_canonical;
 mod claims_evidence;
+mod claims_lookup;
 mod claims_types;
 mod claims_validation;
 pub mod dashboard;
