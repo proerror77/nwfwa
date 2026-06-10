@@ -1,14 +1,20 @@
 use crate::*;
 use serde_json::Value;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 
 #[path = "mlops_workspace_view.rs"]
 mod mlops_workspace_view;
 use mlops_workspace_view::MlopsWorkspaceView;
 #[path = "mlops_workspace_actions.rs"]
 mod mlops_workspace_actions;
-use mlops_workspace_actions::{execute_mlops_governed_action, submit_anomaly_candidate_review, MlopsActionView};
+use mlops_workspace_actions::{
+    execute_mlops_governed_action, submit_anomaly_candidate_review, MlopsActionView,
+};
+#[path = "mlops_workspace_fields.rs"]
+mod mlops_workspace_fields;
+use mlops_workspace_fields::{
+    mlops_select_field, mlops_text_field, mlops_text_field_with_class, mlops_textarea_field,
+};
 
 #[function_component(MlopsWorkspacePage)]
 pub fn mlops_workspace_page() -> Html {
@@ -526,18 +532,7 @@ pub fn mlops_workspace_page() -> Html {
                         </div>
                     </div>
                     <div class="form-grid">
-                        <label>
-                            {"Model key"}
-                            <input
-                                value={(*model_key).clone()}
-                                oninput={{
-                                    let model_key = model_key.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        model_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
+                        {text_input("Model key", &model_key)}
                     </div>
                     <div class="button-row">
                         <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
@@ -633,76 +628,5 @@ pub fn mlops_workspace_page() -> Html {
                 on_select_retraining_job={select_retraining_job}
             />
         </section>
-    }
-}
-
-fn mlops_text_field(label: &'static str, state: &UseStateHandle<String>) -> Html {
-    mlops_text_field_with_class(label, state, "")
-}
-
-fn mlops_text_field_with_class(
-    label: &'static str,
-    state: &UseStateHandle<String>,
-    extra_class: &'static str,
-) -> Html {
-    html! {
-        <label class={classes!("mlops-field", extra_class)}>
-            {label}
-            <input
-                value={(**state).clone()}
-                oninput={{
-                    let state = state.clone();
-                    Callback::from(move |event: InputEvent| {
-                        state.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                    })
-                }}
-            />
-        </label>
-    }
-}
-
-fn mlops_textarea_field(
-    label: &'static str,
-    state: &UseStateHandle<String>,
-    extra_class: &'static str,
-) -> Html {
-    html! {
-        <label class={classes!("mlops-field", extra_class)}>
-            {label}
-            <textarea
-                value={(**state).clone()}
-                oninput={{
-                    let state = state.clone();
-                    Callback::from(move |event: InputEvent| {
-                        state.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                    })
-                }}
-            />
-        </label>
-    }
-}
-
-fn mlops_select_field(
-    label: &'static str,
-    state: &UseStateHandle<String>,
-    options: &'static [&'static str],
-) -> Html {
-    html! {
-        <label class="mlops-field">
-            {label}
-            <select
-                value={(**state).clone()}
-                onchange={{
-                    let state = state.clone();
-                    Callback::from(move |event: Event| {
-                        state.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                    })
-                }}
-            >
-                {for options.iter().map(|option| html! {
-                    <option value={*option}>{*option}</option>
-                })}
-            </select>
-        </label>
     }
 }
