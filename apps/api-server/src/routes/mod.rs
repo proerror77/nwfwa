@@ -32,6 +32,7 @@ mod ops_models_types;
 mod ops_models_validation;
 pub mod ops_providers;
 pub mod ops_routing_policies;
+mod ops_routing_policies_lifecycle;
 pub mod ops_rules;
 mod ops_rules_audit;
 mod ops_rules_backtest;
