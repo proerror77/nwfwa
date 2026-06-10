@@ -45,7 +45,7 @@ mod ops_rules_types;
 mod ops_rules_validation;
 pub mod ops_sampling;
 pub mod ops_schemes;
-pub mod pii;
+mod pii;
 pub mod pilot_loop;
 mod pilot_loop_alerts;
 mod pilot_loop_qa_queue;
