@@ -19,6 +19,7 @@ pub(super) fn leads_triage_workspace(
     triage_priority: &UseStateHandle<String>,
     triage_notes: &UseStateHandle<String>,
     triage_evidence_refs: &UseStateHandle<String>,
+    merge_target_lead_id: &UseStateHandle<String>,
     case_status: &UseStateHandle<String>,
     case_actor: &UseStateHandle<String>,
     case_notes: &UseStateHandle<String>,
@@ -69,6 +70,11 @@ pub(super) fn leads_triage_workspace(
                     {text_input("Assignee", triage_assignee)}
                     {text_input("Reviewer", triage_reviewer)}
                     {text_input("Evidence refs", triage_evidence_refs)}
+                    {if (**triage_decision).as_str() == "merge_lead" {
+                        html! { {text_input("Merge Target Lead ID", merge_target_lead_id)} }
+                    } else {
+                        html! {}
+                    }}
                 </div>
                 <label class="compact-note">
                     {"Notes"}

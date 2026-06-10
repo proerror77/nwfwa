@@ -25,6 +25,7 @@ pub fn leads_cases_page() -> Html {
     let triage_priority = use_state(|| "high".to_string());
     let triage_notes = use_state(|| "Opened from Operations Studio lead triage.".to_string());
     let triage_evidence_refs = use_state(String::new);
+    let merge_target_lead_id = use_state(String::new);
     let selected_case_id = use_state(String::new);
     let case_status = use_state(|| "investigating".to_string());
     let case_actor = use_state(|| "case-manager-1".to_string());
@@ -77,6 +78,7 @@ pub fn leads_cases_page() -> Html {
         let triage_priority = triage_priority.clone();
         let triage_notes = triage_notes.clone();
         let triage_evidence_refs = triage_evidence_refs.clone();
+        let merge_target_lead_id = merge_target_lead_id.clone();
         let snapshot_state = snapshot_state.clone();
         let triage_state = triage_state.clone();
         Callback::from(move |()| {
@@ -94,7 +96,7 @@ pub fn leads_cases_page() -> Html {
             let fallback_refs = lead.evidence_refs.clone();
             let payload = json!({
                 "decision": (*triage_decision).clone(),
-                "merge_target_lead_id": Value::Null,
+                "merge_target_lead_id": if (*merge_target_lead_id).trim().is_empty() { Value::Null } else { Value::String((*merge_target_lead_id).clone()) },
                 "assignee": (*triage_assignee).clone(),
                 "reviewer": (*triage_reviewer).clone(),
                 "priority": (*triage_priority).clone(),
@@ -393,6 +395,7 @@ pub fn leads_cases_page() -> Html {
                         &triage_priority,
                         &triage_notes,
                         &triage_evidence_refs,
+                        &merge_target_lead_id,
                         &case_status,
                         &case_actor,
                         &case_notes,
