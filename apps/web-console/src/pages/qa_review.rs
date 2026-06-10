@@ -5,24 +5,44 @@ use crate::ui_helpers::*;
 use crate::data_helpers::*;
 use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use serde_json::json;
+use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 
 #[function_component(QaReviewPage)]
 pub fn qa_review_page() -> Html {
     let api_key = use_api_key();
     let snapshot_state = use_state(|| ApiState::<QaReviewSnapshot>::Idle);
 
+    // Writeback form state
+    let selected_qa_case_id = use_state(String::new);
+    let qa_conclusion = use_state(|| "pass".to_string());
+    let issue_type = use_state(|| "none".to_string());
+    let feedback_target = use_state(|| "rules".to_string());
+    let qa_notes = use_state(String::new);
+    let qa_evidence_refs = use_state(String::new);
+    let qa_write_state = use_state(|| ApiState::<PilotWritebackResponse>::Idle);
+
     let load_qa_review = {
         let api_key = api_key.clone();
         let snapshot_state = snapshot_state.clone();
+        let selected_qa_case_id = selected_qa_case_id.clone();
         Callback::from(move |_| {
             let api_key = (*api_key).clone();
             let snapshot_state = snapshot_state.clone();
+            let selected_qa_case_id = selected_qa_case_id.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
-                snapshot_state.set(match get_qa_review_snapshot(api_key).await {
-                    Ok(snapshot) => ApiState::Ready(snapshot),
-                    Err(error) => ApiState::Failed(error),
-                });
+                match get_qa_review_snapshot(api_key).await {
+                    Ok(snapshot) => {
+                        if selected_qa_case_id.is_empty() {
+                            if let Some(first) = snapshot.queue.first() {
+                                selected_qa_case_id.set(first.qa_case_id.clone());
+                            }
+                        }
+                        snapshot_state.set(ApiState::Ready(snapshot));
+                    }
+                    Err(error) => snapshot_state.set(ApiState::Failed(error)),
+                }
             });
         })
     };
@@ -32,6 +52,57 @@ pub fn qa_review_page() -> Html {
         Callback::from(move |_| load_qa_review.emit(()))
     };
 
+    let submit_qa_review = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        let selected_qa_case_id = selected_qa_case_id.clone();
+        let qa_conclusion = qa_conclusion.clone();
+        let issue_type = issue_type.clone();
+        let feedback_target = feedback_target.clone();
+        let qa_notes = qa_notes.clone();
+        let qa_evidence_refs = qa_evidence_refs.clone();
+        let qa_write_state = qa_write_state.clone();
+        let load_qa_review = load_qa_review.clone();
+        Callback::from(move |_| {
+            let ApiState::Ready(snapshot) = &*snapshot_state else {
+                qa_write_state.set(ApiState::Failed(
+                    "load the QA review before writeback".into(),
+                ));
+                return;
+            };
+            let qa_case_id = (*selected_qa_case_id).clone();
+            let claim_id = snapshot
+                .queue
+                .iter()
+                .find(|item| item.qa_case_id == qa_case_id)
+                .map(|item| item.claim_id.clone())
+                .unwrap_or_default();
+            let evidence_refs = parse_tags(&qa_evidence_refs);
+            let payload = json!({
+                "qa_case_id": qa_case_id,
+                "claim_id": claim_id,
+                "qa_conclusion": (*qa_conclusion).clone(),
+                "issue_type": (*issue_type).clone(),
+                "feedback_target": (*feedback_target).clone(),
+                "notes": (*qa_notes).clone(),
+                "evidence_refs": evidence_refs,
+            });
+            let api_key = (*api_key).clone();
+            let qa_write_state = qa_write_state.clone();
+            let load_qa_review = load_qa_review.clone();
+            qa_write_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match post_qa_review(api_key, payload).await {
+                    Ok(response) => {
+                        qa_write_state.set(ApiState::Ready(response));
+                        load_qa_review.emit(());
+                    }
+                    Err(error) => qa_write_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
     {
         let load_qa_review = load_qa_review.clone();
         use_effect_with((), move |_| {
@@ -39,6 +110,11 @@ pub fn qa_review_page() -> Html {
             || ()
         });
     }
+
+    let queue_items = match &*snapshot_state {
+        ApiState::Ready(snapshot) => snapshot.queue.clone(),
+        _ => vec![],
+    };
 
     html! {
         <section class="module-status">
@@ -61,6 +137,131 @@ pub fn qa_review_page() -> Html {
             </section>
 
             <QaReviewView state={(*snapshot_state).clone()} />
+
+            <section class="panel result-stack">
+                <h3>{"QA Writeback"}</h3>
+                <p class="empty">{"Submit a QA conclusion for a sampled case. All fields are required."}</p>
+                <div class="form-grid action-form-grid">
+                    <label>
+                        {"QA Case"}
+                        <select
+                            onchange={{
+                                let selected_qa_case_id = selected_qa_case_id.clone();
+                                Callback::from(move |event: Event| {
+                                    selected_qa_case_id.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                })
+                            }}
+                        >
+                            {if queue_items.is_empty() {
+                                html! { <option value="">{"— load QA review first —"}</option> }
+                            } else {
+                                html! {
+                                    {for queue_items.iter().map(|item| {
+                                        let val = item.qa_case_id.clone();
+                                        let label = format!("{} / {}", item.qa_case_id, item.claim_id);
+                                        let selected = *selected_qa_case_id == val;
+                                        html! { <option value={val} selected={selected}>{label}</option> }
+                                    })}
+                                }
+                            }}
+                        </select>
+                    </label>
+                    <label>
+                        {"Conclusion"}
+                        <select
+                            onchange={{
+                                let qa_conclusion = qa_conclusion.clone();
+                                Callback::from(move |event: Event| {
+                                    qa_conclusion.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                })
+                            }}
+                        >
+                            <option value="pass" selected={(*qa_conclusion).as_str() == "pass"}>{"Pass"}</option>
+                            <option value="issue_found_return" selected={(*qa_conclusion).as_str() == "issue_found_return"}>{"Issue found — return"}</option>
+                            <option value="issue_found_escalate" selected={(*qa_conclusion).as_str() == "issue_found_escalate"}>{"Issue found — escalate"}</option>
+                        </select>
+                    </label>
+                    <label>
+                        {"Issue Type"}
+                        <select
+                            onchange={{
+                                let issue_type = issue_type.clone();
+                                Callback::from(move |event: Event| {
+                                    issue_type.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                })
+                            }}
+                        >
+                            <option value="none" selected={(*issue_type).as_str() == "none"}>{"None"}</option>
+                            <option value="confirmed_fwa" selected={(*issue_type).as_str() == "confirmed_fwa"}>{"Confirmed FWA"}</option>
+                            <option value="false_positive" selected={(*issue_type).as_str() == "false_positive"}>{"False Positive"}</option>
+                            <option value="improper_payment" selected={(*issue_type).as_str() == "improper_payment"}>{"Improper Payment"}</option>
+                            <option value="insufficient_evidence" selected={(*issue_type).as_str() == "insufficient_evidence"}>{"Insufficient Evidence"}</option>
+                            <option value="abuse_not_fraud" selected={(*issue_type).as_str() == "abuse_not_fraud"}>{"Abuse Not Fraud"}</option>
+                            <option value="documentation_issue" selected={(*issue_type).as_str() == "documentation_issue"}>{"Documentation Issue"}</option>
+                            <option value="medical_necessity_issue" selected={(*issue_type).as_str() == "medical_necessity_issue"}>{"Medical Necessity Issue"}</option>
+                            <option value="policy_exclusion" selected={(*issue_type).as_str() == "policy_exclusion"}>{"Policy Exclusion"}</option>
+                            <option value="qa_review_completed" selected={(*issue_type).as_str() == "qa_review_completed"}>{"QA Review Completed"}</option>
+                            <option value="alert_handling_incomplete" selected={(*issue_type).as_str() == "alert_handling_incomplete"}>{"Alert Handling Incomplete"}</option>
+                            <option value="medical_reasonableness" selected={(*issue_type).as_str() == "medical_reasonableness"}>{"Medical Reasonableness"}</option>
+                            <option value="provider_pattern" selected={(*issue_type).as_str() == "provider_pattern"}>{"Provider Pattern"}</option>
+                            <option value="model_under_scored_confirmed_issue" selected={(*issue_type).as_str() == "model_under_scored_confirmed_issue"}>{"Model Under-scored Confirmed Issue"}</option>
+                            <option value="workflow_missing_evidence" selected={(*issue_type).as_str() == "workflow_missing_evidence"}>{"Workflow Missing Evidence"}</option>
+                        </select>
+                    </label>
+                    <label>
+                        {"Feedback Target"}
+                        <select
+                            onchange={{
+                                let feedback_target = feedback_target.clone();
+                                Callback::from(move |event: Event| {
+                                    feedback_target.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                })
+                            }}
+                        >
+                            <option value="rules" selected={(*feedback_target).as_str() == "rules"}>{"Rules"}</option>
+                            <option value="model" selected={(*feedback_target).as_str() == "model"}>{"Model"}</option>
+                            <option value="features" selected={(*feedback_target).as_str() == "features"}>{"Features"}</option>
+                            <option value="provider_profile" selected={(*feedback_target).as_str() == "provider_profile"}>{"Provider Profile"}</option>
+                            <option value="workflow" selected={(*feedback_target).as_str() == "workflow"}>{"Workflow"}</option>
+                            <option value="tpa" selected={(*feedback_target).as_str() == "tpa"}>{"TPA"}</option>
+                        </select>
+                    </label>
+                    <label>
+                        {"Evidence Refs (comma-separated)"}
+                        <input
+                            value={(*qa_evidence_refs).clone()}
+                            placeholder={"ref-001, ref-002"}
+                            oninput={{
+                                let qa_evidence_refs = qa_evidence_refs.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    qa_evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <label class="compact-note">
+                    {"Notes"}
+                    <textarea
+                        value={(*qa_notes).clone()}
+                        oninput={{
+                            let qa_notes = qa_notes.clone();
+                            Callback::from(move |event: InputEvent| {
+                                qa_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                            })
+                        }}
+                    />
+                </label>
+                <div class="button-row">
+                    <button
+                        onclick={submit_qa_review}
+                        disabled={matches!(&*qa_write_state, ApiState::Loading)}
+                    >
+                        {if matches!(&*qa_write_state, ApiState::Loading) { "Submitting..." } else { "Submit QA Review" }}
+                    </button>
+                </div>
+                <QaWritebackResultView state={(*qa_write_state).clone()} />
+            </section>
         </section>
     }
 }
@@ -337,5 +538,29 @@ fn qa_evidence_details(title: &str, groups: &[(&str, &Vec<String>)]) -> Html {
                 })}
             </div>
         </details>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct QaWritebackResultProps {
+    state: ApiState<PilotWritebackResponse>,
+}
+
+#[function_component(QaWritebackResultView)]
+fn qa_writeback_result_view(props: &QaWritebackResultProps) -> Html {
+    match &props.state {
+        ApiState::Idle => html! { <p class="empty">{"Select a QA case and submit a controlled conclusion."}</p> },
+        ApiState::Loading => html! { <p>{"Submitting QA review..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(response) => html! {
+            <div class="summary-grid">
+                <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
+                <div><span>{"Event"}</span><strong>{&response.event_type}</strong></div>
+                <div><span>{"Status"}</span><strong>{&response.event_status}</strong></div>
+                <div><span>{"Audit"}</span><strong>{&response.audit_id}</strong></div>
+                <div><span>{"Run"}</span><strong>{&response.run_id}</strong></div>
+                <div><span>{"Evidence"}</span><strong>{refs_label(&response.evidence_refs)}</strong></div>
+            </div>
+        },
     }
 }
