@@ -10,6 +10,9 @@ mod inbox_helpers;
 mod i18n;
 mod medical_review_helpers;
 mod model_ui_helpers;
+mod ops_app;
+mod ops_pages;
+mod ops_routing;
 mod pages;
 mod payload_helpers;
 mod routing;
@@ -29,6 +32,7 @@ use i18n::{
     apply_document_language, brand_description, module_context, module_description, module_label,
     section_label, setup_translations, tr,
 };
+use ops_app::OpsApp;
 use pages::*;
 use routing::{
     active_module_from_location, module_from_name, set_module_hash, workspace_system_map, Module,
@@ -191,5 +195,5 @@ fn rule_performance_for<'a>(
 
 fn main() {
     setup_translations();
-    yew::Renderer::<App>::new().render();
+    yew::Renderer::<OpsApp>::new().render();
 }
