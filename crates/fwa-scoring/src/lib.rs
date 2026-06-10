@@ -137,7 +137,7 @@ pub fn aggregate_with_routing_policy(
         (provider_network_score, 0.10),
         (similar_case_score, 0.05),
     ]);
-    let risk_score = RiskScore::new(final_score_value).expect("clamped score is valid");
+    let risk_score = RiskScore::saturating(final_score_value);
     let risk_level = risk_level_for_policy(risk_score.value(), &routing_policy).to_string();
     let rag = rag_for_policy(risk_score, &routing_policy);
     let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);

@@ -19,6 +19,12 @@ impl RiskScore {
         }
     }
 
+    /// Constructs a RiskScore clamping the value to [0, 100].
+    /// Use when the caller cannot guarantee the value is already in range.
+    pub fn saturating(value: u8) -> Self {
+        Self(value.min(100))
+    }
+
     pub fn value(self) -> u8 {
         self.0
     }
