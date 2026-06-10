@@ -1,104 +1,18 @@
 use super::model_lifecycle_request_body;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+
+#[path = "openapi_paths_model_ops_providers.rs"]
+mod openapi_paths_model_ops_providers;
 
 pub(super) fn model_ops_paths() -> Value {
-    json!({
-            "/api/v1/ops/providers/risk-summary": {
-                "get": {
-                    "summary": "Summarize Provider profile and graph-risk review signals",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "responses": {
-                        "200": {
-                            "description": "Provider risk summary",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/ProviderRiskSummaryResponse" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "/api/v1/ops/providers/anomaly-clustering-reports": {
-                "post": {
-                    "summary": "Submit an unsupervised anomaly clustering report into the human review queue",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "requestBody": {
-                        "required": true,
-                        "content": {
-                            "application/json": {
-                                "schema": { "$ref": "#/components/schemas/SubmitAnomalyClusteringReportRequest" }
-                            }
-                        }
-                    },
-                    "responses": {
-                        "200": {
-                            "description": "Accepted clustering report for anomaly review queue only",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/SubmitAnomalyClusteringReportResponse" }
-                                }
-                            }
-                        },
-                        "400": {
-                            "description": "Invalid clustering report submission or missing anomaly_clustering_reports evidence",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "/api/v1/ops/providers/anomaly-review-queue": {
-                "get": {
-                    "summary": "List anomaly candidates derived from submitted clustering reports",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "responses": {
-                        "200": {
-                            "description": "Anomaly review queue",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/AnomalyReviewQueueResponse" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "/api/v1/ops/providers/anomaly-candidate-reviews": {
-                "post": {
-                    "summary": "Record a human review decision for an unsupervised anomaly candidate",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "requestBody": {
-                        "required": true,
-                        "content": {
-                            "application/json": {
-                                "schema": { "$ref": "#/components/schemas/ReviewAnomalyCandidateRequest" }
-                            }
-                        }
-                    },
-                    "responses": {
-                        "200": {
-                            "description": "Recorded anomaly candidate review decision",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/ReviewAnomalyCandidateResponse" }
-                                }
-                            }
-                        },
-                        "400": {
-                            "description": "Invalid anomaly candidate review or missing clustering report evidence",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
+    let mut paths = Map::new();
+    append_paths(
+        &mut paths,
+        openapi_paths_model_ops_providers::provider_paths(),
+    );
+    append_paths(
+        &mut paths,
+        json!({
             "/api/v1/ops/medical-review/queue": {
                 "get": {
                     "summary": "List claims that require medical review from clinical evidence audit events",
@@ -818,5 +732,14 @@ pub(super) fn model_ops_paths() -> Value {
                     }
                 }
             },
-    })
+        }),
+    );
+    Value::Object(paths)
+}
+
+fn append_paths(target: &mut Map<String, Value>, paths: Value) {
+    let Value::Object(paths) = paths else {
+        unreachable!("OpenAPI model ops path group must be a JSON object");
+    };
+    target.extend(paths);
 }
