@@ -119,20 +119,45 @@ pub(crate) const DEFAULT_MODULE: Module = Module::Dashboard;
 
 pub(crate) const NAV_SECTIONS: &[(&str, &[Module])] = &[
     (
-        "Daily Work",
+        "Daily Ops",
         &[
             Module::Dashboard,
             Module::LeadsCases,
             Module::ReviewWorkbench,
-            Module::BootstrapOps,
         ],
     ),
     (
-        "Control Rooms",
+        "Intake & Scoring",
         &[
             Module::IntakeOps,
-            Module::DiscoveryReview,
+            Module::RuntimeScoring,
+        ],
+    ),
+    (
+        "Investigation",
+        &[
             Module::EvidenceHub,
+            Module::MemberProfile,
+            Module::ProviderRisk,
+            Module::KnowledgeBase,
+            Module::AgentInvestigator,
+            Module::AuditSampling,
+        ],
+    ),
+    (
+        "Governance & Tuning",
+        &[
+            Module::DiscoveryReview,
+            Module::Rules,
+            Module::Models,
+            Module::RoutingPolicies,
+            Module::ProviderModelIntake,
+            Module::BootstrapOps,
+            Module::DataSources,
+            Module::FactorFactory,
+            Module::MedicalReview,
+            Module::QaReview,
+            Module::EvidenceRuntime,
             Module::Governance,
         ],
     ),

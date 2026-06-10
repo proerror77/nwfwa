@@ -443,6 +443,10 @@ pub(crate) fn section_label(section: &str, language: Language) -> &'static str {
     match section {
         "Daily Work" => tr(language, "Daily Work", "日常作业"),
         "Control Rooms" => tr(language, "Control Rooms", "控制室"),
+        "Daily Ops" => tr(language, "Daily Ops", "日常运营"),
+        "Intake & Scoring" => tr(language, "Intake & Scoring", "进件与评分"),
+        "Investigation" => tr(language, "Investigation", "调查"),
+        "Governance & Tuning" => tr(language, "Governance & Tuning", "治理与调优"),
         _ => "Section",
     }
 }
