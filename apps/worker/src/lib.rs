@@ -63,6 +63,8 @@ pub use alertmanager::{
 };
 
 mod mlops_monitoring;
+mod mlops_monitoring_plan;
+mod mlops_monitoring_report;
 pub use mlops_monitoring::{
     build_mlops_monitoring_plan, build_mlops_monitoring_report,
     build_mlops_scheduler_execution_report, run_mlops_monitoring_plan,
