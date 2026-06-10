@@ -3,10 +3,17 @@ use serde_json::{json, Value};
 
 use super::{
     inbox_utils::{
-        bool_at, epoch_date_at, epoch_millis_at, extract_diagnosis, extract_next_line_after_label,
-        normalize_medical_text, normalized_redacted_text_at, number_at, string_at,
+        array_items, bool_at, epoch_date_at, epoch_millis_at, extract_diagnosis,
+        extract_next_line_after_label, first_array_item, mask_identifier, names_mismatch,
+        normalize_medical_text, normalized_redacted_text_at, number_at, push_signal, string_at,
     },
-    SourceInvoice, SOURCE_BUSINESS_TIMEZONE,
+    inbox_validation::{
+        total_invoice_amount, validate_diagnosis_consistency, validate_diagnosis_item_support,
+        validate_invoice_dates, validate_medical_record_receive_dates,
+        validate_policy_coverage_limits, validate_product_liability_windows,
+        validate_service_window,
+    },
+    InboxValidationError, SourceInvoice, SOURCE_BUSINESS_TIMEZONE,
 };
 
 pub(super) fn product_liabilities(policy: &Value, policy_index: usize) -> Vec<Value> {
@@ -291,5 +298,307 @@ pub(super) fn document_evidence(record: &Value, record_index: usize) -> Value {
                 string_at(record, &["id"]).unwrap_or_else(|| "unknown".into())
             )
         ]
+    })
+}
+
+pub(super) fn stable_id_fragment(value: &str) -> String {
+    let fragment = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .chars()
+        .take(96)
+        .collect::<String>();
+    if fragment.is_empty() {
+        "unknown".into()
+    } else {
+        fragment
+    }
+}
+
+pub(super) fn canonical_source_paths(canonical_claim_context: &Value) -> Vec<String> {
+    let mut source_paths = Vec::new();
+    collect_source_paths_from_array(
+        canonical_claim_context,
+        &["document_evidence"],
+        &mut source_paths,
+    );
+    collect_source_paths_from_array(
+        canonical_claim_context,
+        &["itemized_bill_lines"],
+        &mut source_paths,
+    );
+    collect_source_paths_from_array(
+        canonical_claim_context,
+        &["member_policy_snapshot", "product_liabilities"],
+        &mut source_paths,
+    );
+    source_paths.sort();
+    source_paths.dedup();
+    source_paths
+}
+
+fn collect_source_paths_from_array(value: &Value, path: &[&str], source_paths: &mut Vec<String>) {
+    for item in array_items(value, path) {
+        if let Some(source_path) = string_at(item, &["source_path"]) {
+            source_paths.push(source_path);
+        }
+        if let Some(source_path) = string_at(item, &["liability_source_path"]) {
+            source_paths.push(source_path);
+        }
+    }
+}
+
+pub(super) fn build_canonical_claim_context(
+    payload: &Value,
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    source_system: &str,
+    report_no: &str,
+) -> Value {
+    let policies = array_items(payload, &["reportCase", "policyList"]);
+    let policy = policies.first().copied();
+    let invoices = policies
+        .iter()
+        .enumerate()
+        .flat_map(|(policy_index, policy)| {
+            array_items(policy, &["invoiceList"])
+                .into_iter()
+                .enumerate()
+                .map(move |(invoice_index, value)| SourceInvoice {
+                    policy_index,
+                    invoice_index,
+                    value,
+                })
+        })
+        .collect::<Vec<_>>();
+    let invoice = invoices.first().map(|invoice| invoice.value);
+    let medical_records = array_items(payload, &["reportCase", "medicalRecordInfoList"]);
+    let medical_record = medical_records.first().copied();
+    let product = policy.and_then(|policy| first_array_item(policy, &["productList"]));
+    let liability = product.and_then(|product| first_array_item(product, &["claimLiabilityList"]));
+
+    if policy.is_none() {
+        validation_errors.push(InboxValidationError {
+            field_path: "reportCase.policyList".into(),
+            severity: "error".into(),
+            remediation: "include at least one policy for coverage mapping".into(),
+        });
+    }
+    if invoice.is_none() {
+        validation_errors.push(InboxValidationError {
+            field_path: "reportCase.policyList[0].invoiceList".into(),
+            severity: "error".into(),
+            remediation: "include at least one invoice for bill-line mapping".into(),
+        });
+    }
+
+    validate_policy_coverage_limits(validation_errors, data_quality_signals, &policies);
+
+    let insured_name = string_at(payload, &["reportCase", "accidentPerson", "insuredName"]);
+    let policy_insured_name = policy.and_then(|policy| string_at(policy, &["insuredName"]));
+    let mut identity_names = vec![insured_name.as_deref(), policy_insured_name.as_deref()];
+    let medical_record_patient_names = medical_records
+        .iter()
+        .map(|record| string_at(record, &["patientName"]))
+        .collect::<Vec<_>>();
+    identity_names.extend(medical_record_patient_names.iter().map(Option::as_deref));
+    let invoice_person_names = invoices
+        .iter()
+        .map(|invoice| string_at(invoice.value, &["accidentPersonName"]))
+        .collect::<Vec<_>>();
+    identity_names.extend(invoice_person_names.iter().map(Option::as_deref));
+    if names_mismatch(identity_names) {
+        push_signal(data_quality_signals, "identity_mismatch");
+    }
+
+    let service_date = invoice
+        .and_then(|invoice| epoch_date_at(invoice, &["startDate"]))
+        .or_else(|| epoch_date_at(payload, &["reportCase", "accidentDate"]));
+    let service_date_raw_epoch_ms = invoice
+        .and_then(|invoice| epoch_millis_at(invoice, &["startDate"]))
+        .or_else(|| epoch_millis_at(payload, &["reportCase", "accidentDate"]));
+    let receive_date = epoch_date_at(payload, &["reportCase", "claimReceiveDate"]);
+    let accident_date = epoch_date_at(payload, &["reportCase", "accidentDate"]);
+    let policy_start_date = policy.and_then(|policy| epoch_date_at(policy, &["validateDate"]));
+    let policy_end_date = policy.and_then(|policy| epoch_date_at(policy, &["expireDate"]));
+    let product_start_date = product.and_then(|product| epoch_date_at(product, &["validateDate"]));
+    let product_end_date = product.and_then(|product| epoch_date_at(product, &["expireDate"]));
+    let liability_start_date =
+        liability.and_then(|liability| epoch_date_at(liability, &["validateDate"]));
+    let liability_claim_start_date =
+        liability.and_then(|liability| epoch_date_at(liability, &["claimValidateDate"]));
+    let liability_end_date =
+        liability.and_then(|liability| epoch_date_at(liability, &["expireDate"]));
+    let coverage_start_date = product_start_date.or(policy_start_date);
+    let coverage_end_date = product_end_date.or(policy_end_date);
+    let coverage_limit = policy.and_then(|policy| number_at(policy, &["coverageLimit"]));
+    if let (Some(service_date), Some(receive_date)) = (service_date, receive_date) {
+        if receive_date < service_date {
+            validation_errors.push(InboxValidationError {
+                field_path: "reportCase.claimReceiveDate".into(),
+                severity: "warning".into(),
+                remediation: "claim receive date should not be earlier than service date".into(),
+            });
+            push_signal(data_quality_signals, "date_inconsistency");
+        }
+    }
+    if let (Some(accident_date), Some(receive_date)) = (accident_date, receive_date) {
+        if receive_date < accident_date {
+            validation_errors.push(InboxValidationError {
+                field_path: "reportCase.accidentDate".into(),
+                severity: "warning".into(),
+                remediation: "accident date should not be later than claim receive date".into(),
+            });
+            push_signal(data_quality_signals, "date_inconsistency");
+        }
+    }
+    validate_invoice_dates(
+        validation_errors,
+        data_quality_signals,
+        receive_date,
+        &invoices,
+    );
+    validate_medical_record_receive_dates(
+        validation_errors,
+        data_quality_signals,
+        receive_date,
+        &medical_records,
+    );
+    for (policy_index, policy) in policies.iter().enumerate() {
+        validate_service_window(
+            validation_errors,
+            data_quality_signals,
+            service_date,
+            epoch_date_at(policy, &["validateDate"]),
+            epoch_date_at(policy, &["expireDate"]),
+            &format!("reportCase.policyList[{policy_index}]"),
+            "policy",
+        );
+        validate_product_liability_windows(
+            validation_errors,
+            data_quality_signals,
+            service_date,
+            policy,
+            policy_index,
+        );
+    }
+    validate_diagnosis_consistency(
+        validation_errors,
+        data_quality_signals,
+        medical_record,
+        &invoices,
+    );
+    validate_diagnosis_item_support(validation_errors, data_quality_signals, &invoices);
+    let invoice_total_amount = total_invoice_amount(&invoices);
+    if number_at(payload, &["reportCase", "claimAmount"]).is_none()
+        && invoice_total_amount.is_some()
+    {
+        validation_errors.push(InboxValidationError {
+            field_path: "reportCase.claimAmount".into(),
+            severity: "warning".into(),
+            remediation: "claim amount missing; derive canonical total from source invoice totals"
+                .into(),
+        });
+        push_signal(data_quality_signals, "missing_claim_amount");
+    }
+
+    json!({
+        "claim_header": {
+            "external_claim_id": report_no,
+            "source_system": source_system,
+            "service_date": service_date.map(|date| date.to_string()),
+            "receive_date": receive_date.map(|date| date.to_string()),
+            "accident_date": accident_date.map(|date| date.to_string()),
+            "source_timezone": SOURCE_BUSINESS_TIMEZONE,
+            "service_date_raw_epoch_ms": service_date_raw_epoch_ms,
+            "receive_date_raw_epoch_ms": epoch_millis_at(payload, &["reportCase", "claimReceiveDate"]),
+            "accident_date_raw_epoch_ms": epoch_millis_at(payload, &["reportCase", "accidentDate"]),
+            "accident_reason": string_at(payload, &["reportCase", "accidentReason"]),
+            "medical_type": invoice
+                .and_then(|invoice| string_at(invoice, &["medicalType"]))
+                .or_else(|| medical_record.and_then(|record| string_at(record, &["medicalType"]))),
+            "currency": "CNY",
+            "total_amount": invoice_total_amount
+        },
+        "member_policy_snapshot": {
+            "masked_member_id": string_at(payload, &["reportCase", "accidentPerson", "insuredNo"])
+                .map(|value| mask_identifier(&value)),
+            "masked_certificate_id": string_at(payload, &["reportCase", "accidentPerson", "certNo"])
+                .map(|value| mask_identifier(&value)),
+            "certificate_type": string_at(payload, &["reportCase", "accidentPerson", "certType"]),
+            "member_gender": string_at(payload, &["reportCase", "accidentPerson", "gender"]),
+            "member_birth_date": epoch_date_at(payload, &["reportCase", "accidentPerson", "birthday"])
+                .map(|date| date.to_string()),
+            "source_timezone": SOURCE_BUSINESS_TIMEZONE,
+            "member_birth_date_raw_epoch_ms": epoch_millis_at(payload, &["reportCase", "accidentPerson", "birthday"]),
+            "policy_id": policy.and_then(|policy| string_at(policy, &["policyNo"])),
+            "product_code": product.and_then(|product| string_at(product, &["productCode"])),
+            "liability_code": liability.and_then(|liability| string_at(liability, &["liabCode"])),
+            "liability_name": liability.and_then(|liability| string_at(liability, &["liabName"])),
+            "policy_type": policy.and_then(|policy| string_at(policy, &["policyType"])),
+            "policy_first_apply_date": policy
+                .and_then(|policy| epoch_date_at(policy, &["firstApplyTime"]))
+                .map(|date| date.to_string()),
+            "policy_first_apply_date_raw_epoch_ms": policy
+                .and_then(|policy| epoch_millis_at(policy, &["firstApplyTime"])),
+            "insured_with_social_insurance": policy
+                .and_then(|policy| bool_at(policy, &["insuredWithSI"])),
+            "coverage_limit": coverage_limit,
+            "coverage_start_date": coverage_start_date.map(|date| date.to_string()),
+            "coverage_end_date": coverage_end_date.map(|date| date.to_string()),
+            "coverage_start_date_raw_epoch_ms": product
+                .and_then(|product| epoch_millis_at(product, &["validateDate"]))
+                .or_else(|| policy.and_then(|policy| epoch_millis_at(policy, &["validateDate"]))),
+            "coverage_end_date_raw_epoch_ms": product
+                .and_then(|product| epoch_millis_at(product, &["expireDate"]))
+                .or_else(|| policy.and_then(|policy| epoch_millis_at(policy, &["expireDate"]))),
+            "liability_start_date": liability_start_date.map(|date| date.to_string()),
+            "liability_claim_start_date": liability_claim_start_date.map(|date| date.to_string()),
+            "waiting_period_end_date": liability_claim_start_date.map(|date| date.to_string()),
+            "liability_end_date": liability_end_date.map(|date| date.to_string()),
+            "liability_start_date_raw_epoch_ms": liability
+                .and_then(|liability| epoch_millis_at(liability, &["validateDate"])),
+            "liability_claim_start_date_raw_epoch_ms": liability
+                .and_then(|liability| epoch_millis_at(liability, &["claimValidateDate"])),
+            "liability_end_date_raw_epoch_ms": liability
+                .and_then(|liability| epoch_millis_at(liability, &["expireDate"])),
+            "product_liabilities": policies
+                .iter()
+                .enumerate()
+                .flat_map(|(policy_index, policy)| product_liabilities(policy, policy_index))
+                .collect::<Vec<_>>()
+        },
+        "provider_snapshot": {
+            "provider_code": invoice.and_then(|invoice| string_at(invoice, &["hospitalCode"])),
+            "name": invoice
+                .and_then(|invoice| string_at(invoice, &["hospitalName"]))
+                .or_else(|| medical_record.and_then(|record| string_at(record, &["hospitalName"]))),
+            "class": invoice.and_then(|invoice| string_at(invoice, &["hospitalClass"])),
+            "type": invoice.and_then(|invoice| string_at(invoice, &["hospitalProperty"])),
+            "city": invoice.and_then(|invoice| string_at(invoice, &["hospitalCityName"])),
+            "province": invoice.and_then(|invoice| string_at(invoice, &["hospitalProvinceName"])),
+            "network_flags": {
+                "is_hospital_institution": invoice.and_then(|invoice| bool_at(invoice, &["isHospitalInstitution"])),
+                "primary_care": invoice.and_then(|invoice| bool_at(invoice, &["primaryCare"])),
+                "red_flag": invoice.and_then(|invoice| string_at(invoice, &["redFlag"]))
+            }
+        },
+        "itemized_bill_lines": invoices
+            .iter()
+            .flat_map(itemized_bill_lines)
+            .collect::<Vec<_>>(),
+        "document_evidence": medical_records
+            .iter()
+            .enumerate()
+            .map(|(record_index, record)| document_evidence(record, record_index))
+            .collect::<Vec<_>>()
     })
 }
