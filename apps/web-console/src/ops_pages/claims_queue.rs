@@ -461,16 +461,25 @@ pub fn claims_queue_page() -> Html {
     let triage_state       = use_state(|| ApiState::<TriageLeadRecord>::Idle);
     let confirm_msg        = use_state(|| Option::<String>::None);
 
-    // Auto-load on mount
+    // Auto-load on mount + auto-select first lead
     {
-        let api_key        = api_key.clone();
-        let snapshot_state = snapshot_state.clone();
+        let api_key          = api_key.clone();
+        let snapshot_state   = snapshot_state.clone();
+        let selected_lead_id = selected_lead_id.clone();
         use_effect_with((), move |_| {
-            let api_key        = (*api_key).clone();
-            let snapshot_state = snapshot_state.clone();
+            let api_key          = (*api_key).clone();
+            let snapshot_state   = snapshot_state.clone();
+            let selected_lead_id = selected_lead_id.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
-                snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
+                let result = get_leads_cases_snapshot(api_key).await;
+                if let Ok(ref snap) = result {
+                    // Auto-select highest-risk lead
+                    if let Some(first) = snap.leads.iter().max_by_key(|l| l.risk_score) {
+                        selected_lead_id.set(first.lead_id.clone());
+                    }
+                }
+                snapshot_state.set(match result {
                     Ok(s)  => ApiState::Ready(s),
                     Err(e) => ApiState::Failed(e),
                 });
