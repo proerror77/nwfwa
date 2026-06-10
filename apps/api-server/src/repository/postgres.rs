@@ -490,14 +490,14 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         record: QaReviewRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord> {
-        postgres_outcomes::save_qa_review(self, record).await
+        postgres_qa::save_qa_review(self, record).await
     }
 
     async fn list_qa_feedback_items(
         &self,
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
-        postgres_outcomes::list_qa_feedback_items(self, customer_scope_id).await
+        postgres_qa::list_qa_feedback_items(self, customer_scope_id).await
     }
 
     async fn update_qa_feedback_status(
@@ -506,15 +506,14 @@ impl ScoringRepository for PostgresScoringRepository {
         input: UpdateQaFeedbackStatusInput,
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
-        postgres_outcomes::update_qa_feedback_status(self, feedback_id, input, customer_scope_id)
-            .await
+        postgres_qa::update_qa_feedback_status(self, feedback_id, input, customer_scope_id).await
     }
 
     async fn list_qa_reviews(
         &self,
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<QaReviewRecord>> {
-        postgres_outcomes::list_qa_reviews(self, customer_scope_id).await
+        postgres_qa::list_qa_reviews(self, customer_scope_id).await
     }
 
     async fn list_outcome_labels(
