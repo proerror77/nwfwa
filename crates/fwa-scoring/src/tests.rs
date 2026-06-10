@@ -1,5 +1,6 @@
 use super::*;
 use fwa_anomaly::{AnomalyExplanation, AnomalyScore};
+use fwa_core::RuleActionClass;
 use fwa_features::FeatureValue;
 use fwa_ml_runtime::ModelExplanation;
 use std::collections::BTreeMap;
