@@ -237,7 +237,7 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         record: RuleBacktestRecord,
     ) -> anyhow::Result<RuleBacktestRecord> {
-        postgres_rules::save_rule_backtest(self, record).await
+        postgres_rule_reviews::save_rule_backtest(self, record).await
     }
 
     async fn latest_rule_backtest(
@@ -245,14 +245,14 @@ impl ScoringRepository for PostgresScoringRepository {
         rule_id: &str,
         rule_version: u32,
     ) -> anyhow::Result<Option<RuleBacktestRecord>> {
-        postgres_rules::latest_rule_backtest(self, rule_id, rule_version).await
+        postgres_rule_reviews::latest_rule_backtest(self, rule_id, rule_version).await
     }
 
     async fn save_rule_shadow_run(
         &self,
         record: RuleShadowRunRecord,
     ) -> anyhow::Result<RuleShadowRunRecord> {
-        postgres_rules::save_rule_shadow_run(self, record).await
+        postgres_rule_reviews::save_rule_shadow_run(self, record).await
     }
 
     async fn latest_rule_shadow_run(
@@ -260,14 +260,14 @@ impl ScoringRepository for PostgresScoringRepository {
         rule_id: &str,
         rule_version: u32,
     ) -> anyhow::Result<Option<RuleShadowRunRecord>> {
-        postgres_rules::latest_rule_shadow_run(self, rule_id, rule_version).await
+        postgres_rule_reviews::latest_rule_shadow_run(self, rule_id, rule_version).await
     }
 
     async fn save_rule_promotion_review(
         &self,
         record: RulePromotionReviewRecord,
     ) -> anyhow::Result<RulePromotionReviewRecord> {
-        postgres_rules::save_rule_promotion_review(self, record).await
+        postgres_rule_reviews::save_rule_promotion_review(self, record).await
     }
 
     async fn latest_rule_promotion_review(
@@ -275,7 +275,7 @@ impl ScoringRepository for PostgresScoringRepository {
         rule_id: &str,
         rule_version: u32,
     ) -> anyhow::Result<Option<RulePromotionReviewRecord>> {
-        postgres_rules::latest_rule_promotion_review(self, rule_id, rule_version).await
+        postgres_rule_reviews::latest_rule_promotion_review(self, rule_id, rule_version).await
     }
 
     async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>> {
