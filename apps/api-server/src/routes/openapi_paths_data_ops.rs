@@ -1,109 +1,14 @@
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+
+#[path = "openapi_paths_data_ops_datasets.rs"]
+mod openapi_paths_data_ops_datasets;
 
 pub(super) fn data_ops_paths() -> Value {
-    json!({
-            "/api/v1/ops/datasets": {
-                "get": {
-                    "summary": "List registered external datasets",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "responses": {
-                        "200": {
-                            "description": "Dataset catalog entries",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/DatasetListResponse" }
-                                }
-                            }
-                        }
-                    }
-                },
-                "post": {
-                    "summary": "Register a governed Parquet dataset",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "requestBody": {
-                        "required": true,
-                        "content": {
-                            "application/json": {
-                                "schema": { "$ref": "#/components/schemas/DatasetRegistrationRequest" }
-                            }
-                        }
-                    },
-                    "responses": {
-                        "200": {
-                            "description": "Registered dataset",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/DatasetRecord" }
-                                }
-                            }
-                        },
-                        "400": {
-                            "description": "Only parquet datasets can be registered",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "/api/v1/ops/datasets/{dataset_id}": {
-                "get": {
-                    "summary": "Get external dataset catalog detail",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "parameters": [
-                        {
-                            "name": "dataset_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" }
-                        }
-                    ],
-                    "responses": {
-                        "200": {
-                            "description": "Dataset catalog detail",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/DatasetRecord" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "/api/v1/ops/datasets/{dataset_id}/mappings": {
-                "post": {
-                    "summary": "Add an external field mapping for a dataset",
-                    "security": [{ "ApiKeyAuth": [] }],
-                    "parameters": [
-                        {
-                            "name": "dataset_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" }
-                        }
-                    ],
-                    "requestBody": {
-                        "required": true,
-                        "content": {
-                            "application/json": {
-                                "schema": { "$ref": "#/components/schemas/FieldMappingRequest" }
-                            }
-                        }
-                    },
-                    "responses": {
-                        "200": {
-                            "description": "Created field mapping",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "$ref": "#/components/schemas/FieldMappingResponse" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
+    let mut paths = Map::new();
+    append_paths(&mut paths, openapi_paths_data_ops_datasets::dataset_paths());
+    append_paths(
+        &mut paths,
+        json!({
             "/api/v1/ops/feature-sets": {
                 "post": {
                     "summary": "Register a Parquet feature set version",
@@ -831,5 +736,14 @@ pub(super) fn data_ops_paths() -> Value {
                     }
                 }
             },
-    })
+        }),
+    );
+    Value::Object(paths)
+}
+
+fn append_paths(target: &mut Map<String, Value>, paths: Value) {
+    let Value::Object(paths) = paths else {
+        unreachable!("OpenAPI data ops path group must be a JSON object");
+    };
+    target.extend(paths);
 }
