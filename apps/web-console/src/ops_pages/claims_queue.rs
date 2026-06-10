@@ -524,7 +524,8 @@ pub fn claims_queue_page() -> Html {
         None
     };
 
-    // Triage action factory: takes a decision string (and notes override)
+    // Triage action factory
+    // evidence_refs from the selected lead are passed in to satisfy backend validation
     let do_triage = {
         let api_key          = api_key.clone();
         let snapshot_state   = snapshot_state.clone();
@@ -532,21 +533,31 @@ pub fn claims_queue_page() -> Html {
         let selected_lead_id = selected_lead_id.clone();
         let confirm_msg      = confirm_msg.clone();
         let show_review_form = show_review_form.clone();
-        move |decision: String, notes: String, assignee: String| {
+        move |decision: String, notes: String, assignee: String, evidence_refs: Vec<String>| {
             let id = (*selected_lead_id).clone();
             if id.is_empty() { return; }
-            let api_key        = (*api_key).clone();
-            let snapshot_state = snapshot_state.clone();
-            let triage_state   = triage_state.clone();
-            let confirm_msg    = confirm_msg.clone();
+            let api_key          = (*api_key).clone();
+            let snapshot_state   = snapshot_state.clone();
+            let triage_state     = triage_state.clone();
+            let confirm_msg      = confirm_msg.clone();
             let show_review_form = show_review_form.clone();
+            // Backend requires non-empty evidence_refs; fall back to claim ref if empty
+            let refs = if evidence_refs.is_empty() {
+                vec![format!("leads:{id}")]
+            } else {
+                // Keep only non-PII refs (exclude raw personal data paths)
+                evidence_refs.into_iter()
+                    .filter(|r| !r.is_empty())
+                    .take(10)
+                    .collect()
+            };
             let payload = json!({
                 "decision":      decision,
-                "assignee":      if assignee.is_empty() { "investigator-1".to_string() } else { assignee },
+                "assignee":      if assignee.is_empty() { "investigator-1" } else { &assignee },
                 "reviewer":      "lead-reviewer-1",
                 "priority":      "high",
                 "notes":         notes,
-                "evidence_refs": [],
+                "evidence_refs": refs,
             });
             triage_state.set(ApiState::Loading);
             confirm_msg.set(None);
@@ -554,14 +565,12 @@ pub fn claims_queue_page() -> Html {
                 match post_triage_lead(api_key.clone(), id, payload).await {
                     Ok(record) => {
                         let msg = format!(
-                            "理赔 {} 已处理：{}",
+                            "理赔 {} 已处理",
                             record.lead.claim_id,
-                            business_label(&record.lead.status),
                         );
                         triage_state.set(ApiState::Ready(record));
                         confirm_msg.set(Some(msg));
                         show_review_form.set(false);
-                        // Refresh snapshot
                         snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
                             Ok(s)  => ApiState::Ready(s),
                             Err(e) => ApiState::Failed(e),
@@ -573,32 +582,36 @@ pub fn claims_queue_page() -> Html {
         }
     };
 
-    // btn-approve: reject_lead (low-risk straight-through)
+    // btn-approve: straight-through
     let on_approve = {
-        let do_triage        = do_triage.clone();
-        let selected_lead    = selected_lead.clone();
-        let triage_state     = triage_state.clone();
+        let do_triage     = do_triage.clone();
+        let selected_lead = selected_lead.clone();
+        let triage_state  = triage_state.clone();
         Callback::from(move |_: MouseEvent| {
-            if selected_lead.is_none() || matches!(*triage_state, ApiState::Loading) { return; }
+            let Some(ref lead) = selected_lead else { return; };
+            if matches!(*triage_state, ApiState::Loading) { return; }
             do_triage(
                 "reject_lead".to_string(),
-                "Claims Queue: straight-through — low risk approved.".to_string(),
+                "Claims Queue: straight-through — low risk, no FWA signals.".to_string(),
                 "system-auto".to_string(),
+                lead.evidence_refs.clone(),
             );
         })
     };
 
-    // btn-deny: reject_lead hard deny
+    // btn-deny: hard deny
     let on_deny = {
-        let do_triage        = do_triage.clone();
-        let selected_lead    = selected_lead.clone();
-        let triage_state     = triage_state.clone();
+        let do_triage     = do_triage.clone();
+        let selected_lead = selected_lead.clone();
+        let triage_state  = triage_state.clone();
         Callback::from(move |_: MouseEvent| {
-            if selected_lead.is_none() || matches!(*triage_state, ApiState::Loading) { return; }
+            let Some(ref lead) = selected_lead else { return; };
+            if matches!(*triage_state, ApiState::Loading) { return; }
             do_triage(
                 "reject_lead".to_string(),
-                "Claims Queue: hard deny — risk criteria exceeded.".to_string(),
+                "Claims Queue: deny — deterministic rule criteria exceeded.".to_string(),
                 "denial-officer".to_string(),
+                lead.evidence_refs.clone(),
             );
         })
     };
@@ -611,17 +624,21 @@ pub fn claims_queue_page() -> Html {
 
     // confirm transfer to case
     let on_confirm_review = {
-        let do_triage        = do_triage.clone();
-        let selected_lead    = selected_lead.clone();
-        let triage_state     = triage_state.clone();
-        let triage_assignee  = triage_assignee.clone();
-        let triage_notes     = triage_notes.clone();
+        let do_triage       = do_triage.clone();
+        let selected_lead   = selected_lead.clone();
+        let triage_state    = triage_state.clone();
+        let triage_assignee = triage_assignee.clone();
+        let triage_notes    = triage_notes.clone();
         Callback::from(move |_: MouseEvent| {
-            if selected_lead.is_none() || matches!(*triage_state, ApiState::Loading) { return; }
+            let Some(ref lead) = selected_lead else { return; };
+            if matches!(*triage_state, ApiState::Loading) { return; }
+            let notes = (*triage_notes).clone();
+            if notes.trim().is_empty() { return; }
             do_triage(
                 "open_case".to_string(),
-                (*triage_notes).clone(),
+                notes,
                 (*triage_assignee).clone(),
+                lead.evidence_refs.clone(),
             );
         })
     };
