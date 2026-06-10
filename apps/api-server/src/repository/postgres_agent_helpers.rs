@@ -1,3 +1,4 @@
+use super::row_types::{AgentApprovalRow, AgentPolicyCheckRow};
 use super::*;
 
 impl PostgresScoringRepository {

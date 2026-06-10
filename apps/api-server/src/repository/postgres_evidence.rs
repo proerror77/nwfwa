@@ -1,3 +1,7 @@
+use super::evidence_rows::{
+    evidence_document_chunk_from_row, evidence_document_from_row, evidence_embedding_job_from_row,
+    evidence_ocr_output_from_row, evidence_retrieval_audit_event_from_row,
+};
 use super::*;
 
 pub(super) async fn save_evidence_document(

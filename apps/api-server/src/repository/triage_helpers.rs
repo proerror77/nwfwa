@@ -1,5 +1,6 @@
+use super::case_rows::load_lead_in_tx;
 use super::{
-    evidence_values_to_strings, load_lead_in_tx, normalize_scheme_family, CaseRecord, LeadRecord,
+    evidence_values_to_strings, normalize_scheme_family, CaseRecord, LeadRecord,
     PersistedScoringRun, TriageLeadInput,
 };
 use fwa_core::{assess_evidence_sufficiency, ClaimContext};

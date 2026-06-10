@@ -75,20 +75,11 @@ use self::audit_sample_helpers::{
     audit_sample_strata_contexts_from_claims, build_audit_sample, reviewer_lead_sample_counts,
     with_sample_outcome_distributions,
 };
-use self::case_rows::{
-    load_audit_sample_strata_contexts, load_case_in_tx, load_cases, load_control_audit_population,
-    load_lead_in_tx, load_leads,
-};
 use self::dashboard_helpers::{
     decimal_to_f64, summarize_dashboard_agent_governance, summarize_dashboard_audit_coverage,
     summarize_dashboard_case_sla, summarize_dashboard_label_pool,
     summarize_dashboard_model_governance, summarize_dashboard_qa_queue,
     summarize_dashboard_rule_governance, summarize_dashboard_value_measurement,
-};
-use self::dataset_rows::load_dataset_record;
-use self::evidence_rows::{
-    evidence_document_chunk_from_row, evidence_document_from_row, evidence_embedding_job_from_row,
-    evidence_ocr_output_from_row, evidence_retrieval_audit_event_from_row,
 };
 pub use self::in_memory::InMemoryScoringRepository;
 use self::knowledge_helpers::{
@@ -110,10 +101,6 @@ use self::outcome_helpers::{
 pub use self::postgres::PostgresScoringRepository;
 use self::provider_helpers::summarize_provider_risk_profiles;
 pub use self::r#trait::{ScoringRepository, SharedRepository};
-use self::row_types::{
-    inbox_claim_run_from_row, AgentApprovalRow, AgentPolicyCheckRow, ClaimContextRow, ClaimItemRow,
-    IntoClaimContext,
-};
 use self::rule_defaults::default_rule_details;
 pub use self::rule_defaults::default_runtime_rules;
 use self::rule_helpers::{

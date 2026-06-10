@@ -1,3 +1,4 @@
+use super::row_types::inbox_claim_run_from_row;
 use super::*;
 
 pub(super) async fn save_inbox_claim_run(

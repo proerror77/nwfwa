@@ -1,3 +1,4 @@
+use super::dataset_rows::load_dataset_record;
 use super::*;
 
 pub(super) async fn register_dataset(
