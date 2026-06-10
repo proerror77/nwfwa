@@ -14,15 +14,14 @@ pub struct HttpModelScorer {
 }
 
 impl HttpModelScorer {
-    pub fn new(base_url: impl Into<String>) -> Self {
-        Self {
+    pub fn new(base_url: impl Into<String>) -> Result<Self, reqwest::Error> {
+        Ok(Self {
             client: reqwest::Client::builder()
                 .no_proxy()
                 .timeout(Duration::from_secs(5))
-                .build()
-                .expect("HTTP model scorer client configuration should be valid"),
+                .build()?,
             base_url: base_url.into().trim_end_matches('/').to_string(),
-        }
+        })
     }
 }
 

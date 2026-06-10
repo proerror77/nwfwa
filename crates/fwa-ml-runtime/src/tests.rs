@@ -63,7 +63,7 @@ async fn heuristic_scorer_maps_amount_ratio_to_score() {
 
 #[test]
 fn http_scorer_normalizes_base_url() {
-    let scorer = HttpModelScorer::new("http://localhost:8001/");
+    let scorer = HttpModelScorer::new("http://localhost:8001/").unwrap();
     assert_eq!(scorer.base_url, "http://localhost:8001");
 }
 
@@ -85,7 +85,7 @@ async fn http_scorer_records_request_latency() {
         stream.write_all(response.as_bytes()).unwrap();
     });
 
-    let scorer = HttpModelScorer::new(format!("http://{address}"));
+    let scorer = HttpModelScorer::new(format!("http://{address}")).unwrap();
     let result = scorer
         .score(ModelScoreRequest {
             run_id: ScoringRunId::from_external("run_http_latency"),
@@ -120,7 +120,7 @@ async fn http_scorer_rejects_mismatched_model_version() {
         stream.write_all(response.as_bytes()).unwrap();
     });
 
-    let scorer = HttpModelScorer::new(format!("http://{address}"));
+    let scorer = HttpModelScorer::new(format!("http://{address}")).unwrap();
     let result = scorer
         .score(ModelScoreRequest {
             run_id: ScoringRunId::from_external("run_http_mismatch"),
@@ -153,7 +153,7 @@ async fn http_scorer_rejects_out_of_range_score() {
         stream.write_all(response.as_bytes()).unwrap();
     });
 
-    let scorer = HttpModelScorer::new(format!("http://{address}"));
+    let scorer = HttpModelScorer::new(format!("http://{address}")).unwrap();
     let result = scorer
         .score(ModelScoreRequest {
             run_id: ScoringRunId::from_external("run_http_score_range"),

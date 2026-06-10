@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let config = AppConfig::from_env();
     let repository: SharedRepository =
         Arc::new(PostgresScoringRepository::connect(&config.database_url).await?);
-    let scorer = configured_model_scorer(&config);
+    let scorer = configured_model_scorer(&config)?;
     let app = apply_runtime_limits(build_app_with_parts(config, scorer, repository));
     let bind_addr = std::env::var("FWA_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
     let listener = tokio::net::TcpListener::bind(bind_addr.as_str()).await?;

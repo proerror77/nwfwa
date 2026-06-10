@@ -103,28 +103,33 @@ impl ScoringLookupCache {
 }
 
 pub fn build_app(config: AppConfig) -> Router {
-    let scorer = configured_model_scorer(&config);
+    let scorer = configured_model_scorer(&config).expect("failed to configure model scorer");
     build_app_with_parts(config, scorer, InMemoryScoringRepository::shared())
 }
 
-pub fn configured_model_scorer(config: &AppConfig) -> Arc<dyn ModelScorer> {
+pub fn configured_model_scorer(
+    config: &AppConfig,
+) -> anyhow::Result<Arc<dyn ModelScorer>> {
     if let Some(manifest_uri) = config.model_serving_manifest_uri() {
-        Arc::new(ServingManifestModelScorer::from_env(
+        Ok(Arc::new(ServingManifestModelScorer::from_env(
             manifest_uri,
             config.model_signature_key(),
-        ))
+        )))
     } else if let Some(artifact_uri) = config.model_artifact_uri() {
-        Arc::new(ArtifactModelScorer::from_env(
+        Ok(Arc::new(ArtifactModelScorer::from_env(
             artifact_uri,
             config.model_version_lock(),
             config.model_artifact_sha256(),
             config.model_artifact_signature(),
             config.model_signature_key(),
-        ))
+        )))
     } else if config.model_runtime_kind() == "heuristic" {
-        Arc::new(HeuristicModelScorer)
+        Ok(Arc::new(HeuristicModelScorer))
     } else {
-        Arc::new(HttpModelScorer::new(config.model_service_url.clone()))
+        Ok(Arc::new(
+            HttpModelScorer::new(config.model_service_url.clone())
+                .map_err(|e| anyhow::anyhow!("failed to build HTTP model scorer: {e}"))?,
+        ))
     }
 }
 
@@ -279,7 +284,7 @@ mod tests {
         let scorer = {
             let _guard = scorer_env_lock().lock().unwrap();
             clear_model_artifact_env();
-            configured_model_scorer(&config(format!("http://{address}")))
+            configured_model_scorer(&config(format!("http://{address}"))).unwrap()
         };
 
         let result = scorer
@@ -305,7 +310,7 @@ mod tests {
         let scorer = {
             let _guard = scorer_env_lock().lock().unwrap();
             clear_model_artifact_env();
-            configured_model_scorer(&config("heuristic://local".into()))
+            configured_model_scorer(&config("heuristic://local".into())).unwrap()
         };
 
         let result = scorer
@@ -340,7 +345,7 @@ mod tests {
             let _guard = scorer_env_lock().lock().unwrap();
             clear_model_artifact_env();
             std::env::set_var("FWA_MODEL_ARTIFACT_URI", &artifact_path);
-            let scorer = configured_model_scorer(&config("http://127.0.0.1:1".into()));
+            let scorer = configured_model_scorer(&config("http://127.0.0.1:1".into())).unwrap();
             clear_model_artifact_env();
             scorer
         };
@@ -390,7 +395,7 @@ mod tests {
             let _guard = scorer_env_lock().lock().unwrap();
             clear_model_artifact_env();
             std::env::set_var("FWA_MODEL_SERVING_MANIFEST_URI", &manifest_path);
-            let scorer = configured_model_scorer(&config("http://127.0.0.1:1".into()));
+            let scorer = configured_model_scorer(&config("http://127.0.0.1:1".into())).unwrap();
             clear_model_artifact_env();
             scorer
         };
