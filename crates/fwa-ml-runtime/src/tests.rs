@@ -1,4 +1,5 @@
 use super::*;
+use fwa_core::{ClaimId, ScoringRunId};
 use fwa_features::FeatureValue;
 use std::collections::BTreeMap;
 use std::fs;
