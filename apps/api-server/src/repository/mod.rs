@@ -100,7 +100,11 @@ use self::outcome_helpers::{
 };
 pub use self::postgres::PostgresScoringRepository;
 use self::provider_helpers::summarize_provider_risk_profiles;
-pub use self::r#trait::{ScoringRepository, SharedRepository};
+pub use self::r#trait::{
+    CasesRepository, ClaimsRepository, DatasetsRepository, EvidenceRepository, KnowledgeRepository,
+    ModelsRepository, OutcomesRepository, RoutingRepository, RulesRepository, ScoringRepository,
+    SharedRepository,
+};
 use self::rule_defaults::default_rule_details;
 pub use self::rule_defaults::default_runtime_rules;
 use self::rule_helpers::{

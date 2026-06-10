@@ -77,7 +77,7 @@ mod tests {
 }
 
 #[async_trait]
-impl ScoringRepository for PostgresScoringRepository {
+impl ClaimsRepository for PostgresScoringRepository {
     async fn upsert_claim_context(
         &self,
         context: ClaimContext,
@@ -134,7 +134,10 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
         postgres_inbox::get_inbox_claim_run_by_run_id(self, run_id, customer_scope_id).await
     }
+}
 
+#[async_trait]
+impl RoutingRepository for PostgresScoringRepository {
     async fn active_routing_policy(
         &self,
         review_mode: &str,
@@ -189,7 +192,10 @@ impl ScoringRepository for PostgresScoringRepository {
         postgres_routing_policies::activate_routing_policy(self, policy_id, version, review_mode)
             .await
     }
+}
 
+#[async_trait]
+impl RulesRepository for PostgresScoringRepository {
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
         postgres_rules::list_rules(self).await
     }
@@ -277,7 +283,10 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Option<RulePromotionReviewRecord>> {
         postgres_rule_reviews::latest_rule_promotion_review(self, rule_id, rule_version).await
     }
+}
 
+#[async_trait]
+impl CasesRepository for PostgresScoringRepository {
     async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>> {
         postgres_cases::list_leads(self, customer_scope_id).await
     }
@@ -315,7 +324,10 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Vec<AuditSampleRecord>> {
         postgres_audit_samples::list_audit_samples(self, customer_scope_id).await
     }
+}
 
+#[async_trait]
+impl ModelsRepository for PostgresScoringRepository {
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
         postgres_models::list_models(self).await
     }
@@ -411,54 +423,10 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
         postgres_models::complete_model_retraining_job(self, input).await
     }
+}
 
-    async fn dashboard_summary(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<DashboardSummaryRecord> {
-        postgres_dashboard::dashboard_summary(self, customer_scope_id).await
-    }
-
-    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
-        postgres_providers::provider_risk_summary(self).await
-    }
-
-    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
-        postgres_knowledge::list_knowledge_cases(self).await
-    }
-
-    async fn save_knowledge_case(
-        &self,
-        record: KnowledgeCaseRecord,
-    ) -> anyhow::Result<KnowledgeCaseRecord> {
-        postgres_knowledge::save_knowledge_case(self, record).await
-    }
-
-    async fn search_similar_cases(
-        &self,
-        query: SimilarCaseQuery,
-    ) -> anyhow::Result<Vec<SimilarCaseRecord>> {
-        postgres_knowledge::search_similar_cases(self, query).await
-    }
-
-    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
-        postgres_agents::save_agent_run(self, run).await
-    }
-
-    async fn list_agent_runs(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<AgentRunLogRecord>> {
-        postgres_agents::list_agent_runs(self, customer_scope_id).await
-    }
-
-    async fn save_agent_approval(
-        &self,
-        approval: AgentApprovalRecord,
-    ) -> anyhow::Result<AgentApprovalRecord> {
-        postgres_agents::save_agent_approval(self, approval).await
-    }
-
+#[async_trait]
+impl DatasetsRepository for PostgresScoringRepository {
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
         postgres_datasets::register_dataset(self, input).await
     }
@@ -477,76 +445,6 @@ impl ScoringRepository for PostgresScoringRepository {
         input: CreateFieldMappingInput,
     ) -> anyhow::Result<Option<FieldMappingRecord>> {
         postgres_datasets::add_field_mapping(self, dataset_id, input).await
-    }
-
-    async fn save_investigation_result(
-        &self,
-        record: InvestigationResultRecord,
-    ) -> anyhow::Result<AuditHistoryEventRecord> {
-        postgres_outcomes::save_investigation_result(self, record).await
-    }
-
-    async fn save_qa_review(
-        &self,
-        record: QaReviewRecord,
-    ) -> anyhow::Result<AuditHistoryEventRecord> {
-        postgres_qa::save_qa_review(self, record).await
-    }
-
-    async fn list_qa_feedback_items(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
-        postgres_qa::list_qa_feedback_items(self, customer_scope_id).await
-    }
-
-    async fn update_qa_feedback_status(
-        &self,
-        feedback_id: &str,
-        input: UpdateQaFeedbackStatusInput,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
-        postgres_qa::update_qa_feedback_status(self, feedback_id, input, customer_scope_id).await
-    }
-
-    async fn list_qa_reviews(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<QaReviewRecord>> {
-        postgres_qa::list_qa_reviews(self, customer_scope_id).await
-    }
-
-    async fn list_outcome_labels(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
-        postgres_outcomes::list_outcome_labels(self, customer_scope_id).await
-    }
-
-    async fn claim_audit_history(
-        &self,
-        claim_id: &str,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        postgres_audit::claim_audit_history(self, claim_id, customer_scope_id).await
-    }
-
-    async fn list_audit_events(
-        &self,
-        filter: AuditEventListFilter,
-    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        postgres_audit::list_audit_events(self, filter).await
-    }
-
-    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>> {
-        postgres_webhooks::list_webhook_events(self).await
-    }
-
-    async fn save_webhook_delivery_attempt(
-        &self,
-        input: WebhookDeliveryAttemptInput,
-    ) -> anyhow::Result<WebhookDeliveryAttemptRecord> {
-        postgres_webhooks::save_webhook_delivery_attempt(self, input).await
     }
 
     async fn register_feature_set(
@@ -587,7 +485,10 @@ impl ScoringRepository for PostgresScoringRepository {
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
         postgres_datasets::list_model_evaluations(self).await
     }
+}
 
+#[async_trait]
+impl EvidenceRepository for PostgresScoringRepository {
     async fn save_evidence_document(
         &self,
         input: CreateEvidenceDocumentInput,
@@ -668,5 +569,128 @@ impl ScoringRepository for PostgresScoringRepository {
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>> {
         postgres_evidence::list_evidence_retrieval_audit_events(self, customer_scope_id).await
+    }
+}
+
+#[async_trait]
+impl OutcomesRepository for PostgresScoringRepository {
+    async fn save_investigation_result(
+        &self,
+        record: InvestigationResultRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        postgres_outcomes::save_investigation_result(self, record).await
+    }
+
+    async fn save_qa_review(
+        &self,
+        record: QaReviewRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        postgres_qa::save_qa_review(self, record).await
+    }
+
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+        postgres_qa::list_qa_feedback_items(self, customer_scope_id).await
+    }
+
+    async fn update_qa_feedback_status(
+        &self,
+        feedback_id: &str,
+        input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
+        postgres_qa::update_qa_feedback_status(self, feedback_id, input, customer_scope_id).await
+    }
+
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>> {
+        postgres_qa::list_qa_reviews(self, customer_scope_id).await
+    }
+
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+        postgres_outcomes::list_outcome_labels(self, customer_scope_id).await
+    }
+
+    async fn claim_audit_history(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        postgres_audit::claim_audit_history(self, claim_id, customer_scope_id).await
+    }
+
+    async fn list_audit_events(
+        &self,
+        filter: AuditEventListFilter,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        postgres_audit::list_audit_events(self, filter).await
+    }
+
+    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>> {
+        postgres_webhooks::list_webhook_events(self).await
+    }
+
+    async fn save_webhook_delivery_attempt(
+        &self,
+        input: WebhookDeliveryAttemptInput,
+    ) -> anyhow::Result<WebhookDeliveryAttemptRecord> {
+        postgres_webhooks::save_webhook_delivery_attempt(self, input).await
+    }
+}
+
+#[async_trait]
+impl KnowledgeRepository for PostgresScoringRepository {
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord> {
+        postgres_dashboard::dashboard_summary(self, customer_scope_id).await
+    }
+
+    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
+        postgres_providers::provider_risk_summary(self).await
+    }
+
+    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
+        postgres_knowledge::list_knowledge_cases(self).await
+    }
+
+    async fn save_knowledge_case(
+        &self,
+        record: KnowledgeCaseRecord,
+    ) -> anyhow::Result<KnowledgeCaseRecord> {
+        postgres_knowledge::save_knowledge_case(self, record).await
+    }
+
+    async fn search_similar_cases(
+        &self,
+        query: SimilarCaseQuery,
+    ) -> anyhow::Result<Vec<SimilarCaseRecord>> {
+        postgres_knowledge::search_similar_cases(self, query).await
+    }
+
+    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
+        postgres_agents::save_agent_run(self, run).await
+    }
+
+    async fn list_agent_runs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AgentRunLogRecord>> {
+        postgres_agents::list_agent_runs(self, customer_scope_id).await
+    }
+
+    async fn save_agent_approval(
+        &self,
+        approval: AgentApprovalRecord,
+    ) -> anyhow::Result<AgentApprovalRecord> {
+        postgres_agents::save_agent_approval(self, approval).await
     }
 }

@@ -1,8 +1,12 @@
 use super::*;
 use async_trait::async_trait;
 
+// ---------------------------------------------------------------------------
+// ClaimsRepository
+// ---------------------------------------------------------------------------
+
 #[async_trait]
-impl ScoringRepository for InMemoryScoringRepository {
+impl ClaimsRepository for InMemoryScoringRepository {
     async fn upsert_claim_context(
         &self,
         context: ClaimContext,
@@ -58,7 +62,14 @@ impl ScoringRepository for InMemoryScoringRepository {
         self.in_memory_get_inbox_claim_run_by_run_id(run_id, customer_scope_id)
             .await
     }
+}
 
+// ---------------------------------------------------------------------------
+// RoutingRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl RoutingRepository for InMemoryScoringRepository {
     async fn active_routing_policy(
         &self,
         review_mode: &str,
@@ -109,7 +120,14 @@ impl ScoringRepository for InMemoryScoringRepository {
         self.in_memory_activate_routing_policy(policy_id, version, review_mode)
             .await
     }
+}
 
+// ---------------------------------------------------------------------------
+// RulesRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl RulesRepository for InMemoryScoringRepository {
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
         self.in_memory_list_rules().await
     }
@@ -200,7 +218,14 @@ impl ScoringRepository for InMemoryScoringRepository {
         self.in_memory_latest_rule_promotion_review(rule_id, rule_version)
             .await
     }
+}
 
+// ---------------------------------------------------------------------------
+// CasesRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl CasesRepository for InMemoryScoringRepository {
     async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>> {
         self.in_memory_list_leads(customer_scope_id).await
     }
@@ -238,7 +263,14 @@ impl ScoringRepository for InMemoryScoringRepository {
     ) -> anyhow::Result<Vec<AuditSampleRecord>> {
         self.in_memory_list_audit_samples(customer_scope_id).await
     }
+}
 
+// ---------------------------------------------------------------------------
+// ModelsRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl ModelsRepository for InMemoryScoringRepository {
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
         self.in_memory_list_models().await
     }
@@ -331,54 +363,14 @@ impl ScoringRepository for InMemoryScoringRepository {
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
         self.in_memory_complete_model_retraining_job(input).await
     }
+}
 
-    async fn dashboard_summary(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<DashboardSummaryRecord> {
-        self.in_memory_dashboard_summary(customer_scope_id).await
-    }
+// ---------------------------------------------------------------------------
+// DatasetsRepository
+// ---------------------------------------------------------------------------
 
-    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
-        self.in_memory_provider_risk_summary().await
-    }
-
-    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
-        self.in_memory_list_knowledge_cases().await
-    }
-
-    async fn save_knowledge_case(
-        &self,
-        record: KnowledgeCaseRecord,
-    ) -> anyhow::Result<KnowledgeCaseRecord> {
-        self.in_memory_save_knowledge_case(record).await
-    }
-
-    async fn search_similar_cases(
-        &self,
-        query: SimilarCaseQuery,
-    ) -> anyhow::Result<Vec<SimilarCaseRecord>> {
-        self.in_memory_search_similar_cases(query).await
-    }
-
-    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
-        self.in_memory_save_agent_run(run).await
-    }
-
-    async fn list_agent_runs(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<AgentRunLogRecord>> {
-        self.in_memory_list_agent_runs(customer_scope_id).await
-    }
-
-    async fn save_agent_approval(
-        &self,
-        approval: AgentApprovalRecord,
-    ) -> anyhow::Result<AgentApprovalRecord> {
-        self.in_memory_save_agent_approval(approval).await
-    }
-
+#[async_trait]
+impl DatasetsRepository for InMemoryScoringRepository {
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
         self.in_memory_register_dataset(input).await
     }
@@ -397,79 +389,6 @@ impl ScoringRepository for InMemoryScoringRepository {
         input: CreateFieldMappingInput,
     ) -> anyhow::Result<Option<FieldMappingRecord>> {
         self.in_memory_add_field_mapping(dataset_id, input).await
-    }
-
-    async fn save_investigation_result(
-        &self,
-        record: InvestigationResultRecord,
-    ) -> anyhow::Result<AuditHistoryEventRecord> {
-        self.in_memory_save_investigation_result(record).await
-    }
-
-    async fn save_qa_review(
-        &self,
-        record: QaReviewRecord,
-    ) -> anyhow::Result<AuditHistoryEventRecord> {
-        self.in_memory_save_qa_review(record).await
-    }
-
-    async fn list_qa_feedback_items(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
-        self.in_memory_list_qa_feedback_items(customer_scope_id)
-            .await
-    }
-
-    async fn update_qa_feedback_status(
-        &self,
-        feedback_id: &str,
-        input: UpdateQaFeedbackStatusInput,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
-        self.in_memory_update_qa_feedback_status(feedback_id, input, customer_scope_id)
-            .await
-    }
-
-    async fn list_qa_reviews(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<QaReviewRecord>> {
-        self.in_memory_list_qa_reviews(customer_scope_id).await
-    }
-
-    async fn list_outcome_labels(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
-        self.in_memory_list_outcome_labels(customer_scope_id).await
-    }
-
-    async fn claim_audit_history(
-        &self,
-        claim_id: &str,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        self.in_memory_claim_audit_history(claim_id, customer_scope_id)
-            .await
-    }
-
-    async fn list_audit_events(
-        &self,
-        filter: AuditEventListFilter,
-    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        self.in_memory_list_audit_events(filter).await
-    }
-
-    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>> {
-        self.in_memory_list_webhook_events().await
-    }
-
-    async fn save_webhook_delivery_attempt(
-        &self,
-        input: WebhookDeliveryAttemptInput,
-    ) -> anyhow::Result<WebhookDeliveryAttemptRecord> {
-        self.in_memory_save_webhook_delivery_attempt(input).await
     }
 
     async fn register_feature_set(
@@ -511,7 +430,14 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
         self.in_memory_list_model_evaluations().await
     }
+}
 
+// ---------------------------------------------------------------------------
+// EvidenceRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl EvidenceRepository for InMemoryScoringRepository {
     async fn save_evidence_document(
         &self,
         input: CreateEvidenceDocumentInput,
@@ -601,5 +527,139 @@ impl ScoringRepository for InMemoryScoringRepository {
     ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>> {
         self.in_memory_list_evidence_retrieval_audit_events(customer_scope_id)
             .await
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OutcomesRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl OutcomesRepository for InMemoryScoringRepository {
+    async fn save_investigation_result(
+        &self,
+        record: InvestigationResultRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        self.in_memory_save_investigation_result(record).await
+    }
+
+    async fn save_qa_review(
+        &self,
+        record: QaReviewRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        self.in_memory_save_qa_review(record).await
+    }
+
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+        self.in_memory_list_qa_feedback_items(customer_scope_id)
+            .await
+    }
+
+    async fn update_qa_feedback_status(
+        &self,
+        feedback_id: &str,
+        input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
+        self.in_memory_update_qa_feedback_status(feedback_id, input, customer_scope_id)
+            .await
+    }
+
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>> {
+        self.in_memory_list_qa_reviews(customer_scope_id).await
+    }
+
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+        self.in_memory_list_outcome_labels(customer_scope_id).await
+    }
+
+    async fn claim_audit_history(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        self.in_memory_claim_audit_history(claim_id, customer_scope_id)
+            .await
+    }
+
+    async fn list_audit_events(
+        &self,
+        filter: AuditEventListFilter,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        self.in_memory_list_audit_events(filter).await
+    }
+
+    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>> {
+        self.in_memory_list_webhook_events().await
+    }
+
+    async fn save_webhook_delivery_attempt(
+        &self,
+        input: WebhookDeliveryAttemptInput,
+    ) -> anyhow::Result<WebhookDeliveryAttemptRecord> {
+        self.in_memory_save_webhook_delivery_attempt(input).await
+    }
+}
+
+// ---------------------------------------------------------------------------
+// KnowledgeRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl KnowledgeRepository for InMemoryScoringRepository {
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord> {
+        self.in_memory_dashboard_summary(customer_scope_id).await
+    }
+
+    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
+        self.in_memory_provider_risk_summary().await
+    }
+
+    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
+        self.in_memory_list_knowledge_cases().await
+    }
+
+    async fn save_knowledge_case(
+        &self,
+        record: KnowledgeCaseRecord,
+    ) -> anyhow::Result<KnowledgeCaseRecord> {
+        self.in_memory_save_knowledge_case(record).await
+    }
+
+    async fn search_similar_cases(
+        &self,
+        query: SimilarCaseQuery,
+    ) -> anyhow::Result<Vec<SimilarCaseRecord>> {
+        self.in_memory_search_similar_cases(query).await
+    }
+
+    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
+        self.in_memory_save_agent_run(run).await
+    }
+
+    async fn list_agent_runs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AgentRunLogRecord>> {
+        self.in_memory_list_agent_runs(customer_scope_id).await
+    }
+
+    async fn save_agent_approval(
+        &self,
+        approval: AgentApprovalRecord,
+    ) -> anyhow::Result<AgentApprovalRecord> {
+        self.in_memory_save_agent_approval(approval).await
     }
 }

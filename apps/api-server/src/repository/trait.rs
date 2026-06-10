@@ -6,8 +6,12 @@ use fwa_scoring::RoutingPolicy;
 use serde_json::Value;
 use std::sync::Arc;
 
+// ---------------------------------------------------------------------------
+// ClaimsRepository
+// ---------------------------------------------------------------------------
+
 #[async_trait]
-pub trait ScoringRepository: Send + Sync {
+pub trait ClaimsRepository: Send + Sync {
     async fn upsert_claim_context(
         &self,
         context: ClaimContext,
@@ -43,7 +47,14 @@ pub trait ScoringRepository: Send + Sync {
         run_id: &str,
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<PersistedInboxClaimRun>>;
+}
 
+// ---------------------------------------------------------------------------
+// RoutingRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait RoutingRepository: Send + Sync {
     async fn active_routing_policy(
         &self,
         review_mode: &str,
@@ -78,7 +89,14 @@ pub trait ScoringRepository: Send + Sync {
         version: u32,
         review_mode: &str,
     ) -> anyhow::Result<Option<RoutingPolicyRecord>>;
+}
 
+// ---------------------------------------------------------------------------
+// RulesRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait RulesRepository: Send + Sync {
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>>;
 
     async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>>;
@@ -138,7 +156,14 @@ pub trait ScoringRepository: Send + Sync {
         rule_id: &str,
         rule_version: u32,
     ) -> anyhow::Result<Option<RulePromotionReviewRecord>>;
+}
 
+// ---------------------------------------------------------------------------
+// CasesRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait CasesRepository: Send + Sync {
     async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>>;
 
     async fn triage_lead(
@@ -164,7 +189,14 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AuditSampleRecord>>;
+}
 
+// ---------------------------------------------------------------------------
+// ModelsRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait ModelsRepository: Send + Sync {
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
     async fn save_model_version(
@@ -229,38 +261,14 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         input: CompleteModelRetrainingJobInput<'_>,
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
+}
 
-    async fn dashboard_summary(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<DashboardSummaryRecord>;
+// ---------------------------------------------------------------------------
+// DatasetsRepository
+// ---------------------------------------------------------------------------
 
-    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord>;
-
-    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
-
-    async fn save_knowledge_case(
-        &self,
-        record: KnowledgeCaseRecord,
-    ) -> anyhow::Result<KnowledgeCaseRecord>;
-
-    async fn search_similar_cases(
-        &self,
-        query: SimilarCaseQuery,
-    ) -> anyhow::Result<Vec<SimilarCaseRecord>>;
-
-    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
-
-    async fn list_agent_runs(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<AgentRunLogRecord>>;
-
-    async fn save_agent_approval(
-        &self,
-        approval: AgentApprovalRecord,
-    ) -> anyhow::Result<AgentApprovalRecord>;
-
+#[async_trait]
+pub trait DatasetsRepository: Send + Sync {
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord>;
 
     async fn list_datasets(&self) -> anyhow::Result<Vec<DatasetRecord>>;
@@ -272,56 +280,6 @@ pub trait ScoringRepository: Send + Sync {
         dataset_id: &str,
         input: CreateFieldMappingInput,
     ) -> anyhow::Result<Option<FieldMappingRecord>>;
-
-    async fn save_investigation_result(
-        &self,
-        record: InvestigationResultRecord,
-    ) -> anyhow::Result<AuditHistoryEventRecord>;
-
-    async fn save_qa_review(
-        &self,
-        record: QaReviewRecord,
-    ) -> anyhow::Result<AuditHistoryEventRecord>;
-
-    async fn list_qa_feedback_items(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
-
-    async fn update_qa_feedback_status(
-        &self,
-        feedback_id: &str,
-        input: UpdateQaFeedbackStatusInput,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>>;
-
-    async fn list_qa_reviews(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<QaReviewRecord>>;
-
-    async fn list_outcome_labels(
-        &self,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
-
-    async fn claim_audit_history(
-        &self,
-        claim_id: &str,
-        customer_scope_id: Option<&str>,
-    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
-
-    async fn list_audit_events(
-        &self,
-        filter: AuditEventListFilter,
-    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
-
-    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>>;
-
-    async fn save_webhook_delivery_attempt(
-        &self,
-        input: WebhookDeliveryAttemptInput,
-    ) -> anyhow::Result<WebhookDeliveryAttemptRecord>;
 
     async fn register_feature_set(
         &self,
@@ -349,7 +307,14 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<Option<ModelEvaluationRecord>>;
 
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>>;
+}
 
+// ---------------------------------------------------------------------------
+// EvidenceRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait EvidenceRepository: Send + Sync {
     async fn save_evidence_document(
         &self,
         input: CreateEvidenceDocumentInput,
@@ -409,6 +374,135 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>>;
+}
+
+// ---------------------------------------------------------------------------
+// OutcomesRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait OutcomesRepository: Send + Sync {
+    async fn save_investigation_result(
+        &self,
+        record: InvestigationResultRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord>;
+
+    async fn save_qa_review(
+        &self,
+        record: QaReviewRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord>;
+
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
+
+    async fn update_qa_feedback_status(
+        &self,
+        feedback_id: &str,
+        input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>>;
+
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>>;
+
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
+
+    async fn claim_audit_history(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
+
+    async fn list_audit_events(
+        &self,
+        filter: AuditEventListFilter,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
+
+    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>>;
+
+    async fn save_webhook_delivery_attempt(
+        &self,
+        input: WebhookDeliveryAttemptInput,
+    ) -> anyhow::Result<WebhookDeliveryAttemptRecord>;
+}
+
+// ---------------------------------------------------------------------------
+// KnowledgeRepository
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait KnowledgeRepository: Send + Sync {
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord>;
+
+    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord>;
+
+    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
+
+    async fn save_knowledge_case(
+        &self,
+        record: KnowledgeCaseRecord,
+    ) -> anyhow::Result<KnowledgeCaseRecord>;
+
+    async fn search_similar_cases(
+        &self,
+        query: SimilarCaseQuery,
+    ) -> anyhow::Result<Vec<SimilarCaseRecord>>;
+
+    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
+
+    async fn list_agent_runs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AgentRunLogRecord>>;
+
+    async fn save_agent_approval(
+        &self,
+        approval: AgentApprovalRecord,
+    ) -> anyhow::Result<AgentApprovalRecord>;
+}
+
+// ---------------------------------------------------------------------------
+// ScoringRepository — composed supertrait
+// ---------------------------------------------------------------------------
+
+pub trait ScoringRepository:
+    ClaimsRepository
+    + RoutingRepository
+    + RulesRepository
+    + CasesRepository
+    + ModelsRepository
+    + DatasetsRepository
+    + EvidenceRepository
+    + OutcomesRepository
+    + KnowledgeRepository
+    + Send
+    + Sync
+{
+}
+
+impl<T> ScoringRepository for T where
+    T: ClaimsRepository
+        + RoutingRepository
+        + RulesRepository
+        + CasesRepository
+        + ModelsRepository
+        + DatasetsRepository
+        + EvidenceRepository
+        + OutcomesRepository
+        + KnowledgeRepository
+        + Send
+        + Sync
+{
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
