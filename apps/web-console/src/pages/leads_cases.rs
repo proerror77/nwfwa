@@ -56,6 +56,8 @@ pub fn leads_cases_page() -> Html {
     let case_update_state = use_state(|| ApiState::<UpdateCaseStatusRecord>::Idle);
     let investigation_state = use_state(|| ApiState::<PilotWritebackResponse>::Idle);
     let case_agent_state = use_state(|| ApiState::<AgentInvestigationResponse>::Idle);
+    let member_context_state = use_state(|| ApiState::<MemberProfileSummary>::Idle);
+    let provider_context_state = use_state(|| ApiState::<ProviderRiskSummary>::Idle);
 
     let load_cases = {
         let api_key = api_key.clone();
@@ -306,7 +308,48 @@ pub fn leads_cases_page() -> Html {
 
     let select_lead = {
         let selected_lead_id = selected_lead_id.clone();
-        Callback::from(move |lead_id: String| selected_lead_id.set(lead_id))
+        let snapshot_state = snapshot_state.clone();
+        let api_key = api_key.clone();
+        let member_context_state = member_context_state.clone();
+        let provider_context_state = provider_context_state.clone();
+        Callback::from(move |lead_id: String| {
+            selected_lead_id.set(lead_id.clone());
+
+            let member_id = if let ApiState::Ready(snapshot) = &*snapshot_state {
+                snapshot.leads.iter()
+                    .find(|l| l.lead_id == lead_id)
+                    .map(|l| l.member_id.clone())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+
+            if !member_id.is_empty() {
+                let api_key_m = (*api_key).clone();
+                let member_context_state = member_context_state.clone();
+                member_context_state.set(ApiState::Loading);
+                spawn_local(async move {
+                    member_context_state.set(
+                        match get_member_profile_summary(api_key_m, member_id).await {
+                            Ok(summary) => ApiState::Ready(summary),
+                            Err(error) => ApiState::Failed(error),
+                        }
+                    );
+                });
+            }
+
+            let api_key_p = (*api_key).clone();
+            let provider_context_state = provider_context_state.clone();
+            provider_context_state.set(ApiState::Loading);
+            spawn_local(async move {
+                provider_context_state.set(
+                    match get_provider_risk_summary(api_key_p).await {
+                        Ok(summary) => ApiState::Ready(summary),
+                        Err(error) => ApiState::Failed(error),
+                    }
+                );
+            });
+        })
     };
 
     let select_case = {
@@ -339,13 +382,15 @@ pub fn leads_cases_page() -> Html {
             </section>
 
             <div class="leads-cases-workflow">
-                <div class="queue-column">
+                    <div class="queue-column">
                     <LeadsCasesView
                         state={(*snapshot_state).clone()}
                         selected_lead_id={(*selected_lead_id).clone()}
                         selected_case_id={(*selected_case_id).clone()}
                         on_select_lead={select_lead}
                         on_select_case={select_case}
+                        member_context_state={(*member_context_state).clone()}
+                        provider_context_state={(*provider_context_state).clone()}
                     />
                 </div>
 

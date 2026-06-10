@@ -24,6 +24,8 @@ pub(super) struct LeadsCasesProps {
     pub(super) selected_case_id: String,
     pub(super) on_select_lead: Callback<String>,
     pub(super) on_select_case: Callback<String>,
+    pub(super) member_context_state: ApiState<MemberProfileSummary>,
+    pub(super) provider_context_state: ApiState<ProviderRiskSummary>,
 }
 
 #[function_component(LeadsCasesView)]
@@ -149,10 +151,118 @@ pub(super) fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                 }
                             </div>
                         </section>
+
+                        {lead_context_panel(&props.member_context_state, &props.provider_context_state)}
                     </>
                 },
             }}
         </>
+    }
+}
+
+fn lead_context_panel(
+    member_state: &ApiState<MemberProfileSummary>,
+    provider_state: &ApiState<ProviderRiskSummary>,
+) -> Html {
+    let is_idle = matches!(member_state, ApiState::Idle) && matches!(provider_state, ApiState::Idle);
+    if is_idle {
+        return html! {};
+    }
+
+    let member_html = match member_state {
+        ApiState::Idle => html! {},
+        ApiState::Loading => html! {
+            <div class="context-mini-card">
+                <span class="context-card-label">{"Member"}</span>
+                <p class="context-loading">{"Loading context..."}</p>
+            </div>
+        },
+        ApiState::Failed(error) => html! {
+            <div class="context-mini-card">
+                <span class="context-card-label">{"Member"}</span>
+                <p class="warning">{format!("Context unavailable: {error}")}</p>
+            </div>
+        },
+        ApiState::Ready(summary) => html! {
+            <div class="context-mini-card">
+                <span class="context-card-label">{"Member"}</span>
+                <div class="context-card-row">
+                    <span>{"Claims"}</span><strong>{summary.claim_count}</strong>
+                </div>
+                <div class="context-card-row">
+                    <span>{"High-risk claims"}</span><strong>{summary.high_risk_claim_count}</strong>
+                </div>
+                <div class="context-card-row">
+                    <span>{"Risk level"}</span>
+                    <strong>{&summary.risk_level_summary}</strong>
+                </div>
+                <div class="context-card-row">
+                    <span>{"Profile"}</span><span>{&summary.profile_summary}</span>
+                </div>
+            </div>
+        },
+    };
+
+    let provider_html = match provider_state {
+        ApiState::Idle => html! {},
+        ApiState::Loading => html! {
+            <div class="context-mini-card">
+                <span class="context-card-label">{"Provider Risk"}</span>
+                <p class="context-loading">{"Loading context..."}</p>
+            </div>
+        },
+        ApiState::Failed(error) => html! {
+            <div class="context-mini-card">
+                <span class="context-card-label">{"Provider Risk"}</span>
+                <p class="warning">{format!("Context unavailable: {error}")}</p>
+            </div>
+        },
+        ApiState::Ready(summary) => {
+            let top_provider = summary.providers.first();
+            html! {
+                <div class="context-mini-card">
+                    <span class="context-card-label">{"Provider Risk"}</span>
+                    <div class="context-card-row">
+                        <span>{"Providers reviewed"}</span><strong>{summary.provider_count}</strong>
+                    </div>
+                    <div class="context-card-row">
+                        <span>{"High risk"}</span><strong>{summary.high_risk_count}</strong>
+                    </div>
+                    <div class="context-card-row">
+                        <span>{"Review required"}</span><strong>{summary.review_required_count}</strong>
+                    </div>
+                    {top_provider.map(|p| html! {
+                        <>
+                            <div class="context-card-row">
+                                <span>{"Top provider"}</span><strong>{&p.provider_id}</strong>
+                            </div>
+                            <div class="context-card-row">
+                                <span>{"Risk tier"}</span><strong>{&p.risk_tier}</strong>
+                            </div>
+                            <div class="context-card-row">
+                                <span>{"Risk score"}</span><strong>{p.risk_score}</strong>
+                            </div>
+                            if !p.outlier_flags.is_empty() {
+                                <div class="context-card-row">
+                                    <span>{"Signals"}</span>
+                                    <span>{p.outlier_flags.join(", ")}</span>
+                                </div>
+                            }
+                        </>
+                    }).unwrap_or_else(|| html! {})}
+                </div>
+            }
+        },
+    };
+
+    html! {
+        <section class="panel result-stack lead-context-panel">
+            <h3>{"Lead Context"}</h3>
+            <div class="context-cards-row">
+                {member_html}
+                {provider_html}
+            </div>
+        </section>
     }
 }
 
