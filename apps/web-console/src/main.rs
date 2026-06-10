@@ -31,7 +31,7 @@ pub(crate) use formatting::*;
 pub(crate) use inbox_helpers::*;
 use i18n::{
     apply_document_language, brand_description, module_context, module_description, module_label,
-    section_label, tr,
+    section_label, setup_translations, tr,
 };
 pub(crate) use medical_review_helpers::*;
 pub(crate) use model_ui_helpers::*;
@@ -199,5 +199,6 @@ fn rule_performance_for<'a>(
 }
 
 fn main() {
+    setup_translations();
     yew::Renderer::<App>::new().render();
 }
