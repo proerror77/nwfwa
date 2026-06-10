@@ -1,6 +1,15 @@
-use super::*;
+use crate::scorer_artifact::ArtifactModelScorer;
+use crate::scorer_heuristic::HeuristicModelScorer;
+use crate::scorer_http::HttpModelScorer;
+use crate::scorer_manifest::{
+    onnx_session_cache_key, positive_probability_from_tensor, ServingManifest,
+    ServingManifestModelScorer,
+};
+use crate::types::{ModelRuntimeError, ModelScoreRequest, ModelScorer};
+use crate::verify::to_hex;
 use fwa_core::{ClaimId, ScoringRunId};
 use fwa_features::FeatureValue;
+use hmac::{Hmac, Mac};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
