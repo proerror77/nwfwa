@@ -1,0 +1,221 @@
+use super::{
+    ops_rules::{internal_error, load_rule_promotion_gates, require_permission},
+    ops_rules_audit::{record_rule_audit, RuleAuditInput},
+    ops_rules_types::{RuleLifecycleRequest, RuleLifecycleResponse},
+    ops_rules_validation::validate_rule_lifecycle_request,
+};
+use crate::{
+    app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    error::ApiError,
+};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    Json,
+};
+use fwa_audit::ActorContext;
+
+pub async fn submit_rule(
+    State(state): State<AppState>,
+    AuthenticatedActor(actor): AuthenticatedActor,
+    Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    validate_rule_lifecycle_request(&request)?;
+    update_status(state, actor, rule_id, "submitted", request.evidence_refs).await
+}
+
+pub async fn approve_rule(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    validate_rule_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:rules:approve")?;
+    update_status_with_required_previous(
+        state,
+        actor,
+        rule_id,
+        "approved",
+        Some("submitted"),
+        request.evidence_refs,
+    )
+    .await
+}
+
+pub async fn publish_rule(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    validate_rule_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:rules:publish")?;
+    let previous = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    if previous.status != "approved" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "RULE_APPROVAL_REQUIRED",
+            "rule must be approved before publish",
+        ));
+    }
+    let gates = load_rule_promotion_gates(&state, &rule_id).await?;
+    if gates.decision != "routing_allowed" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "RULE_PROMOTION_GATES_BLOCKED",
+            format!(
+                "rule promotion gates blocked: {}",
+                gates.blockers.join(", ")
+            ),
+        ));
+    }
+    let rule = state
+        .repository
+        .update_rule_status(&rule_id, "active")
+        .await
+        .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &rule,
+            event_type: "rule.status.changed",
+            from_status: Some(&previous.status),
+            to_status: &rule.status,
+            summary: "Rule status changed",
+            evidence_refs: request.evidence_refs,
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    state.scoring_lookup_cache.invalidate_all().await;
+    Ok(Json(RuleLifecycleResponse {
+        rule_id: rule.rule_id,
+        status: rule.status,
+        active_version: rule.active_version,
+        latest_version: rule.latest_version,
+    }))
+}
+
+pub async fn rollback_rule(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    validate_rule_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:rules:rollback")?;
+    let previous = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    if previous.status != "active" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "RULE_ROLLBACK_REQUIRES_ACTIVE",
+            "only active rules can be rolled back",
+        ));
+    }
+    let rule = state
+        .repository
+        .update_rule_status(&rule_id, "approved")
+        .await
+        .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &rule,
+            event_type: "rule.rollback.completed",
+            from_status: Some(&previous.status),
+            to_status: &rule.status,
+            summary: "Rule rollback completed",
+            evidence_refs: request.evidence_refs,
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    state.scoring_lookup_cache.invalidate_all().await;
+    Ok(Json(RuleLifecycleResponse {
+        rule_id: rule.rule_id,
+        status: rule.status,
+        active_version: rule.active_version,
+        latest_version: rule.latest_version,
+    }))
+}
+
+async fn update_status(
+    state: AppState,
+    actor: ActorContext,
+    rule_id: String,
+    status: &'static str,
+    evidence_refs: Vec<String>,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    update_status_with_required_previous(state, actor, rule_id, status, None, evidence_refs).await
+}
+
+async fn update_status_with_required_previous(
+    state: AppState,
+    actor: ActorContext,
+    rule_id: String,
+    status: &'static str,
+    required_previous_status: Option<&'static str>,
+    evidence_refs: Vec<String>,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    let previous = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    if let Some(required_status) = required_previous_status {
+        if previous.status != required_status {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_STATUS_REQUIRED",
+                format!("rule must be {required_status} before {status}"),
+            ));
+        }
+    }
+    let rule = state
+        .repository
+        .update_rule_status(&rule_id, status)
+        .await
+        .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &rule,
+            event_type: "rule.status.changed",
+            from_status: Some(&previous.status),
+            to_status: &rule.status,
+            summary: "Rule status changed",
+            evidence_refs,
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(RuleLifecycleResponse {
+        rule_id: rule.rule_id,
+        status: rule.status,
+        active_version: rule.active_version,
+        latest_version: rule.latest_version,
+    }))
+}
