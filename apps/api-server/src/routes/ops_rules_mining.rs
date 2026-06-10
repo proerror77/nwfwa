@@ -1,6 +1,25 @@
-use super::ops_rules::{RuleDiscoveryCandidate, RuleDiscoveryRequest};
-use super::ops_rules_mining_samples::{normalized_optional_str, MiningSample};
-use fwa_core::{RecommendedAction, RuleActionClass};
+use super::ops_rules::{bad_request, internal_error, require_permission};
+use super::ops_rules_audit::{default_rule_evidence_refs, record_rule_audit, RuleAuditInput};
+use super::ops_rules_mining_samples::{
+    discovery_mining_samples, normalized_optional_str, MiningSample,
+};
+use super::ops_rules_types::{
+    ReviewRuleCandidateRequest, ReviewRuleCandidateResponse, RuleDiscoveryCandidate,
+    RuleDiscoveryRequest, RuleDiscoveryResponse, SaveRuleCandidateRequest,
+};
+use super::ops_rules_validation::{
+    candidate_review_outcome, validate_candidate_review_backtest_evidence,
+    validate_candidate_review_shadow_evidence, validate_rule_candidate,
+};
+use crate::{
+    app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    error::ApiError,
+    repository::PersistedAuditEvent,
+    routes::pii,
+};
+use axum::{extract::State, http::StatusCode, Json};
+use fwa_core::{AuditEventId, RecommendedAction, RuleActionClass};
 use fwa_rules::{Condition, Rule, RuleAction};
 use rust_decimal::Decimal;
 
@@ -438,4 +457,253 @@ fn format_threshold(value: f64) -> String {
 
 fn round_float(value: f64) -> f64 {
     (value * 10000.0).round() / 10000.0
+}
+
+pub async fn discover_rules(
+    State(_state): State<AppState>,
+    _actor: AuthenticatedActor,
+    Json(request): Json<RuleDiscoveryRequest>,
+) -> Result<Json<RuleDiscoveryResponse>, ApiError> {
+    let min_support = request.min_support.unwrap_or(1);
+    let mining_samples =
+        discovery_mining_samples(&request).map_err(bad_request("RULE_DISCOVERY_DATASET_FAILED"))?;
+    let sample_count = mining_samples.len();
+    let positive_count = mining_samples
+        .iter()
+        .filter(|sample| sample.confirmed_fwa == Some(true))
+        .count();
+    if sample_count == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_DISCOVERY_EMPTY_DATASET",
+            "rule discovery requires labeled samples or a parquet dataset_uri",
+        ));
+    }
+    if positive_count == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_DISCOVERY_NO_POSITIVE_LABELS",
+            "rule discovery requires at least one positive label",
+        ));
+    }
+    let baseline_rate = if sample_count == 0 {
+        0.0
+    } else {
+        positive_count as f64 / sample_count as f64
+    };
+
+    let discovery_evidence_refs = rule_discovery_evidence_refs(&request);
+    let mut candidates = mine_statistical_rule_candidates(
+        &request,
+        &mining_samples,
+        min_support,
+        positive_count,
+        baseline_rate,
+        &discovery_evidence_refs,
+    );
+    candidates.truncate(request.max_candidates.unwrap_or(8));
+
+    Ok(Json(RuleDiscoveryResponse {
+        sample_count,
+        positive_count,
+        candidates,
+    }))
+}
+
+pub async fn save_rule_candidate(
+    State(state): State<AppState>,
+    AuthenticatedActor(actor): AuthenticatedActor,
+    Json(mut request): Json<SaveRuleCandidateRequest>,
+) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
+    request.rule.scheme_family = Some(validate_rule_candidate(&request.rule)?);
+    let owner = request.owner.unwrap_or_else(|| "rule-discovery".into());
+    let detail = state
+        .repository
+        .save_rule_candidate(request.rule, owner)
+        .await
+        .map_err(internal_error("RULE_CANDIDATE_SAVE_FAILED"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &detail.summary,
+            event_type: "rule.candidate.saved",
+            from_status: None,
+            to_status: &detail.summary.status,
+            summary: "Rule candidate saved",
+            evidence_refs: default_rule_evidence_refs(&detail.summary),
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(detail))
+}
+
+pub async fn review_rule_candidate(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<ReviewRuleCandidateRequest>,
+) -> Result<Json<ReviewRuleCandidateResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:rules:review")?;
+    if !matches!(request.decision.as_str(), "accepted" | "rejected") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CANDIDATE_REVIEW_DECISION",
+            "decision must be accepted or rejected",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CANDIDATE_REVIEW_NOTES",
+            "candidate review notes are required",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CANDIDATE_REVIEW_EVIDENCE",
+            "candidate review evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_CANDIDATE_REVIEW",
+            "candidate review notes and evidence_refs must not contain PII",
+        ));
+    }
+    validate_candidate_review_backtest_evidence(&request.decision, &request.evidence_refs)?;
+    let mut saved_draft_rule_id = None;
+    if request.decision == "accepted" {
+        let backtest = state
+            .repository
+            .latest_rule_backtest(&request.rule.rule_id, request.rule.version)
+            .await
+            .map_err(internal_error("RULE_CANDIDATE_BACKTEST_LOAD_FAILED"))?;
+        let Some(backtest) = backtest else {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_BACKTEST_REQUIRED",
+                "accepted rule candidates require a completed backtest",
+            ));
+        };
+        if !backtest.blockers.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_BACKTEST_BLOCKED",
+                format!(
+                    "accepted rule candidate backtest blockers must be resolved: {}",
+                    backtest.blockers.join(", ")
+                ),
+            ));
+        }
+        let shadow_run = state
+            .repository
+            .latest_rule_shadow_run(&request.rule.rule_id, request.rule.version)
+            .await
+            .map_err(internal_error("RULE_CANDIDATE_SHADOW_LOAD_FAILED"))?;
+        let Some(shadow_run) = shadow_run else {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_SHADOW_REQUIRED",
+                "accepted rule candidates require passed shadow evidence",
+            ));
+        };
+        if shadow_run.decision != "shadow_passed" {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_SHADOW_BLOCKED",
+                format!(
+                    "accepted rule candidate shadow evidence is not passed: {}",
+                    shadow_run.decision
+                ),
+            ));
+        }
+        if !shadow_run.blockers.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_SHADOW_BLOCKED",
+                format!(
+                    "accepted rule candidate shadow blockers must be resolved: {}",
+                    shadow_run.blockers.join(", ")
+                ),
+            ));
+        }
+        validate_candidate_review_shadow_evidence(&request.evidence_refs, &shadow_run.report_uri)?;
+        let mut rule = request.rule.clone();
+        rule.scheme_family = Some(validate_rule_candidate(&rule)?);
+        let detail = state
+            .repository
+            .save_rule_candidate(rule, "rule-discovery-review".into())
+            .await
+            .map_err(internal_error("RULE_CANDIDATE_ACCEPT_SAVE_FAILED"))?;
+        saved_draft_rule_id = Some(detail.summary.rule_id);
+    }
+    let outcome = candidate_review_outcome(&request.decision, saved_draft_rule_id.clone());
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: format!(
+                "rule_candidate_review_{}",
+                rule_id_slug(&request.rule.rule_id)
+            ),
+            claim_id: request.rule.rule_id.clone(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "rule.candidate.reviewed".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "Rule candidate {}: {}",
+                request.rule.rule_id, request.decision
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "rule_id": request.rule.rule_id,
+                "rule_version": request.rule.version,
+                "decision": request.decision,
+                "reviewer": request.reviewer,
+                "entered_rule_library": false,
+                "accepted_for_governance_review": outcome.accepted_for_governance_review,
+                "saved_draft_rule_id": outcome.saved_draft_rule_id,
+                "active_rule_writeback": outcome.active_rule_writeback,
+                "condition_count": request.rule.conditions.len(),
+                "note_present": !request.notes.trim().is_empty(),
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+        .map_err(internal_error("RULE_CANDIDATE_REVIEW_AUDIT_SAVE_FAILED"))?;
+
+    Ok(Json(ReviewRuleCandidateResponse {
+        rule_id: request.rule.rule_id,
+        decision: request.decision,
+        entered_rule_library: false,
+        accepted_for_governance_review: outcome.accepted_for_governance_review,
+        saved_draft_rule_id: outcome.saved_draft_rule_id,
+        active_rule_writeback: outcome.active_rule_writeback,
+        evidence_refs: request.evidence_refs,
+    }))
 }

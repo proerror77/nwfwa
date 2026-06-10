@@ -1,11 +1,23 @@
 use super::{
+    ops_rules::{internal_error, require_permission},
+    ops_rules_audit::{record_rule_backtest_audit, record_rule_shadow_run_audit},
     ops_rules_mining_samples::{
         backtest_mining_samples, feature_map_from_mining_sample, normalized_optional_str,
     },
-    ops_rules_types::{RuleBacktestRequest, RuleBacktestResponse},
+    ops_rules_types::{RuleBacktestRequest, RuleBacktestResponse, SubmitRuleShadowRunRequest},
+    ops_rules_validation::validate_rule_shadow_run_request,
 };
-use crate::{error::ApiError, repository::RuleBacktestRecord};
-use axum::http::StatusCode;
+use crate::{
+    app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    error::ApiError,
+    repository::{RuleBacktestRecord, RuleShadowRunRecord},
+};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    Json,
+};
 use fwa_rules::evaluate_rules;
 use rust_decimal::Decimal;
 
@@ -183,4 +195,73 @@ fn backtest_evidence_refs(request: &RuleBacktestRequest) -> Vec<String> {
         refs.push(format!("dataset:{dataset_uri}"));
     }
     refs
+}
+
+pub async fn backtest_rule(
+    State(state): State<AppState>,
+    AuthenticatedActor(actor): AuthenticatedActor,
+    Json(request): Json<RuleBacktestRequest>,
+) -> Result<Json<RuleBacktestResponse>, ApiError> {
+    let response = build_rule_backtest_response(&request)?;
+    let record = state
+        .repository
+        .save_rule_backtest(rule_backtest_record_from_response(
+            &request.rule.rule_id,
+            request.rule.version,
+            &response,
+        ))
+        .await
+        .map_err(internal_error("RULE_BACKTEST_SAVE_FAILED"))?;
+    record_rule_backtest_audit(&state, &actor, &record)
+        .await
+        .map_err(internal_error("RULE_BACKTEST_AUDIT_SAVE_FAILED"))?;
+
+    Ok(Json(response))
+}
+
+pub async fn submit_rule_shadow_run(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(rule_id): Path<String>,
+    Json(request): Json<SubmitRuleShadowRunRequest>,
+) -> Result<Json<RuleShadowRunRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:rules:review")?;
+    validate_rule_shadow_run_request(&rule_id, &request)?;
+    let rule = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    if request.rule_version != rule.latest_version {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_SHADOW_VERSION_MISMATCH",
+            "shadow run rule_version must match the latest rule version",
+        ));
+    }
+    let record = state
+        .repository
+        .save_rule_shadow_run(RuleShadowRunRecord {
+            rule_id: rule.rule_id.clone(),
+            rule_version: request.rule_version,
+            report_uri: request.report_uri,
+            decision: request.decision,
+            reviewer: request.reviewer,
+            notes: request.notes,
+            reviewed_count: request.reviewed_count,
+            matched_count: request.matched_count,
+            false_positive_count: request.false_positive_count,
+            false_positive_rate: request.false_positive_rate,
+            blockers: request.blockers,
+            evidence_refs: request.evidence_refs,
+            created_at: None,
+        })
+        .await
+        .map_err(internal_error("RULE_SHADOW_RUN_SAVE_FAILED"))?;
+    record_rule_shadow_run_audit(&state, &actor, &record)
+        .await
+        .map_err(internal_error("RULE_SHADOW_RUN_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(record))
 }

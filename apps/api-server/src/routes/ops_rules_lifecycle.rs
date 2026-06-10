@@ -1,13 +1,17 @@
 use super::{
     ops_rules::{internal_error, load_rule_promotion_gates, require_permission},
-    ops_rules_audit::{record_rule_audit, RuleAuditInput},
-    ops_rules_types::{RuleLifecycleRequest, RuleLifecycleResponse},
+    ops_rules_audit::{record_rule_audit, record_rule_promotion_audit, RuleAuditInput},
+    ops_rules_types::{
+        RuleLifecycleRequest, RuleLifecycleResponse, SubmitRulePromotionReviewRequest,
+    },
     ops_rules_validation::validate_rule_lifecycle_request,
 };
 use crate::{
     app::AppState,
     auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
+    repository::RulePromotionReviewRecord,
+    routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -218,4 +222,80 @@ async fn update_status_with_required_previous(
         active_version: rule.active_version,
         latest_version: rule.latest_version,
     }))
+}
+
+pub async fn submit_rule_promotion_review(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(rule_id): Path<String>,
+    Json(request): Json<SubmitRulePromotionReviewRequest>,
+) -> Result<Json<RulePromotionReviewRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:rules:review")?;
+    if !matches!(request.decision.as_str(), "approved" | "rejected") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROMOTION_DECISION",
+            "decision must be approved or rejected",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROMOTION_REVIEW_NOTES",
+            "promotion review notes are required",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROMOTION_REVIEW_EVIDENCE",
+            "promotion review evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_PROMOTION_REVIEW",
+            "promotion review notes and evidence_refs must not contain PII",
+        ));
+    }
+    let rule = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    let review = state
+        .repository
+        .save_rule_promotion_review(RulePromotionReviewRecord {
+            rule_id: rule.rule_id.clone(),
+            rule_version: rule.latest_version,
+            decision: request.decision,
+            reviewer: request.reviewer,
+            notes: request.notes,
+            evidence_refs: request.evidence_refs,
+            created_at: None,
+        })
+        .await
+        .map_err(internal_error("RULE_PROMOTION_REVIEW_SAVE_FAILED"))?;
+    record_rule_promotion_audit(&state, &actor, &review)
+        .await
+        .map_err(internal_error("RULE_PROMOTION_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(review))
 }
