@@ -1,5 +1,136 @@
 use super::*;
 
+pub async fn generate_evidence_requests(
+    State(state): State<AppState>,
+    AuthenticatedActor(actor): AuthenticatedActor,
+    Json(request): Json<GenerateEvidenceRequestsRequest>,
+) -> Result<Json<EvidenceRequestGenerateResponse>, ApiError> {
+    validate_generate_evidence_request(&request)?;
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: request.limit.unwrap_or(50).clamp(1, 200),
+            event_type: Some("scoring.completed".into()),
+            claim_id: request.claim_id.clone(),
+            customer_scope_id: Some(actor.customer_scope_id.clone()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("EVIDENCE_REQUEST_SOURCE_LOOKUP_FAILED"))?;
+    let mut generated = Vec::new();
+    for event in events
+        .iter()
+        .filter(|event| {
+            request
+                .scoring_audit_id
+                .as_deref()
+                .is_none_or(|id| event.audit_id == id)
+        })
+        .filter_map(|event| evidence_request_from_scoring_event(event, &request, &actor))
+    {
+        let audit_id = AuditEventId::new().to_string();
+        state
+            .repository
+            .save_audit_event(PersistedAuditEvent {
+                audit_id,
+                run_id: ScoringRunId::new().to_string(),
+                claim_id: event.claim_id.clone(),
+                source_system: "ops-studio".into(),
+                actor_id: event.requested_by.clone(),
+                actor_role: actor.actor_role.clone(),
+                event_type: "evidence.request.generated".into(),
+                event_status: "succeeded".into(),
+                summary: format!("Evidence request generated: {}", event.request_id),
+                payload: evidence_request_payload(&actor.customer_scope_id, &event),
+                evidence_refs: event
+                    .evidence_refs
+                    .iter()
+                    .map(|value| Value::String(value.clone()))
+                    .collect(),
+            })
+            .await
+            .map_err(internal_error("EVIDENCE_REQUEST_SAVE_FAILED"))?;
+        generated.push(event);
+    }
+    Ok(Json(EvidenceRequestGenerateResponse {
+        requests: generated,
+    }))
+}
+
+pub async fn list_evidence_requests(
+    State(state): State<AppState>,
+    AuthenticatedActor(actor): AuthenticatedActor,
+) -> Result<Json<EvidenceRequestListResponse>, ApiError> {
+    Ok(Json(EvidenceRequestListResponse {
+        requests: load_evidence_requests(&state, &actor.customer_scope_id).await?,
+    }))
+}
+
+pub async fn update_evidence_request_status(
+    State(state): State<AppState>,
+    AuthenticatedActor(actor): AuthenticatedActor,
+    Path(request_id): Path<String>,
+    Json(request): Json<UpdateEvidenceRequestStatusRequest>,
+) -> Result<Json<EvidenceRequestRecord>, ApiError> {
+    validate_evidence_status_update(&request)?;
+    let current = load_evidence_requests(&state, &actor.customer_scope_id)
+        .await?
+        .into_iter()
+        .find(|record| record.request_id == request_id)
+        .ok_or_else(not_found(
+            "EVIDENCE_REQUEST_NOT_FOUND",
+            "evidence request not found",
+        ))?;
+    let audit_id = AuditEventId::new().to_string();
+    let mut evidence_refs = current.evidence_refs.clone();
+    for reference in &request.evidence_refs {
+        if !evidence_refs.contains(reference) {
+            evidence_refs.push(reference.clone());
+        }
+    }
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id,
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: current.claim_id.clone(),
+            source_system: "ops-studio".into(),
+            actor_id: request.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "evidence.request.status_updated".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Evidence request status updated: {request_id}"),
+            payload: json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "request_id": request_id,
+                "claim_id": current.claim_id,
+                "scoring_audit_id": current.scoring_audit_id,
+                "from_status": current.status,
+                "to_status": request.status,
+                "actor_id": request.actor_id,
+                "notes": request.notes,
+            }),
+            evidence_refs: evidence_refs
+                .iter()
+                .map(|value| Value::String(value.clone()))
+                .collect(),
+        })
+        .await
+        .map_err(internal_error("EVIDENCE_REQUEST_STATUS_SAVE_FAILED"))?;
+    load_evidence_requests(&state, &actor.customer_scope_id)
+        .await?
+        .into_iter()
+        .find(|record| record.request_id == request_id)
+        .map(Json)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "EVIDENCE_REQUEST_RELOAD_FAILED",
+                "evidence request update saved but could not be reloaded",
+            )
+        })
+}
+
 pub(super) async fn load_evidence_requests(
     state: &AppState,
     customer_scope_id: &str,
