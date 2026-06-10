@@ -1,7 +1,8 @@
 use futures::join;
 
-use super::request_get_json;
+use super::{request_get_json, request_json};
 use crate::types::*;
+use serde_json::{json, Value};
 
 pub(crate) async fn get_rule_ops_snapshot(
     api_key: String,
@@ -29,4 +30,18 @@ pub(crate) async fn get_rule_ops_snapshot(
         performance,
         gates,
     })
+}
+
+pub(crate) async fn post_rule_lifecycle(
+    api_key: String,
+    rule_id: String,
+    action: &str,
+    evidence_refs: Vec<String>,
+) -> Result<Value, String> {
+    request_json(
+        &format!("/api/v1/ops/rules/{}/{}", rule_id.trim(), action),
+        api_key,
+        json!({ "evidence_refs": evidence_refs }),
+    )
+    .await
 }

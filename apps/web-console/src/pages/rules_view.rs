@@ -37,12 +37,19 @@ pub(crate) fn rules_view(props: &RulesProps) -> Html {
                                                 "post_payment" | "post" => "neutral",
                                                 _ => "info",
                                             };
+                                            let status_tone = match rule.status.as_str() {
+                                                "submitted" => "warning",
+                                                "approved" => "info",
+                                                "active" => "success",
+                                                _ => "neutral",
+                                            };
                                             html! {
                                                 <div class="factor-card">
                                                     <div>
                                                         <strong>{&rule.name}</strong>
                                                         <span class={classes!("status-pill", review_mode_tone)}>{&rule.review_mode}</span>
-                                                        <span>{format!("{} / {}", rule.status, rule.scheme_family)}</span>
+                                                        <span class={classes!("status-pill", status_tone)}>{&rule.status}</span>
+                                                        <span>{&rule.scheme_family}</span>
                                                     </div>
                                                     <div class="summary-grid">
                                                         <div><span>{"Score"}</span><strong>{rule.score}</strong></div>
