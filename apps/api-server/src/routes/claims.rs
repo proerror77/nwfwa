@@ -170,7 +170,11 @@ pub async fn score_claim(
             Some(canonical.trace),
         )
     } else {
-        let mut payload = request.claim.clone().expect("validated claim payload");
+        let mut payload = request.claim.clone().ok_or_else(|| ApiError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "INVALID_SCORE_REQUEST",
+            "claim payload is required when no claim_id, canonical_claim_context, or inbox locator is provided",
+        ))?;
         let duplicate_fields = duplicate_payload_fields(&request, &payload);
         if !duplicate_fields.is_empty() {
             return Err(ApiError::new(
