@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::RulePromotionReviewRecord,
     routes::pii,
@@ -22,11 +22,12 @@ use fwa_audit::ActorContext;
 
 pub async fn submit_rule(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:rules:write")?;
     update_status(state, actor, rule_id, "submitted", request.evidence_refs).await
 }
 

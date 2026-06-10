@@ -512,9 +512,10 @@ pub async fn discover_rules(
 
 pub async fn save_rule_candidate(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(mut request): Json<SaveRuleCandidateRequest>,
 ) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:rules:write")?;
     request.rule.scheme_family = Some(validate_rule_candidate(&request.rule)?);
     let owner = request.owner.unwrap_or_else(|| "rule-discovery".into());
     let detail = state
