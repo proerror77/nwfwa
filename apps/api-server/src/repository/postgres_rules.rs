@@ -19,7 +19,7 @@ pub(super) async fn list_rules(
     .fetch_all(&repository.pool)
     .await?;
 
-    let mut summaries = rows
+    let summaries = rows
         .into_iter()
         .map(
             |(rule_id, name, status, owner, version, dsl, score, recommended_action)| {
@@ -55,14 +55,95 @@ pub(super) async fn list_rules(
         )
         .collect::<Vec<_>>();
 
+    // Batch-fetch the latest backtest for all rules in a single query instead of N individual
+    // queries. We group by (rule_id, rule_version) and pick the row with the highest created_at
+    // (ties broken by id DESC to match the per-rule query in postgres_rule_reviews).
+    let backtest_rows: Vec<(
+        String,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        f64,
+        f64,
+        f64,
+        f64,
+        String,
+        String,
+        Value,
+        Value,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
+        "SELECT rb.rule_id, rb.rule_version, rb.sample_count, rb.matched_count,
+                rb.reviewed_count, rb.confirmed_fwa_count, rb.false_positive_count,
+                rb.precision_value, rb.recall_value, rb.lift, rb.false_positive_rate,
+                rb.estimated_saving, rb.promotion_recommendation,
+                rb.blockers, rb.evidence_refs, rb.created_at
+         FROM rule_backtest_runs rb
+         INNER JOIN (
+             SELECT rule_id, rule_version, MAX(created_at) AS max_created
+             FROM rule_backtest_runs
+             GROUP BY rule_id, rule_version
+         ) latest ON rb.rule_id = latest.rule_id
+                 AND rb.rule_version = latest.rule_version
+                 AND rb.created_at = latest.max_created",
+    )
+    .fetch_all(&repository.pool)
+    .await?;
+
+    // Build a HashMap keyed by (rule_id, rule_version) for O(1) lookup.
+    let mut backtest_map: std::collections::HashMap<(String, u32), RuleBacktestRecord> =
+        std::collections::HashMap::new();
+    for (
+        rule_id,
+        rule_version,
+        sample_count,
+        matched_count,
+        reviewed_count,
+        confirmed_fwa_count,
+        false_positive_count,
+        precision,
+        recall,
+        lift,
+        false_positive_rate,
+        estimated_saving,
+        promotion_recommendation,
+        blockers,
+        evidence_refs,
+        created_at,
+    ) in backtest_rows
+    {
+        let key = (rule_id.clone(), rule_version.max(0) as u32);
+        backtest_map.insert(
+            key,
+            RuleBacktestRecord {
+                rule_id,
+                rule_version: rule_version.max(0) as u32,
+                sample_count: sample_count.max(0) as u32,
+                matched_count: matched_count.max(0) as u32,
+                reviewed_count: reviewed_count.max(0) as u32,
+                confirmed_fwa_count: confirmed_fwa_count.max(0) as u32,
+                false_positive_count: false_positive_count.max(0) as u32,
+                precision,
+                recall,
+                lift,
+                false_positive_rate,
+                estimated_saving,
+                promotion_recommendation,
+                blockers: json_array_to_strings(blockers),
+                evidence_refs: json_array_to_strings(evidence_refs),
+                created_at: Some(created_at.to_rfc3339()),
+            },
+        );
+    }
+
+    let mut summaries = summaries;
     for summary in &mut summaries {
-        let latest_backtest = postgres_rule_reviews::latest_rule_backtest(
-            repository,
-            &summary.rule_id,
-            summary.latest_version,
-        )
-        .await?;
-        apply_rule_backtest_metadata(summary, latest_backtest.as_ref());
+        let key = (summary.rule_id.clone(), summary.latest_version);
+        let latest_backtest = backtest_map.get(&key);
+        apply_rule_backtest_metadata(summary, latest_backtest);
     }
 
     Ok(summaries)
@@ -100,13 +181,66 @@ pub(super) async fn get_rule(
     rule_id: &str,
 ) -> anyhow::Result<Option<RuleDetailRecord>> {
     ensure_default_rules_seeded(&repository.pool).await?;
-    let summary = list_rules(repository)
-        .await?
-        .into_iter()
-        .find(|rule| rule.rule_id == rule_id);
-    let Some(summary) = summary else {
+
+    // Direct single-rule query — avoids fetching all rules and filtering in memory.
+    let summary_row: Option<(String, String, String, String, i32, Value, i32, String)> =
+        sqlx::query_as(
+            "SELECT r.rule_key, r.name, r.status, r.owner, rv.version, rv.dsl, rv.score, rv.recommended_action
+             FROM rules r
+             JOIN LATERAL (
+               SELECT version, dsl, score, recommended_action
+               FROM rule_versions
+               WHERE rule_id = r.id
+               ORDER BY version DESC
+               LIMIT 1
+             ) rv ON true
+             WHERE r.rule_key = $1",
+        )
+        .bind(rule_id)
+        .fetch_optional(&repository.pool)
+        .await?;
+
+    let Some((rid, name, status, owner, version, dsl, score, recommended_action)) = summary_row
+    else {
         return Ok(None);
     };
+
+    let action = dsl.get("action").cloned().unwrap_or(Value::Null);
+    let review_mode = review_mode_from_dsl(&dsl);
+    let scheme_family = scheme_family_from_dsl(&dsl);
+    let mut summary = RuleSummaryRecord {
+        rule_id: rid.clone(),
+        name,
+        active_version: if status == "active" {
+            Some(version as u32)
+        } else {
+            None
+        },
+        latest_version: version as u32,
+        review_mode: review_mode.clone(),
+        scheme_family: scheme_family.clone(),
+        status,
+        owner,
+        score: score as u8,
+        alert_code: action["alert_code"]
+            .as_str()
+            .unwrap_or("UNKNOWN")
+            .to_string(),
+        recommended_action: parse_recommended_action(&recommended_action),
+        applicability_scope: rule_applicability_scope(&review_mode, &scheme_family),
+        backtest_result: default_rule_backtest_summary(),
+        estimated_saving: "0.00".into(),
+        false_positive_history: default_rule_false_positive_history(),
+        evidence_refs: rule_governance_evidence_refs(&rid, version as u32),
+    };
+
+    let latest_backtest = postgres_rule_reviews::latest_rule_backtest(
+        repository,
+        &summary.rule_id,
+        summary.latest_version,
+    )
+    .await?;
+    apply_rule_backtest_metadata(&mut summary, latest_backtest.as_ref());
 
     let rows: Vec<(i32, Value, i32, String)> = sqlx::query_as(
         "SELECT rv.version, rv.dsl, rv.score, rv.recommended_action
