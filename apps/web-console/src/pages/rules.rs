@@ -1,6 +1,6 @@
 use crate::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlInputElement, HtmlTextAreaElement};
+use web_sys::HtmlTextAreaElement;
 
 #[path = "rules_view.rs"]
 mod rules_view;
@@ -601,162 +601,19 @@ pub fn rules_page() -> Html {
                 <h3>{"Rule Discovery Workbench"}</h3>
                 {rule_backfill_pipeline(&discovery_state, &backtest_state, &save_state, &shadow_state, &review_state)}
                 <div class="form-grid">
-                    <label>
-                        {"Gate Rule ID"}
-                        <input
-                            value={(*rule_id).clone()}
-                            oninput={{
-                                let rule_id = rule_id.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    rule_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Model Key"}
-                        <input
-                            value={(*model_key).clone()}
-                            oninput={{
-                                let model_key = model_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    model_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Model Version"}
-                        <input
-                            value={(*model_version).clone()}
-                            oninput={{
-                                let model_version = model_version.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    model_version.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Explained Feature"}
-                        <input
-                            value={(*explanation_feature).clone()}
-                            oninput={{
-                                let explanation_feature = explanation_feature.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    explanation_feature.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Contribution"}
-                        <input
-                            value={(*explanation_contribution).clone()}
-                            oninput={{
-                                let explanation_contribution = explanation_contribution.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    explanation_contribution.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Explanation Artifact"}
-                        <input
-                            value={(*feature_importance_uri).clone()}
-                            oninput={{
-                                let feature_importance_uri = feature_importance_uri.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    feature_importance_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Mining Dataset URI"}
-                        <input
-                            value={(*discovery_dataset_uri).clone()}
-                            oninput={{
-                                let discovery_dataset_uri = discovery_dataset_uri.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    discovery_dataset_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Label Column"}
-                        <input
-                            value={(*discovery_label_column).clone()}
-                            oninput={{
-                                let discovery_label_column = discovery_label_column.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    discovery_label_column.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Claim ID Column"}
-                        <input
-                            value={(*discovery_claim_id_column).clone()}
-                            oninput={{
-                                let discovery_claim_id_column = discovery_claim_id_column.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    discovery_claim_id_column.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Feature Columns"}
-                        <input
-                            value={(*discovery_feature_fields).clone()}
-                            oninput={{
-                                let discovery_feature_fields = discovery_feature_fields.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    discovery_feature_fields.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Tree Depth"}
-                        <input
-                            value={(*discovery_tree_depth).clone()}
-                            oninput={{
-                                let discovery_tree_depth = discovery_tree_depth.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    discovery_tree_depth.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Reviewer"}
-                        <input
-                            value={(*rule_reviewer).clone()}
-                            oninput={{
-                                let rule_reviewer = rule_reviewer.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    rule_reviewer.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Review Evidence Refs"}
-                        <input
-                            value={(*rule_review_evidence_refs).clone()}
-                            oninput={{
-                                let rule_review_evidence_refs = rule_review_evidence_refs.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    rule_review_evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
+                    {text_input("Gate Rule ID", &rule_id)}
+                    {text_input("Model Key", &model_key)}
+                    {text_input("Model Version", &model_version)}
+                    {text_input("Explained Feature", &explanation_feature)}
+                    {text_input("Contribution", &explanation_contribution)}
+                    {text_input("Explanation Artifact", &feature_importance_uri)}
+                    {text_input("Mining Dataset URI", &discovery_dataset_uri)}
+                    {text_input("Label Column", &discovery_label_column)}
+                    {text_input("Claim ID Column", &discovery_claim_id_column)}
+                    {text_input("Feature Columns", &discovery_feature_fields)}
+                    {text_input("Tree Depth", &discovery_tree_depth)}
+                    {text_input("Reviewer", &rule_reviewer)}
+                    {text_input("Review Evidence Refs", &rule_review_evidence_refs)}
                 </div>
                 <label class="full-field">
                     {"Inline Labeled Evaluation Dataset"}
