@@ -5,5 +5,5 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-fwa-audit = { path = "../fwa-audit" }
+fwa-core = { path = "../fwa-core" }
 thiserror.workspace = true

@@ -1,4 +1,4 @@
-use fwa_audit::ActorContext;
+use fwa_core::ActorContext;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
