@@ -1,3 +1,6 @@
+// Old pages are kept for reference but not rendered in the ops platform build.
+// The new customer-facing OpsApp is the active renderer.
+#![allow(dead_code, unused_imports, unused_variables)]
 use wasm_bindgen::{closure::Closure, JsCast};
 use yew::prelude::*;
 mod api;
