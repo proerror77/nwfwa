@@ -1,3 +1,5 @@
+use futures::join;
+
 use super::{request_get_json, request_json};
 use crate::types::*;
 use serde_json::Value;
@@ -5,12 +7,12 @@ use serde_json::Value;
 pub(crate) async fn get_leads_cases_snapshot(
     api_key: String,
 ) -> Result<LeadsCasesSnapshot, String> {
-    let leads = request_get_json::<LeadListResponse>("/api/v1/ops/leads", api_key.clone())
-        .await?
-        .leads;
-    let cases = request_get_json::<CaseListResponse>("/api/v1/ops/cases", api_key)
-        .await?
-        .cases;
+    let (leads_res, cases_res) = join!(
+        request_get_json::<LeadListResponse>("/api/v1/ops/leads", api_key.clone()),
+        request_get_json::<CaseListResponse>("/api/v1/ops/cases", api_key),
+    );
+    let leads = leads_res?.leads;
+    let cases = cases_res?.cases;
     Ok(LeadsCasesSnapshot { leads, cases })
 }
 
