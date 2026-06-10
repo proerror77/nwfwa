@@ -1,6 +1,26 @@
 use super::*;
 
 impl InMemoryScoringRepository {
+    pub(super) async fn in_memory_save_audit_event(
+        &self,
+        event: PersistedAuditEvent,
+    ) -> anyhow::Result<()> {
+        let event = PersistedAuditEvent {
+            payload: mask_audit_payload(event.payload),
+            ..event
+        };
+        let mut audit_events = self.audit_events.lock().await;
+        if let Some(existing) = audit_events
+            .iter_mut()
+            .find(|existing| existing.audit_id == event.audit_id)
+        {
+            *existing = event;
+        } else {
+            audit_events.push(event);
+        }
+        Ok(())
+    }
+
     pub(super) async fn in_memory_claim_audit_history(
         &self,
         claim_id: &str,
