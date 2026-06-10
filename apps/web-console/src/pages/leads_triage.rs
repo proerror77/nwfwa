@@ -146,7 +146,24 @@ pub(super) fn leads_triage_workspace(
                 </div>
                 <h4>{"Investigation Writeback"}</h4>
                 <div class="form-grid action-form-grid">
-                    {text_input("Outcome", investigation_outcome)}
+                    <label>
+                        {"Outcome"}
+                        <select onchange={{
+                            let investigation_outcome = investigation_outcome.clone();
+                            Callback::from(move |e: Event| investigation_outcome.set(e.target_unchecked_into::<HtmlSelectElement>().value()))
+                        }}>
+                            <option value="confirmed_fwa_prevented_payment" selected={(**investigation_outcome).as_str() == "confirmed_fwa_prevented_payment"}>{"Confirmed FWA — prevented payment"}</option>
+                            <option value="confirmed_fwa_recovered_amount" selected={(**investigation_outcome).as_str() == "confirmed_fwa_recovered_amount"}>{"Confirmed FWA — recovered amount"}</option>
+                            <option value="confirmed_fwa_avoided_exposure" selected={(**investigation_outcome).as_str() == "confirmed_fwa_avoided_exposure"}>{"Confirmed FWA — avoided exposure"}</option>
+                            <option value="false_positive" selected={(**investigation_outcome).as_str() == "false_positive"}>{"False positive"}</option>
+                            <option value="improper_payment" selected={(**investigation_outcome).as_str() == "improper_payment"}>{"Improper payment"}</option>
+                            <option value="insufficient_evidence" selected={(**investigation_outcome).as_str() == "insufficient_evidence"}>{"Insufficient evidence"}</option>
+                            <option value="abuse_not_fraud" selected={(**investigation_outcome).as_str() == "abuse_not_fraud"}>{"Abuse — not fraud"}</option>
+                            <option value="documentation_issue" selected={(**investigation_outcome).as_str() == "documentation_issue"}>{"Documentation issue"}</option>
+                            <option value="medical_necessity_issue" selected={(**investigation_outcome).as_str() == "medical_necessity_issue"}>{"Medical necessity issue"}</option>
+                            <option value="policy_exclusion" selected={(**investigation_outcome).as_str() == "policy_exclusion"}>{"Policy exclusion"}</option>
+                        </select>
+                    </label>
                     <label>
                         {"Impact type"}
                         <select onchange={{
