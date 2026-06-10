@@ -130,6 +130,8 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                             <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
                             <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
                             <div><span>{"RAG"}</span><strong>{response.rag.as_ref().map(display_value).unwrap_or_else(|| "none".into())}</strong></div>
+                            <div><span>{"Audit ID"}</span><strong>{response.audit_id.as_deref().unwrap_or("not available")}</strong></div>
+                            <div><span>{"Run ID"}</span><strong>{response.run_id.as_deref().unwrap_or("not available")}</strong></div>
                         </div>
                         {runtime_decision_visual(response)}
                         {runtime_signal_map(response)}
@@ -143,8 +145,6 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                             <div><span>{"Review Required"}</span><strong>{if response.appeal_or_review_required.unwrap_or(true) { "yes" } else { "no" }}</strong></div>
                             <div><span>{"Review Mode"}</span><strong>{response.review_mode.as_deref().unwrap_or("unknown")}</strong></div>
                             <div><span>{"Reason Code"}</span><strong>{response.reason_code.as_deref().unwrap_or("pending")}</strong></div>
-                            <div><span>{"Run"}</span><strong>{response.run_id.as_deref().unwrap_or("pending")}</strong></div>
-                            <div><span>{"Audit"}</span><strong>{response.audit_id.as_deref().unwrap_or("pending")}</strong></div>
                         </div>
                         <p class="empty">{response.routing_reason.as_deref().unwrap_or("No routing reason returned.")}</p>
 
