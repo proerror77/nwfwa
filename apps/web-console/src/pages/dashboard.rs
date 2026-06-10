@@ -106,6 +106,9 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                                 {kpi_card("Suspected FWA", &summary.suspected_claims.to_string(), "risk")}
                                 {kpi_card("Confirmed FWA", &summary.confirmed_fwa.to_string(), "confirmed")}
                                 {kpi_card("Risk Amount", &summary.risk_amount, "amount")}
+                                {kpi_card("Precision at Capacity", &percent_label(summary.rule_governance.precision), "qa")}
+                                {kpi_card("SLA Breach Rate", &percent_label(summary.case_sla.sla_breach_rate), "risk")}
+                                {kpi_card("Review Cost vs Saving", &format!("{} / {}", summary.value_measurement.review_cost, summary.saving_amount), "saving")}
                             </div>
                             <div class="summary-grid">
                                 {kpi_card("Savings", &summary.saving_amount, "saving")}

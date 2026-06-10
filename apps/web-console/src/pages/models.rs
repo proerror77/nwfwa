@@ -119,6 +119,14 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
                                     <div class="factor-card">
                                         <div>
                                             <strong>{format!("{} {}", model.model_key, model.version)}</strong>
+                                            {{
+                                                let review_mode_tone = match model.review_mode.as_str() {
+                                                    "pre_payment" | "pre" => "warning",
+                                                    "post_payment" | "post" => "neutral",
+                                                    _ => "info",
+                                                };
+                                                html! { <span class={classes!("status-pill", review_mode_tone)}>{&model.review_mode}</span> }
+                                            }}
                                             <span>{format!("{} / {} / {}", model.model_type, model.runtime_kind, model.execution_provider)}</span>
                                         </div>
                                         <div class="summary-grid">

@@ -44,11 +44,17 @@ pub(crate) fn rules_view(props: &RulesProps) -> Html {
                                     <div class="factor-card-grid">
                                         {for snapshot.rules.iter().map(|rule| {
                                             let performance = rule_performance_for(&snapshot.performance, &rule.rule_id);
+                                            let review_mode_tone = match rule.review_mode.as_str() {
+                                                "pre_payment" | "pre" => "warning",
+                                                "post_payment" | "post" => "neutral",
+                                                _ => "info",
+                                            };
                                             html! {
                                                 <div class="factor-card">
                                                     <div>
                                                         <strong>{&rule.name}</strong>
-                                                        <span>{format!("{} / {} / {}", rule.status, rule.review_mode, rule.scheme_family)}</span>
+                                                        <span class={classes!("status-pill", review_mode_tone)}>{&rule.review_mode}</span>
+                                                        <span>{format!("{} / {}", rule.status, rule.scheme_family)}</span>
                                                     </div>
                                                     <div class="summary-grid">
                                                         <div><span>{"Score"}</span><strong>{rule.score}</strong></div>
