@@ -1,6 +1,13 @@
 use serde::Deserialize;
 use serde_json::Value;
 
+/// Combined data for the force-directed network graph
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GraphNetworkData {
+    pub(crate) leads: Vec<LeadRecord>,
+    pub(crate) providers: Vec<crate::types::ProviderRiskItem>,
+}
+
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub(crate) struct LeadListResponse {
     pub(crate) leads: Vec<LeadRecord>,

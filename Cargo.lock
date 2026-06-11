@@ -1323,7 +1323,7 @@ dependencies = [
 name = "fwa-auth"
 version = "0.1.0"
 dependencies = [
- "fwa-audit",
+ "fwa-core",
  "thiserror",
 ]
 
