@@ -133,11 +133,12 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
     let mut nodes: Vec<GraphNode> = Vec::new();
     let mut edges: Vec<GraphEdge> = Vec::new();
 
-    // Add provider nodes — spread in outer ring
+    // Provider nodes — evenly spread around a large circle
     let n_providers = data.providers.len();
     for (i, p) in data.providers.iter().enumerate() {
         let angle = 2.0 * PI * i as f64 / n_providers.max(1) as f64;
-        let r = 180.0;
+        // Space providers out across most of the canvas
+        let r = w.min(h) * 0.35;
         nodes.push(GraphNode {
             id: p.provider_id.clone(),
             label: short_id(&p.provider_id),
@@ -147,22 +148,24 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
             claim_count: p.claim_count,
             graph_reasons: p.graph_reasons.clone(),
             outlier_flags: p.outlier_flags.clone(),
-            x: cx + r * angle.cos() + rand_jitter(i as f64 * 7.3),
-            y: cy + r * angle.sin() + rand_jitter(i as f64 * 3.7),
+            x: cx + r * angle.cos(),
+            y: cy + r * angle.sin(),
             vx: 0.0,
             vy: 0.0,
         });
     }
 
-    // Add member nodes — collect unique members from leads
+    // Member nodes — spread in an inner ring between providers
     let mut seen_members: HashMap<String, u32> = HashMap::new();
     for lead in &data.leads {
         *seen_members.entry(lead.member_id.clone()).or_insert(0) += 1;
     }
     let n_members = seen_members.len();
     for (i, (member_id, count)) in seen_members.iter().enumerate() {
-        let angle = 2.0 * PI * i as f64 / n_members.max(1) as f64 + PI / n_members.max(1) as f64;
-        let r = 80.0 + rand_jitter(i as f64 * 2.1) * 30.0;
+        // Offset angle so members sit between provider positions
+        let angle = 2.0 * PI * i as f64 / n_members.max(1) as f64
+            + PI / n_members.max(1) as f64;
+        let r = w.min(h) * 0.18 + (i % 3) as f64 * 22.0;
         nodes.push(GraphNode {
             id: member_id.clone(),
             label: short_id(member_id),
@@ -172,8 +175,8 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
             claim_count: *count,
             graph_reasons: Vec::new(),
             outlier_flags: Vec::new(),
-            x: cx + r * angle.cos() + rand_jitter(i as f64 * 5.1),
-            y: cy + r * angle.sin() + rand_jitter(i as f64 * 8.9),
+            x: cx + r * angle.cos(),
+            y: cy + r * angle.sin(),
             vx: 0.0,
             vy: 0.0,
         });
@@ -212,10 +215,17 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
         }
     }
 
+    // Pre-compute layout: run 120 force iterations synchronously
+    // This avoids async timer complexity in WASM and gives a stable result on first render
+    for iter in 0..120 {
+        apply_forces(&mut nodes, &edges, w, h, iter);
+    }
+
     (nodes, edges)
 }
 
-// Deterministic jitter from seed
+// Deterministic jitter from seed (kept for potential future use)
+#[allow(dead_code)]
 fn rand_jitter(seed: f64) -> f64 {
     let x = (seed * 127.1 + 311.7).sin() * 43758.5453;
     (x - x.floor() - 0.5) * 60.0
@@ -305,28 +315,18 @@ fn force_graph(props: &ForceGraphProps) -> Html {
     let w = 720.0_f64;
     let h = 520.0_f64;
 
-    // Build initial graph
+    // Layout is pre-computed synchronously in build_graph (120 FR iterations).
+    // We only re-compute when the underlying data changes (keyed by provider count).
+    let data_key = props.data.providers.len();
     let (init_nodes, edges) = build_graph(&props.data, w, h);
-    let nodes_state = use_state(|| init_nodes);
-    let iter_state = use_state(|| 0_u32);
+    let nodes_state = use_state(|| init_nodes.clone());
 
-    // Run layout iterations via use_effect
     {
         let nodes_state = nodes_state.clone();
-        let edges = edges.clone();
-        let iter_state = iter_state.clone();
-        use_effect_with(*iter_state, move |&iter| {
-            if iter < 80 {
-                // Schedule next frame via gloo_timers
-                let nodes_state = nodes_state.clone();
-                let iter_state = iter_state.clone();
-                gloo_timers::callback::Timeout::new(16, move || {
-                    let mut nodes = (*nodes_state).clone();
-                    apply_forces(&mut nodes, &edges, w, h, iter);
-                    nodes_state.set(nodes);
-                    iter_state.set(iter + 1);
-                }).forget();
-            }
+        let data = props.data.clone();
+        use_effect_with(data_key, move |_| {
+            let (nodes, _) = build_graph(&data, w, h);
+            nodes_state.set(nodes);
             || ()
         });
     }
@@ -344,7 +344,6 @@ fn force_graph(props: &ForceGraphProps) -> Html {
         }
     });
 
-    // Node visual properties
     let max_claims = nodes.iter().map(|n| n.claim_count).max().unwrap_or(1).max(1);
 
     html! {
@@ -356,7 +355,7 @@ fn force_graph(props: &ForceGraphProps) -> Html {
                     {stat_chip(&format!("{} Providers", props.data.providers.len()), "#d8284f")}
                     {stat_chip(&format!("{} Members", nodes.iter().filter(|n| matches!(n.kind, NodeKind::Member)).count().to_string() + " 成员"), "#1769e0")}
                     {stat_chip(&format!("{} 理赔连接", props.data.leads.len()), "#0f7b8c")}
-                    {stat_chip(if *iter_state >= 80 { "布局完成 ✓" } else { "计算布局中..." }, "#5f6f85")}
+                    {stat_chip("布局完成 ✓", "#5f6f85")}
                 </div>
 
                 // Dark canvas
