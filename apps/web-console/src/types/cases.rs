@@ -132,3 +132,35 @@ pub(crate) struct MedicalReviewResultResponse {
     pub(crate) clinical_outcomes: Vec<String>,
     pub(crate) evidence_refs: Vec<String>,
 }
+
+/// All data needed for the 7-layer investigation workbench.
+/// Loaded when a case is selected.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct InvestigationContext {
+    pub(crate) case: CaseRecord,
+    pub(crate) lead: Option<LeadRecord>,
+    pub(crate) member: Option<crate::types::MemberProfileSummary>,
+    pub(crate) providers: Vec<crate::types::ProviderRiskItem>,
+    pub(crate) audit_events: Vec<crate::types::AuditEventRecord>,
+    pub(crate) similar_cases: Vec<SimilarCaseItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+pub(crate) struct ClaimAuditHistoryResponse {
+    pub(crate) claim_id: String,
+    pub(crate) events: Vec<crate::types::AuditEventRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+pub(crate) struct SimilarCaseItem {
+    pub(crate) case_id: String,
+    pub(crate) scheme_family: String,
+    pub(crate) similarity_score: f64,
+    pub(crate) final_outcome: Option<String>,
+    pub(crate) tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+pub(crate) struct SimilarCasesResponse {
+    pub(crate) cases: Vec<SimilarCaseItem>,
+}

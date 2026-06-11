@@ -161,7 +161,7 @@ pub fn ops_app() -> Html {
                         // ── 运营工作台 ──────────────────────────────────────
                         OpsPage::Dashboard       => html! { <OpsDashboardPage /> },
                         OpsPage::ClaimsQueue     => html! { <ClaimsQueuePage /> },
-                        OpsPage::ReviewWorkbench => html! { <ReviewWorkbenchPage /> },
+                        OpsPage::ReviewWorkbench => html! { <CaseInvestigationPage /> },
                         OpsPage::CaseTracker     => html! { <CaseTrackerPage /> },
                         // ── 调查工具（复用原有页面，完整功能）──────────────
                         OpsPage::EvidenceHub       => evidence_hub_page(navigate_by_name.clone()),

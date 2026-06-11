@@ -26,7 +26,7 @@ impl OpsPage {
         match self {
             OpsPage::Dashboard         => "运营仪表盘",
             OpsPage::ClaimsQueue       => "理赔队列",
-            OpsPage::ReviewWorkbench   => "审核工作台",
+            OpsPage::ReviewWorkbench   => "调查工作台",
             OpsPage::CaseTracker       => "案件追踪",
             OpsPage::EvidenceHub       => "证据中心",
             OpsPage::MemberProfile     => "成员画像",
@@ -86,7 +86,7 @@ impl OpsPage {
         match self {
             OpsPage::Dashboard         => "今日拦截、防赔与运营指标",
             OpsPage::ClaimsQueue       => "TPA 进件，风险判断与处置",
-            OpsPage::ReviewWorkbench   => "可疑案件调查与结论写回",
+            OpsPage::ReviewWorkbench   => "案件调查：资料核查、风险分析、关联网络、结论提交",
             OpsPage::CaseTracker       => "进行中案件 SLA 与进度",
             OpsPage::EvidenceHub       => "证据链、文件与溯源",
             OpsPage::MemberProfile     => "成员历史理赔与风险",

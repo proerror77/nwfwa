@@ -129,7 +129,7 @@ fn kpi_avg_closure_hours(cases: &[CaseRecord]) -> String {
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
-fn page_header(snapshot_state: &UseStateHandle<ApiState<LeadsCasesSnapshot>>) -> Html {
+fn page_header(_snapshot_state: &UseStateHandle<ApiState<LeadsCasesSnapshot>>) -> Html {
     html! {
         <div class="ops-page-header">
             <div>
