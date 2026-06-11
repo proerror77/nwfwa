@@ -29,14 +29,6 @@ fn today_label() -> String {
     }
 }
 
-/// Parse a currency string like "CNY 1234.56" or "1234.56" → f64
-fn parse_amount(s: &str) -> f64 {
-    s.split_whitespace()
-        .last()
-        .and_then(|v| v.replace(',', "").parse::<f64>().ok())
-        .unwrap_or(0.0)
-}
-
 fn precision_tone(precision: f64) -> &'static str {
     if precision > 0.70 {
         "success"
@@ -93,40 +85,6 @@ fn rag_distribution_section(summary: &DashboardSummary) -> Html {
     }
 }
 
-fn value_proof_section(summary: &DashboardSummary) -> Html {
-    let vm = &summary.value_measurement;
-    let prevented = parse_amount(&vm.prevented_payment);
-    let cost = parse_amount(&vm.review_cost);
-    let roi_text = if cost > 0.0 {
-        format!(
-            "试算参考：每 1 元估算复核成本对应 {:.1} 元已确认防赔",
-            prevented / cost
-        )
-    } else {
-        "试算参考：估算复核成本为 0，暂不计算比值".to_string()
-    };
-
-    html! {
-        <div class="ops-value-proof">
-            <div class="ops-dashboard-grid" style="grid-template-columns:1fr 1fr;">
-                <div class="ops-kpi-card success">
-                    <span class="ops-kpi-label">{"本月防赔累计"}</span>
-                    <strong class="ops-kpi-value">{&vm.prevented_payment}</strong>
-                </div>
-                <div class="ops-kpi-card neutral">
-                    <span class="ops-kpi-label">{"估算复核成本"}</span>
-                    <strong class="ops-kpi-value">{&vm.review_cost}</strong>
-                    <small class="ops-kpi-note">{"复核事件 × 固定试算单价，不代表实际财务成本"}</small>
-                </div>
-            </div>
-            <div class="ops-roi-note">
-                <strong>{roi_text}</strong>
-                <span>{&vm.evidence_caveat}</span>
-            </div>
-        </div>
-    }
-}
-
 fn operational_watch_section(summary: &DashboardSummary) -> Html {
     let breached = summary.case_sla.breached_cases;
     let open_cases = summary.case_sla.open_cases;
@@ -155,13 +113,36 @@ fn operational_watch_section(summary: &DashboardSummary) -> Html {
     }
 }
 
+fn governance_todo_section(summary: &DashboardSummary) -> Html {
+    html! {
+        <div class="ops-dashboard-grid">
+            <div class="ops-kpi-card warning">
+                <span class="ops-kpi-label">{"待质控样本"}</span>
+                <strong class="ops-kpi-value">{summary.qa_queue.open_cases}</strong>
+                <small class="ops-kpi-note">{"进入 QA 抽样或复核分歧处理"}</small>
+            </div>
+            <div class="ops-kpi-card neutral">
+                <span class="ops-kpi-label">{"待审核标签"}</span>
+                <strong class="ops-kpi-value">{summary.label_pool.needs_review}</strong>
+                <small class="ops-kpi-note">{"不得直接进入训练或规则回流"}</small>
+            </div>
+            <div class="ops-kpi-card success">
+                <span class="ops-kpi-label">{"审计覆盖率"}</span>
+                <strong class="ops-kpi-value">{percent_label(summary.audit_coverage.canonical_trace_coverage)}</strong>
+                <small class="ops-kpi-note">{"评分链路可追踪覆盖情况"}</small>
+            </div>
+        </div>
+    }
+}
+
 fn next_action_section(summary: &DashboardSummary) -> Html {
+    let red_count = summary.rag_distribution.get("Red").copied().unwrap_or(0);
     html! {
         <div class="ops-command-panel">
             <div>
                 <p class="ops-section-label">{"今日处理顺序"}</p>
                 <ol>
-                    <li>{format!("先看 {} 个高风险/已拦截信号，确认是否需要进入调查。", summary.confirmed_fwa)}</li>
+                    <li>{format!("先处理 {} 个 Red 风险进件，判断补件、转调查或低风险归档。", red_count)}</li>
                     <li>{format!("再处理 {} 个开放调查案件，优先按 SLA 和优先级排序。", summary.case_sla.open_cases)}</li>
                     <li>{format!("最后闭环 {} 条 QA/治理反馈，避免规则和模型继续放大误差。", summary.qa_queue.unresolved_feedback_count)}</li>
                 </ol>
@@ -186,8 +167,8 @@ fn dashboard_body(summary: &DashboardSummary) -> Html {
             // ── Row 1 KPIs ──────────────────────────────────────────────
             <div class="ops-dashboard-grid">
                 { kpi_card("今日进件",        summary.suspected_claims, "neutral") }
-                { kpi_card("已拦截 (高风险)", summary.confirmed_fwa,    "danger")  }
-                { kpi_card("防赔金额",        &summary.saving_amount,   "success") }
+                { kpi_card("Red 风险进件",    summary.rag_distribution.get("Red").copied().unwrap_or(0), "danger")  }
+                { kpi_card("开放调查",        summary.case_sla.open_cases, "warning") }
             </div>
 
             // ── Row 2 KPIs ──────────────────────────────────────────────
@@ -200,14 +181,14 @@ fn dashboard_body(summary: &DashboardSummary) -> Html {
             // ── Operational watchlist ───────────────────────────────────
             { operational_watch_section(summary) }
 
+            // ── Governance todo ──────────────────────────────────────────
+            { governance_todo_section(summary) }
+
             // ── Next actions ────────────────────────────────────────────
             { next_action_section(summary) }
 
             // ── Risk distribution ────────────────────────────────────────
             { rag_distribution_section(summary) }
-
-            // ── Value proof ──────────────────────────────────────────────
-            { value_proof_section(summary) }
         </>
     }
 }

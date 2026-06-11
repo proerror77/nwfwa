@@ -82,9 +82,9 @@ fn risk_badge_html(rag: &str) -> Html {
 
 fn outcome_badge_html(rag: &str) -> Html {
     let (tone, label) = match rag.trim().to_ascii_uppercase().as_str() {
-        "RED" => ("auto-deny", "建议拒付复核"),
-        "AMBER" | "YELLOW" => ("manual", "人工审核"),
-        _ => ("straight", "低风险归档"),
+        "RED" => ("auto-deny", "需调查判断"),
+        "AMBER" | "YELLOW" => ("manual", "人工分流"),
+        _ => ("straight", "可归档"),
     };
     html! { <span class={classes!("outcome-badge", tone)}>{label}</span> }
 }
@@ -288,11 +288,6 @@ fn detail_panel(
     let tone = rag_tone(&lead.rag);
     let ev_count = lead.evidence_refs.len();
 
-    // Evidence-refs as proxy for breakdown bars (rule/model/anomaly split)
-    let rule_count = ev_count.saturating_sub(0).min(ev_count);
-    let model_count = (ev_count / 2).max(1);
-    let anomaly_count = (ev_count / 3).max(0);
-
     // Signal cards from splitting the reason text
     let signals: Vec<&str> = lead
         .reason
@@ -302,8 +297,8 @@ fn detail_panel(
         .collect();
 
     let recommendation = match lead.rag.to_ascii_uppercase().as_str() {
-        "RED" => "建议拒付复核或转人工调查",
-        "AMBER" | "YELLOW" => "建议人工审核",
+        "RED" => "建议转人工调查或先请求补件",
+        "AMBER" | "YELLOW" => "建议人工分流",
         _ => "建议低风险归档",
     };
 
@@ -344,13 +339,22 @@ fn detail_panel(
                     html! {}
                 } }
 
-                // ── Risk breakdown ─────────────────────────────────────
+                // ── Routing context ────────────────────────────────────
                 <div>
-                    <p class="ops-section-label">{"风险分解"}</p>
-                    <div class="risk-breakdown">
-                        { risk_bar("规则命中", rule_count, ev_count.max(1), tone) }
-                        { risk_bar("模型评分", model_count, ev_count.max(1), "model") }
-                        { risk_bar("异常检测", anomaly_count, ev_count.max(1), "medium") }
+                    <p class="ops-section-label">{"分流依据"}</p>
+                    <div class="ops-dashboard-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+                        <div class="ops-kpi-card neutral">
+                            <span class="ops-kpi-label">{"风险评分"}</span>
+                            <strong class="ops-kpi-value">{lead.risk_score}</strong>
+                        </div>
+                        <div class="ops-kpi-card neutral">
+                            <span class="ops-kpi-label">{"证据引用"}</span>
+                            <strong class="ops-kpi-value">{ev_count}</strong>
+                        </div>
+                        <div class={classes!("ops-kpi-card", tone)}>
+                            <span class="ops-kpi-label">{"风险带"}</span>
+                            <strong class="ops-kpi-value">{rag_label(&lead.rag)}</strong>
+                        </div>
                     </div>
                 </div>
 
@@ -391,10 +395,10 @@ fn detail_panel(
                         disabled={loading}
                     >{"低风险归档"}</button>
                     <button
-                        class="btn-deny"
+                        class="btn-evidence"
                         onclick={on_deny}
                         disabled={loading}
-                    >{"建议拒付复核"}</button>
+                    >{"请求补件"}</button>
                     <button
                         class="btn-review"
                         onclick={on_review_click}
@@ -446,25 +450,6 @@ fn detail_panel(
                 } }
 
             </div>
-        </div>
-    }
-}
-
-fn risk_bar(label: &str, value: usize, max: usize, tone: &str) -> Html {
-    let pct = if max == 0 {
-        0.0
-    } else {
-        (value as f64 / max as f64) * 100.0
-    };
-    let width = format!("{:.0}%", pct.clamp(4.0, 100.0));
-    let tone = tone.to_string();
-    html! {
-        <div class="risk-breakdown-row">
-            <span class="risk-breakdown-label">{label}</span>
-            <div class="risk-bar-track">
-                <div class={classes!("risk-bar-fill", tone)} style={format!("width:{width}")} />
-            </div>
-            <span class="risk-breakdown-value">{value}</span>
         </div>
     }
 }
@@ -628,7 +613,7 @@ pub fn claims_queue_page() -> Html {
         })
     };
 
-    // btn-deny: close lead with denial-review recommendation
+    // btn-evidence: keep the lead open while requesting missing evidence
     let on_deny = {
         let do_triage = do_triage.clone();
         let selected_lead = selected_lead.clone();
@@ -641,9 +626,10 @@ pub fn claims_queue_page() -> Html {
                 return;
             }
             do_triage(
-                "reject_lead".to_string(),
-                "Claims Queue: denial-review recommendation recorded; deterministic rule criteria exceeded.".to_string(),
-                "denial-officer".to_string(),
+                "request_evidence".to_string(),
+                "Claims Queue: additional evidence requested before investigation or closure."
+                    .to_string(),
+                "evidence-coordinator".to_string(),
                 lead.evidence_refs.clone(),
             );
         })

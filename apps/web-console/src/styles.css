@@ -7060,6 +7060,13 @@ pre {
 
 .ops-kpi-card.highlight strong { color: var(--red); }
 .ops-kpi-card.positive strong  { color: #1a7a3c; }
+.ops-kpi-card.danger strong,
+.ops-kpi-card.high strong { color: var(--red); }
+.ops-kpi-card.warning strong,
+.ops-kpi-card.medium strong { color: var(--amber); }
+.ops-kpi-card.success strong,
+.ops-kpi-card.low strong { color: #1a7a3c; }
+.ops-kpi-card.neutral strong { color: var(--graphite); }
 
 .ops-roi-note {
   display: grid;
@@ -7292,6 +7299,20 @@ pre {
   transition: background 0.15s;
 }
 .btn-deny:hover:not(:disabled) { background: #ffd1dc; }
+
+.btn-evidence {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--blue-soft);
+  color: var(--blue);
+  transition: background 0.15s;
+}
+.btn-evidence:hover:not(:disabled) { background: #dbeafe; }
 
 .btn-review {
   flex: 1;

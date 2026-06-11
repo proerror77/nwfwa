@@ -108,8 +108,8 @@ pub fn ops_app() -> Html {
                 "Member Profile" => OpsPage::MemberProfile,
                 "Provider Risk" => OpsPage::ProviderRisk,
                 "Knowledge Base" => OpsPage::KnowledgeBase,
-                "Evidence Runtime" => OpsPage::EvidenceHub,
-                "Data Sources" => OpsPage::EvidenceHub,
+                "Evidence Runtime" => OpsPage::EvidenceRuntime,
+                "Data Sources" => OpsPage::DataSources,
                 "Medical Review" => OpsPage::MedicalReview,
                 "QA Review" => OpsPage::QaReview,
                 "Agent Investigator" => OpsPage::AgentInvestigator,
@@ -207,9 +207,11 @@ pub fn ops_app() -> Html {
                         OpsPage::CaseTracker     => html! { <CaseTrackerPage /> },
                         // ── 调查工具（复用原有页面，完整功能）──────────────
                         OpsPage::EvidenceHub       => evidence_hub_page(navigate_by_name.clone()),
+                        OpsPage::EvidenceRuntime   => html! { <EvidenceRuntimePage /> },
                         OpsPage::MemberProfile     => html! { <MemberProfilePage /> },
                         OpsPage::ProviderRisk      => html! { <ProviderRiskPage /> },
                         OpsPage::KnowledgeBase     => html! { <KnowledgeBasePage /> },
+                        OpsPage::DataSources       => html! { <DataSourcesPage /> },
                         OpsPage::AgentInvestigator => html! { <AgentInvestigatorPage /> },
                         // ── 规则与模型（完整功能：推送审核 + 回测 + 激活）──
                         OpsPage::RuleLibrary     => html! { <RulesPage /> },
