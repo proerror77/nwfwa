@@ -178,7 +178,7 @@ pub(crate) fn module_label(module: &str, language: Language) -> &'static str {
         "Evidence Runtime" => tr(language, "Evidence Runtime", "证据运行时"),
         "Rules" => tr(language, "Rules", "规则"),
         "Models" => tr(language, "Models", "模型"),
-        "Routing Policies" => tr(language, "Routing Policies", "路由策略"),
+        "Routing Policies" => tr(language, "Review Routing Policies", "审核分流策略"),
         "Factor Factory" => tr(language, "Factor Factory", "因子工厂"),
         "Data Sources" => tr(language, "Data Sources", "数据源"),
         "Leads & Cases" => tr(language, "Leads & Cases", "线索与案件"),
@@ -253,8 +253,8 @@ pub(crate) fn module_context(module: &str, language: Language) -> &'static str {
         ),
         "Routing Policies" => tr(
             language,
-            "Inspect routing boundaries for model and policy execution.",
-            "检查模型与政策执行的路由边界。",
+            "Configure when risk bands route claims to STP, QA sampling, or manual review.",
+            "设置不同风险等级进入自动通过、抽样复核或人工审核。",
         ),
         "Factor Factory" => tr(
             language,
@@ -332,7 +332,7 @@ pub(crate) fn module_description(module: &str, language: Language) -> &'static s
         "Evidence Runtime" => tr(language, "document evidence", "文件证据"),
         "Rules" => tr(language, "rule candidate release", "规则候选发布"),
         "Models" => tr(language, "threshold evidence", "阈值证据"),
-        "Routing Policies" => tr(language, "execution routing", "执行路由"),
+        "Routing Policies" => tr(language, "review routing", "审核分流"),
         "Factor Factory" => tr(language, "feature readiness", "特征就绪"),
         "Data Sources" => tr(language, "catalog & lineage", "目录与血缘"),
         "Leads & Cases" => tr(language, "investigation queue", "调查队列"),

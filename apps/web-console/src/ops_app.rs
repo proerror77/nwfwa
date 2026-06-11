@@ -36,8 +36,8 @@ fn governance_hub_page(navigate: Callback<OpsPage>) -> Html {
                         <span>{"质控与治理"}</span>
                         <small>{"Quality & Governance"}</small>
                     </h2>
-                    <p>{"管理抽样质控、医疗复核、QA 反馈以及规则/模型/路由的发布治理；这里不承办理赔分流。"}</p>
-                    <p class="muted en-copy">{"Second-line controls for sampling QA, medical review, feedback closure, and rule/model/routing governance. This hub does not handle claim triage."}</p>
+                    <p>{"管理抽样质控、医疗复核、QA 反馈以及规则、模型和审核分流策略的发布治理；这里不承办理赔分流。"}</p>
+                    <p class="muted en-copy">{"Second-line controls for sampling QA, medical review, feedback closure, and rule/model/review-routing governance. This hub does not handle claim triage."}</p>
                 </div>
                 <span class="status-pill">{"二线治理"}</span>
             </div>
@@ -47,7 +47,7 @@ fn governance_hub_page(navigate: Callback<OpsPage>) -> Html {
                 {ops_entry_card(OpsPage::QaReview, "Feedback", "QA 反馈", "闭环复核意见，回流规则、模型、特征和工作流改进。", "success", &navigate)}
                 {ops_entry_card(OpsPage::RuleLibrary, "Rules", "规则库", "审核推送规则、查看命中表现和回测结果，避免静默上线。", "danger", &navigate)}
                 {ops_entry_card(OpsPage::ModelGovernance, "Models", "模型管理", "查看模型版本、评估指标、漂移监控和激活决策。", "neutral", &navigate)}
-                {ops_entry_card(OpsPage::RoutingPolicies, "Routing", "路由策略", "维护 Red/Amber/Green 分流阈值与人工审核策略。", "strong", &navigate)}
+                {ops_entry_card(OpsPage::RoutingPolicies, "Routing", "审核分流策略", "设置不同风险等级进入自动通过、抽样复核、人工审核或回滚保护。", "strong", &navigate)}
             </div>
         </section>
     }
@@ -119,6 +119,7 @@ pub fn ops_app() -> Html {
                 "Agent Investigator" => OpsPage::AgentInvestigator,
                 "Rules" => OpsPage::RuleLibrary,
                 "Models" => OpsPage::ModelGovernance,
+                "Routing Policies" => OpsPage::RoutingPolicies,
                 "Case Tracker" => OpsPage::CaseTracker,
                 "Governance" => OpsPage::GovernanceHub,
                 "Dashboard" => OpsPage::Dashboard,

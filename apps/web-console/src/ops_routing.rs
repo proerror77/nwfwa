@@ -40,7 +40,7 @@ impl OpsPage {
             OpsPage::AgentInvestigator => "AI 调查员",
             OpsPage::RuleLibrary => "规则库",
             OpsPage::ModelGovernance => "模型管理",
-            OpsPage::RoutingPolicies => "路由策略",
+            OpsPage::RoutingPolicies => "审核分流策略",
             OpsPage::GovernanceHub => "质控与治理",
             OpsPage::AuditSampling => "抽样审核",
             OpsPage::MedicalReview => "医疗复核",
@@ -63,7 +63,7 @@ impl OpsPage {
             OpsPage::AgentInvestigator => "AI Investigator",
             OpsPage::RuleLibrary => "Rule Library",
             OpsPage::ModelGovernance => "Model Governance",
-            OpsPage::RoutingPolicies => "Routing Policies",
+            OpsPage::RoutingPolicies => "Review Routing Policies",
             OpsPage::GovernanceHub => "Quality & Governance",
             OpsPage::AuditSampling => "Audit Sampling",
             OpsPage::MedicalReview => "Medical Review",
@@ -132,7 +132,7 @@ impl OpsPage {
             OpsPage::AgentInvestigator => "AI 辅助调查包生成",
             OpsPage::RuleLibrary => "活跃规则 + 推送规则审核",
             OpsPage::ModelGovernance => "推送模型版本 + 激活决策",
-            OpsPage::RoutingPolicies => "风险路由策略配置",
+            OpsPage::RoutingPolicies => "配置风险等级进入自动通过、抽样复核或人工审核",
             OpsPage::GovernanceHub => "抽样、QA、医疗复核、规则模型治理",
             OpsPage::AuditSampling => "抽样质控与覆盖率",
             OpsPage::MedicalReview => "医疗必要性人工复核",
@@ -161,7 +161,9 @@ impl OpsPage {
             OpsPage::ModelGovernance => {
                 "Model versions, evaluation, drift, and activation decisions"
             }
-            OpsPage::RoutingPolicies => "Risk-band routing policy configuration",
+            OpsPage::RoutingPolicies => {
+                "Risk-band routing policy configuration for STP, QA sampling, and manual review"
+            }
             OpsPage::GovernanceHub => {
                 "Sampling, QA, medical review, rule, model, and routing governance"
             }
