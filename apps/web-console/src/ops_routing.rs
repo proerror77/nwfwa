@@ -1,3 +1,5 @@
+use crate::state::Language;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OpsPage {
     // ── 运营工作台 ────────────────────────────────────────────────────────────
@@ -68,6 +70,13 @@ impl OpsPage {
             OpsPage::AuditSampling => "Audit Sampling",
             OpsPage::MedicalReview => "Medical Review",
             OpsPage::QaReview => "QA Feedback",
+        }
+    }
+
+    pub(crate) fn label_for(self, language: Language) -> &'static str {
+        match language {
+            Language::En => self.label_en(),
+            Language::Zh => self.label(),
         }
     }
 
@@ -170,6 +179,13 @@ impl OpsPage {
             OpsPage::AuditSampling => "QA sample coverage and disagreement monitoring",
             OpsPage::MedicalReview => "Human clinical necessity review",
             OpsPage::QaReview => "QA feedback closure loop",
+        }
+    }
+
+    pub(crate) fn description_for(self, language: Language) -> &'static str {
+        match language {
+            Language::En => self.description_en(),
+            Language::Zh => self.description(),
         }
     }
 }

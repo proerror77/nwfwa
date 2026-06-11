@@ -1,3 +1,6 @@
+use crate::formatting::localized_business_text;
+use crate::i18n::tr;
+use crate::state::Language;
 use crate::types::InvestigationContext;
 use yew::prelude::*;
 
@@ -64,13 +67,18 @@ fn default_min_evidence(scheme: &str) -> Vec<&'static str> {
 
 // ── Supplement-request button (needs local state → sub-component) ──────────────
 
+#[derive(Properties, PartialEq)]
+struct SupplementRequestButtonProps {
+    language: Language,
+}
+
 #[function_component(SupplementRequestButton)]
-fn supplement_request_button() -> Html {
+fn supplement_request_button(props: &SupplementRequestButtonProps) -> Html {
     let sent = use_state(|| false);
     if *sent {
         html! {
             <div style="padding:8px 12px;background:#e8f7ee;border:1px solid #1a7a3c;border-radius:4px;font-size:0.82rem;color:#1a7a3c;">
-                {"补件通知已发送（Mock）"}
+                {tr(props.language, "Evidence request sent (mock)", "补件通知已发送（Mock）")}
             </div>
         }
     } else {
@@ -83,7 +91,7 @@ fn supplement_request_button() -> Html {
                 style="background:var(--blue);color:var(--graphite);border:none;border-radius:6px;padding:8px 16px;font-size:0.85rem;cursor:pointer;font-weight:600;"
                 onclick={on_click}
             >
-                {"发补件请求"}
+                {tr(props.language, "Send evidence request", "发补件请求")}
             </button>
         }
     }
@@ -91,7 +99,7 @@ fn supplement_request_button() -> Html {
 
 // ── Layer 1: Document Completeness + Amount Reasonableness ────────────────────
 
-pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
+pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: Language) -> Html {
     let suf = extract_evidence_sufficiency(ctx);
     let min_ev = default_min_evidence(&ctx.case.scheme_family);
 
@@ -108,9 +116,9 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
     let any_missing = checklist.iter().any(|(_, ok)| !ok) || !suf.missing.is_empty();
 
     let status_badge = if any_missing {
-        html! { <span class="risk-badge high" style="font-size:0.75rem;">{"存在问题"}</span> }
+        html! { <span class="risk-badge high" style="font-size:0.75rem;">{tr(language, "Issues found", "存在问题")}</span> }
     } else {
-        html! { <span class="risk-badge low" style="font-size:0.75rem;">{"资料完整"}</span> }
+        html! { <span class="risk-badge low" style="font-size:0.75rem;">{tr(language, "Evidence complete", "资料完整")}</span> }
     };
 
     // Mock billing data derived from claim_id hash
@@ -128,25 +136,25 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
     let lines = vec![
         BillingLine {
             code: "99213",
-            desc: "门诊复诊",
+            desc: tr(language, "Office visit", "门诊复诊"),
             claimed: base_amount * 0.18,
             peer_avg: peer_avg * 0.20,
         },
         BillingLine {
             code: "93000",
-            desc: "心电图",
+            desc: tr(language, "Electrocardiogram", "心电图"),
             claimed: base_amount * 0.07,
             peer_avg: peer_avg * 0.06,
         },
         BillingLine {
             code: "85025",
-            desc: "血常规检查",
+            desc: tr(language, "Complete blood count", "血常规检查"),
             claimed: base_amount * 0.05,
             peer_avg: peer_avg * 0.05,
         },
         BillingLine {
             code: "99232",
-            desc: "住院随诊",
+            desc: tr(language, "Inpatient follow-up", "住院随诊"),
             claimed: base_amount * 0.70,
             peer_avg: peer_avg * 0.69,
         },
@@ -163,17 +171,17 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div class="evidence-card-header" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"① 资料完整性 & 金额合理性"}</h4>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "① Document Completeness & Amount Reasonableness", "① 资料完整性 & 金额合理性")}</h4>
                 { status_badge }
             </div>
 
             // Checklist
             <div style="margin-bottom:14px;">
-                <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"最低资料要求"}</p>
+                <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Minimum evidence requirements", "最低资料要求")}</p>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                     { for checklist.iter().map(|(item, ok)| {
                         let (icon, color) = if *ok { ("✓", "#1a7a3c") } else { ("✗", "var(--red)") };
-                        let label = if *ok { "已提供" } else { "缺失" };
+                        let label = if *ok { tr(language, "Provided", "已提供") } else { tr(language, "Missing", "缺失") };
                         html! {
                             <div style="display:flex;align-items:center;gap:8px;">
                                 <span style={format!("font-size:0.9rem;font-weight:700;color:{color};")}>{icon}</span>
@@ -190,7 +198,7 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
                             <div style="display:flex;align-items:center;gap:8px;">
                                 <span style="font-size:0.9rem;font-weight:700;color:var(--red);">{"✗"}</span>
                                 <span style="font-size:0.85rem;color:var(--graphite);flex:1;">{m.as_str()}</span>
-                                <span style="font-size:0.75rem;color:var(--red);">{"缺失"}</span>
+                                <span style="font-size:0.75rem;color:var(--red);">{tr(language, "Missing", "缺失")}</span>
                             </div>
                         }
                     }) }
@@ -200,15 +208,15 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
             // Amount reasonableness (mock)
             <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-                    <p style="margin:0;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"金额合理性"}</p>
-                    <span style="font-size:0.7rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;">{"模拟数据"}</span>
+                    <p style="margin:0;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Amount reasonableness", "金额合理性")}</p>
+                    <span style="font-size:0.7rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;">{tr(language, "Simulated data", "模拟数据")}</span>
                 </div>
 
                 // Billing line grid
                 <div style="display:grid;grid-template-columns:4.5rem minmax(6rem,1fr) 5.5rem;gap:4px 8px;font-size:0.8rem;margin-bottom:12px;">
-                    <span style="color:var(--muted);font-weight:600;">{"代码"}</span>
-                    <span style="color:var(--muted);font-weight:600;">{"项目"}</span>
-                    <span style="color:var(--muted);font-weight:600;text-align:right;">{"申报金额"}</span>
+                    <span style="color:var(--muted);font-weight:600;">{tr(language, "Code", "代码")}</span>
+                    <span style="color:var(--muted);font-weight:600;">{tr(language, "Item", "项目")}</span>
+                    <span style="color:var(--muted);font-weight:600;text-align:right;">{tr(language, "Claimed amount", "申报金额")}</span>
                     { for lines.iter().map(|line| {
                         let ratio     = line.claimed / line.peer_avg;
                         let val_color = if ratio > 1.3 { "var(--red)" } else if ratio > 1.1 { "var(--amber)" } else { "var(--graphite)" };
@@ -225,7 +233,7 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
                 // Summary bar chart
                 <div style="margin-bottom:4px;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                        <span style="font-size:0.75rem;color:var(--muted);width:5rem;">{"申报合计"}</span>
+                        <span style="font-size:0.75rem;color:var(--muted);width:5rem;">{tr(language, "Claimed total", "申报合计")}</span>
                         <div style="flex:1;background:var(--surface-strong);border-radius:3px;height:10px;overflow:hidden;">
                             <div style={format!("width:{claimed_bar}%;height:100%;background:{};border-radius:3px;",
                                 if over_threshold { "var(--red)" } else { "var(--blue)" })}></div>
@@ -233,7 +241,7 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
                         <span style="font-size:0.75rem;color:var(--graphite);width:5rem;text-align:right;">{format!("¥{:.0}", total_claimed)}</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <span style="font-size:0.75rem;color:var(--muted);width:5rem;">{"同行均值"}</span>
+                        <span style="font-size:0.75rem;color:var(--muted);width:5rem;">{tr(language, "Peer average", "同行均值")}</span>
                         <div style="flex:1;background:var(--surface-strong);border-radius:3px;height:10px;overflow:hidden;">
                             <div style={format!("width:{peer_bar}%;height:100%;background:#1a7a3c;border-radius:3px;")}></div>
                         </div>
@@ -244,7 +252,7 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
                 { if over_threshold {
                     html! {
                         <div style="margin-top:8px;padding:6px 10px;background:var(--red-soft);border:1px solid var(--red);border-radius:4px;font-size:0.8rem;color:var(--red);">
-                            {"⚠ 申报总额超出同行均值 25%，存在异常"}
+                            {tr(language, "Claimed total is 25% above peer average.", "申报总额超出同行均值 25%，存在异常")}
                         </div>
                     }
                 } else { html! {} } }
@@ -252,7 +260,7 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext) -> Html {
 
             // Supplement request
             { if any_missing {
-                html! { <SupplementRequestButton /> }
+                html! { <SupplementRequestButton language={language} /> }
             } else { html! {} } }
         </div>
     }
@@ -339,21 +347,21 @@ fn scheme_chip_color(scheme: &str) -> (&'static str, &'static str) {
     }
 }
 
-fn evidence_ref_type_label(r: &str) -> (&'static str, &'static str) {
+fn evidence_ref_type_label(r: &str, language: Language) -> (&'static str, &'static str) {
     if r.starts_with("rule_runs:") {
-        ("规则命中", "var(--amber)")
+        (tr(language, "Rule hit", "规则命中"), "var(--amber)")
     } else if r.starts_with("model_scores:") {
-        ("模型评分", "var(--blue)")
+        (tr(language, "Model score", "模型评分"), "var(--blue)")
     } else if r.starts_with("audit_events:") {
-        ("审计事件", "var(--muted)")
+        (tr(language, "Audit event", "审计事件"), "var(--muted)")
     } else if r.starts_with("claims:") {
-        ("理赔记录", "#1a7a3c")
+        (tr(language, "Claim record", "理赔记录"), "#1a7a3c")
     } else {
-        ("证据引用", "var(--muted)")
+        (tr(language, "Evidence ref", "证据引用"), "var(--muted)")
     }
 }
 
-pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
+pub(crate) fn layer_risk_signals(ctx: &InvestigationContext, language: Language) -> Html {
     // Top reasons from lead
     let reasons: Vec<&str> = ctx
         .lead
@@ -375,7 +383,7 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
             l.evidence_refs
                 .iter()
                 .map(|r| {
-                    let (kind, color) = evidence_ref_type_label(r.as_str());
+                    let (kind, color) = evidence_ref_type_label(r.as_str(), language);
                     (r.clone(), kind, color)
                 })
                 .collect()
@@ -386,13 +394,25 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
     let scores = extract_score_breakdown(ctx);
 
     let score_rows: &[(&str, Option<f64>)] = &[
-        ("同行偏差", scores.peer_deviation),
-        ("规则", scores.rule),
-        ("异常", scores.anomaly),
+        (
+            tr(language, "Peer deviation", "同行偏差"),
+            scores.peer_deviation,
+        ),
+        (tr(language, "Rules", "规则"), scores.rule),
+        (tr(language, "Anomaly", "异常"), scores.anomaly),
         ("ML", scores.ml),
-        ("医疗合理性", scores.medical),
-        ("供应商网络", scores.provider_network),
-        ("相似案件", scores.similar_case),
+        (
+            tr(language, "Medical reasonableness", "医疗合理性"),
+            scores.medical,
+        ),
+        (
+            tr(language, "Provider network", "供应商网络"),
+            scores.provider_network,
+        ),
+        (
+            tr(language, "Similar cases", "相似案件"),
+            scores.similar_case,
+        ),
     ];
 
     let has_scores = score_rows.iter().any(|(_, v)| v.is_some());
@@ -407,15 +427,15 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
 
     let risk_score = ctx.lead.as_ref().map(|l| l.risk_score).unwrap_or(0);
     let (score_color, score_label) = match risk_score {
-        80..=100 => ("var(--red)", "高风险"),
-        50..=79 => ("var(--amber)", "中风险"),
-        _ => ("#1a7a3c", "低风险"),
+        80..=100 => ("var(--red)", tr(language, "High risk", "高风险")),
+        50..=79 => ("var(--amber)", tr(language, "Medium risk", "中风险")),
+        _ => ("#1a7a3c", tr(language, "Low risk", "低风险")),
     };
 
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"② 风险信号"}</h4>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "② Risk Signals", "② 风险信号")}</h4>
                 <span style={format!("background:{chip_bg};color:{chip_fg};border:1px solid {chip_fg};border-radius:12px;padding:2px 10px;font-size:0.75rem;font-weight:600;")}>
                     {scheme}
                 </span>
@@ -428,14 +448,14 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
             { if !reasons.is_empty() {
                 html! {
                     <div style="margin-bottom:14px;">
-                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"标记原因"}</p>
+                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Flag reasons", "标记原因")}</p>
                         <div style="display:flex;flex-direction:column;gap:5px;">
                             { for reasons.iter().enumerate().map(|(i, r)| {
                                 let bg     = if i == 0 { "var(--red-soft)" } else { "var(--surface-strong)" };
                                 let border = if i == 0 { "var(--red)" } else { "var(--line)" };
                                 html! {
                                     <div style={format!("background:{bg};border-left:3px solid {border};border-radius:0 4px 4px 0;padding:6px 10px;font-size:0.83rem;color:var(--graphite);")}>
-                                        {*r}
+                                        {localized_business_text(r, language)}
                                     </div>
                                 }
                             }) }
@@ -448,7 +468,7 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
             { if !ev_ref_chips.is_empty() {
                 html! {
                     <div style="margin-bottom:14px;">
-                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"证据类型"}</p>
+                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Evidence types", "证据类型")}</p>
                         <div style="display:flex;flex-wrap:wrap;gap:6px;">
                             { for ev_ref_chips.iter().map(|(r, kind, color)| {
                                 html! {
@@ -467,12 +487,12 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
             { if !alerts.is_empty() {
                 html! {
                     <div style="margin-bottom:14px;">
-                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"规则告警"}</p>
+                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Rule alerts", "规则告警")}</p>
                         <div style="display:flex;flex-direction:column;gap:5px;">
                             { for alerts.iter().map(|a| {
                                 html! {
                                     <div style="background:var(--amber-soft);border-left:3px solid var(--amber);border-radius:0 4px 4px 0;padding:6px 10px;font-size:0.82rem;color:var(--graphite);">
-                                        {a.as_str()}
+                                        {localized_business_text(a, language)}
                                     </div>
                                 }
                             }) }
@@ -485,7 +505,7 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
             { if has_scores {
                 html! {
                     <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;">
-                        <p style="margin:0 0 10px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"7层评分分解"}</p>
+                        <p style="margin:0 0 10px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Seven-layer score breakdown", "7层评分分解")}</p>
                         <div style="display:flex;flex-direction:column;gap:7px;">
                             { for score_rows.iter().map(|(label, val)| {
                                 let pct = val.map(|v| (v.clamp(0.0, 1.0) * 100.0) as u32).unwrap_or(0);
@@ -517,14 +537,14 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext) -> Html {
 
 // ── Layer 3: Member Behavior Pattern ──────────────────────────────────────────
 
-pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
+pub(crate) fn layer_member_behavior(ctx: &InvestigationContext, language: Language) -> Html {
     let Some(member) = ctx.member.as_ref() else {
         return html! {
             <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"③ 成员行为模式"}</h4>
+                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "③ Member Behavior Pattern", "③ 成员行为模式")}</h4>
                 </div>
-                <p style="color:var(--muted);font-size:0.85rem;margin:0;">{"成员数据不可用"}</p>
+                <p style="color:var(--muted);font-size:0.85rem;margin:0;">{tr(language, "Member data unavailable.", "成员数据不可用")}</p>
             </div>
         };
     };
@@ -539,9 +559,13 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
     let pct_u32 = pct.round() as u32;
 
     let (risk_color, risk_label) = match member.risk_level_summary.to_ascii_lowercase().as_str() {
-        s if s.contains("high") || s.contains("高") => ("var(--red)", "高风险"),
-        s if s.contains("medium") || s.contains("中") => ("var(--amber)", "中风险"),
-        _ => ("#1a7a3c", "低风险"),
+        s if s.contains("high") || s.contains("高") => {
+            ("var(--red)", tr(language, "High risk", "高风险"))
+        }
+        s if s.contains("medium") || s.contains("中") => {
+            ("var(--amber)", tr(language, "Medium risk", "中风险"))
+        }
+        _ => ("#1a7a3c", tr(language, "Low risk", "低风险")),
     };
 
     // Total claim amount — stored as serde_json::Value
@@ -572,7 +596,7 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"③ 成员行为模式"}</h4>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "③ Member Behavior Pattern", "③ 成员行为模式")}</h4>
                 <span style={format!("background:var(--surface-strong);border:1px solid {risk_color};border-radius:12px;padding:2px 10px;font-size:0.75rem;font-weight:600;color:{risk_color};")}>
                     {risk_label}
                 </span>
@@ -582,22 +606,25 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
                 <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:10px;text-align:center;">
                     <div style="font-size:1.3rem;font-weight:700;color:var(--graphite);">{claim_count}</div>
-                    <div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">{"累计理赔笔数"}</div>
+                    <div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">{tr(language, "Lifetime claims", "累计理赔笔数")}</div>
                 </div>
                 <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:10px;text-align:center;">
                     <div style={format!("font-size:1.3rem;font-weight:700;color:{risk_color};")}>{high_risk}</div>
-                    <div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">{"高风险理赔"}</div>
+                    <div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">{tr(language, "High-risk claims", "高风险理赔")}</div>
                 </div>
                 <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:10px;text-align:center;">
                     <div style={format!("font-size:1.3rem;font-weight:700;color:{risk_color};")}>{format!("{pct_u32}%")}</div>
-                    <div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">{"高风险占比"}</div>
+                    <div style="font-size:0.73rem;color:var(--muted);margin-top:2px;">{tr(language, "High-risk share", "高风险占比")}</div>
                 </div>
             </div>
 
             // High-risk percentage bar
             <div style="margin-bottom:14px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                    <span style="font-size:0.78rem;color:var(--muted);">{format!("高风险理赔占比 {pct_u32}%")}</span>
+                    <span style="font-size:0.78rem;color:var(--muted);">{match language {
+                        Language::En => format!("High-risk claim share {pct_u32}%"),
+                        Language::Zh => format!("高风险理赔占比 {pct_u32}%"),
+                    }}</span>
                 </div>
                 <div style="background:var(--surface-strong);border-radius:3px;height:10px;overflow:hidden;">
                     <div style={format!("width:{pct_u32}%;height:100%;background:{risk_color};border-radius:3px;")}></div>
@@ -607,14 +634,14 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
             // Total claim amount + this-claim ratio
             <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <span style="font-size:0.83rem;color:var(--muted);">{"累计理赔金额"}</span>
+                    <span style="font-size:0.83rem;color:var(--muted);">{tr(language, "Lifetime claim amount", "累计理赔金额")}</span>
                     <span style={format!("font-size:0.9rem;font-weight:700;color:{};",
                         if total_f64 > 50000.0 { "var(--red)" } else { "var(--graphite)" })}>
                         {total_amount_str}
                     </span>
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-size:0.83rem;color:var(--muted);">{"本次理赔占历史总额比例"}</span>
+                    <span style="font-size:0.83rem;color:var(--muted);">{tr(language, "Current claim share of lifetime total", "本次理赔占历史总额比例")}</span>
                     <span style={format!("font-size:0.9rem;font-weight:700;color:{};",
                         if ratio_pct > 50 { "var(--amber)" } else { "var(--graphite)" })}>
                         {format!("{ratio_pct}%")}
@@ -626,8 +653,8 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
             { if !member.profile_summary.is_empty() {
                 html! {
                     <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px;">
-                        <p style="margin:0 0 6px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"画像摘要"}</p>
-                        <p style="margin:0;font-size:0.83rem;color:var(--graphite);line-height:1.5;">{&member.profile_summary}</p>
+                        <p style="margin:0 0 6px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Profile summary", "画像摘要")}</p>
+                        <p style="margin:0;font-size:0.83rem;color:var(--graphite);line-height:1.5;">{localized_business_text(&member.profile_summary, language)}</p>
                     </div>
                 }
             } else { html! {} } }
@@ -635,11 +662,15 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
             // Mock time-window section
             <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-                    <p style="margin:0;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"理赔时间窗口分布"}</p>
-                    <span style="font-size:0.7rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;">{"模拟数据"}</span>
+                    <p style="margin:0;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Claim time-window distribution", "理赔时间窗口分布")}</p>
+                    <span style="font-size:0.7rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;">{tr(language, "Simulated data", "模拟数据")}</span>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:6px;">
-                    { for [("30天内", window_30), ("90天内", window_90), ("180天内", window_180)].iter().map(|(label, n)| {
+                    { for [
+                        (tr(language, "30 days", "30天内"), window_30),
+                        (tr(language, "90 days", "90天内"), window_90),
+                        (tr(language, "180 days", "180天内"), window_180),
+                    ].iter().map(|(label, n)| {
                         let bar_w = if claim_count > 0 { (*n as f64 / claim_count as f64 * 100.0).min(100.0) as u32 } else { 0 };
                         html! {
                             <div style="display:flex;align-items:center;gap:8px;">
@@ -647,7 +678,10 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
                                 <div style="flex:1;background:var(--surface-strong);border-radius:3px;height:8px;overflow:hidden;">
                                     <div style={format!("width:{bar_w}%;height:100%;background:var(--blue);border-radius:3px;")}></div>
                                 </div>
-                                <span style="font-size:0.78rem;color:var(--graphite);width:3rem;text-align:right;">{format!("{n} 笔")}</span>
+                                <span style="font-size:0.78rem;color:var(--graphite);width:3rem;text-align:right;">{match language {
+                                    Language::En => format!("{n} claims"),
+                                    Language::Zh => format!("{n} 笔"),
+                                }}</span>
                             </div>
                         }
                     }) }
@@ -655,7 +689,7 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
                 { if concentration_warning {
                     html! {
                         <div style="margin-top:10px;padding:6px 10px;background:var(--amber-soft);border:1px solid var(--amber);border-radius:4px;font-size:0.8rem;color:var(--amber);">
-                            {"⚠ 短期窗口内理赔集中度异常偏高"}
+                            {tr(language, "Claim concentration is unusually high in the short-term window.", "短期窗口内理赔集中度异常偏高")}
                         </div>
                     }
                 } else { html! {} } }
@@ -666,7 +700,7 @@ pub(crate) fn layer_member_behavior(ctx: &InvestigationContext) -> Html {
 
 // ── Layer 4: Provider Risk Analysis ───────────────────────────────────────────
 
-pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
+pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext, language: Language) -> Html {
     let provider = ctx
         .providers
         .iter()
@@ -676,10 +710,13 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
         return html! {
             <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"④ Provider 风险分析"}</h4>
+                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "④ Provider Risk Analysis", "④ Provider 风险分析")}</h4>
                 </div>
                 <p style="color:var(--muted);font-size:0.85rem;margin:0;">
-                    {format!("Provider {} 暂无风险档案", ctx.case.provider_id)}
+                    {match language {
+                        Language::En => format!("Provider {} has no risk profile.", ctx.case.provider_id),
+                        Language::Zh => format!("Provider {} 暂无风险档案", ctx.case.provider_id),
+                    }}
                 </p>
             </div>
         };
@@ -688,9 +725,9 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
     let score = prov.risk_score;
     let score_f64 = score as f64;
     let (score_color, score_label) = match score {
-        80..=100 => ("var(--red)", "高风险"),
-        50..=79 => ("var(--amber)", "中风险"),
-        _ => ("#1a7a3c", "低风险"),
+        80..=100 => ("var(--red)", tr(language, "High risk", "高风险")),
+        50..=79 => ("var(--amber)", tr(language, "Medium risk", "中风险")),
+        _ => ("#1a7a3c", tr(language, "Low risk", "低风险")),
     };
 
     let specialty = prov.specialty.as_deref().unwrap_or("—");
@@ -725,12 +762,12 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
     let (amount_rank_label, amount_rank_color) = if has_p97_amount {
         ("P97", "var(--red)")
     } else {
-        ("正常", "#1a7a3c")
+        (tr(language, "Normal", "正常"), "#1a7a3c")
     };
     let (freq_rank_label, freq_rank_color) = if has_p96_freq {
         ("P96", "var(--amber)")
     } else {
-        ("正常", "#1a7a3c")
+        (tr(language, "Normal", "正常"), "#1a7a3c")
     };
 
     // Member-provider relationship: count leads sharing this member+provider
@@ -748,7 +785,7 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"④ Provider 风险分析"}</h4>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "④ Provider Risk Analysis", "④ Provider 风险分析")}</h4>
                 <span style={format!("background:var(--surface-strong);border:1px solid {score_color};border-radius:12px;padding:2px 10px;font-size:0.75rem;font-weight:600;color:{score_color};")}>
                     {score_label}
                 </span>
@@ -758,7 +795,7 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
             // Risk score bar
             <div style="margin-bottom:14px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                    <span style="font-size:0.78rem;color:var(--muted);flex:1;">{"风险评分"}</span>
+                    <span style="font-size:0.78rem;color:var(--muted);flex:1;">{tr(language, "Risk score", "风险评分")}</span>
                     <span style={format!("font-size:0.85rem;font-weight:700;color:{score_color};")}>{format!("{score}/100")}</span>
                 </div>
                 <div style="background:var(--surface-strong);border-radius:3px;height:10px;overflow:hidden;">
@@ -769,11 +806,11 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
             // Specialty + network status
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
                 <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:10px;">
-                    <div style="font-size:0.73rem;color:var(--muted);margin-bottom:4px;">{"专科"}</div>
+                    <div style="font-size:0.73rem;color:var(--muted);margin-bottom:4px;">{tr(language, "Specialty", "专科")}</div>
                     <div style="font-size:0.88rem;color:var(--graphite);font-weight:600;">{specialty}</div>
                 </div>
                 <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:10px;">
-                    <div style="font-size:0.73rem;color:var(--muted);margin-bottom:4px;">{"网络状态"}</div>
+                    <div style="font-size:0.73rem;color:var(--muted);margin-bottom:4px;">{tr(language, "Network status", "网络状态")}</div>
                     <div style="font-size:0.88rem;color:var(--graphite);font-weight:600;">{network_status}</div>
                 </div>
             </div>
@@ -781,26 +818,32 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
             // Peer comparison table
             <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-                    <p style="margin:0;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"同行对比"}</p>
-                    <span style="font-size:0.7rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;">{"模拟均值"}</span>
+                    <p style="margin:0;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Peer comparison", "同行对比")}</p>
+                    <span style="font-size:0.7rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;">{tr(language, "Simulated average", "模拟均值")}</span>
                 </div>
                 <div style="display:grid;grid-template-columns:7rem 1fr 1fr 3.5rem;gap:4px 10px;font-size:0.8rem;">
-                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{"指标"}</span>
-                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{"本 Provider"}</span>
-                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{"同行均值"}</span>
-                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{"排名"}</span>
+                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "Metric", "指标")}</span>
+                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "This Provider", "本 Provider")}</span>
+                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "Peer average", "同行均值")}</span>
+                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "Rank", "排名")}</span>
 
-                    <span style="color:var(--graphite);padding:3px 0;">{"理赔金额"}</span>
+                    <span style="color:var(--graphite);padding:3px 0;">{tr(language, "Claim amount", "理赔金额")}</span>
                     <span style={format!("color:{score_color};padding:3px 0;")}>{format!("¥{my_amount:.0}")}</span>
                     <span style="color:var(--muted);padding:3px 0;">{format!("¥{peer_amount:.0}")}</span>
                     <span style={format!("color:{amount_rank_color};padding:3px 0;font-weight:700;")}>{amount_rank_label}</span>
 
-                    <span style="color:var(--graphite);padding:3px 0;">{"理赔频率"}</span>
-                    <span style={format!("color:{};padding:3px 0;", if my_freq > peer_freq * 2 { "var(--red)" } else { "var(--graphite)" })}>{format!("{my_freq} 笔")}</span>
-                    <span style="color:var(--muted);padding:3px 0;">{format!("{peer_freq} 笔")}</span>
+                    <span style="color:var(--graphite);padding:3px 0;">{tr(language, "Claim frequency", "理赔频率")}</span>
+                    <span style={format!("color:{};padding:3px 0;", if my_freq > peer_freq * 2 { "var(--red)" } else { "var(--graphite)" })}>{match language {
+                        Language::En => format!("{my_freq} claims"),
+                        Language::Zh => format!("{my_freq} 笔"),
+                    }}</span>
+                    <span style="color:var(--muted);padding:3px 0;">{match language {
+                        Language::En => format!("{peer_freq} claims"),
+                        Language::Zh => format!("{peer_freq} 笔"),
+                    }}</span>
                     <span style={format!("color:{freq_rank_color};padding:3px 0;font-weight:700;")}>{freq_rank_label}</span>
 
-                    <span style="color:var(--graphite);padding:3px 0;">{"高费项目占比"}</span>
+                    <span style="color:var(--graphite);padding:3px 0;">{tr(language, "High-cost item share", "高费项目占比")}</span>
                     <span style={format!("color:{};padding:3px 0;", if my_high_item_pct > 50 { "var(--amber)" } else { "var(--graphite)" })}>{format!("{my_high_item_pct}%")}</span>
                     <span style="color:var(--muted);padding:3px 0;">{format!("{peer_high_item_pct}%")}</span>
                     <span style="color:var(--muted);padding:3px 0;">{"—"}</span>
@@ -811,12 +854,12 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
             { if !prov.graph_reasons.is_empty() {
                 html! {
                     <div style="margin-bottom:14px;">
-                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"风险依据"}</p>
+                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Risk basis", "风险依据")}</p>
                         <div style="display:flex;flex-direction:column;gap:5px;">
                             { for prov.graph_reasons.iter().map(|r| {
                                 html! {
                                     <div style="background:var(--red-soft);border-left:3px solid var(--red);border-radius:0 4px 4px 0;padding:6px 10px;font-size:0.82rem;color:var(--graphite);">
-                                        {r.as_str()}
+                                        {localized_business_text(r, language)}
                                     </div>
                                 }
                             }) }
@@ -829,7 +872,7 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
             { if !prov.outlier_flags.is_empty() {
                 html! {
                     <div style="margin-bottom:14px;">
-                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"异常标签"}</p>
+                        <p style="margin:0 0 8px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Outlier flags", "异常标签")}</p>
                         <div style="display:flex;flex-wrap:wrap;gap:6px;">
                             { for prov.outlier_flags.iter().map(|flag| {
                                 let (bg, fg) = if flag.contains("p97") || flag.contains("high") {
@@ -853,16 +896,19 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
             // Provider–Member service frequency
             <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-size:0.83rem;color:var(--muted);">{"服务本成员次数"}</span>
+                    <span style="font-size:0.83rem;color:var(--muted);">{tr(language, "Services for this member", "服务本成员次数")}</span>
                     <span style={format!("font-size:0.9rem;font-weight:700;color:{};",
                         if prov.claim_count > 3 { "var(--red)" } else { "var(--graphite)" })}>
-                        {format!("{} 次", prov.claim_count)}
+                        {match language {
+                            Language::En => format!("{} times", prov.claim_count),
+                            Language::Zh => format!("{} 次", prov.claim_count),
+                        }}
                     </span>
                 </div>
                 { if prov.claim_count > 3 {
                     html! {
                         <div style="margin-top:8px;padding:4px 8px;background:var(--red-soft);border:1px solid var(--red);border-radius:4px;font-size:0.78rem;color:var(--red);">
-                            {"⚠ 服务频次异常偏高"}
+                            {tr(language, "Service frequency is unusually high.", "服务频次异常偏高")}
                         </div>
                     }
                 } else { html! {} } }
@@ -871,16 +917,19 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
             // Member–Provider relationship signal
             <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-size:0.83rem;color:var(--muted);">{"该 Provider 与本成员理赔关联"}</span>
+                    <span style="font-size:0.83rem;color:var(--muted);">{tr(language, "Claims linking this Provider and member", "该 Provider 与本成员理赔关联")}</span>
                     <span style={format!("font-size:0.9rem;font-weight:700;color:{};",
                         if member_prov_link_count > 3 { "var(--red)" } else { "var(--graphite)" })}>
-                        {format!("{member_prov_link_count} 次")}
+                        {match language {
+                            Language::En => format!("{member_prov_link_count} times"),
+                            Language::Zh => format!("{member_prov_link_count} 次"),
+                        }}
                     </span>
                 </div>
                 { if member_prov_link_count > 3 {
                     html! {
                         <div style="margin-top:8px;padding:4px 8px;background:var(--red-soft);border:1px solid var(--red);border-radius:4px;font-size:0.78rem;color:var(--red);">
-                            {"⚠ 关联频次异常偏高"}
+                            {tr(language, "Relationship frequency is unusually high.", "关联频次异常偏高")}
                         </div>
                     }
                 } else { html! {} } }
@@ -891,7 +940,7 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext) -> Html {
 
 // ── Layer 5: Association Network (Mini Graph) ─────────────────────────────────
 
-pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
+pub(crate) fn layer_association_network(ctx: &InvestigationContext, language: Language) -> Html {
     // Find the provider for this case
     let provider = ctx
         .providers
@@ -960,8 +1009,8 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"⑤ 关联网络"}</h4>
-                <span style="font-size:0.75rem;color:var(--muted);">{"是否存在群聚效应？"}</span>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "⑤ Association Network", "⑤ 关联网络")}</h4>
+                <span style="font-size:0.75rem;color:var(--muted);">{tr(language, "Cluster effect check", "是否存在群聚效应？")}</span>
             </div>
 
             // Mini SVG graph
@@ -975,7 +1024,10 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
 
                     // Edge label for Member → Provider
                     <text x="115" y="103" font-size="10" fill="var(--muted)" text-anchor="middle">
-                        {format!("{}笔理赔", claim_count)}
+                        {match language {
+                            Language::En => format!("{claim_count} claims"),
+                            Language::Zh => format!("{claim_count}笔理赔"),
+                        }}
                     </text>
 
                     // Edges: Provider → Other providers (dashed red)
@@ -1031,7 +1083,7 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
                                 <rect x="115" y="182" width="110" height="20"
                                       rx="4" fill="var(--red-soft)" stroke="var(--red)" stroke-width="1" />
                                 <text x="170" y="196" font-size="9" fill="var(--red)"
-                                      text-anchor="middle">{"已确认 FWA"}</text>
+                                      text-anchor="middle">{tr(language, "Confirmed FWA", "已确认 FWA")}</text>
                                 <line x1="170" y1={format!("{}", 110 + prov_r as i32)}
                                       x2="170" y2="182"
                                       stroke="var(--red)" stroke-width="1" stroke-dasharray="3 2" />
@@ -1046,7 +1098,10 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
                 { if confirmed_fwa_count > 0 {
                     html! {
                         <div style="padding:6px 10px;background:var(--red-soft);border:1px solid var(--red);border-radius:4px;font-size:0.82rem;color:var(--red);">
-                            {format!("⚠️ 该 Provider 关联 {} 个已确认 FWA 成员", confirmed_fwa_count)}
+                            {match language {
+                                Language::En => format!("This Provider is linked to {confirmed_fwa_count} confirmed FWA members."),
+                                Language::Zh => format!("该 Provider 关联 {confirmed_fwa_count} 个已确认 FWA 成员"),
+                            }}
                         </div>
                     }
                 } else { html! {} } }
@@ -1054,7 +1109,10 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
                 { if shared_outlier_count > 0 {
                     html! {
                         <div style="padding:6px 10px;background:var(--amber-soft);border:1px solid var(--amber);border-radius:4px;font-size:0.82rem;color:var(--amber);">
-                            {format!("⚠️ 与 {} 个高风险 Provider 存在共同异常标记", shared_outlier_count)}
+                            {match language {
+                                Language::En => format!("Shares outlier flags with {shared_outlier_count} high-risk Providers."),
+                                Language::Zh => format!("与 {shared_outlier_count} 个高风险 Provider 存在共同异常标记"),
+                            }}
                         </div>
                     }
                 } else { html! {} } }
@@ -1062,7 +1120,7 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
                 { if confirmed_fwa_count == 0 && shared_outlier_count == 0 {
                     html! {
                         <div style="padding:6px 10px;background:#e8f7ee;border:1px solid #1a7a3c;border-radius:4px;font-size:0.82rem;color:#1a7a3c;">
-                            {"✓ 未发现明显群聚效应"}
+                            {tr(language, "No obvious cluster effect found.", "未发现明显群聚效应")}
                         </div>
                     }
                 } else { html! {} } }
@@ -1073,7 +1131,7 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext) -> Html {
 
 // ── Layer 6: Similar Confirmed Cases ──────────────────────────────────────────
 
-pub(crate) fn layer_similar_cases(ctx: &InvestigationContext) -> Html {
+pub(crate) fn layer_similar_cases(ctx: &InvestigationContext, language: Language) -> Html {
     let mut sorted_cases: Vec<&crate::types::SimilarCaseItem> = ctx.similar_cases.iter().collect();
     sorted_cases.sort_by(|a, b| {
         b.similarity_score
@@ -1084,15 +1142,18 @@ pub(crate) fn layer_similar_cases(ctx: &InvestigationContext) -> Html {
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"⑥ 相似已确认案例"}</h4>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "⑥ Similar Confirmed Cases", "⑥ 相似已确认案例")}</h4>
                 <span style="font-size:0.75rem;color:var(--muted);">
-                    {format!("{} 个相似案例", sorted_cases.len())}
+                    {match language {
+                        Language::En => format!("{} similar cases", sorted_cases.len()),
+                        Language::Zh => format!("{} 个相似案例", sorted_cases.len()),
+                    }}
                 </span>
             </div>
 
             { if sorted_cases.is_empty() {
                 html! {
-                    <p style="color:var(--muted);font-size:0.85rem;margin:0 0 14px;">{"暂无相似历史案例"}</p>
+                    <p style="color:var(--muted);font-size:0.85rem;margin:0 0 14px;">{tr(language, "No similar historical cases.", "暂无相似历史案例")}</p>
                 }
             } else {
                 html! {
@@ -1106,13 +1167,13 @@ pub(crate) fn layer_similar_cases(ctx: &InvestigationContext) -> Html {
                             };
                             let (outcome_bg, outcome_fg, outcome_text) = match item.final_outcome.as_deref() {
                                 Some(o) if o.contains("confirmed_fwa") || o.contains("confirmed") =>
-                                    ("var(--red-soft)", "var(--red)", "已确认 FWA"),
+                                    ("var(--red-soft)", "var(--red)", tr(language, "Confirmed FWA", "已确认 FWA")),
                                 Some(o) if o.contains("false_positive") =>
-                                    ("#e8f7ee", "#1a7a3c", "误报"),
+                                    ("#e8f7ee", "#1a7a3c", tr(language, "False positive", "误报")),
                                 Some(o) if o.contains("inconclusive") =>
-                                    ("var(--amber-soft)", "var(--amber)", "不确定"),
+                                    ("var(--amber-soft)", "var(--amber)", tr(language, "Inconclusive", "不确定")),
                                 Some(o) => ("var(--surface-strong)", "var(--muted)", o),
-                                None    => ("var(--surface-strong)", "var(--muted)", "待定"),
+                                None    => ("var(--surface-strong)", "var(--muted)", tr(language, "Pending", "待定")),
                             };
                             let case_id_short = if item.case_id.chars().count() > 16 {
                                 format!("{}…", item.case_id.chars().take(16).collect::<String>())
@@ -1137,7 +1198,7 @@ pub(crate) fn layer_similar_cases(ctx: &InvestigationContext) -> Html {
                                     // Similarity bar
                                     <div style="margin-bottom:8px;">
                                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
-                                            <span style="font-size:0.73rem;color:var(--muted);">{"相似度"}</span>
+                                            <span style="font-size:0.73rem;color:var(--muted);">{tr(language, "Similarity", "相似度")}</span>
                                             <span style={format!("font-size:0.73rem;font-weight:700;color:{bar_color};")}>{format!("{pct}%")}</span>
                                         </div>
                                         <div style="background:var(--surface-strong);border-radius:3px;height:6px;overflow:hidden;">
@@ -1166,7 +1227,7 @@ pub(crate) fn layer_similar_cases(ctx: &InvestigationContext) -> Html {
             } }
 
             <div style="padding:6px 10px;background:var(--surface-strong);border:1px solid var(--line);border-radius:4px;font-size:0.75rem;color:var(--muted);">
-                {"以上案例来自已审结的 FWA 知识库，仅供参考，不作为自动判断依据"}
+                {tr(language, "These cases come from the closed FWA knowledge base for reference only and are not an automatic decision basis.", "以上案例来自已审结的 FWA 知识库，仅供参考，不作为自动判断依据")}
             </div>
         </div>
     }
@@ -1174,7 +1235,7 @@ pub(crate) fn layer_similar_cases(ctx: &InvestigationContext) -> Html {
 
 // ── Layer 7: AI Investigation Summary ─────────────────────────────────────────
 
-pub(crate) fn layer_ai_summary(ctx: &InvestigationContext) -> Html {
+pub(crate) fn layer_ai_summary(ctx: &InvestigationContext, language: Language) -> Html {
     // Find the agent.investigation.completed event
     let agent_event = ctx
         .audit_events
@@ -1185,17 +1246,17 @@ pub(crate) fn layer_ai_summary(ctx: &InvestigationContext) -> Html {
         return html! {
             <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"⑦ AI 调查摘要"}</h4>
+                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "⑦ AI Investigation Summary", "⑦ AI 调查摘要")}</h4>
                     <span style="font-size:0.72rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 8px;">
-                        {"由 Agent 生成"}
+                        {tr(language, "Generated by Agent", "由 Agent 生成")}
                     </span>
                 </div>
-                <p style="color:var(--muted);font-size:0.85rem;margin:0 0 10px;">{"AI 调查包未生成"}</p>
+                <p style="color:var(--muted);font-size:0.85rem;margin:0 0 10px;">{tr(language, "AI investigation package has not been generated.", "AI 调查包未生成")}</p>
                 <p style="color:var(--muted);font-size:0.78rem;margin:0;">
-                    {"当前案件尚未完成 Agent 自动调查，请等待系统生成或手动触发调查流程。"}
+                    {tr(language, "This case has not completed automated Agent investigation yet. Wait for the system package or trigger the investigation workflow manually.", "当前案件尚未完成 Agent 自动调查，请等待系统生成或手动触发调查流程。")}
                 </p>
                 <div style="margin-top:14px;padding:6px 10px;background:var(--surface-strong);border:1px solid var(--line);border-radius:4px;font-size:0.75rem;color:var(--muted);">
-                    {"AI 摘要为辅助参考，最终判断由调查员决定"}
+                    {tr(language, "AI summaries are assistive. Final judgment remains with the investigator.", "AI 摘要为辅助参考，最终判断由调查员决定")}
                 </div>
             </div>
         };
@@ -1251,20 +1312,27 @@ pub(crate) fn layer_ai_summary(ctx: &InvestigationContext) -> Html {
             ("var(--amber-soft)", "var(--amber)", s)
         }
         Some(s) => ("var(--surface-strong)", "var(--muted)", s),
-        None => ("var(--surface-strong)", "var(--muted)", "未知"),
+        None => (
+            "var(--surface-strong)",
+            "var(--muted)",
+            tr(language, "Unknown", "未知"),
+        ),
     };
 
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{"⑦ AI 调查摘要"}</h4>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "⑦ AI Investigation Summary", "⑦ AI 调查摘要")}</h4>
                 <span style="font-size:0.72rem;background:var(--surface-strong);color:var(--blue);border:1px solid var(--blue);border-radius:4px;padding:1px 8px;">
-                    {"由 Agent 生成"}
+                    {tr(language, "Generated by Agent", "由 Agent 生成")}
                 </span>
                 { if let Some(status) = es_status {
                     html! {
                         <span style={format!("margin-left:auto;background:{es_bg};color:{es_fg};border:1px solid {es_fg};border-radius:4px;padding:1px 8px;font-size:0.72rem;font-weight:600;")}>
-                            {format!("证据充分性: {}", status)}
+                            {match language {
+                                Language::En => format!("Evidence sufficiency: {status}"),
+                                Language::Zh => format!("证据充分性: {status}"),
+                            }}
                         </span>
                     }
                 } else { html! {} } }
@@ -1274,9 +1342,9 @@ pub(crate) fn layer_ai_summary(ctx: &InvestigationContext) -> Html {
             { if let Some(finding) = main_finding {
                 html! {
                     <div style="background:var(--surface-muted);border-left:4px solid var(--blue);border-radius:0 6px 6px 0;padding:12px 14px;margin-bottom:14px;">
-                        <p style="margin:0 0 6px;font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"调查摘要"}</p>
+                        <p style="margin:0 0 6px;font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Investigation summary", "调查摘要")}</p>
                         <p style="margin:0;font-size:0.9rem;color:var(--graphite);line-height:1.6;font-style:italic;">
-                            {finding}
+                            {localized_business_text(finding, language)}
                         </p>
                     </div>
                 }
@@ -1286,11 +1354,11 @@ pub(crate) fn layer_ai_summary(ctx: &InvestigationContext) -> Html {
             { if !checklist.is_empty() {
                 html! {
                     <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px;">
-                        <p style="margin:0 0 10px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{"调查清单"}</p>
+                        <p style="margin:0 0 10px;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">{tr(language, "Investigation checklist", "调查清单")}</p>
                         <ol style="margin:0;padding-left:1.4rem;display:flex;flex-direction:column;gap:6px;">
                             { for checklist.iter().map(|item| {
                                 html! {
-                                    <li style="font-size:0.83rem;color:var(--graphite);line-height:1.5;">{item.as_str()}</li>
+                                    <li style="font-size:0.83rem;color:var(--graphite);line-height:1.5;">{localized_business_text(item, language)}</li>
                                 }
                             }) }
                         </ol>
@@ -1300,7 +1368,7 @@ pub(crate) fn layer_ai_summary(ctx: &InvestigationContext) -> Html {
 
             // Evidence sufficiency status chip (standalone, below checklist)
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-                <span style="font-size:0.78rem;color:var(--muted);">{"证据充分性状态:"}</span>
+                <span style="font-size:0.78rem;color:var(--muted);">{tr(language, "Evidence sufficiency status:", "证据充分性状态:")}</span>
                 <span style={format!("background:{es_bg};color:{es_fg};border:1px solid {es_fg};border-radius:4px;padding:2px 10px;font-size:0.78rem;font-weight:600;")}>
                     {es_label}
                 </span>
@@ -1308,7 +1376,7 @@ pub(crate) fn layer_ai_summary(ctx: &InvestigationContext) -> Html {
 
             // Disclaimer
             <div style="padding:6px 10px;background:var(--surface-strong);border:1px solid var(--line);border-radius:4px;font-size:0.75rem;color:var(--muted);">
-                {"AI 摘要为辅助参考，最终判断由调查员决定"}
+                {tr(language, "AI summaries are assistive. Final judgment remains with the investigator.", "AI 摘要为辅助参考，最终判断由调查员决定")}
             </div>
         </div>
     }

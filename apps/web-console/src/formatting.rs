@@ -100,6 +100,32 @@ pub(crate) fn business_label(value: &str) -> String {
     }
 }
 
+pub(crate) fn localized_business_text(value: &str, language: crate::state::Language) -> String {
+    if language == crate::state::Language::Zh {
+        return value.to_string();
+    }
+
+    value
+        .replace(
+            "关键风险，建议人工审核、医务复核并升级调查",
+            "Critical risk: route for manual review, medical review, and investigation escalation",
+        )
+        .replace(
+            "医务复核并升级调查",
+            "medical review and investigation escalation",
+        )
+        .replace(
+            "高风险，建议人工审核",
+            "High risk: manual review recommended",
+        )
+        .replace("建议人工审核", "manual review recommended")
+        .replace("医务复核", "medical review")
+        .replace("升级调查", "escalate investigation")
+        .replace("关键风险", "critical risk")
+        .replace("高风险", "high risk")
+        .replace('，', ", ")
+}
+
 pub(crate) fn rag_label(value: &str) -> &'static str {
     match value.trim().to_ascii_uppercase().as_str() {
         "RED" => "High risk",

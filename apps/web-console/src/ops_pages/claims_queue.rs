@@ -1,6 +1,7 @@
 use crate::api::*;
 use crate::formatting::*;
-use crate::state::{use_api_key, ApiState};
+use crate::i18n::tr;
+use crate::state::{use_api_key, ApiState, Language};
 use crate::types::*;
 use serde_json::json;
 use wasm_bindgen_futures::spawn_local;
@@ -19,13 +20,13 @@ enum Filter {
 }
 
 impl Filter {
-    fn label(self) -> &'static str {
+    fn label(self, language: Language) -> &'static str {
         match self {
-            Filter::All => "全部",
-            Filter::High => "高风险",
-            Filter::Amber => "可疑",
-            Filter::Low => "低风险",
-            Filter::Pending => "待处理",
+            Filter::All => tr(language, "All", "全部"),
+            Filter::High => tr(language, "High risk", "高风险"),
+            Filter::Amber => tr(language, "Watchlist", "可疑"),
+            Filter::Low => tr(language, "Low risk", "低风险"),
+            Filter::Pending => tr(language, "Pending", "待处理"),
         }
     }
 
@@ -74,29 +75,53 @@ fn rag_tone(rag: &str) -> &'static str {
     }
 }
 
-fn risk_badge_html(rag: &str) -> Html {
+fn rag_label_for(value: &str, language: Language) -> &'static str {
+    match value.trim().to_ascii_uppercase().as_str() {
+        "RED" => tr(language, "High risk", "高风险"),
+        "AMBER" | "YELLOW" => tr(language, "Watchlist risk", "可疑风险"),
+        "GREEN" => tr(language, "Low risk", "低风险"),
+        _ => tr(language, "Risk pending", "风险待确认"),
+    }
+}
+
+fn risk_badge_html(rag: &str, language: Language) -> Html {
     let tone = rag_tone(rag);
-    let label = rag_label(rag);
+    let label = rag_label_for(rag, language);
     html! { <span class={classes!("risk-badge", tone)}>{label}</span> }
 }
 
-fn outcome_badge_html(rag: &str) -> Html {
+fn outcome_badge_html(rag: &str, language: Language) -> Html {
     let (tone, label) = match rag.trim().to_ascii_uppercase().as_str() {
-        "RED" => ("auto-deny", "需调查判断"),
-        "AMBER" | "YELLOW" => ("manual", "人工分流"),
-        _ => ("straight", "可归档"),
+        "RED" => (
+            "auto-deny",
+            tr(language, "Needs investigation", "需调查判断"),
+        ),
+        "AMBER" | "YELLOW" => ("manual", tr(language, "Human triage", "人工分流")),
+        _ => ("straight", tr(language, "Can archive", "可归档")),
     };
     html! { <span class={classes!("outcome-badge", tone)}>{label}</span> }
 }
 
-fn status_badge_html(status: &str) -> Html {
+fn status_badge_html(status: &str, language: Language) -> Html {
     let tone = match status.to_ascii_lowercase().as_str() {
         "triage" | "pending" | "new" => "warning",
         "rejected" | "closed" => "neutral",
         "investigating" | "open" => "info",
         _ => "neutral",
     };
-    html! { <span class={classes!("status-token", tone)}>{business_label(status)}</span> }
+    let label = match language {
+        Language::En => business_label(status),
+        Language::Zh => match status.trim().to_ascii_lowercase().as_str() {
+            "triage" => "分诊中".into(),
+            "pending" | "new" => "待处理".into(),
+            "pending_evidence" => "待补件".into(),
+            "investigating" | "open" => "调查中".into(),
+            "closed" => "已关闭".into(),
+            "rejected" => "已驳回".into(),
+            _ => business_label(status),
+        },
+    };
+    html! { <span class={classes!("status-token", tone)}>{label}</span> }
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -107,13 +132,11 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
-fn lead_triage_explanation(lead: &LeadRecord) -> &'static str {
+fn lead_triage_explanation(lead: &LeadRecord, language: Language) -> &'static str {
     match lead.rag.to_ascii_uppercase().as_str() {
-        "RED" => {
-            "高风险进件：先确认资料是否充分；资料不足先补件，资料充分再转调查工作台形成人工建议。"
-        }
-        "AMBER" | "YELLOW" => "可疑进件：需要人工分流，重点确认命中信号是否有证据引用支撑。",
-        _ => "低风险进件：确认无关键命中信号后可归档，但仍需保留审计引用。",
+        "RED" => tr(language, "High-risk intake: first confirm evidence sufficiency. Request evidence if incomplete; route to Investigation Workbench if the package is ready for a human recommendation.", "高风险进件：先确认资料是否充分；资料不足先补件，资料充分再转调查工作台形成人工建议。"),
+        "AMBER" | "YELLOW" => tr(language, "Watchlist intake: triage manually and confirm whether each hit is backed by evidence references.", "可疑进件：需要人工分流，重点确认命中信号是否有证据引用支撑。"),
+        _ => tr(language, "Low-risk intake: archive only after confirming no material hit, while preserving audit references.", "低风险进件：确认无关键命中信号后可归档，但仍需保留审计引用。"),
     }
 }
 
@@ -151,26 +174,26 @@ fn kpi_processed(leads: &[LeadRecord]) -> usize {
 fn page_header(
     refresh: Callback<MouseEvent>,
     snapshot_state: &UseStateHandle<ApiState<LeadsCasesSnapshot>>,
+    language: Language,
 ) -> Html {
     let loading = matches!(&**snapshot_state, ApiState::Loading);
     html! {
         <div class="dashboard-header">
             <div>
-                <h2 class="bilingual-title">
-                    <span>{"理赔队列"}</span>
-                    <small>{"Claims Triage Queue"}</small>
-                </h2>
-                <p class="muted">{"今日 TPA 进件分流：确认风险、补证据、转调查；不在此页做最终赔付裁决。"}</p>
-                <p class="muted en-copy">{"TPA intake triage: confirm risk context, request evidence when needed, and route cases to investigation without making final payment decisions."}</p>
+                <h2>{tr(language, "Claims Triage Queue", "理赔队列")}</h2>
+                <p class="muted">{tr(language, "TPA intake triage: confirm risk context, request evidence when needed, and route cases to investigation without making final payment decisions.", "今日 TPA 进件分流：确认风险、补证据、转调查；不在此页做最终赔付裁决。")}</p>
             </div>
             <button onclick={refresh} disabled={loading}>
-                {if loading { "刷新中..." } else { "刷新" }}
+                {if loading { tr(language, "Refreshing...", "刷新中...") } else { tr(language, "Refresh", "刷新") }}
             </button>
         </div>
     }
 }
 
-fn kpi_strip_from_state(snapshot_state: &UseStateHandle<ApiState<LeadsCasesSnapshot>>) -> Html {
+fn kpi_strip_from_state(
+    snapshot_state: &UseStateHandle<ApiState<LeadsCasesSnapshot>>,
+    language: Language,
+) -> Html {
     let (total, high, pending, processed) = if let ApiState::Ready(snap) = &**snapshot_state {
         (
             kpi_total(&snap.leads),
@@ -184,26 +207,26 @@ fn kpi_strip_from_state(snapshot_state: &UseStateHandle<ApiState<LeadsCasesSnaps
     html! {
         <div class="ops-kpi-strip">
             <div class="ops-kpi-card">
-                <span>{"今日总量"}</span>
+                <span>{tr(language, "Total today", "今日总量")}</span>
                 <strong>{total}</strong>
             </div>
             <div class="ops-kpi-card highlight">
-                <span>{"高风险"}</span>
+                <span>{tr(language, "High risk", "高风险")}</span>
                 <strong>{high}</strong>
             </div>
             <div class="ops-kpi-card">
-                <span>{"待审核"}</span>
+                <span>{tr(language, "Pending review", "待审核")}</span>
                 <strong>{pending}</strong>
             </div>
             <div class="ops-kpi-card positive">
-                <span>{"已处理"}</span>
+                <span>{tr(language, "Processed", "已处理")}</span>
                 <strong>{processed}</strong>
             </div>
         </div>
     }
 }
 
-fn filter_bar(active_filter: &UseStateHandle<Filter>) -> Html {
+fn filter_bar(active_filter: &UseStateHandle<Filter>, language: Language) -> Html {
     let active = **active_filter;
     html! {
         <div class="ops-filter-bar">
@@ -220,7 +243,7 @@ fn filter_bar(active_filter: &UseStateHandle<Filter>) -> Html {
                         )}
                         onclick={Callback::from(move |_: MouseEvent| active_filter.set(f))}
                     >
-                        {f.label()}
+                        {f.label(language)}
                     </button>
                 }
             }) }
@@ -233,18 +256,22 @@ fn queue_list(
     leads: &[LeadRecord],
     selected_lead_id: &UseStateHandle<String>,
     snapshot_state: &UseStateHandle<ApiState<LeadsCasesSnapshot>>,
+    language: Language,
 ) -> Html {
     if matches!(&**snapshot_state, ApiState::Loading) {
-        return html! { <p class="empty">{"加载中..."}</p> };
+        return html! { <p class="empty">{tr(language, "Loading...", "加载中...")}</p> };
     }
     if matches!(&**snapshot_state, ApiState::Idle) {
-        return html! { <p class="empty">{"数据加载中，请稍候。"}</p> };
+        return html! { <p class="empty">{tr(language, "Loading data. Please wait.", "数据加载中，请稍候。")}</p> };
     }
     if let ApiState::Failed(err) = &**snapshot_state {
-        return html! { <p class="empty">{format!("加载失败：{err}")}</p> };
+        return html! { <p class="empty">{match language {
+            Language::En => format!("Load failed: {err}"),
+            Language::Zh => format!("加载失败：{err}"),
+        }}</p> };
     }
     if leads.is_empty() {
-        return html! { <p class="empty">{"该筛选条件下无进件。"}</p> };
+        return html! { <p class="empty">{tr(language, "No intake items match this filter.", "该筛选条件下无进件。")}</p> };
     }
     html! {
         <>
@@ -261,15 +288,15 @@ fn queue_list(
                     <div class="claim-row-main">
                         <strong>{&lead.claim_id}</strong>
                         <span>{format!("Member {} · Provider {} · {} · {}", lead.member_id, lead.provider_id, lead.scheme_family, lead.review_mode)}</span>
-                        <small>{lead_triage_explanation(lead)}</small>
+                        <small>{lead_triage_explanation(lead, language)}</small>
                     </div>
-                    { risk_badge_html(&lead.rag) }
-                    { outcome_badge_html(&lead.rag) }
+                    { risk_badge_html(&lead.rag, language) }
+                    { outcome_badge_html(&lead.rag, language) }
                     <span class="claim-row-reason">
-                        <strong>{"入队原因"}</strong>
-                        <small>{truncate(&lead.reason, 96)}</small>
+                        <strong>{tr(language, "Queue reason", "入队原因")}</strong>
+                        <small>{truncate(&localized_business_text(&lead.reason, language), 96)}</small>
                     </span>
-                    { status_badge_html(&lead.status) }
+                    { status_badge_html(&lead.status, language) }
                 </div>
             }
         }) }
@@ -289,15 +316,16 @@ fn detail_panel(
     on_deny: Callback<MouseEvent>,
     on_review_click: Callback<MouseEvent>,
     on_confirm_review: Callback<MouseEvent>,
+    language: Language,
 ) -> Html {
     let Some(lead) = lead else {
         return html! {
             <div class="claim-detail-panel">
                 <div class="claim-detail-header">
-                    <h3>{"理赔详情"}</h3>
+                    <h3>{tr(language, "Claim detail", "理赔详情")}</h3>
                 </div>
                 <div class="claim-detail-body">
-                    <p class="empty">{"点击左侧进件查看详情"}</p>
+                    <p class="empty">{tr(language, "Select an intake item from the left to inspect details.", "点击左侧进件查看详情")}</p>
                 </div>
             </div>
         };
@@ -315,9 +343,13 @@ fn detail_panel(
         .collect();
 
     let recommendation = match lead.rag.to_ascii_uppercase().as_str() {
-        "RED" => "建议转人工调查或先请求补件",
-        "AMBER" | "YELLOW" => "建议人工分流",
-        _ => "建议低风险归档",
+        "RED" => tr(
+            language,
+            "Route to investigation or request evidence first",
+            "建议转人工调查或先请求补件",
+        ),
+        "AMBER" | "YELLOW" => tr(language, "Manual triage recommended", "建议人工分流"),
+        _ => tr(language, "Archive as low risk", "建议低风险归档"),
     };
 
     let loading = matches!(&**triage_state, ApiState::Loading);
@@ -328,7 +360,7 @@ fn detail_panel(
                 <h3>{ &lead.claim_id }</h3>
                 <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
                     <span class="muted" style="font-size:12px;">{ &lead.member_id }</span>
-                    { risk_badge_html(&lead.rag) }
+                    { risk_badge_html(&lead.rag, language) }
                 </div>
             </div>
             <div class="claim-detail-body">
@@ -337,7 +369,7 @@ fn detail_panel(
                 { if let Some(msg) = &**confirm_msg {
                     html! {
                         <div class="alert-card info">
-                            <strong>{"操作成功"}</strong>
+                            <strong>{tr(language, "Action succeeded", "操作成功")}</strong>
                             <span>{ msg }</span>
                         </div>
                     }
@@ -349,7 +381,7 @@ fn detail_panel(
                 { if let ApiState::Failed(err) = &**triage_state {
                     html! {
                         <div class="alert-card critical">
-                            <strong>{"操作失败"}</strong>
+                            <strong>{tr(language, "Action failed", "操作失败")}</strong>
                             <span>{ err }</span>
                         </div>
                     }
@@ -359,36 +391,39 @@ fn detail_panel(
 
                 // ── Routing context ────────────────────────────────────
                 <div>
-                    <p class="ops-section-label">{"分流依据"}</p>
+                    <p class="ops-section-label">{tr(language, "Triage basis", "分流依据")}</p>
                     <div class="ops-dashboard-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
                         <div class="ops-kpi-card neutral">
-                            <span class="ops-kpi-label">{"风险评分"}</span>
+                            <span class="ops-kpi-label">{tr(language, "Risk score", "风险评分")}</span>
                             <strong class="ops-kpi-value">{lead.risk_score}</strong>
                         </div>
                         <div class="ops-kpi-card neutral">
-                            <span class="ops-kpi-label">{"证据引用"}</span>
+                            <span class="ops-kpi-label">{tr(language, "Evidence refs", "证据引用")}</span>
                             <strong class="ops-kpi-value">{ev_count}</strong>
                         </div>
                         <div class={classes!("ops-kpi-card", tone)}>
-                            <span class="ops-kpi-label">{"风险带"}</span>
-                            <strong class="ops-kpi-value">{rag_label(&lead.rag)}</strong>
+                            <span class="ops-kpi-label">{tr(language, "Risk band", "风险带")}</span>
+                            <strong class="ops-kpi-value">{rag_label_for(&lead.rag, language)}</strong>
                         </div>
                     </div>
                 </div>
 
                 // ── Signal / reason list ───────────────────────────────
                 <div>
-                    <p class="ops-section-label">{"命中信号"}</p>
+                    <p class="ops-section-label">{tr(language, "Hit signals", "命中信号")}</p>
                     <div class="alert-list">
                         { if signals.is_empty() {
-                            html! { <div class="alert-card"><strong>{"无具体信号"}</strong><span>{"请参阅系统日志"}</span></div> }
+                            html! { <div class="alert-card"><strong>{tr(language, "No specific signal", "无具体信号")}</strong><span>{tr(language, "Check system logs", "请参阅系统日志")}</span></div> }
                         } else {
                             html! { for signals.iter().enumerate().map(|(i, sig)| {
                                 let cls = if i == 0 && lead.rag.eq_ignore_ascii_case("red") { "critical" } else { "" };
                                 html! {
                                     <div class={classes!("alert-card", cls)}>
-                                        <strong>{ format!("信号 {}", i + 1) }</strong>
-                                        <span>{ *sig }</span>
+                                        <strong>{ match language {
+                                            Language::En => format!("Signal {}", i + 1),
+                                            Language::Zh => format!("信号 {}", i + 1),
+                                        } }</strong>
+                                        <span>{ localized_business_text(sig, language) }</span>
                                     </div>
                                 }
                             }) }
@@ -398,10 +433,13 @@ fn detail_panel(
 
                 // ── Recommendation ────────────────────────────────────
                 <div>
-                    <p class="ops-section-label">{"建议动作"}</p>
+                    <p class="ops-section-label">{tr(language, "Recommended action", "建议动作")}</p>
                     <div class={classes!("alert-card", if lead.rag.eq_ignore_ascii_case("red") { "critical" } else { "" })}>
                         <strong>{ recommendation }</strong>
-                        <span>{ format!("风险评分 {} | {}", lead.risk_score, rag_label(&lead.rag)) }</span>
+                        <span>{ match language {
+                            Language::En => format!("Risk score {} | {}", lead.risk_score, rag_label_for(&lead.rag, language)),
+                            Language::Zh => format!("风险评分 {} | {}", lead.risk_score, rag_label_for(&lead.rag, language)),
+                        } }</span>
                     </div>
                 </div>
 
@@ -411,17 +449,17 @@ fn detail_panel(
                         class="btn-approve"
                         onclick={on_approve}
                         disabled={loading}
-                    >{"低风险归档"}</button>
+                    >{tr(language, "Archive low risk", "低风险归档")}</button>
                     <button
                         class="btn-evidence"
                         onclick={on_deny}
                         disabled={loading}
-                    >{"请求补件"}</button>
+                    >{tr(language, "Request evidence", "请求补件")}</button>
                     <button
                         class="btn-review"
                         onclick={on_review_click}
                         disabled={loading}
-                    >{"转人工调查"}</button>
+                    >{tr(language, "Route to investigation", "转人工调查")}</button>
                 </div>
 
                 // ── Triage mini-form (review) ─────────────────────────
@@ -429,7 +467,7 @@ fn detail_panel(
                     html! {
                         <div class="triage-mini-form" style="display:flex;flex-direction:column;gap:8px;padding-top:8px;">
                             <label style="font-size:12px;font-weight:600;color:var(--muted);">
-                                {"指派给"}
+                                {tr(language, "Assign to", "指派给")}
                                 <input
                                     style="margin-top:4px;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;"
                                     value={(**triage_assignee).clone()}
@@ -442,7 +480,7 @@ fn detail_panel(
                                 />
                             </label>
                             <label style="font-size:12px;font-weight:600;color:var(--muted);">
-                                {"备注"}
+                                {tr(language, "Notes", "备注")}
                                 <textarea
                                     style="margin-top:4px;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;resize:vertical;min-height:60px;"
                                     value={(**triage_notes).clone()}
@@ -459,7 +497,7 @@ fn detail_panel(
                                 onclick={on_confirm_review}
                                 disabled={loading}
                             >
-                                {if loading { "提交中..." } else { "确认转人工调查" }}
+                                {if loading { tr(language, "Submitting...", "提交中...") } else { tr(language, "Confirm investigation route", "确认转人工调查") }}
                             </button>
                         </div>
                     }
@@ -474,8 +512,13 @@ fn detail_panel(
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+#[derive(Properties, PartialEq)]
+pub struct ClaimsQueuePageProps {
+    pub language: Language,
+}
+
 #[function_component(ClaimsQueuePage)]
-pub fn claims_queue_page() -> Html {
+pub fn claims_queue_page(props: &ClaimsQueuePageProps) -> Html {
     let api_key = use_api_key();
     let snapshot_state = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
     let active_filter = use_state(|| Filter::All);
@@ -688,9 +731,9 @@ pub fn claims_queue_page() -> Html {
 
     html! {
         <div class="ops-page claims-queue-page">
-            { page_header(refresh, &snapshot_state) }
-            { kpi_strip_from_state(&snapshot_state) }
-            { filter_bar(&active_filter) }
+            { page_header(refresh, &snapshot_state, props.language) }
+            { kpi_strip_from_state(&snapshot_state, props.language) }
+            { filter_bar(&active_filter, props.language) }
 
             <div class="ops-split-layout">
                 <div class="claim-queue-list">
@@ -698,6 +741,7 @@ pub fn claims_queue_page() -> Html {
                         &filtered_leads,
                         &selected_lead_id,
                         &snapshot_state,
+                        props.language,
                     ) }
                 </div>
 
@@ -712,6 +756,7 @@ pub fn claims_queue_page() -> Html {
                     on_deny,
                     on_review_click,
                     on_confirm_review,
+                    props.language,
                 ) }
             </div>
         </div>
