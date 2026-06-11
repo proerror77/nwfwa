@@ -133,12 +133,32 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
     let mut nodes: Vec<GraphNode> = Vec::new();
     let mut edges: Vec<GraphEdge> = Vec::new();
 
-    // Provider nodes — evenly spread around a large circle
-    let n_providers = data.providers.len();
-    for (i, p) in data.providers.iter().enumerate() {
-        let angle = 2.0 * PI * i as f64 / n_providers.max(1) as f64;
-        // Space providers out across most of the canvas
-        let r = w.min(h) * 0.35;
+    // ── Semantic layout: sort providers by risk, place radially ──────────────
+    // Highest risk → nearest center, lower risk → outer ring
+    let mut sorted_providers = data.providers.clone();
+    sorted_providers.sort_by(|a, b| b.risk_score.cmp(&a.risk_score));
+
+    let n = sorted_providers.len();
+    for (rank, p) in sorted_providers.iter().enumerate() {
+        // radius increases with rank (lower risk = further from center)
+        let base_r = if rank == 0 {
+            0.0 // highest risk node at center
+        } else {
+            let tier = (rank as f64 / n.max(2) as f64).sqrt();
+            w.min(h) * 0.22 + tier * w.min(h) * 0.28
+        };
+
+        // Spread nodes evenly around the ring at each tier
+        // All nodes at the same radius get evenly spaced angles
+        let nodes_at_ring: usize = if rank == 0 { 1 } else { n - 1 };
+        let ring_idx = if rank == 0 { 0 } else { rank - 1 };
+        let angle = if rank == 0 {
+            0.0
+        } else {
+            // Start from top (−π/2) and go clockwise
+            -PI / 2.0 + 2.0 * PI * ring_idx as f64 / nodes_at_ring as f64
+        };
+
         nodes.push(GraphNode {
             id: p.provider_id.clone(),
             label: short_id(&p.provider_id),
@@ -148,24 +168,65 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
             claim_count: p.claim_count,
             graph_reasons: p.graph_reasons.clone(),
             outlier_flags: p.outlier_flags.clone(),
-            x: cx + r * angle.cos(),
-            y: cy + r * angle.sin(),
+            x: cx + base_r * angle.cos(),
+            y: cy + base_r * angle.sin(),
             vx: 0.0,
             vy: 0.0,
         });
     }
 
-    // Member nodes — spread in an inner ring between providers
+    // ── Member nodes: place near their primary provider ───────────────────────
+    // Map member → provider with highest-risk lead
+    let mut member_primary: HashMap<String, (String, u8)> = HashMap::new();
+    for lead in &data.leads {
+        let entry = member_primary.entry(lead.member_id.clone())
+            .or_insert((lead.provider_id.clone(), lead.risk_score));
+        if lead.risk_score > entry.1 {
+            *entry = (lead.provider_id.clone(), lead.risk_score);
+        }
+    }
+
+    // Count members per provider to space them out
+    let mut provider_member_count: HashMap<String, usize> = HashMap::new();
+    for (_, (pid, _)) in &member_primary {
+        *provider_member_count.entry(pid.clone()).or_insert(0) += 1;
+    }
+    let mut provider_member_idx: HashMap<String, usize> = HashMap::new();
+
     let mut seen_members: HashMap<String, u32> = HashMap::new();
     for lead in &data.leads {
         *seen_members.entry(lead.member_id.clone()).or_insert(0) += 1;
     }
-    let n_members = seen_members.len();
-    for (i, (member_id, count)) in seen_members.iter().enumerate() {
-        // Offset angle so members sit between provider positions
-        let angle = 2.0 * PI * i as f64 / n_members.max(1) as f64
-            + PI / n_members.max(1) as f64;
-        let r = w.min(h) * 0.18 + (i % 3) as f64 * 22.0;
+
+    for (member_id, count) in &seen_members {
+        let (primary_pid, _) = member_primary.get(member_id)
+            .cloned()
+            .unwrap_or_default();
+
+        // Find provider node position
+        let (px, py) = nodes.iter()
+            .find(|n| n.id == primary_pid)
+            .map(|n| (n.x, n.y))
+            .unwrap_or((cx, cy));
+
+        // Spread members around their provider at a fixed offset radius
+        let total = provider_member_count.get(&primary_pid).copied().unwrap_or(1);
+        let idx = *provider_member_idx.entry(primary_pid.clone()).or_insert(0);
+        *provider_member_idx.get_mut(&primary_pid).unwrap() += 1;
+
+        let spread_angle = 2.0 * PI * idx as f64 / total.max(1) as f64;
+        // Direction away from center so member doesn't overlap provider
+        let dir_x = px - cx;
+        let dir_y = py - cy;
+        let dir_len = (dir_x * dir_x + dir_y * dir_y).sqrt().max(1.0);
+        // Base offset: 52px outward from provider, then fan around
+        let offset_r = 52.0;
+        let fan_angle = spread_angle * 0.6 - 0.3; // ±0.3 rad fan
+        let ox = (dir_x / dir_len) * offset_r * fan_angle.cos()
+            - (dir_y / dir_len) * offset_r * fan_angle.sin();
+        let oy = (dir_x / dir_len) * offset_r * fan_angle.sin()
+            + (dir_y / dir_len) * offset_r * fan_angle.cos();
+
         nodes.push(GraphNode {
             id: member_id.clone(),
             label: short_id(member_id),
@@ -175,31 +236,36 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
             claim_count: *count,
             graph_reasons: Vec::new(),
             outlier_flags: Vec::new(),
-            x: cx + r * angle.cos(),
-            y: cy + r * angle.sin(),
+            x: (px + ox).clamp(30.0, w - 30.0),
+            y: (py + oy).clamp(30.0, h - 30.0),
             vx: 0.0,
             vy: 0.0,
         });
     }
 
-    // Provider ↔ Member edges from leads
+    // ── Edges ─────────────────────────────────────────────────────────────────
+
+    // Provider ↔ Member edges (deduplicated: one edge per unique pair)
+    let mut pm_pairs: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
     for lead in &data.leads {
-        let strength = (lead.risk_score as f64 / 100.0).max(0.2);
-        edges.push(GraphEdge {
-            source: lead.provider_id.clone(),
-            target: lead.member_id.clone(),
-            strength,
-            label: format!("理赔 {}", lead.claim_id),
-            is_risk_link: lead.risk_score >= 60,
-        });
+        let key = (lead.provider_id.clone(), lead.member_id.clone());
+        if pm_pairs.insert(key) {
+            let strength = (lead.risk_score as f64 / 100.0).max(0.2);
+            edges.push(GraphEdge {
+                source: lead.provider_id.clone(),
+                target: lead.member_id.clone(),
+                strength,
+                label: format!("理赔 {}", lead.claim_id),
+                is_risk_link: lead.risk_score >= 60,
+            });
+        }
     }
 
-    // Provider ↔ Provider edges: shared outlier flags (risk cluster)
-    let providers_vec: Vec<_> = data.providers.iter().collect();
-    for i in 0..providers_vec.len() {
-        for j in (i + 1)..providers_vec.len() {
-            let pa = providers_vec[i];
-            let pb = providers_vec[j];
+    // Provider ↔ Provider edges: shared outlier flags
+    for i in 0..sorted_providers.len() {
+        for j in (i + 1)..sorted_providers.len() {
+            let pa = &sorted_providers[i];
+            let pb = &sorted_providers[j];
             let shared: Vec<_> = pa.outlier_flags.iter()
                 .filter(|f| pb.outlier_flags.contains(f))
                 .collect();
@@ -213,12 +279,6 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
                 });
             }
         }
-    }
-
-    // Pre-compute layout: run 120 force iterations synchronously
-    // This avoids async timer complexity in WASM and gives a stable result on first render
-    for iter in 0..120 {
-        apply_forces(&mut nodes, &edges, w, h, iter);
     }
 
     (nodes, edges)
