@@ -107,6 +107,16 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+fn lead_triage_explanation(lead: &LeadRecord) -> &'static str {
+    match lead.rag.to_ascii_uppercase().as_str() {
+        "RED" => {
+            "高风险进件：先确认资料是否充分；资料不足先补件，资料充分再转调查工作台形成人工建议。"
+        }
+        "AMBER" | "YELLOW" => "可疑进件：需要人工分流，重点确认命中信号是否有证据引用支撑。",
+        _ => "低风险进件：确认无关键命中信号后可归档，但仍需保留审计引用。",
+    }
+}
+
 // Compute KPI values from leads
 fn kpi_total(leads: &[LeadRecord]) -> usize {
     leads.len()
@@ -146,8 +156,12 @@ fn page_header(
     html! {
         <div class="dashboard-header">
             <div>
-                <h2>{"理赔队列"}</h2>
+                <h2 class="bilingual-title">
+                    <span>{"理赔队列"}</span>
+                    <small>{"Claims Triage Queue"}</small>
+                </h2>
                 <p class="muted">{"今日 TPA 进件分流：确认风险、补证据、转调查；不在此页做最终赔付裁决。"}</p>
+                <p class="muted en-copy">{"TPA intake triage: confirm risk context, request evidence when needed, and route cases to investigation without making final payment decisions."}</p>
             </div>
             <button onclick={refresh} disabled={loading}>
                 {if loading { "刷新中..." } else { "刷新" }}
@@ -246,11 +260,15 @@ fn queue_list(
                 >
                     <div class="claim-row-main">
                         <strong>{&lead.claim_id}</strong>
-                        <span>{format!("{} · {} · {}", lead.member_id, lead.scheme_family, lead.review_mode)}</span>
+                        <span>{format!("Member {} · Provider {} · {} · {}", lead.member_id, lead.provider_id, lead.scheme_family, lead.review_mode)}</span>
+                        <small>{lead_triage_explanation(lead)}</small>
                     </div>
                     { risk_badge_html(&lead.rag) }
                     { outcome_badge_html(&lead.rag) }
-                    <span class="claim-row-reason">{truncate(&lead.reason, 40)}</span>
+                    <span class="claim-row-reason">
+                        <strong>{"入队原因"}</strong>
+                        <small>{truncate(&lead.reason, 96)}</small>
+                    </span>
                     { status_badge_html(&lead.status) }
                 </div>
             }

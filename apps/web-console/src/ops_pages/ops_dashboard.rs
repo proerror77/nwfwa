@@ -243,8 +243,12 @@ pub fn ops_dashboard_page() -> Html {
             // ── Header ───────────────────────────────────────────────────
             <div class="ops-page-header">
                 <div>
-                    <h2>{"运营仪表盘"}</h2>
+                    <h2 class="bilingual-title">
+                        <span>{"运营仪表盘"}</span>
+                        <small>{"Operations Dashboard"}</small>
+                    </h2>
                     <p class="muted">{ format!("{} · 看今日优先级、SLA 风险、队列负载与治理异常", today_label()) }</p>
+                    <p class="muted en-copy">{"Daily priority, SLA risk, queue load, and governance exceptions."}</p>
                 </div>
                 <button onclick={refresh} disabled={loading}>
                     {if loading { "刷新中..." } else { "刷新" }}

@@ -32,8 +32,12 @@ fn governance_hub_page(navigate: Callback<OpsPage>) -> Html {
         <section class="workflow-hub governance-hub-page">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"质控与治理"}</h2>
+                    <h2 class="bilingual-title">
+                        <span>{"质控与治理"}</span>
+                        <small>{"Quality & Governance"}</small>
+                    </h2>
                     <p>{"管理抽样质控、医疗复核、QA 反馈以及规则/模型/路由的发布治理；这里不承办理赔分流。"}</p>
+                    <p class="muted en-copy">{"Second-line controls for sampling QA, medical review, feedback closure, and rule/model/routing governance. This hub does not handle claim triage."}</p>
                 </div>
                 <span class="status-pill">{"二线治理"}</span>
             </div>
@@ -132,7 +136,7 @@ pub fn ops_app() -> Html {
                 <div class="brand-block">
                     <span>{"FWA PLATFORM"}</span>
                     <h1>{"风控运营"}</h1>
-                    <p>{"保险理赔 FWA 检测与审核"}</p>
+                    <p>{"Claims FWA Operations Console"}</p>
                 </div>
 
                 // API key input (pilot)
@@ -155,7 +159,7 @@ pub fn ops_app() -> Html {
                 // Primary workflow navigation
                 <nav class="module-nav" aria-label="FWA operations">
                     <div class="nav-section">
-                        <p class="nav-section-title">{"主工作流"}</p>
+                        <p class="nav-section-title">{"主工作流 · Primary workflow"}</p>
                         {for PRIMARY_OPS_NAV.iter().map(|&page| {
                             let navigate = navigate.clone();
                             let is_active = *active == page;
@@ -166,16 +170,23 @@ pub fn ops_app() -> Html {
                                 >
                                     <span class={classes!("nav-icon", page.icon_class())}></span>
                                     <span class="nav-copy">
-                                        <span class="nav-label">{page.label()}</span>
-                                        <span class="nav-description">{page.description()}</span>
+                                        <span class="nav-label">
+                                            <span>{page.label()}</span>
+                                            <small>{page.label_en()}</small>
+                                        </span>
+                                        <span class="nav-description">
+                                            <span>{page.description()}</span>
+                                            <small>{page.description_en()}</small>
+                                        </span>
                                     </span>
                                 </button>
                             }
                         })}
                     </div>
                     <div class="sidebar-workflow-note">
-                        <strong>{"页面路径"}</strong>
+                        <strong>{"页面路径 · Workflow path"}</strong>
                         <span>{"仪表盘看优先级，理赔队列做分流，调查工作台形成建议，证据中心查上下文，治理页处理二线配置。"}</span>
+                        <small>{"Dashboard prioritizes work, Claims Queue triages intake, Investigation Workbench records recommendations, Evidence Center provides context, and Governance handles second-line controls."}</small>
                     </div>
                 </nav>
 
@@ -192,7 +203,8 @@ pub fn ops_app() -> Html {
                 <div class="workspace-topbar">
                     <div class="topbar-context">
                         <span class="eyebrow">{"FWA 风控平台"}</span>
-                        <strong>{active.description()}</strong>
+                        <strong>{active.label_en()}</strong>
+                        <small>{active.description()}</small>
                     </div>
                     <div class="topbar-actions">
                         <span class="api-chip status-live">{"运营中"}</span>

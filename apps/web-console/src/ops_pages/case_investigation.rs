@@ -159,6 +159,19 @@ fn status_badge(status: &str) -> Html {
     }
 }
 
+fn case_focus_summary(case: &CaseRecord) -> String {
+    let reason = if case.routing_reason.trim().is_empty() {
+        "缺少路由说明，请查看证据包和命中信号。".to_string()
+    } else {
+        case.routing_reason.clone()
+    };
+    if reason.chars().count() > 92 {
+        format!("{}…", reason.chars().take(92).collect::<String>())
+    } else {
+        reason
+    }
+}
+
 // ── Layer metadata (for collapsed summaries) ───────────────────────────────────
 
 struct LayerMeta {
@@ -206,12 +219,12 @@ fn queue_panel(
 ) -> Html {
     let count = cases.len();
     html! {
-        <div style="width:260px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;">
+        <div style="width:320px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;">
             <div style="padding:16px;border-bottom:1px solid var(--line);flex-shrink:0;">
                 <h3 style="margin:0;font-size:0.95rem;color:var(--graphite);">
                     {format!("调查队列 ({})", count)}
                 </h3>
-                <p style="margin:4px 0 0;font-size:0.75rem;color:var(--muted);">{"调查中 · 分诊 · 待证据"}</p>
+                <p style="margin:4px 0 0;font-size:0.75rem;color:var(--muted);">{"Investigation queue · 调查中 / 分诊 / 待证据"}</p>
             </div>
             <div style="flex:1;overflow-y:auto;padding:8px 0;">
                 { if loading {
@@ -239,17 +252,26 @@ fn queue_panel(
                                 .get("rag")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("amber");
+                            let focus_summary = case_focus_summary(c);
                             html! {
                                 <div
-                                    style={format!("padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--surface-strong);{border_style}")}
+                                    class="investigation-case-row"
+                                    style={format!("padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--surface-strong);{border_style}")}
                                     onclick={Callback::from(move |_: MouseEvent| selected.set(case_id_val.clone()))}
                                 >
                                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                                         <span style="font-size:0.8rem;color:var(--graphite);font-family:monospace;font-weight:600;">{short_id}</span>
                                         { rag_badge(rag) }
                                     </div>
-                                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;">
-                                        {format!("理赔 {}", &c.claim_id)}
+                                    <div style="font-size:0.78rem;color:var(--graphite);font-weight:650;margin-bottom:4px;">
+                                        {format!("理赔 {} · {}", &c.claim_id, &c.scheme_family)}
+                                    </div>
+                                    <div style="font-size:0.72rem;color:var(--muted);line-height:1.35;margin-bottom:6px;">
+                                        {format!("Member {} · Provider {} · reviewer {}", &c.member_id, &c.provider_id, &c.reviewer)}
+                                    </div>
+                                    <div style="font-size:0.74rem;color:var(--graphite);line-height:1.35;margin-bottom:8px;">
+                                        <strong>{"调查焦点："}</strong>
+                                        {focus_summary}
                                     </div>
                                     <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
                                         { scheme_chip(&c.scheme_family) }
@@ -763,8 +785,12 @@ pub fn case_investigation_page() -> Html {
             // Top bar
             <div style="flex-shrink:0;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:16px;">
                 <div>
-                    <h2 style="margin:0;font-size:1.1rem;color:var(--graphite);font-weight:600;">{"调查工作台"}</h2>
+                    <h2 class="bilingual-title" style="margin:0;color:var(--graphite);">
+                        <span>{"调查工作台"}</span>
+                        <small>{"Investigation Workbench"}</small>
+                    </h2>
                     <p style="margin:2px 0 0;font-size:0.78rem;color:var(--muted);">{"7层调查分析 · 补证据 · 形成可审计的人工建议"}</p>
+                    <p style="margin:2px 0 0;font-size:0.74rem;color:var(--muted);">{"Seven-layer investigation, evidence requests, and auditable human recommendations."}</p>
                 </div>
             </div>
 

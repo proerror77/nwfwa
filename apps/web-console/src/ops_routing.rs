@@ -48,6 +48,29 @@ impl OpsPage {
         }
     }
 
+    pub(crate) fn label_en(self) -> &'static str {
+        match self {
+            OpsPage::Dashboard => "Operations Dashboard",
+            OpsPage::ClaimsQueue => "Claims Triage Queue",
+            OpsPage::ReviewWorkbench => "Investigation Workbench",
+            OpsPage::CaseTracker => "Case Tracker",
+            OpsPage::EvidenceHub => "Evidence Center",
+            OpsPage::EvidenceRuntime => "Evidence Runtime",
+            OpsPage::MemberProfile => "Member Profile",
+            OpsPage::ProviderRisk => "Provider Risk",
+            OpsPage::KnowledgeBase => "Knowledge Base",
+            OpsPage::DataSources => "Data Sources",
+            OpsPage::AgentInvestigator => "AI Investigator",
+            OpsPage::RuleLibrary => "Rule Library",
+            OpsPage::ModelGovernance => "Model Governance",
+            OpsPage::RoutingPolicies => "Routing Policies",
+            OpsPage::GovernanceHub => "Quality & Governance",
+            OpsPage::AuditSampling => "Audit Sampling",
+            OpsPage::MedicalReview => "Medical Review",
+            OpsPage::QaReview => "QA Feedback",
+        }
+    }
+
     pub(crate) fn slug(self) -> &'static str {
         match self {
             OpsPage::Dashboard => "dashboard",
@@ -114,6 +137,37 @@ impl OpsPage {
             OpsPage::AuditSampling => "抽样质控与覆盖率",
             OpsPage::MedicalReview => "医疗必要性人工复核",
             OpsPage::QaReview => "QA 反馈闭环",
+        }
+    }
+
+    pub(crate) fn description_en(self) -> &'static str {
+        match self {
+            OpsPage::Dashboard => "Daily risk, SLA, queue load, and governance watchlist",
+            OpsPage::ClaimsQueue => "TPA intake triage without final adjudication",
+            OpsPage::ReviewWorkbench => "Evidence-backed human investigation and recommendations",
+            OpsPage::CaseTracker => "Open case status, SLA, and progress tracking",
+            OpsPage::EvidenceHub => {
+                "Evidence chain, member profile, provider graph, and knowledge lookup"
+            }
+            OpsPage::EvidenceRuntime => {
+                "Document packets, OCR, chunks, embeddings, and retrieval audit"
+            }
+            OpsPage::MemberProfile => "Member claim history and risk context",
+            OpsPage::ProviderRisk => "Provider profile, network signals, and anomaly patterns",
+            OpsPage::KnowledgeBase => "Similar confirmed cases and evidence-backed references",
+            OpsPage::DataSources => "Dataset lineage, field mappings, and model evaluation inputs",
+            OpsPage::AgentInvestigator => "Assistive-only AI investigation package generation",
+            OpsPage::RuleLibrary => "Active rules and pushed candidate review",
+            OpsPage::ModelGovernance => {
+                "Model versions, evaluation, drift, and activation decisions"
+            }
+            OpsPage::RoutingPolicies => "Risk-band routing policy configuration",
+            OpsPage::GovernanceHub => {
+                "Sampling, QA, medical review, rule, model, and routing governance"
+            }
+            OpsPage::AuditSampling => "QA sample coverage and disagreement monitoring",
+            OpsPage::MedicalReview => "Human clinical necessity review",
+            OpsPage::QaReview => "QA feedback closure loop",
         }
     }
 }

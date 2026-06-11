@@ -6,8 +6,12 @@ pub fn evidence_hub_page(on_navigate: Callback<String>) -> Html {
         <section class="workflow-hub">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"证据中心"}</h2>
+                    <h2 class="bilingual-title">
+                        <span>{"证据中心"}</span>
+                        <small>{"Evidence Center"}</small>
+                    </h2>
                     <p>{"为调查员集中查询证据链、成员画像、Provider 图谱和相似案例；这里只提供上下文，不提交分流或赔付结论。"}</p>
+                    <p class="muted en-copy">{"Central context lookup for evidence chain, member profile, provider graph, and similar cases. This page provides context only and does not submit triage or payment decisions."}</p>
                 </div>
                 <span class="status-pill">{"上下文查询"}</span>
             </div>
