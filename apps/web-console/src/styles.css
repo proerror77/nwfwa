@@ -7061,6 +7061,24 @@ pre {
 .ops-kpi-card.highlight strong { color: var(--red); }
 .ops-kpi-card.positive strong  { color: #1a7a3c; }
 
+.ops-roi-note {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ops-roi-note strong {
+  color: var(--graphite);
+  font-size: 14px;
+}
+
+.ops-roi-note span {
+  max-width: 780px;
+}
+
 /* ── Filter bar ── */
 .ops-filter-bar {
   display: flex;

@@ -98,9 +98,12 @@ fn value_proof_section(summary: &DashboardSummary) -> Html {
     let prevented = parse_amount(&vm.prevented_payment);
     let cost = parse_amount(&vm.review_cost);
     let roi_text = if cost > 0.0 {
-        format!("每投入1元审核成本，防赔{:.1}元", prevented / cost)
+        format!(
+            "试算参考：每 1 元估算复核成本对应 {:.1} 元已确认防赔",
+            prevented / cost
+        )
     } else {
-        "每投入1元审核成本，防赔 — 元".to_string()
+        "试算参考：估算复核成本为 0，暂不计算比值".to_string()
     };
 
     html! {
@@ -111,11 +114,15 @@ fn value_proof_section(summary: &DashboardSummary) -> Html {
                     <strong class="ops-kpi-value">{&vm.prevented_payment}</strong>
                 </div>
                 <div class="ops-kpi-card neutral">
-                    <span class="ops-kpi-label">{"审核投入成本"}</span>
+                    <span class="ops-kpi-label">{"估算复核成本"}</span>
                     <strong class="ops-kpi-value">{&vm.review_cost}</strong>
+                    <small class="ops-kpi-note">{"复核事件 × 固定试算单价，不代表实际财务成本"}</small>
                 </div>
             </div>
-            <p class="ops-roi-note muted">{roi_text}</p>
+            <div class="ops-roi-note">
+                <strong>{roi_text}</strong>
+                <span>{&vm.evidence_caveat}</span>
+            </div>
         </div>
     }
 }
