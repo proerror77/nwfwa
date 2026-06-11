@@ -1,9 +1,9 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::formatting::business_label;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 // ── Filter kind ───────────────────────────────────────────────────────────────
 
@@ -19,33 +19,37 @@ enum Filter {
 impl Filter {
     fn label(self) -> &'static str {
         match self {
-            Filter::All             => "全部",
-            Filter::Investigating   => "调查中",
+            Filter::All => "全部",
+            Filter::Investigating => "调查中",
             Filter::PendingEvidence => "待证据",
-            Filter::Confirmed       => "已确认",
-            Filter::Closed          => "已关闭",
+            Filter::Confirmed => "已确认",
+            Filter::Closed => "已关闭",
         }
     }
 
     fn slug(self) -> &'static str {
         match self {
-            Filter::All             => "all",
-            Filter::Investigating   => "investigating",
+            Filter::All => "all",
+            Filter::Investigating => "investigating",
             Filter::PendingEvidence => "pending-evidence",
-            Filter::Confirmed       => "confirmed",
-            Filter::Closed          => "closed",
+            Filter::Confirmed => "confirmed",
+            Filter::Closed => "closed",
         }
     }
 
     fn matches(self, case: &CaseRecord) -> bool {
         match self {
-            Filter::All             => true,
-            Filter::Investigating   => case.status.eq_ignore_ascii_case("investigating")
-                                    || case.status.eq_ignore_ascii_case("open"),
-            Filter::PendingEvidence => case.status.eq_ignore_ascii_case("pending_evidence")
-                                    || case.status.eq_ignore_ascii_case("evidence_pending"),
-            Filter::Confirmed       => case.status.eq_ignore_ascii_case("confirmed"),
-            Filter::Closed          => case.status.eq_ignore_ascii_case("closed"),
+            Filter::All => true,
+            Filter::Investigating => {
+                case.status.eq_ignore_ascii_case("investigating")
+                    || case.status.eq_ignore_ascii_case("open")
+            }
+            Filter::PendingEvidence => {
+                case.status.eq_ignore_ascii_case("pending_evidence")
+                    || case.status.eq_ignore_ascii_case("evidence_pending")
+            }
+            Filter::Confirmed => case.status.eq_ignore_ascii_case("confirmed"),
+            Filter::Closed => case.status.eq_ignore_ascii_case("closed"),
         }
     }
 }
@@ -61,30 +65,30 @@ const FILTERS: &[Filter] = &[
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max])
+        format!("{}…", s.chars().take(max).collect::<String>())
     }
 }
 
 fn sla_badge_html(sla_status: &str) -> Html {
     let (tone, label) = match sla_status.trim().to_ascii_lowercase().as_str() {
-        "ok"      => ("ok",      "✓ 正常"),
+        "ok" => ("ok", "✓ 正常"),
         "warning" => ("warning", "⚠ 注意"),
-        "breach"  => ("breach",  "✕ 超时"),
-        _         => ("ok",      "✓ 正常"),
+        "breach" => ("breach", "✕ 超时"),
+        _ => ("ok", "✓ 正常"),
     };
     html! { <span class={classes!("sla-badge", tone)}>{label}</span> }
 }
 
 fn status_badge_html(status: &str) -> Html {
     let tone = match status.to_ascii_lowercase().as_str() {
-        "investigating" | "open"                        => "info",
-        "pending_evidence" | "evidence_pending"         => "warning",
-        "confirmed"                                      => "positive",
-        "closed"                                         => "neutral",
-        _                                                => "neutral",
+        "investigating" | "open" => "info",
+        "pending_evidence" | "evidence_pending" => "warning",
+        "confirmed" => "positive",
+        "closed" => "neutral",
+        _ => "neutral",
     };
     html! { <span class={classes!("status-token", tone)}>{business_label(status)}</span> }
 }
@@ -93,31 +97,41 @@ fn priority_tone(priority: &str) -> &'static str {
     match priority.trim().to_ascii_lowercase().as_str() {
         "high" | "critical" => "high",
         "medium" | "normal" => "medium",
-        _                   => "low",
+        _ => "low",
     }
 }
 
 // ── KPI helpers ───────────────────────────────────────────────────────────────
 
 fn kpi_active(cases: &[CaseRecord]) -> usize {
-    cases.iter().filter(|c| {
-        let s = c.status.to_ascii_lowercase();
-        s != "closed"
-    }).count()
+    cases
+        .iter()
+        .filter(|c| {
+            let s = c.status.to_ascii_lowercase();
+            s != "closed"
+        })
+        .count()
 }
 
 fn kpi_breach(cases: &[CaseRecord]) -> usize {
-    cases.iter().filter(|c| c.sla_status.eq_ignore_ascii_case("breach")).count()
+    cases
+        .iter()
+        .filter(|c| c.sla_status.eq_ignore_ascii_case("breach"))
+        .count()
 }
 
 fn kpi_closed_this_week(cases: &[CaseRecord]) -> usize {
     // All closed cases — week-window requires a timestamp field not present in CaseRecord,
     // so we count all closed as a reasonable approximation for the UI strip.
-    cases.iter().filter(|c| c.status.eq_ignore_ascii_case("closed")).count()
+    cases
+        .iter()
+        .filter(|c| c.status.eq_ignore_ascii_case("closed"))
+        .count()
 }
 
 fn kpi_avg_closure_hours(cases: &[CaseRecord]) -> String {
-    let closed: Vec<f64> = cases.iter()
+    let closed: Vec<f64> = cases
+        .iter()
         .filter_map(|c| c.time_to_closure_hours)
         .collect();
     if closed.is_empty() {
@@ -262,21 +276,21 @@ fn case_table_row(case: &CaseRecord) -> Html {
 
 #[function_component(CaseTrackerPage)]
 pub fn case_tracker_page() -> Html {
-    let api_key        = use_api_key();
+    let api_key = use_api_key();
     let snapshot_state = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
-    let active_filter  = use_state(|| Filter::All);
+    let active_filter = use_state(|| Filter::All);
 
     // Auto-load on mount
     {
-        let api_key        = api_key.clone();
+        let api_key = api_key.clone();
         let snapshot_state = snapshot_state.clone();
         use_effect_with((), move |_| {
-            let api_key        = (*api_key).clone();
+            let api_key = (*api_key).clone();
             let snapshot_state = snapshot_state.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
                 snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
-                    Ok(s)  => ApiState::Ready(s),
+                    Ok(s) => ApiState::Ready(s),
                     Err(e) => ApiState::Failed(e),
                 });
             });
@@ -286,7 +300,8 @@ pub fn case_tracker_page() -> Html {
 
     // Filtered case list
     let filtered_cases: Vec<CaseRecord> = if let ApiState::Ready(snap) = &*snapshot_state {
-        snap.cases.iter()
+        snap.cases
+            .iter()
             .filter(|c| active_filter.matches(c))
             .cloned()
             .collect()

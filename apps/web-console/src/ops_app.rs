@@ -1,10 +1,53 @@
 use crate::constants::API_KEY_DEFAULT;
 use crate::ops_pages::*;
-use crate::ops_routing::{ops_page_from_hash, ops_set_hash, OpsPage, OPS_NAV_SECTIONS};
+use crate::ops_routing::{ops_page_from_hash, ops_set_hash, OpsPage, PRIMARY_OPS_NAV};
 use crate::pages::*;
 use crate::state::{ApiKeyContext, Language};
 use wasm_bindgen::{closure::Closure, JsCast};
 use yew::prelude::*;
+
+fn ops_entry_card(
+    page: OpsPage,
+    eyebrow: &'static str,
+    title: &'static str,
+    body: &'static str,
+    tone: &'static str,
+    navigate: &Callback<OpsPage>,
+) -> Html {
+    let navigate = navigate.clone();
+    html! {
+        <button
+            class={classes!("workflow-action-card", tone)}
+            onclick={Callback::from(move |_: MouseEvent| navigate.emit(page))}
+        >
+            <span>{eyebrow}</span>
+            <strong>{title}</strong>
+            <small>{body}</small>
+        </button>
+    }
+}
+
+fn governance_hub_page(navigate: Callback<OpsPage>) -> Html {
+    html! {
+        <section class="workflow-hub governance-hub-page">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"质控与治理"}</h2>
+                    <p>{"管理抽样质控、医疗复核、QA 反馈以及规则/模型/路由的发布治理；这里不承办理赔分流。"}</p>
+                </div>
+                <span class="status-pill">{"二线治理"}</span>
+            </div>
+            <div class="workflow-card-grid governance-card-grid">
+                {ops_entry_card(OpsPage::AuditSampling, "Quality", "抽样审核", "查看抽样覆盖率、复核分歧和需要质控介入的案件。", "warning", &navigate)}
+                {ops_entry_card(OpsPage::MedicalReview, "Clinical", "医疗复核", "处理医疗必要性、资料缺口和临床合理性人工复核。", "strong", &navigate)}
+                {ops_entry_card(OpsPage::QaReview, "Feedback", "QA 反馈", "闭环复核意见，回流规则、模型、特征和工作流改进。", "success", &navigate)}
+                {ops_entry_card(OpsPage::RuleLibrary, "Rules", "规则库", "审核推送规则、查看命中表现和回测结果，避免静默上线。", "danger", &navigate)}
+                {ops_entry_card(OpsPage::ModelGovernance, "Models", "模型管理", "查看模型版本、评估指标、漂移监控和激活决策。", "neutral", &navigate)}
+                {ops_entry_card(OpsPage::RoutingPolicies, "Routing", "路由策略", "维护 Red/Amber/Green 分流阈值与人工审核策略。", "strong", &navigate)}
+            </div>
+        </section>
+    }
+}
 
 #[function_component(OpsApp)]
 pub fn ops_app() -> Html {
@@ -24,13 +67,12 @@ pub fn ops_app() -> Html {
         use_effect_with((), move |_| {
             let listener = web_sys::window().and_then(|window| {
                 let active = active.clone();
-                let callback =
-                    Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_| {
-                        let hash = web_sys::window()
-                            .and_then(|w| w.location().hash().ok())
-                            .unwrap_or_default();
-                        active.set(ops_page_from_hash(&hash));
-                    }));
+                let callback = Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_| {
+                    let hash = web_sys::window()
+                        .and_then(|w| w.location().hash().ok())
+                        .unwrap_or_default();
+                    active.set(ops_page_from_hash(&hash));
+                }));
                 window
                     .add_event_listener_with_callback(
                         "hashchange",
@@ -63,18 +105,20 @@ pub fn ops_app() -> Html {
         Callback::from(move |name: String| {
             // Map old module names to new OpsPage for cross-page links
             let page = match name.as_str() {
-                "Member Profile"     => OpsPage::MemberProfile,
-                "Provider Risk"      => OpsPage::ProviderRisk,
-                "Knowledge Base"     => OpsPage::KnowledgeBase,
-                "Evidence Runtime"   => OpsPage::EvidenceHub,
-                "Data Sources"       => OpsPage::EvidenceHub,
-                "Medical Review"     => OpsPage::MedicalReview,
-                "QA Review"          => OpsPage::QaReview,
+                "Member Profile" => OpsPage::MemberProfile,
+                "Provider Risk" => OpsPage::ProviderRisk,
+                "Knowledge Base" => OpsPage::KnowledgeBase,
+                "Evidence Runtime" => OpsPage::EvidenceHub,
+                "Data Sources" => OpsPage::EvidenceHub,
+                "Medical Review" => OpsPage::MedicalReview,
+                "QA Review" => OpsPage::QaReview,
                 "Agent Investigator" => OpsPage::AgentInvestigator,
-                "Rules"              => OpsPage::RuleLibrary,
-                "Models"             => OpsPage::ModelGovernance,
-                "Dashboard"          => OpsPage::Dashboard,
-                _                    => OpsPage::Dashboard,
+                "Rules" => OpsPage::RuleLibrary,
+                "Models" => OpsPage::ModelGovernance,
+                "Case Tracker" => OpsPage::CaseTracker,
+                "Governance" => OpsPage::GovernanceHub,
+                "Dashboard" => OpsPage::Dashboard,
+                _ => OpsPage::Dashboard,
             };
             navigate.emit(page);
         })
@@ -108,33 +152,31 @@ pub fn ops_app() -> Html {
                     />
                 </div>
 
-                // Grouped navigation
+                // Primary workflow navigation
                 <nav class="module-nav" aria-label="FWA operations">
-                    {for OPS_NAV_SECTIONS.iter().map(|(section_label, pages)| {
-                        let navigate = navigate.clone();
-                        let active_page = *active;
-                        html! {
-                            <div class="nav-section">
-                                <p class="nav-section-title">{section_label}</p>
-                                {for pages.iter().map(|&page| {
-                                    let navigate = navigate.clone();
-                                    let is_active = active_page == page;
-                                    html! {
-                                        <button
-                                            class={classes!(is_active.then_some("active"))}
-                                            onclick={Callback::from(move |_| navigate.emit(page))}
-                                        >
-                                            <span class={classes!("nav-icon", page.icon_class())}></span>
-                                            <span class="nav-copy">
-                                                <span class="nav-label">{page.label()}</span>
-                                                <span class="nav-description">{page.description()}</span>
-                                            </span>
-                                        </button>
-                                    }
-                                })}
-                            </div>
-                        }
-                    })}
+                    <div class="nav-section">
+                        <p class="nav-section-title">{"主工作流"}</p>
+                        {for PRIMARY_OPS_NAV.iter().map(|&page| {
+                            let navigate = navigate.clone();
+                            let is_active = *active == page;
+                            html! {
+                                <button
+                                    class={classes!(is_active.then_some("active"))}
+                                    onclick={Callback::from(move |_| navigate.emit(page))}
+                                >
+                                    <span class={classes!("nav-icon", page.icon_class())}></span>
+                                    <span class="nav-copy">
+                                        <span class="nav-label">{page.label()}</span>
+                                        <span class="nav-description">{page.description()}</span>
+                                    </span>
+                                </button>
+                            }
+                        })}
+                    </div>
+                    <div class="sidebar-workflow-note">
+                        <strong>{"页面路径"}</strong>
+                        <span>{"仪表盘看优先级，理赔队列做分流，调查工作台形成建议，证据中心查上下文，治理页处理二线配置。"}</span>
+                    </div>
                 </nav>
 
                 <div style="padding:12px 10px 8px;border-top:1px solid rgba(226,239,255,0.1);margin-top:8px;">
@@ -174,6 +216,7 @@ pub fn ops_app() -> Html {
                         OpsPage::ModelGovernance => html! { <ModelsPage /> },
                         OpsPage::RoutingPolicies => html! { <RoutingPoliciesPage /> },
                         // ── 质量管理 ────────────────────────────────────────
+                        OpsPage::GovernanceHub => governance_hub_page(navigate.clone()),
                         OpsPage::AuditSampling => html! { <AuditSamplingPage /> },
                         OpsPage::MedicalReview => html! { <MedicalReviewPage /> },
                         OpsPage::QaReview      => html! { <QaReviewPage /> },

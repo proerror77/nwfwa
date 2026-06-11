@@ -1,9 +1,9 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::formatting::percent_label;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ fn rag_distribution_section(summary: &DashboardSummary) -> Html {
     let total_f = total.max(1) as f64;
 
     let rows: Vec<(&'static str, &'static str, u32)> = vec![
-        ("Red",   "red",   *dist.get("Red").unwrap_or(&0)),
+        ("Red", "red", *dist.get("Red").unwrap_or(&0)),
         ("Amber", "amber", *dist.get("Amber").unwrap_or(&0)),
         ("Green", "green", *dist.get("Green").unwrap_or(&0)),
     ];
@@ -120,12 +120,59 @@ fn value_proof_section(summary: &DashboardSummary) -> Html {
     }
 }
 
+fn operational_watch_section(summary: &DashboardSummary) -> Html {
+    let breached = summary.case_sla.breached_cases;
+    let open_cases = summary.case_sla.open_cases;
+    let qa_open = summary.qa_queue.open_cases + summary.qa_queue.unresolved_feedback_count;
+    let drift_count = summary.model_governance.drift_detected_count;
+    let denied_policy = summary.agent_governance.denied_policy_check_count;
+
+    html! {
+        <div class="ops-dashboard-grid">
+            <div class="ops-kpi-card warning">
+                <span class="ops-kpi-label">{"SLA 需要关注"}</span>
+                <strong class="ops-kpi-value">{format!("{breached}/{open_cases}")}</strong>
+                <small class="ops-kpi-note">{"优先处理超时或即将超时的调查案件"}</small>
+            </div>
+            <div class="ops-kpi-card neutral">
+                <span class="ops-kpi-label">{"QA / 反馈待闭环"}</span>
+                <strong class="ops-kpi-value">{qa_open}</strong>
+                <small class="ops-kpi-note">{"用于判断规则、模型或流程是否需要修正"}</small>
+            </div>
+            <div class="ops-kpi-card danger">
+                <span class="ops-kpi-label">{"治理异常"}</span>
+                <strong class="ops-kpi-value">{drift_count + denied_policy}</strong>
+                <small class="ops-kpi-note">{"模型漂移或 Agent policy deny 需要二线确认"}</small>
+            </div>
+        </div>
+    }
+}
+
+fn next_action_section(summary: &DashboardSummary) -> Html {
+    html! {
+        <div class="ops-command-panel">
+            <div>
+                <p class="ops-section-label">{"今日处理顺序"}</p>
+                <ol>
+                    <li>{format!("先看 {} 个高风险/已拦截信号，确认是否需要进入调查。", summary.confirmed_fwa)}</li>
+                    <li>{format!("再处理 {} 个开放调查案件，优先按 SLA 和优先级排序。", summary.case_sla.open_cases)}</li>
+                    <li>{format!("最后闭环 {} 条 QA/治理反馈，避免规则和模型继续放大误差。", summary.qa_queue.unresolved_feedback_count)}</li>
+                </ol>
+            </div>
+            <div>
+                <p class="ops-section-label">{"看板边界"}</p>
+                <p class="muted">{"运营仪表盘只回答今天哪里需要人处理；进件分流去理赔队列，证据判断去调查工作台，配置变更去质控与治理。"}</p>
+            </div>
+        </div>
+    }
+}
+
 fn dashboard_body(summary: &DashboardSummary) -> Html {
-    let precision     = summary.rule_governance.precision;
-    let sla_rate      = 1.0 - summary.case_sla.sla_breach_rate;
-    let sla_label     = format!("{:.1}%", sla_rate * 100.0);
-    let prec_label    = percent_label(precision);
-    let prec_tone     = precision_tone(precision);
+    let precision = summary.rule_governance.precision;
+    let sla_rate = 1.0 - summary.case_sla.sla_breach_rate;
+    let sla_label = format!("{:.1}%", sla_rate * 100.0);
+    let prec_label = percent_label(precision);
+    let prec_tone = precision_tone(precision);
 
     html! {
         <>
@@ -138,10 +185,16 @@ fn dashboard_body(summary: &DashboardSummary) -> Html {
 
             // ── Row 2 KPIs ──────────────────────────────────────────────
             <div class="ops-dashboard-grid">
-                { kpi_card("规则命中", summary.rule_hits, "neutral")   }
-                { kpi_card("精准率",   prec_label,        prec_tone)   }
-                { kpi_card("SLA 达标率", sla_label,       "neutral")   }
+            { kpi_card("规则命中", summary.rule_hits, "neutral")   }
+            { kpi_card("精准率",   prec_label,        prec_tone)   }
+            { kpi_card("SLA 达标率", sla_label,       "neutral")   }
             </div>
+
+            // ── Operational watchlist ───────────────────────────────────
+            { operational_watch_section(summary) }
+
+            // ── Next actions ────────────────────────────────────────────
+            { next_action_section(summary) }
 
             // ── Risk distribution ────────────────────────────────────────
             { rag_distribution_section(summary) }
@@ -156,20 +209,20 @@ fn dashboard_body(summary: &DashboardSummary) -> Html {
 
 #[function_component(OpsDashboardPage)]
 pub fn ops_dashboard_page() -> Html {
-    let api_key      = use_api_key();
+    let api_key = use_api_key();
     let summary_state = use_state(|| ApiState::<DashboardSummary>::Idle);
 
     // Auto-load on mount
     {
-        let api_key       = api_key.clone();
+        let api_key = api_key.clone();
         let summary_state = summary_state.clone();
         use_effect_with((), move |_| {
-            let api_key       = (*api_key).clone();
+            let api_key = (*api_key).clone();
             let summary_state = summary_state.clone();
             summary_state.set(ApiState::Loading);
             spawn_local(async move {
                 summary_state.set(match get_dashboard_summary(api_key).await {
-                    Ok(s)  => ApiState::Ready(s),
+                    Ok(s) => ApiState::Ready(s),
                     Err(e) => ApiState::Failed(e),
                 });
             });
@@ -179,15 +232,15 @@ pub fn ops_dashboard_page() -> Html {
 
     // Refresh callback
     let refresh = {
-        let api_key       = api_key.clone();
+        let api_key = api_key.clone();
         let summary_state = summary_state.clone();
         Callback::from(move |_: MouseEvent| {
-            let api_key       = (*api_key).clone();
+            let api_key = (*api_key).clone();
             let summary_state = summary_state.clone();
             summary_state.set(ApiState::Loading);
             spawn_local(async move {
                 summary_state.set(match get_dashboard_summary(api_key).await {
-                    Ok(s)  => ApiState::Ready(s),
+                    Ok(s) => ApiState::Ready(s),
                     Err(e) => ApiState::Failed(e),
                 });
             });
@@ -203,7 +256,7 @@ pub fn ops_dashboard_page() -> Html {
             <div class="ops-page-header">
                 <div>
                     <h2>{"运营仪表盘"}</h2>
-                    <p class="muted">{ today_label() }</p>
+                    <p class="muted">{ format!("{} · 看今日优先级、SLA 风险、队列负载与治理异常", today_label()) }</p>
                 </div>
                 <button onclick={refresh} disabled={loading}>
                     {if loading { "刷新中..." } else { "刷新" }}

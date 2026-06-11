@@ -1,11 +1,11 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::formatting::*;
-use yew::prelude::*;
-use wasm_bindgen_futures::spawn_local;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use serde_json::json;
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 // ── Filter kind ──────────────────────────────────────────────────────────────
 
@@ -21,33 +21,37 @@ enum Filter {
 impl Filter {
     fn label(self) -> &'static str {
         match self {
-            Filter::All     => "全部",
-            Filter::High    => "🔴 高风险",
-            Filter::Amber   => "🟡 可疑",
-            Filter::Low     => "🟢 低风险",
+            Filter::All => "全部",
+            Filter::High => "高风险",
+            Filter::Amber => "可疑",
+            Filter::Low => "低风险",
             Filter::Pending => "待处理",
         }
     }
 
     fn slug(self) -> &'static str {
         match self {
-            Filter::All     => "all",
-            Filter::High    => "red",
-            Filter::Amber   => "amber",
-            Filter::Low     => "green",
+            Filter::All => "all",
+            Filter::High => "red",
+            Filter::Amber => "amber",
+            Filter::Low => "green",
             Filter::Pending => "pending",
         }
     }
 
     fn matches(self, lead: &LeadRecord) -> bool {
         match self {
-            Filter::All     => true,
-            Filter::High    => lead.rag.eq_ignore_ascii_case("red"),
-            Filter::Amber   => lead.rag.eq_ignore_ascii_case("amber") || lead.rag.eq_ignore_ascii_case("yellow"),
-            Filter::Low     => lead.rag.eq_ignore_ascii_case("green"),
-            Filter::Pending => lead.status.eq_ignore_ascii_case("pending")
-                            || lead.status.eq_ignore_ascii_case("triage")
-                            || lead.status.eq_ignore_ascii_case("new"),
+            Filter::All => true,
+            Filter::High => lead.rag.eq_ignore_ascii_case("red"),
+            Filter::Amber => {
+                lead.rag.eq_ignore_ascii_case("amber") || lead.rag.eq_ignore_ascii_case("yellow")
+            }
+            Filter::Low => lead.rag.eq_ignore_ascii_case("green"),
+            Filter::Pending => {
+                lead.status.eq_ignore_ascii_case("pending")
+                    || lead.status.eq_ignore_ascii_case("triage")
+                    || lead.status.eq_ignore_ascii_case("new")
+            }
         }
     }
 }
@@ -64,23 +68,23 @@ const FILTERS: &[Filter] = &[
 
 fn rag_tone(rag: &str) -> &'static str {
     match rag.trim().to_ascii_uppercase().as_str() {
-        "RED"              => "high",
+        "RED" => "high",
         "AMBER" | "YELLOW" => "medium",
-        _                  => "low",
+        _ => "low",
     }
 }
 
 fn risk_badge_html(rag: &str) -> Html {
-    let tone  = rag_tone(rag);
+    let tone = rag_tone(rag);
     let label = rag_label(rag);
     html! { <span class={classes!("risk-badge", tone)}>{label}</span> }
 }
 
 fn outcome_badge_html(rag: &str) -> Html {
     let (tone, label) = match rag.trim().to_ascii_uppercase().as_str() {
-        "RED"              => ("auto-deny", "建议拒赔/转审"),
-        "AMBER" | "YELLOW" => ("manual",    "人工审核"),
-        _                  => ("straight",  "直接放行"),
+        "RED" => ("auto-deny", "建议拒付复核"),
+        "AMBER" | "YELLOW" => ("manual", "人工审核"),
+        _ => ("straight", "低风险归档"),
     };
     html! { <span class={classes!("outcome-badge", tone)}>{label}</span> }
 }
@@ -88,35 +92,48 @@ fn outcome_badge_html(rag: &str) -> Html {
 fn status_badge_html(status: &str) -> Html {
     let tone = match status.to_ascii_lowercase().as_str() {
         "triage" | "pending" | "new" => "warning",
-        "rejected" | "closed"        => "neutral",
-        "investigating" | "open"     => "info",
-        _                            => "neutral",
+        "rejected" | "closed" => "neutral",
+        "investigating" | "open" => "info",
+        _ => "neutral",
     };
     html! { <span class={classes!("status-token", tone)}>{business_label(status)}</span> }
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max])
+        format!("{}…", s.chars().take(max).collect::<String>())
     }
 }
 
 // Compute KPI values from leads
-fn kpi_total(leads: &[LeadRecord]) -> usize { leads.len() }
-fn kpi_high(leads: &[LeadRecord])  -> usize { leads.iter().filter(|l| l.rag.eq_ignore_ascii_case("red")).count() }
+fn kpi_total(leads: &[LeadRecord]) -> usize {
+    leads.len()
+}
+fn kpi_high(leads: &[LeadRecord]) -> usize {
+    leads
+        .iter()
+        .filter(|l| l.rag.eq_ignore_ascii_case("red"))
+        .count()
+}
 fn kpi_pending(leads: &[LeadRecord]) -> usize {
-    leads.iter().filter(|l| {
-        let s = l.status.to_ascii_lowercase();
-        s == "triage" || s == "pending" || s == "new"
-    }).count()
+    leads
+        .iter()
+        .filter(|l| {
+            let s = l.status.to_ascii_lowercase();
+            s == "triage" || s == "pending" || s == "new"
+        })
+        .count()
 }
 fn kpi_processed(leads: &[LeadRecord]) -> usize {
-    leads.iter().filter(|l| {
-        let s = l.status.to_ascii_lowercase();
-        s == "closed" || s == "rejected" || s == "confirmed"
-    }).count()
+    leads
+        .iter()
+        .filter(|l| {
+            let s = l.status.to_ascii_lowercase();
+            s == "closed" || s == "rejected" || s == "confirmed"
+        })
+        .count()
 }
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
@@ -130,7 +147,7 @@ fn page_header(
         <div class="dashboard-header">
             <div>
                 <h2>{"理赔队列"}</h2>
-                <p class="muted">{"今日 TPA 进件，按风险等级排序"}</p>
+                <p class="muted">{"今日 TPA 进件分流：确认风险、补证据、转调查；不在此页做最终赔付裁决。"}</p>
             </div>
             <button onclick={refresh} disabled={loading}>
                 {if loading { "刷新中..." } else { "刷新" }}
@@ -272,21 +289,22 @@ fn detail_panel(
     let ev_count = lead.evidence_refs.len();
 
     // Evidence-refs as proxy for breakdown bars (rule/model/anomaly split)
-    let rule_count    = ev_count.saturating_sub(0).min(ev_count);
-    let model_count   = (ev_count / 2).max(1);
+    let rule_count = ev_count.saturating_sub(0).min(ev_count);
+    let model_count = (ev_count / 2).max(1);
     let anomaly_count = (ev_count / 3).max(0);
 
     // Signal cards from splitting the reason text
-    let signals: Vec<&str> = lead.reason
+    let signals: Vec<&str> = lead
+        .reason
         .split(|c| c == ';' || c == ',')
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .collect();
 
     let recommendation = match lead.rag.to_ascii_uppercase().as_str() {
-        "RED"              => "建议转审核或拒赔",
+        "RED" => "建议拒付复核或转人工调查",
         "AMBER" | "YELLOW" => "建议人工审核",
-        _                  => "建议直接放行",
+        _ => "建议低风险归档",
     };
 
     let loading = matches!(&**triage_state, ApiState::Loading);
@@ -371,17 +389,17 @@ fn detail_panel(
                         class="btn-approve"
                         onclick={on_approve}
                         disabled={loading}
-                    >{"放行"}</button>
+                    >{"低风险归档"}</button>
                     <button
                         class="btn-deny"
                         onclick={on_deny}
                         disabled={loading}
-                    >{"拒赔"}</button>
+                    >{"建议拒付复核"}</button>
                     <button
                         class="btn-review"
                         onclick={on_review_click}
                         disabled={loading}
-                    >{"转审核"}</button>
+                    >{"转人工调查"}</button>
                 </div>
 
                 // ── Triage mini-form (review) ─────────────────────────
@@ -419,7 +437,7 @@ fn detail_panel(
                                 onclick={on_confirm_review}
                                 disabled={loading}
                             >
-                                {if loading { "提交中..." } else { "确认转审核" }}
+                                {if loading { "提交中..." } else { "确认转人工调查" }}
                             </button>
                         </div>
                     }
@@ -433,7 +451,11 @@ fn detail_panel(
 }
 
 fn risk_bar(label: &str, value: usize, max: usize, tone: &str) -> Html {
-    let pct = if max == 0 { 0.0 } else { (value as f64 / max as f64) * 100.0 };
+    let pct = if max == 0 {
+        0.0
+    } else {
+        (value as f64 / max as f64) * 100.0
+    };
     let width = format!("{:.0}%", pct.clamp(4.0, 100.0));
     let tone = tone.to_string();
     html! {
@@ -451,24 +473,24 @@ fn risk_bar(label: &str, value: usize, max: usize, tone: &str) -> Html {
 
 #[function_component(ClaimsQueuePage)]
 pub fn claims_queue_page() -> Html {
-    let api_key            = use_api_key();
-    let snapshot_state     = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
-    let active_filter      = use_state(|| Filter::All);
-    let selected_lead_id   = use_state(String::new);
-    let show_review_form   = use_state(|| false);
-    let triage_assignee    = use_state(|| "investigator-1".to_string());
-    let triage_notes       = use_state(|| "Routed from Claims Queue.".to_string());
-    let triage_state       = use_state(|| ApiState::<TriageLeadRecord>::Idle);
-    let confirm_msg        = use_state(|| Option::<String>::None);
+    let api_key = use_api_key();
+    let snapshot_state = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
+    let active_filter = use_state(|| Filter::All);
+    let selected_lead_id = use_state(String::new);
+    let show_review_form = use_state(|| false);
+    let triage_assignee = use_state(|| "investigator-1".to_string());
+    let triage_notes = use_state(|| "Routed from Claims Queue.".to_string());
+    let triage_state = use_state(|| ApiState::<TriageLeadRecord>::Idle);
+    let confirm_msg = use_state(|| Option::<String>::None);
 
     // Auto-load on mount + auto-select first lead
     {
-        let api_key          = api_key.clone();
-        let snapshot_state   = snapshot_state.clone();
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
         let selected_lead_id = selected_lead_id.clone();
         use_effect_with((), move |_| {
-            let api_key          = (*api_key).clone();
-            let snapshot_state   = snapshot_state.clone();
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
             let selected_lead_id = selected_lead_id.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
@@ -480,7 +502,7 @@ pub fn claims_queue_page() -> Html {
                     }
                 }
                 snapshot_state.set(match result {
-                    Ok(s)  => ApiState::Ready(s),
+                    Ok(s) => ApiState::Ready(s),
                     Err(e) => ApiState::Failed(e),
                 });
             });
@@ -490,15 +512,15 @@ pub fn claims_queue_page() -> Html {
 
     // Refresh callback
     let refresh = {
-        let api_key        = api_key.clone();
+        let api_key = api_key.clone();
         let snapshot_state = snapshot_state.clone();
         Callback::from(move |_: MouseEvent| {
-            let api_key        = (*api_key).clone();
+            let api_key = (*api_key).clone();
             let snapshot_state = snapshot_state.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
                 snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
-                    Ok(s)  => ApiState::Ready(s),
+                    Ok(s) => ApiState::Ready(s),
                     Err(e) => ApiState::Failed(e),
                 });
             });
@@ -507,7 +529,9 @@ pub fn claims_queue_page() -> Html {
 
     // Derive sorted, filtered lead list
     let filtered_leads: Vec<LeadRecord> = if let ApiState::Ready(snap) = &*snapshot_state {
-        let mut leads: Vec<LeadRecord> = snap.leads.iter()
+        let mut leads: Vec<LeadRecord> = snap
+            .leads
+            .iter()
             .filter(|l| active_filter.matches(l))
             .cloned()
             .collect();
@@ -527,26 +551,29 @@ pub fn claims_queue_page() -> Html {
     // Triage action factory
     // evidence_refs from the selected lead are passed in to satisfy backend validation
     let do_triage = {
-        let api_key          = api_key.clone();
-        let snapshot_state   = snapshot_state.clone();
-        let triage_state     = triage_state.clone();
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        let triage_state = triage_state.clone();
         let selected_lead_id = selected_lead_id.clone();
-        let confirm_msg      = confirm_msg.clone();
+        let confirm_msg = confirm_msg.clone();
         let show_review_form = show_review_form.clone();
         move |decision: String, notes: String, assignee: String, evidence_refs: Vec<String>| {
             let id = (*selected_lead_id).clone();
-            if id.is_empty() { return; }
-            let api_key          = (*api_key).clone();
-            let snapshot_state   = snapshot_state.clone();
-            let triage_state     = triage_state.clone();
-            let confirm_msg      = confirm_msg.clone();
+            if id.is_empty() {
+                return;
+            }
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            let triage_state = triage_state.clone();
+            let confirm_msg = confirm_msg.clone();
             let show_review_form = show_review_form.clone();
             // Backend requires non-empty evidence_refs; fall back to claim ref if empty
             let refs = if evidence_refs.is_empty() {
                 vec![format!("leads:{id}")]
             } else {
                 // Keep only non-PII refs (exclude raw personal data paths)
-                evidence_refs.into_iter()
+                evidence_refs
+                    .into_iter()
                     .filter(|r| !r.is_empty())
                     .take(10)
                     .collect()
@@ -564,15 +591,12 @@ pub fn claims_queue_page() -> Html {
             spawn_local(async move {
                 match post_triage_lead(api_key.clone(), id, payload).await {
                     Ok(record) => {
-                        let msg = format!(
-                            "理赔 {} 已处理",
-                            record.lead.claim_id,
-                        );
+                        let msg = format!("理赔 {} 已处理", record.lead.claim_id,);
                         triage_state.set(ApiState::Ready(record));
                         confirm_msg.set(Some(msg));
                         show_review_form.set(false);
                         snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
-                            Ok(s)  => ApiState::Ready(s),
+                            Ok(s) => ApiState::Ready(s),
                             Err(e) => ApiState::Failed(e),
                         });
                     }
@@ -582,34 +606,43 @@ pub fn claims_queue_page() -> Html {
         }
     };
 
-    // btn-approve: straight-through
+    // btn-approve: close low-risk lead
     let on_approve = {
-        let do_triage     = do_triage.clone();
+        let do_triage = do_triage.clone();
         let selected_lead = selected_lead.clone();
-        let triage_state  = triage_state.clone();
+        let triage_state = triage_state.clone();
         Callback::from(move |_: MouseEvent| {
-            let Some(ref lead) = selected_lead else { return; };
-            if matches!(*triage_state, ApiState::Loading) { return; }
+            let Some(ref lead) = selected_lead else {
+                return;
+            };
+            if matches!(*triage_state, ApiState::Loading) {
+                return;
+            }
             do_triage(
                 "reject_lead".to_string(),
-                "Claims Queue: straight-through — low risk, no FWA signals.".to_string(),
-                "system-auto".to_string(),
+                "Claims Queue: low-risk lead archived; no material FWA signal found in triage."
+                    .to_string(),
+                "triage-operator".to_string(),
                 lead.evidence_refs.clone(),
             );
         })
     };
 
-    // btn-deny: hard deny
+    // btn-deny: close lead with denial-review recommendation
     let on_deny = {
-        let do_triage     = do_triage.clone();
+        let do_triage = do_triage.clone();
         let selected_lead = selected_lead.clone();
-        let triage_state  = triage_state.clone();
+        let triage_state = triage_state.clone();
         Callback::from(move |_: MouseEvent| {
-            let Some(ref lead) = selected_lead else { return; };
-            if matches!(*triage_state, ApiState::Loading) { return; }
+            let Some(ref lead) = selected_lead else {
+                return;
+            };
+            if matches!(*triage_state, ApiState::Loading) {
+                return;
+            }
             do_triage(
                 "reject_lead".to_string(),
-                "Claims Queue: deny — deterministic rule criteria exceeded.".to_string(),
+                "Claims Queue: denial-review recommendation recorded; deterministic rule criteria exceeded.".to_string(),
                 "denial-officer".to_string(),
                 lead.evidence_refs.clone(),
             );
@@ -624,16 +657,22 @@ pub fn claims_queue_page() -> Html {
 
     // confirm transfer to case
     let on_confirm_review = {
-        let do_triage       = do_triage.clone();
-        let selected_lead   = selected_lead.clone();
-        let triage_state    = triage_state.clone();
+        let do_triage = do_triage.clone();
+        let selected_lead = selected_lead.clone();
+        let triage_state = triage_state.clone();
         let triage_assignee = triage_assignee.clone();
-        let triage_notes    = triage_notes.clone();
+        let triage_notes = triage_notes.clone();
         Callback::from(move |_: MouseEvent| {
-            let Some(ref lead) = selected_lead else { return; };
-            if matches!(*triage_state, ApiState::Loading) { return; }
+            let Some(ref lead) = selected_lead else {
+                return;
+            };
+            if matches!(*triage_state, ApiState::Loading) {
+                return;
+            }
             let notes = (*triage_notes).clone();
-            if notes.trim().is_empty() { return; }
+            if notes.trim().is_empty() {
+                return;
+            }
             do_triage(
                 "open_case".to_string(),
                 notes,

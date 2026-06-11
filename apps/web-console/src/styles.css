@@ -236,6 +236,28 @@ button {
   color: #d8ebff;
 }
 
+.sidebar-workflow-note {
+  display: grid;
+  gap: 6px;
+  margin: 4px 4px 0;
+  padding: 10px;
+  color: #cfe4ff;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(185, 214, 247, 0.16);
+  border-radius: 8px;
+}
+
+.sidebar-workflow-note strong {
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.sidebar-workflow-note span {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #b9cdea;
+}
+
 .workspace {
   min-width: 0;
   padding: 16px 18px 30px;
@@ -6457,6 +6479,11 @@ pre {
     grid-template-columns: 1fr;
   }
 
+  .ops-command-panel,
+  .governance-card-grid {
+    grid-template-columns: 1fr;
+  }
+
   .evidence-visual-board,
   .runtime-visual-cockpit,
   .pilot-runway-proof,
@@ -7021,6 +7048,16 @@ pre {
   line-height: 1;
 }
 
+.ops-kpi-note {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .ops-kpi-card.highlight strong { color: var(--red); }
 .ops-kpi-card.positive strong  { color: #1a7a3c; }
 
@@ -7267,6 +7304,37 @@ pre {
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
 button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.ops-command-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(15,46,89,0.05);
+}
+
+.ops-command-panel ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--graphite);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ops-command-panel p:last-child {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.governance-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 
 /* ── Section label ── */
 .ops-section-label {

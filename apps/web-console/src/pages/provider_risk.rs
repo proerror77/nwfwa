@@ -5,8 +5,8 @@ use crate::state::{use_api_key, ApiState};
 use crate::types::*;
 use std::collections::HashMap;
 use std::f64::consts::PI;
-use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
@@ -43,7 +43,10 @@ pub fn provider_risk_page() -> Html {
 
     {
         let load = load.clone();
-        use_effect_with((), move |_| { load.emit(()); || () });
+        use_effect_with((), move |_| {
+            load.emit(());
+            || ()
+        });
     }
 
     html! {
@@ -179,7 +182,8 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
     // Map member → provider with highest-risk lead
     let mut member_primary: HashMap<String, (String, u8)> = HashMap::new();
     for lead in &data.leads {
-        let entry = member_primary.entry(lead.member_id.clone())
+        let entry = member_primary
+            .entry(lead.member_id.clone())
             .or_insert((lead.provider_id.clone(), lead.risk_score));
         if lead.risk_score > entry.1 {
             *entry = (lead.provider_id.clone(), lead.risk_score);
@@ -199,18 +203,20 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
     }
 
     for (member_id, count) in &seen_members {
-        let (primary_pid, _) = member_primary.get(member_id)
-            .cloned()
-            .unwrap_or_default();
+        let (primary_pid, _) = member_primary.get(member_id).cloned().unwrap_or_default();
 
         // Find provider node position
-        let (px, py) = nodes.iter()
+        let (px, py) = nodes
+            .iter()
             .find(|n| n.id == primary_pid)
             .map(|n| (n.x, n.y))
             .unwrap_or((cx, cy));
 
         // Spread members around their provider at a fixed offset radius
-        let total = provider_member_count.get(&primary_pid).copied().unwrap_or(1);
+        let total = provider_member_count
+            .get(&primary_pid)
+            .copied()
+            .unwrap_or(1);
         let idx = *provider_member_idx.entry(primary_pid.clone()).or_insert(0);
         *provider_member_idx.get_mut(&primary_pid).unwrap() += 1;
 
@@ -246,7 +252,8 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
     // ── Edges ─────────────────────────────────────────────────────────────────
 
     // Provider ↔ Member edges (deduplicated: one edge per unique pair)
-    let mut pm_pairs: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+    let mut pm_pairs: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::new();
     for lead in &data.leads {
         let key = (lead.provider_id.clone(), lead.member_id.clone());
         if pm_pairs.insert(key) {
@@ -266,7 +273,9 @@ fn build_graph(data: &GraphNetworkData, w: f64, h: f64) -> (Vec<GraphNode>, Vec<
         for j in (i + 1)..sorted_providers.len() {
             let pa = &sorted_providers[i];
             let pb = &sorted_providers[j];
-            let shared: Vec<_> = pa.outlier_flags.iter()
+            let shared: Vec<_> = pa
+                .outlier_flags
+                .iter()
                 .filter(|f| pb.outlier_flags.contains(f))
                 .collect();
             if !shared.is_empty() {
@@ -292,14 +301,20 @@ fn rand_jitter(seed: f64) -> f64 {
 }
 
 fn short_id(id: &str) -> String {
-    if id.len() > 12 { format!("{}…", &id[..12]) } else { id.to_string() }
+    if id.chars().count() > 12 {
+        format!("{}…", id.chars().take(12).collect::<String>())
+    } else {
+        id.to_string()
+    }
 }
 
 // ─── Force-directed layout (Fruchterman-Reingold, simplified) ────────────────
 
 fn apply_forces(nodes: &mut Vec<GraphNode>, edges: &[GraphEdge], w: f64, h: f64, iter: u32) {
     let n = nodes.len();
-    if n == 0 { return; }
+    if n == 0 {
+        return;
+    }
 
     // Cooling temperature — starts high, decreases with iteration
     let temp = (1.0 - (iter as f64 / 80.0).min(0.95)) * 12.0;
@@ -311,7 +326,9 @@ fn apply_forces(nodes: &mut Vec<GraphNode>, edges: &[GraphEdge], w: f64, h: f64,
 
     for i in 0..n {
         for j in 0..n {
-            if i == j { continue; }
+            if i == j {
+                continue;
+            }
             let dx = positions[i].0 - positions[j].0;
             let dy = positions[i].1 - positions[j].1;
             let dist = (dx * dx + dy * dy).sqrt().max(1.0);
@@ -322,13 +339,19 @@ fn apply_forces(nodes: &mut Vec<GraphNode>, edges: &[GraphEdge], w: f64, h: f64,
     }
 
     // Attraction along edges
-    let id_to_idx: HashMap<String, usize> = nodes.iter().enumerate()
+    let id_to_idx: HashMap<String, usize> = nodes
+        .iter()
+        .enumerate()
         .map(|(i, n)| (n.id.clone(), i))
         .collect();
 
     for edge in edges {
-        let Some(&si) = id_to_idx.get(&edge.source) else { continue };
-        let Some(&ti) = id_to_idx.get(&edge.target) else { continue };
+        let Some(&si) = id_to_idx.get(&edge.source) else {
+            continue;
+        };
+        let Some(&ti) = id_to_idx.get(&edge.target) else {
+            continue;
+        };
         let dx = positions[si].0 - positions[ti].0;
         let dy = positions[si].1 - positions[ti].1;
         let dist = (dx * dx + dy * dy).sqrt().max(1.0);
@@ -351,7 +374,9 @@ fn apply_forces(nodes: &mut Vec<GraphNode>, edges: &[GraphEdge], w: f64, h: f64,
 
     // Apply forces with temperature damping
     for (i, node) in nodes.iter_mut().enumerate() {
-        let len = (forces[i].0 * forces[i].0 + forces[i].1 * forces[i].1).sqrt().max(0.001);
+        let len = (forces[i].0 * forces[i].0 + forces[i].1 * forces[i].1)
+            .sqrt()
+            .max(0.001);
         let clamped = len.min(temp);
         node.x += (forces[i].0 / len) * clamped;
         node.y += (forces[i].1 / len) * clamped;
@@ -404,7 +429,12 @@ fn force_graph(props: &ForceGraphProps) -> Html {
         }
     });
 
-    let max_claims = nodes.iter().map(|n| n.claim_count).max().unwrap_or(1).max(1);
+    let max_claims = nodes
+        .iter()
+        .map(|n| n.claim_count)
+        .max()
+        .unwrap_or(1)
+        .max(1);
 
     html! {
         <div style="display:grid;grid-template-columns:1fr 360px;gap:14px;align-items:start;">
@@ -700,9 +730,7 @@ fn provider_detail_panel(props: &DetailPanelProps) -> Html {
 }
 
 fn member_detail_panel(node: &GraphNode, leads: &[LeadRecord]) -> Html {
-    let member_leads: Vec<_> = leads.iter()
-        .filter(|l| l.member_id == node.id)
-        .collect();
+    let member_leads: Vec<_> = leads.iter().filter(|l| l.member_id == node.id).collect();
 
     html! {
         <section style="background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;">
@@ -793,7 +821,15 @@ fn provider_color(tier: &str, score: u8) -> &'static str {
         "high" | "critical" => "#ff4d6d",
         "medium" => "#f59e0b",
         "low" => "#34d399",
-        _ => if score >= 60 { "#ff4d6d" } else if score >= 30 { "#f59e0b" } else { "#34d399" },
+        _ => {
+            if score >= 60 {
+                "#ff4d6d"
+            } else if score >= 30 {
+                "#f59e0b"
+            } else {
+                "#34d399"
+            }
+        }
     }
 }
 
@@ -809,21 +845,21 @@ fn rgb_from_hex(hex: &str) -> &'static str {
 
 fn fmt_flag(flag: &str) -> String {
     match flag {
-        "confirmed_fwa_history"             => "确认 FWA 历史".into(),
+        "confirmed_fwa_history" => "确认 FWA 历史".into(),
         "diagnosis_procedure_mismatch_rate" => "诊断/项目不匹配".into(),
-        "high_cost_item_ratio"              => "高费项目占比".into(),
-        "peer_amount_p97"                   => "金额 P97 异常".into(),
-        "peer_amount_p96"                   => "金额 P96 异常".into(),
-        "peer_frequency_p96"                => "频率 P96 异常".into(),
-        "peer_frequency_p97"                => "频率 P97 异常".into(),
-        _                                   => flag.replace('_', " "),
+        "high_cost_item_ratio" => "高费项目占比".into(),
+        "peer_amount_p97" => "金额 P97 异常".into(),
+        "peer_amount_p96" => "金额 P96 异常".into(),
+        "peer_frequency_p96" => "频率 P96 异常".into(),
+        "peer_frequency_p97" => "频率 P97 异常".into(),
+        _ => flag.replace('_', " "),
     }
 }
 
 // Keep for compatibility with other pages (routing_policies, model_ui_helpers, etc.)
 pub(crate) fn provider_signal_row(label: &str, value: &str, tone: &str) -> Html {
     let (bg, border) = match tone {
-        "danger"  => ("var(--red-soft)",   "#d8284f"),
+        "danger" => ("var(--red-soft)", "#d8284f"),
         "warning" => ("var(--amber-soft)", "#b7791f"),
         "success" | "strong" => ("#e8f7ee", "#1a7a3c"),
         _ => ("var(--surface-muted)", "var(--line-strong)"),
