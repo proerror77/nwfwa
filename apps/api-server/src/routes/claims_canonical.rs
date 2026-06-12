@@ -157,6 +157,7 @@ pub(super) fn canonical_score_input(
             external_claim_id,
             claim_amount,
             currency,
+            claim_amount_peer_percentile: None,
             service_date,
             diagnosis_code: Some(diagnosis_code),
             items: Some(items),

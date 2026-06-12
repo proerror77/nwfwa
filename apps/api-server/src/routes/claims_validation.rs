@@ -12,6 +12,9 @@ pub(super) fn validate_score_request_contract(request: &ScoreClaimRequest) -> Re
     if let Some(claim_id) = &request.claim_id {
         require_nonblank(claim_id, "claim_id")?;
     }
+    if let Some(peer_percentile) = request.claim_amount_peer_percentile {
+        require_percentile(peer_percentile, "claim_amount_peer_percentile")?;
+    }
     if let Some(inbox_run_id) = &request.inbox_run_id {
         require_nonblank(inbox_run_id, "inbox_run_id")?;
     }
@@ -77,6 +80,9 @@ fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiErro
     require_nonblank(&payload.currency, "claim.currency")?;
     if let Some(diagnosis_code) = &payload.diagnosis_code {
         require_nonblank(diagnosis_code, "claim.diagnosis_code")?;
+    }
+    if let Some(peer_percentile) = payload.claim_amount_peer_percentile {
+        require_percentile(peer_percentile, "claim.claim_amount_peer_percentile")?;
     }
     if let Some(items) = &payload.items {
         for item in items {
@@ -183,7 +189,7 @@ fn validate_provider_profile_payload(payload: &ProviderProfilePayload) -> Result
 fn validate_provider_profile_window_payload(
     payload: &ProviderProfileWindowPayload,
 ) -> Result<(), ApiError> {
-    if !matches!(payload.window_days, 30 | 90 | 180) {
+    if !matches!(payload.window_days, 30 | 90 | 365) {
         return invalid_score_field("provider_profile.windows.window_days");
     }
     require_nonnegative_decimal(
@@ -223,6 +229,12 @@ fn validate_provider_relationship_graph_payload(
         require_unit_interval(
             referral_concentration_score,
             "provider_relationships.referral_concentration_score",
+        )?;
+    }
+    if let Some(temporal_co_billing_score) = payload.temporal_co_billing_score {
+        require_unit_interval(
+            temporal_co_billing_score,
+            "provider_relationships.temporal_co_billing_score",
         )?;
     }
     if let Some(network_component_risk_score) = payload.network_component_risk_score {

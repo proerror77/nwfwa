@@ -189,6 +189,7 @@ impl From<ProviderRelationshipGraphPayload> for ProviderRelationshipGraphInput {
             high_risk_neighbor_ratio: value.high_risk_neighbor_ratio,
             provider_patient_overlap_score: value.provider_patient_overlap_score,
             referral_concentration_score: value.referral_concentration_score,
+            temporal_co_billing_score: value.temporal_co_billing_score,
             connected_confirmed_fwa_count: value.connected_confirmed_fwa_count,
             network_component_risk_score: value.network_component_risk_score,
             evidence_refs: value.evidence_refs.unwrap_or_default(),

@@ -164,6 +164,7 @@ async fn scores_spec_style_top_level_full_payload() {
         .body(Body::from(
             r#"{
               "source_system": "tpa-demo",
+              "claim_amount_peer_percentile": 95,
               "claim": {
                 "external_claim_id": "CLM-TOP-LEVEL",
                 "claim_amount": "8000",

@@ -1,5 +1,6 @@
 use api_server::repository::{
-    PersistedAuditEvent, PersistedScoringRun, PostgresScoringRepository, ScoringRepository,
+    ClaimsRepository, ModelsRepository, PersistedAuditEvent, PersistedScoringRun,
+    PostgresScoringRepository, RulesRepository,
 };
 use chrono::NaiveDate;
 use fwa_core::{

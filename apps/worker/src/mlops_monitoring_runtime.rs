@@ -2,6 +2,7 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, fs, path::Path};
 
+use super::mlops_monitoring_plan::compute_psi;
 use super::required_non_empty;
 
 pub(super) fn build_mlops_monitoring_artifact_publication_manifest(
@@ -75,10 +76,12 @@ pub(super) fn mlops_plan_job_output_uri(job: &serde_json::Value) -> Option<Strin
     })
 }
 
-pub(super) fn expected_mlops_runtime_job_kinds() -> [&'static str; 5] {
+pub(super) fn expected_mlops_runtime_job_kinds() -> [&'static str; 7] {
     [
         "shadow_traffic_evaluation",
         "drift_monitoring",
+        "feature_distribution_psi",
+        "rule_hit_rate_trend",
         "segment_fairness_review",
         "reviewer_disagreement_review",
         "label_delay_review",
@@ -89,6 +92,8 @@ pub(super) fn expected_mlops_runtime_report_file(job_kind: &str) -> Option<&'sta
     match job_kind {
         "shadow_traffic_evaluation" => Some("shadow_report.json"),
         "drift_monitoring" => Some("drift_report.json"),
+        "feature_distribution_psi" => Some("feature_psi_report.json"),
+        "rule_hit_rate_trend" => Some("rule_hit_rate_report.json"),
         "segment_fairness_review" => Some("fairness_report.json"),
         "reviewer_disagreement_review" => Some("reviewer_disagreement_report.json"),
         "label_delay_review" => Some("label_delay_report.json"),
@@ -155,6 +160,53 @@ pub(super) fn mlops_runtime_report_for_job(
             report["score_psi"] = serde_json::json!(0.05);
             report["max_feature_psi"] = serde_json::json!(0.08);
         }
+        "feature_distribution_psi" => {
+            report["status"] = serde_json::json!("stable");
+            report["feature"] = job
+                .get("feature")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!("claim_amount_peer_percentile"));
+            report["bucket_count"] = job
+                .get("bucket_count")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!(10));
+            report["psi"] = serde_json::json!(0.05);
+            report["thresholds"] = job.get("thresholds").cloned().unwrap_or_else(|| {
+                serde_json::json!({
+                    "stable_below": 0.10,
+                    "watch_below": 0.25
+                })
+            });
+            if let Some(monitoring_input) = monitoring_input {
+                if let (Some(baseline), Some(current)) = (
+                    f64_array(monitoring_input, "baseline"),
+                    f64_array(monitoring_input, "current"),
+                ) {
+                    let bucket_count = job
+                        .get("bucket_count")
+                        .and_then(|value| value.as_u64())
+                        .unwrap_or(10) as usize;
+                    let psi = compute_psi(&baseline, &current, bucket_count);
+                    report["psi"] = serde_json::json!(psi);
+                    report["status"] = serde_json::json!(if psi < 0.10 {
+                        "stable"
+                    } else if psi < 0.25 {
+                        "watch"
+                    } else {
+                        "alert"
+                    });
+                }
+            }
+        }
+        "rule_hit_rate_trend" => {
+            report["status"] = serde_json::json!("stable");
+            report["rules_evaluated"] = serde_json::json!(0);
+            report["alert_condition"] = job
+                .get("alert_condition")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!("hit_rate_7d < 0.5 * hit_rate_90d"));
+            report["rule_drift_alerts"] = serde_json::json!([]);
+        }
         "segment_fairness_review" => {
             report["segments"] = serde_json::json!([
                 {"segment_column": "provider_risk_tier", "segment_value": "low"},
@@ -207,6 +259,15 @@ fn apply_mlops_monitoring_input(
         report_object.insert("customer_data_bound".into(), serde_json::json!(true));
         report_object.insert("customer_data_required".into(), serde_json::json!(false));
     }
+}
+
+fn f64_array(input: &serde_json::Value, field: &str) -> Option<Vec<f64>> {
+    input.get(field)?.as_array().map(|values| {
+        values
+            .iter()
+            .filter_map(|value| value.as_f64())
+            .collect::<Vec<_>>()
+    })
 }
 
 fn is_protected_mlops_report_field(key: &str) -> bool {

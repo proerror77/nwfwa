@@ -1,6 +1,7 @@
 use fwa_core::assess_evidence_sufficiency;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use ulid::Ulid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SimilarCaseInput {
@@ -58,7 +59,7 @@ pub struct DeterministicInvestigator;
 
 impl DeterministicInvestigator {
     pub fn investigate(self, request: InvestigationRequest) -> InvestigationPackage {
-        let agent_run_id = format!("agent_{}", request.claim_id);
+        let agent_run_id = format!("agent_{}", Ulid::new());
         let findings = build_findings(&request);
         let mut evidence_refs = findings
             .iter()
@@ -240,6 +241,7 @@ mod tests {
 
         assert_eq!(package.decision_boundary, "assistive_only");
         assert!(package.agent_run_id.starts_with("agent_"));
+        assert!(!package.agent_run_id.contains("CLM-0287"));
         assert!(package.risk_summary.contains("CLM-0287"));
         assert!(!package.investigation_checklist.is_empty());
         assert_eq!(package.similar_cases[0].case_id, "KC-1001");
@@ -267,5 +269,24 @@ mod tests {
             .contains(&"retrieval:structured_signal_overlap".into()));
         assert!(!package.evidence_refs.is_empty());
         assert!(!package.qa_opinion_draft.contains("拒赔"));
+    }
+
+    #[test]
+    fn deterministic_investigator_uses_unique_run_ids_for_repeated_claims() {
+        let request = InvestigationRequest {
+            claim_id: "CLM-0287".into(),
+            risk_score: 87,
+            rag: "RED".into(),
+            scheme_family: "provider_peer_outlier".into(),
+            top_reasons: vec!["金额高于同病种同地区 P99".into()],
+            similar_cases: vec![],
+        };
+
+        let first = DeterministicInvestigator.investigate(request.clone());
+        let second = DeterministicInvestigator.investigate(request);
+
+        assert!(first.agent_run_id.starts_with("agent_"));
+        assert!(second.agent_run_id.starts_with("agent_"));
+        assert_ne!(first.agent_run_id, second.agent_run_id);
     }
 }

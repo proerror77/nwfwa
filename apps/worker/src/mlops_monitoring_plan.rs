@@ -43,6 +43,25 @@ pub fn build_mlops_monitoring_plan(
                 "drift_report_uri": format!("{artifact_dir}/drift_report.json")
             },
             {
+                "job_kind": "feature_distribution_psi",
+                "input": "monthly_claim_amount_peer_percentile_distribution",
+                "feature": "claim_amount_peer_percentile",
+                "bucket_count": 10,
+                "thresholds": {
+                    "stable_below": 0.10,
+                    "watch_below": 0.25
+                },
+                "output_ref": "feature_distribution_psi_reports:<feature_psi_report_uri>",
+                "feature_psi_report_uri": format!("{artifact_dir}/feature_psi_report.json")
+            },
+            {
+                "job_kind": "rule_hit_rate_trend",
+                "input": "daily_rule_hit_rates",
+                "alert_condition": "hit_rate_7d < 0.5 * hit_rate_90d",
+                "output_ref": "rule_drift_reports:<rule_hit_rate_report_uri>",
+                "rule_hit_rate_report_uri": format!("{artifact_dir}/rule_hit_rate_report.json")
+            },
+            {
                 "job_kind": "segment_fairness_review",
                 "input": "customer_approved_segments",
                 "output_ref": "model_fairness_reports:<fairness_report_uri>",
@@ -62,4 +81,37 @@ pub fn build_mlops_monitoring_plan(
             }
         ]
     }))
+}
+
+pub fn compute_psi(baseline: &[f64], current: &[f64], n_bins: usize) -> f64 {
+    if baseline.is_empty() || current.is_empty() || n_bins == 0 {
+        return 0.0;
+    }
+    let mut baseline_counts = vec![0_u32; n_bins];
+    let mut current_counts = vec![0_u32; n_bins];
+    for value in baseline {
+        baseline_counts[psi_bucket(*value, n_bins)] += 1;
+    }
+    for value in current {
+        current_counts[psi_bucket(*value, n_bins)] += 1;
+    }
+
+    let baseline_total = baseline.len() as f64;
+    let current_total = current.len() as f64;
+    let epsilon = 1.0e-6_f64;
+    baseline_counts
+        .iter()
+        .zip(current_counts.iter())
+        .map(|(baseline_count, current_count)| {
+            let expected = (*baseline_count as f64 / baseline_total).max(epsilon);
+            let actual = (*current_count as f64 / current_total).max(epsilon);
+            (actual - expected) * (actual / expected).ln()
+        })
+        .sum()
+}
+
+fn psi_bucket(value: f64, n_bins: usize) -> usize {
+    let clamped = value.clamp(0.0, 100.0);
+    let bucket_width = 100.0 / n_bins as f64;
+    ((clamped / bucket_width).floor() as usize).min(n_bins - 1)
 }

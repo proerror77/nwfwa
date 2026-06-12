@@ -151,6 +151,12 @@ pub(super) fn scoring_request_schemas() -> Value {
                 "claim": {
                     "$ref": "#/components/schemas/FullClaimPayload"
                 },
+                "claim_amount_peer_percentile": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "Optional real peer percentile from upstream peer-group statistics. The API does not derive this from claim amount or policy limit."
+                },
                 "review_mode": {
                     "type": "string",
                     "enum": ["pre_payment", "post_payment"],
@@ -208,6 +214,12 @@ pub(super) fn scoring_request_schemas() -> Value {
                     "type": "string",
                     "format": "decimal",
                     "description": "Positive decimal string."
+                },
+                "claim_amount_peer_percentile": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "Optional real peer percentile from upstream peer-group statistics. If omitted, claim_amount_peer_percentile is not generated."
                 },
                 "currency": {
                     "type": "string",
@@ -411,7 +423,7 @@ pub(super) fn scoring_request_schemas() -> Value {
                 "false_positive_count"
             ],
             "properties": {
-                "window_days": { "type": "integer", "enum": [30, 90, 180] },
+                "window_days": { "type": "integer", "enum": [30, 90, 365] },
                 "claim_count": { "type": "integer", "minimum": 0 },
                 "total_claim_amount": { "type": "string", "format": "decimal", "description": "Non-negative decimal string." },
                 "high_cost_item_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -434,6 +446,12 @@ pub(super) fn scoring_request_schemas() -> Value {
                 "high_risk_neighbor_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
                 "provider_patient_overlap_score": { "type": "number", "minimum": 0, "maximum": 1 },
                 "referral_concentration_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+                "temporal_co_billing_score": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Optional co-billing frequency for same-member short-window provider pairs."
+                },
                 "connected_confirmed_fwa_count": { "type": "integer", "minimum": 0 },
                 "network_component_risk_score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
                 "evidence_refs": {

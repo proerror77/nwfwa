@@ -1,4 +1,5 @@
 use super::*;
+use crate::mlops_monitoring_plan::compute_psi;
 
 #[test]
 fn builds_scheduled_mlops_monitoring_plan() {
@@ -22,21 +23,41 @@ fn builds_scheduled_mlops_monitoring_plan() {
     );
     assert_eq!(plan["jobs"][0]["job_kind"], "shadow_traffic_evaluation");
     assert_eq!(plan["jobs"][1]["job_kind"], "drift_monitoring");
-    assert_eq!(plan["jobs"][2]["job_kind"], "segment_fairness_review");
-    assert_eq!(plan["jobs"][3]["job_kind"], "reviewer_disagreement_review");
-    assert_eq!(plan["jobs"][4]["job_kind"], "label_delay_review");
+    assert_eq!(plan["jobs"][2]["job_kind"], "feature_distribution_psi");
+    assert_eq!(plan["jobs"][3]["job_kind"], "rule_hit_rate_trend");
+    assert_eq!(plan["jobs"][4]["job_kind"], "segment_fairness_review");
+    assert_eq!(plan["jobs"][5]["job_kind"], "reviewer_disagreement_review");
+    assert_eq!(plan["jobs"][6]["job_kind"], "label_delay_review");
     assert_eq!(
         plan["jobs"][1]["drift_report_uri"],
         "s3://fwa-models/baseline_fwa/0.2.0/drift_report.json"
     );
     assert_eq!(
-        plan["jobs"][3]["reviewer_disagreement_report_uri"],
+        plan["jobs"][5]["reviewer_disagreement_report_uri"],
         "s3://fwa-models/baseline_fwa/0.2.0/reviewer_disagreement_report.json"
     );
     assert_eq!(
-        plan["jobs"][4]["label_delay_report_uri"],
+        plan["jobs"][6]["label_delay_report_uri"],
         "s3://fwa-models/baseline_fwa/0.2.0/label_delay_report.json"
     );
+    assert_eq!(
+        plan["jobs"][2]["feature_psi_report_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0/feature_psi_report.json"
+    );
+    assert_eq!(
+        plan["jobs"][3]["rule_hit_rate_report_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0/rule_hit_rate_report.json"
+    );
+}
+
+#[test]
+fn computes_population_stability_index_for_percentile_buckets() {
+    let baseline = [5.0, 15.0, 25.0, 35.0, 45.0, 55.0, 65.0, 75.0, 85.0, 95.0];
+    let stable = [6.0, 14.0, 26.0, 34.0, 46.0, 54.0, 66.0, 74.0, 86.0, 94.0];
+    let shifted = [85.0, 86.0, 87.0, 88.0, 89.0, 90.0, 91.0, 92.0, 93.0, 94.0];
+
+    assert!(compute_psi(&baseline, &stable, 10) < 0.1);
+    assert!(compute_psi(&baseline, &shifted, 10) > 0.25);
 }
 
 #[test]
@@ -74,6 +95,8 @@ fn runs_mlops_monitoring_plan_runtime_report_producer() {
     assert!(root.join("runtime/index.json").is_file());
     assert!(root.join("runtime/shadow_report.json").is_file());
     assert!(root.join("runtime/drift_report.json").is_file());
+    assert!(root.join("runtime/feature_psi_report.json").is_file());
+    assert!(root.join("runtime/rule_hit_rate_report.json").is_file());
     assert!(root.join("runtime/fairness_report.json").is_file());
     assert!(root
         .join("runtime/reviewer_disagreement_report.json")
@@ -86,6 +109,23 @@ fn runs_mlops_monitoring_plan_runtime_report_producer() {
         "rust_worker_monitoring_plan_runner"
     );
     assert_eq!(drift["status"], "stable");
+    let feature_psi = read_json_report(
+        &root
+            .join("runtime/feature_psi_report.json")
+            .to_string_lossy(),
+    )
+    .expect("feature PSI report");
+    assert_eq!(feature_psi["feature"], "claim_amount_peer_percentile");
+    let rule_hit_rate = read_json_report(
+        &root
+            .join("runtime/rule_hit_rate_report.json")
+            .to_string_lossy(),
+    )
+    .expect("rule hit rate report");
+    assert_eq!(
+        rule_hit_rate["alert_condition"],
+        "hit_rate_7d < 0.5 * hit_rate_90d"
+    );
 }
 
 #[test]
@@ -101,6 +141,8 @@ fn runs_mlops_monitoring_plan_with_legacy_flat_plan_shape() {
         "jobs": [
             {"job_kind": "shadow_traffic_evaluation", "output_ref": "model_shadow_reports:<shadow_report_uri>", "shadow_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/shadow_report.json"},
             {"job_kind": "drift_monitoring", "output_ref": "model_drift_reports:<drift_report_uri>", "drift_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/drift_report.json"},
+            {"job_kind": "feature_distribution_psi", "output_ref": "feature_distribution_psi_reports:<feature_psi_report_uri>", "feature_psi_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/feature_psi_report.json"},
+            {"job_kind": "rule_hit_rate_trend", "output_ref": "rule_drift_reports:<rule_hit_rate_report_uri>", "rule_hit_rate_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/rule_hit_rate_report.json"},
             {"job_kind": "segment_fairness_review", "output_ref": "model_fairness_reports:<fairness_report_uri>", "fairness_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/fairness_report.json"},
             {"job_kind": "reviewer_disagreement_review", "output_ref": "reviewer_disagreement_reports:<reviewer_disagreement_report_uri>", "reviewer_disagreement_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/reviewer_disagreement_report.json"},
             {"job_kind": "label_delay_review", "output_ref": "label_delay_reports:<label_delay_report_uri>", "label_delay_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/label_delay_report.json"}
@@ -148,6 +190,7 @@ fn runs_scheduled_mlops_monitoring_from_parameters() {
     );
     assert!(root.join("runtime/mlops_monitoring_plan.json").is_file());
     assert!(root.join("runtime/shadow_report.json").is_file());
+    assert!(root.join("runtime/feature_psi_report.json").is_file());
     assert!(root
         .join("runtime/reviewer_disagreement_report.json")
         .is_file());
@@ -182,7 +225,7 @@ fn scheduled_mlops_monitoring_writes_artifact_publication_manifest() {
         manifest["artifact_kind"],
         "mlops_monitoring_artifact_publication_manifest"
     );
-    assert_eq!(manifest["artifact_count"], 7);
+    assert_eq!(manifest["artifact_count"], 9);
     assert!(manifest["artifacts"]
         .as_array()
         .unwrap()
@@ -222,6 +265,16 @@ fn scheduled_mlops_monitoring_binds_customer_monitoring_inputs() {
                     "score_psi": 0.14,
                     "max_feature_psi": 0.18
                 },
+                "feature_distribution_psi": {
+                    "status": "watch",
+                    "feature": "claim_amount_peer_percentile",
+                    "psi": 0.19
+                },
+                "rule_hit_rate_trend": {
+                    "status": "watch",
+                    "rules_evaluated": 14,
+                    "rule_drift_alerts": [{"rule_id": "R-1", "hit_rate_7d": 0.02, "hit_rate_90d": 0.08}]
+                },
                 "segment_fairness_review": {
                     "status": "passed",
                     "segments": [{"segment_column": "provider_region", "segment_value": "north"}]
@@ -260,6 +313,21 @@ fn scheduled_mlops_monitoring_binds_customer_monitoring_inputs() {
     assert_eq!(drift["score_psi"], 0.14);
     assert_eq!(drift["customer_data_bound"], true);
     assert_eq!(drift["input_binding_job_kind"], "drift_monitoring");
+    let feature_psi = read_json_report(
+        &root
+            .join("runtime/feature_psi_report.json")
+            .to_string_lossy(),
+    )
+    .expect("feature PSI report");
+    assert_eq!(feature_psi["status"], "watch");
+    assert_eq!(feature_psi["psi"], 0.19);
+    let rule_hit_rate = read_json_report(
+        &root
+            .join("runtime/rule_hit_rate_report.json")
+            .to_string_lossy(),
+    )
+    .expect("rule hit rate report");
+    assert_eq!(rule_hit_rate["rules_evaluated"], 14);
     let shadow = read_json_report(&root.join("runtime/shadow_report.json").to_string_lossy())
         .expect("shadow report");
     assert_eq!(shadow["comparison_count"], 240);

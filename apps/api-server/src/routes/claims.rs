@@ -23,7 +23,7 @@ use fwa_anomaly::detect_anomaly;
 use fwa_audit::ActorContext;
 use fwa_clinical::{assess_clinical_evidence, ClinicalDocumentEvidence};
 use fwa_core::*;
-use fwa_features::calculate_features;
+use fwa_features::{calculate_features_with_peer_context, PeerFeatureContext};
 use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
 use fwa_provider::{
     assess_provider_profile, assess_provider_relationship_graph, ProviderProfileInput,
@@ -32,6 +32,15 @@ use fwa_provider::{
 use fwa_rules::evaluate_rules;
 
 pub use super::claims_types::*;
+
+fn peer_feature_context_from_request(request: &ScoreClaimRequest) -> Option<PeerFeatureContext> {
+    let claim_amount_peer_percentile = request
+        .claim_amount_peer_percentile
+        .or_else(|| request.claim.as_ref()?.claim_amount_peer_percentile);
+    Some(PeerFeatureContext {
+        claim_amount_peer_percentile,
+    })
+}
 
 pub async fn score_claim(
     State(state): State<AppState>,
@@ -231,8 +240,11 @@ pub async fn score_claim(
         )
     };
 
+    let peer_feature_context = peer_feature_context_from_request(&request)
+        .filter(|context| context.claim_amount_peer_percentile.is_some());
     let run_id = ScoringRunId::new();
-    let mut features = calculate_features(&context);
+    let mut features =
+        calculate_features_with_peer_context(&context, peer_feature_context.as_ref());
     let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
     let provider_profile =
         assess_provider_profile(&context.provider, provider_profile_input.as_ref());

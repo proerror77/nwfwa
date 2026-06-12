@@ -21,7 +21,19 @@ pub struct FeatureValue {
 
 pub type FeatureMap = BTreeMap<String, FeatureValue>;
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerFeatureContext {
+    pub claim_amount_peer_percentile: Option<u8>,
+}
+
 pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
+    calculate_features_with_peer_context(context, None)
+}
+
+pub fn calculate_features_with_peer_context(
+    context: &ClaimContext,
+    peer_context: Option<&PeerFeatureContext>,
+) -> FeatureMap {
     let mut features = FeatureMap::new();
     let claim_id = context.claim.external_claim_id.clone();
 
@@ -51,14 +63,18 @@ pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
         &claim_id,
         "claim_amount",
     );
-    insert_number(
-        &mut features,
-        "claim_amount_peer_percentile",
-        peer_percentile_from_amount_ratio(ratio),
-        "claim",
-        &claim_id,
-        "claim_amount",
-    );
+    if let Some(peer_percentile) =
+        peer_context.and_then(|context| context.claim_amount_peer_percentile)
+    {
+        insert_number(
+            &mut features,
+            "claim_amount_peer_percentile",
+            peer_percentile.min(100),
+            "claim_peer_stats",
+            &claim_id,
+            "claim_amount_peer_percentile",
+        );
+    }
 
     insert_number(
         &mut features,
@@ -108,20 +124,6 @@ pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
     );
 
     features
-}
-
-fn peer_percentile_from_amount_ratio(ratio: f64) -> u8 {
-    if ratio >= 1.0 {
-        99
-    } else if ratio >= 0.8 {
-        95
-    } else if ratio >= 0.5 {
-        80
-    } else if ratio >= 0.25 {
-        60
-    } else {
-        40
-    }
 }
 
 fn high_cost_item_ratio(context: &ClaimContext) -> f64 {
@@ -287,13 +289,37 @@ mod tests {
     }
 
     #[test]
-    fn calculates_peer_medical_and_provider_layer_features() {
+    fn does_not_invent_peer_percentile_from_amount_ratio() {
         let features = calculate_features(&context());
+
+        assert!(!features.contains_key("claim_amount_peer_percentile"));
+        assert_eq!(
+            features["claim_amount_to_limit_ratio"].value,
+            serde_json::json!(0.8)
+        );
+    }
+
+    #[test]
+    fn accepts_real_peer_percentile_from_peer_context() {
+        let peer_context = PeerFeatureContext {
+            claim_amount_peer_percentile: Some(95),
+        };
+        let features = calculate_features_with_peer_context(&context(), Some(&peer_context));
 
         assert_eq!(
             features["claim_amount_peer_percentile"].value,
             serde_json::json!(95)
         );
+        assert_eq!(
+            features["claim_amount_peer_percentile"].evidence_refs[0].entity_type,
+            "claim_peer_stats"
+        );
+    }
+
+    #[test]
+    fn calculates_medical_and_provider_layer_features() {
+        let features = calculate_features(&context());
+
         assert_eq!(
             features["high_cost_item_ratio"].value,
             serde_json::json!(1.0)

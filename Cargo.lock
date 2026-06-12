@@ -1298,6 +1298,7 @@ dependencies = [
  "fwa-core",
  "serde",
  "serde_json",
+ "ulid",
 ]
 
 [[package]]

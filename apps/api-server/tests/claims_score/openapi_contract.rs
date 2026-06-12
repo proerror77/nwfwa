@@ -193,7 +193,12 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     assert_eq!(
         schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"]
             ["window_days"]["enum"],
-        serde_json::json!([30, 90, 180])
+        serde_json::json!([30, 90, 365])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FullClaimPayload"]["properties"]
+            ["claim_amount_peer_percentile"]["maximum"],
+        100
     );
     for field in ["high_cost_item_ratio", "diagnosis_procedure_mismatch_rate"] {
         assert_eq!(
@@ -221,6 +226,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "high_risk_neighbor_ratio",
         "provider_patient_overlap_score",
         "referral_concentration_score",
+        "temporal_co_billing_score",
     ] {
         assert_eq!(
             schema["components"]["schemas"]["ProviderRelationshipGraphPayload"]["properties"]

@@ -54,6 +54,7 @@ pub struct ProviderRelationshipGraphInput {
     pub high_risk_neighbor_ratio: f64,
     pub provider_patient_overlap_score: f64,
     pub referral_concentration_score: Option<f64>,
+    pub temporal_co_billing_score: Option<f64>,
     pub connected_confirmed_fwa_count: u32,
     pub network_component_risk_score: Option<u8>,
     pub evidence_refs: Vec<String>,
@@ -111,10 +112,7 @@ pub fn assess_provider_profile(
         .iter()
         .map(|window| assess_window(&provider.external_provider_id, window))
         .collect::<Vec<_>>();
-    let risk_score = window_findings
-        .iter()
-        .map(|finding| finding.risk_score)
-        .max()
+    let risk_score = weighted_profile_risk_score(&window_findings)
         .unwrap_or_else(|| tier_score(provider.risk_tier));
     let outlier_flags = window_findings
         .iter()
@@ -233,6 +231,16 @@ pub fn assess_provider_relationship_graph(
         ));
     }
 
+    if graph.temporal_co_billing_score.unwrap_or(0.0) >= 0.70 {
+        score += 20;
+        findings.push(graph_finding(
+            provider_id,
+            "temporal_co_billing_score",
+            20,
+            "Provider 在同一 Member 短窗口内共现出账频率偏高",
+        ));
+    }
+
     if graph.connected_confirmed_fwa_count > 0 {
         let contribution = (graph.connected_confirmed_fwa_count * 10).min(30) as u8;
         score += contribution as u16;
@@ -325,6 +333,25 @@ fn assess_window(
     }
 }
 
+fn weighted_profile_risk_score(findings: &[ProviderProfileWindowFinding]) -> Option<u8> {
+    let mut weighted = 0.0_f64;
+    let mut total_weight = 0.0_f64;
+    for finding in findings {
+        let weight = match finding.window_days {
+            0..=30 => 0.50,
+            31..=90 => 0.35,
+            _ => 0.15,
+        };
+        weighted += finding.risk_score as f64 * weight;
+        total_weight += weight;
+    }
+    if total_weight == 0.0 {
+        None
+    } else {
+        Some((weighted / total_weight).round().clamp(0.0, 100.0) as u8)
+    }
+}
+
 fn tier_score(tier: ProviderRiskTier) -> u8 {
     match tier {
         ProviderRiskTier::Low => 10,
@@ -402,6 +429,53 @@ mod tests {
     }
 
     #[test]
+    fn combines_profile_windows_with_recency_weights() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-1"),
+            external_provider_id: "PRV-1".into(),
+            name: "Demo Hospital".into(),
+            provider_type: "hospital".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Medium,
+        };
+        let high_recent_window = ProviderProfileWindow {
+            window_days: 30,
+            claim_count: 20,
+            total_claim_amount: Decimal::new(120000, 0),
+            high_cost_item_ratio: 0.72,
+            diagnosis_procedure_mismatch_rate: 0.38,
+            peer_amount_percentile: 97,
+            peer_frequency_percentile: 96,
+            review_failure_count: 3,
+            confirmed_fwa_count: 4,
+            false_positive_count: 1,
+        };
+        let quiet_window = |window_days| ProviderProfileWindow {
+            window_days,
+            claim_count: 60,
+            total_claim_amount: Decimal::new(180000, 0),
+            high_cost_item_ratio: 0.10,
+            diagnosis_procedure_mismatch_rate: 0.02,
+            peer_amount_percentile: 45,
+            peer_frequency_percentile: 50,
+            review_failure_count: 0,
+            confirmed_fwa_count: 0,
+            false_positive_count: 0,
+        };
+        let profile = ProviderProfileInput {
+            specialty: Some("imaging".into()),
+            network_status: Some("in_network".into()),
+            windows: vec![high_recent_window, quiet_window(90), quiet_window(365)],
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.risk_score, 50);
+        assert_eq!(assessment.risk_tier, "medium");
+        assert!(!assessment.review_required);
+    }
+
+    #[test]
     fn detects_relationship_graph_risk_from_network_signals() {
         let provider = Provider {
             id: ProviderId::from_external("PRV-1"),
@@ -415,6 +489,7 @@ mod tests {
             high_risk_neighbor_ratio: 0.34,
             provider_patient_overlap_score: 0.68,
             referral_concentration_score: Some(0.72),
+            temporal_co_billing_score: Some(0.75),
             connected_confirmed_fwa_count: 2,
             network_component_risk_score: Some(82),
             evidence_refs: vec!["relationship_edges:PRV-1".into()],
