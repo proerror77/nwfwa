@@ -139,6 +139,12 @@ pub use peer_benchmark::{
     PeerBenchmarkInput, PeerBenchmarkReport,
 };
 
+mod episode_rollup;
+pub use episode_rollup::{
+    build_episode_aggregation_report, EpisodeAggregationReport, EpisodeClaimInput,
+    EpisodeRollupInput, EpisodeWindowRollup, MemberProviderEpisodeRollup,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,

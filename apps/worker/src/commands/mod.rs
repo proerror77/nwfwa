@@ -5,6 +5,7 @@ mod build_analytics_export_plan;
 mod build_automl_lifecycle_closure_report;
 mod build_demo_automl_lifecycle_evidence;
 mod build_demo_ml_datasets;
+mod build_episode_aggregation;
 mod build_feature_set;
 mod build_governance_ops_plan;
 mod build_mlops_monitoring_plan;
@@ -65,6 +66,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-model-promotion-orchestration-report" => {
             build_model_promotion_orchestration_report::run(args)
         }
+        "build-episode-aggregation" => build_episode_aggregation::run(args),
         "build-peer-benchmarks" => build_peer_benchmarks::run(args),
         "build-provider-graph-signals" => build_provider_graph_signals::run(args),
         "build-provider-profile-windows" => build_provider_profile_windows::run(args),

@@ -6,6 +6,7 @@ mod automl_lifecycle;
 mod automl_ranking;
 mod clustering;
 mod dataset;
+mod episode_rollup;
 mod mlops_monitoring_reports;
 mod mlops_monitoring_runtime;
 mod model_artifact;
