@@ -1,7 +1,7 @@
 use api_server::{
     app::{build_app, build_app_with_parts},
     config::AppConfig,
-    repository::InMemoryScoringRepository,
+    repository::{AgentRegistryRecord, InMemoryScoringRepository},
 };
 use axum::{
     body::{to_bytes, Body},
@@ -379,6 +379,63 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+}
+
+#[tokio::test]
+async fn rejects_agent_investigation_when_registry_identity_is_not_active() {
+    let repository = InMemoryScoringRepository::shared();
+    repository
+        .save_agent_registry(AgentRegistryRecord {
+            agent_identity_id: "agent_identity:deterministic_investigator:v1".into(),
+            agent_kind: "deterministic_investigator".into(),
+            agent_version: 1,
+            capability_scope: vec![
+                "knowledge.search_similar".into(),
+                "agent.investigation.package".into(),
+            ],
+            phi_fields_allowed: vec![
+                "claim_id".into(),
+                "risk_score".into(),
+                "rag".into(),
+                "diagnosis_code".into(),
+                "provider_region".into(),
+            ],
+            status: "deprovisioned".into(),
+        })
+        .await
+        .unwrap();
+    let app = build_app_with_parts(
+        test_config(),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-REGISTRY-DENY",
+          "risk_score": 92,
+          "rag": "RED",
+          "top_reasons": ["Agent identity has been deprovisioned"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "AGENT_IDENTITY_NOT_ACTIVE");
+    assert!(repository
+        .list_agent_runs(Some("demo-customer"))
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]

@@ -1,5 +1,68 @@
 use super::*;
 
+pub(super) async fn save_agent_registry(
+    repository: &PostgresScoringRepository,
+    record: AgentRegistryRecord,
+) -> anyhow::Result<AgentRegistryRecord> {
+    sqlx::query(
+        "INSERT INTO agent_registry
+             (agent_identity_id, agent_kind, agent_version, capability_scope, phi_fields_allowed, status)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (agent_identity_id) DO UPDATE
+             SET agent_kind = EXCLUDED.agent_kind,
+                 agent_version = EXCLUDED.agent_version,
+                 capability_scope = EXCLUDED.capability_scope,
+                 phi_fields_allowed = EXCLUDED.phi_fields_allowed,
+                 status = EXCLUDED.status",
+    )
+    .bind(&record.agent_identity_id)
+    .bind(&record.agent_kind)
+    .bind(record.agent_version as i32)
+    .bind(string_values(&record.capability_scope))
+    .bind(string_values(&record.phi_fields_allowed))
+    .bind(&record.status)
+    .execute(&repository.pool)
+    .await?;
+    Ok(record)
+}
+
+pub(super) async fn active_agent_registry(
+    repository: &PostgresScoringRepository,
+    agent_kind: &str,
+    agent_version: u32,
+) -> anyhow::Result<Option<AgentRegistryRecord>> {
+    let row: Option<(String, String, i32, Value, Value, String)> = sqlx::query_as(
+        "SELECT agent_identity_id, agent_kind, agent_version, capability_scope, phi_fields_allowed, status
+             FROM agent_registry
+             WHERE agent_kind = $1
+               AND agent_version = $2
+               AND status = 'active'
+               AND deprovisioned_at IS NULL
+             LIMIT 1",
+    )
+    .bind(agent_kind)
+    .bind(agent_version as i32)
+    .fetch_optional(&repository.pool)
+    .await?;
+    Ok(row.map(
+        |(
+            agent_identity_id,
+            agent_kind,
+            agent_version,
+            capability_scope,
+            phi_fields_allowed,
+            status,
+        )| AgentRegistryRecord {
+            agent_identity_id,
+            agent_kind,
+            agent_version: agent_version as u32,
+            capability_scope: json_array_to_strings(capability_scope),
+            phi_fields_allowed: json_array_to_strings(phi_fields_allowed),
+            status,
+        },
+    ))
+}
+
 pub(super) async fn save_agent_run(
     repository: &PostgresScoringRepository,
     run: PersistedAgentRun,
@@ -11,10 +74,7 @@ pub(super) async fn save_agent_run(
         "INSERT INTO agent_registry
              (agent_identity_id, agent_kind, agent_version, capability_scope, phi_fields_allowed, status)
              VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (agent_identity_id) DO UPDATE
-             SET capability_scope = EXCLUDED.capability_scope,
-                 phi_fields_allowed = EXCLUDED.phi_fields_allowed,
-                 status = EXCLUDED.status",
+             ON CONFLICT (agent_identity_id) DO NOTHING",
     )
     .bind(&registry.agent_identity_id)
     .bind(&registry.agent_kind)

@@ -459,6 +459,17 @@ pub trait KnowledgeRepository: Send + Sync {
         query: SimilarCaseQuery,
     ) -> anyhow::Result<Vec<SimilarCaseRecord>>;
 
+    async fn save_agent_registry(
+        &self,
+        record: AgentRegistryRecord,
+    ) -> anyhow::Result<AgentRegistryRecord>;
+
+    async fn active_agent_registry(
+        &self,
+        agent_kind: &str,
+        agent_version: u32,
+    ) -> anyhow::Result<Option<AgentRegistryRecord>>;
+
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
 
     async fn list_agent_runs(

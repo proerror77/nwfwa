@@ -17,6 +17,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
 
+const AGENT_KIND_DETERMINISTIC_INVESTIGATOR: &str = "deterministic_investigator";
+const AGENT_VERSION_DETERMINISTIC_INVESTIGATOR: u32 = 1;
+const TOOL_KNOWLEDGE_SEARCH_SIMILAR: &str = "knowledge.search_similar";
+
 #[derive(Debug, Deserialize)]
 pub struct AgentInvestigationRequest {
     pub claim_id: String,
@@ -73,14 +77,38 @@ pub async fn investigate_case(
     let agent_policy_id = state.config.agent_policy_id.clone();
     let tool_call_id = format!("tool_call_{}", masked_claim_ref);
     let tool_result_id = format!("tool_result_{}", masked_claim_ref);
+    let registry = state
+        .repository
+        .active_agent_registry(
+            AGENT_KIND_DETERMINISTIC_INVESTIGATOR,
+            AGENT_VERSION_DETERMINISTIC_INVESTIGATOR,
+        )
+        .await
+        .map_err(internal_error("AGENT_REGISTRY_LOOKUP_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::FORBIDDEN,
+                "AGENT_IDENTITY_NOT_ACTIVE",
+                "agent identity is not active",
+            )
+        })?;
+    let phi_fields_accessed = agent_investigation_phi_fields();
+    enforce_agent_registry_policy(
+        &registry,
+        TOOL_KNOWLEDGE_SEARCH_SIMILAR,
+        &phi_fields_accessed,
+    )?;
     let policy_check = AgentPolicyCheckRecord {
         policy_check_id: format!("policy_check_{}", masked_claim_ref),
         agent_run_id: format!("agent_{}", masked_claim_ref),
         tool_call_id: tool_call_id.clone(),
-        tool_name: "knowledge.search_similar".into(),
+        tool_name: TOOL_KNOWLEDGE_SEARCH_SIMILAR.into(),
         policy_name: agent_policy_id.clone(),
         decision: "allowed".into(),
-        reason: "Tool is allowlisted for read-only similar-case evidence retrieval.".into(),
+        reason: format!(
+            "Tool is allowlisted by active agent registry identity {}.",
+            registry.agent_identity_id
+        ),
         evidence_refs: vec![
             format!("policy:{agent_policy_id}"),
             format!("knowledge_query:{}", masked_claim_ref),
@@ -192,7 +220,15 @@ pub async fn investigate_case(
         payload.insert("tool_call_id".into(), Value::String(audit_tool_call_id));
         payload.insert(
             "tool_name".into(),
-            Value::String("knowledge.search_similar".into()),
+            Value::String(TOOL_KNOWLEDGE_SEARCH_SIMILAR.into()),
+        );
+        payload.insert(
+            "agent_identity_id".into(),
+            Value::String(registry.agent_identity_id.clone()),
+        );
+        payload.insert(
+            "phi_fields_accessed".into(),
+            serde_json::json!(phi_fields_accessed),
         );
     }
     let mut audit_evidence_refs = evidence_refs.clone();
@@ -224,7 +260,7 @@ pub async fn investigate_case(
             }],
             tool_calls: vec![AgentToolCallRecord {
                 tool_call_id: tool_call_id.clone(),
-                tool_name: "knowledge.search_similar".into(),
+                tool_name: TOOL_KNOWLEDGE_SEARCH_SIMILAR.into(),
                 status: "succeeded".into(),
                 input_json: tool_input,
                 evidence_refs: query_evidence_refs,
@@ -232,7 +268,7 @@ pub async fn investigate_case(
             tool_results: vec![AgentToolResultRecord {
                 tool_result_id,
                 tool_call_id,
-                tool_name: "knowledge.search_similar".into(),
+                tool_name: TOOL_KNOWLEDGE_SEARCH_SIMILAR.into(),
                 status: "succeeded".into(),
                 output_json: serde_json::json!({
                     "result_count": package.similar_cases.len(),
@@ -349,6 +385,54 @@ fn validate_agent_investigation_request(
         ));
     }
     Ok(())
+}
+
+fn enforce_agent_registry_policy(
+    registry: &crate::repository::AgentRegistryRecord,
+    tool_name: &str,
+    phi_fields_accessed: &[String],
+) -> Result<(), ApiError> {
+    if registry.status != "active" {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "AGENT_IDENTITY_NOT_ACTIVE",
+            "agent identity is not active",
+        ));
+    }
+    if !registry
+        .capability_scope
+        .iter()
+        .any(|capability| capability == tool_name)
+    {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "AGENT_TOOL_NOT_ALLOWED",
+            "agent identity is not allowed to use the requested tool",
+        ));
+    }
+    if let Some(field) = phi_fields_accessed.iter().find(|field| {
+        !registry
+            .phi_fields_allowed
+            .iter()
+            .any(|allowed| allowed == *field)
+    }) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "AGENT_PHI_FIELD_NOT_ALLOWED",
+            format!("agent identity is not allowed to access PHI field {field}"),
+        ));
+    }
+    Ok(())
+}
+
+fn agent_investigation_phi_fields() -> Vec<String> {
+    vec![
+        "claim_id".into(),
+        "risk_score".into(),
+        "rag".into(),
+        "diagnosis_code".into(),
+        "provider_region".into(),
+    ]
 }
 
 async fn latest_canonical_claim_context_trace(

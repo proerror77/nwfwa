@@ -677,6 +677,21 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_knowledge::search_similar_cases(self, query).await
     }
 
+    async fn save_agent_registry(
+        &self,
+        record: AgentRegistryRecord,
+    ) -> anyhow::Result<AgentRegistryRecord> {
+        postgres_agents::save_agent_registry(self, record).await
+    }
+
+    async fn active_agent_registry(
+        &self,
+        agent_kind: &str,
+        agent_version: u32,
+    ) -> anyhow::Result<Option<AgentRegistryRecord>> {
+        postgres_agents::active_agent_registry(self, agent_kind, agent_version).await
+    }
+
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
         postgres_agents::save_agent_run(self, run).await
     }

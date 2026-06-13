@@ -647,6 +647,22 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_search_similar_cases(query).await
     }
 
+    async fn save_agent_registry(
+        &self,
+        record: AgentRegistryRecord,
+    ) -> anyhow::Result<AgentRegistryRecord> {
+        self.in_memory_save_agent_registry(record).await
+    }
+
+    async fn active_agent_registry(
+        &self,
+        agent_kind: &str,
+        agent_version: u32,
+    ) -> anyhow::Result<Option<AgentRegistryRecord>> {
+        self.in_memory_active_agent_registry(agent_kind, agent_version)
+            .await
+    }
+
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
         self.in_memory_save_agent_run(run).await
     }

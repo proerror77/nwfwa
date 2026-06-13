@@ -446,6 +446,19 @@ CREATE TABLE IF NOT EXISTS investigations (
 CREATE INDEX IF NOT EXISTS investigations_claim_id_idx
   ON investigations(claim_id);
 
+INSERT INTO agent_registry
+  (agent_identity_id, agent_kind, agent_version, capability_scope, phi_fields_allowed, status)
+VALUES
+  (
+    'agent_identity:deterministic_investigator:v1',
+    'deterministic_investigator',
+    1,
+    '["knowledge.search_similar", "agent.investigation.package"]'::jsonb,
+    '["claim_id", "risk_score", "rag", "diagnosis_code", "provider_region"]'::jsonb,
+    'active'
+  )
+ON CONFLICT (agent_identity_id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS agent_audit_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   audit_event_id TEXT NOT NULL UNIQUE,

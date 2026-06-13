@@ -35,6 +35,41 @@ impl InMemoryScoringRepository {
         ))
     }
 
+    pub(super) async fn in_memory_save_agent_registry(
+        &self,
+        record: AgentRegistryRecord,
+    ) -> anyhow::Result<AgentRegistryRecord> {
+        self.agent_registry
+            .lock()
+            .await
+            .insert(record.agent_identity_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    pub(super) async fn in_memory_active_agent_registry(
+        &self,
+        agent_kind: &str,
+        agent_version: u32,
+    ) -> anyhow::Result<Option<AgentRegistryRecord>> {
+        let registry = self.agent_registry.lock().await;
+        let active = registry
+            .values()
+            .find(|record| {
+                record.agent_kind == agent_kind
+                    && record.agent_version == agent_version
+                    && record.status == "active"
+            })
+            .cloned();
+        if active.is_some() || !registry.is_empty() {
+            return Ok(active);
+        }
+        let default = default_agent_registry_record();
+        Ok((default.agent_kind == agent_kind
+            && default.agent_version == agent_version
+            && default.status == "active")
+            .then_some(default))
+    }
+
     pub(super) async fn in_memory_save_agent_run(
         &self,
         run: PersistedAgentRun,
@@ -43,7 +78,8 @@ impl InMemoryScoringRepository {
         self.agent_registry
             .lock()
             .await
-            .insert(registry.agent_identity_id.clone(), registry);
+            .entry(registry.agent_identity_id.clone())
+            .or_insert(registry);
         let investigation = agent_investigation_record_for_claim(&run.claim_id);
         self.agent_investigations.lock().await.insert(
             investigation.investigation_id.clone(),
