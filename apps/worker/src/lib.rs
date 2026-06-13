@@ -133,6 +133,12 @@ pub use provider_graph_rollup::{
     ProviderGraphSignalRollup, ProviderGraphSignalRollupReport, ProviderReferralInput,
 };
 
+mod peer_benchmark;
+pub use peer_benchmark::{
+    build_peer_percentile_benchmark, PeerBenchmarkClaimInput, PeerBenchmarkGroup,
+    PeerBenchmarkInput, PeerBenchmarkReport,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,
