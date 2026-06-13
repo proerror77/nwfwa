@@ -121,6 +121,7 @@ pub fn aggregate_with_routing_policy(
     routing_policy: RoutingPolicy,
 ) -> ScoringDecision {
     let peer_deviation_score = amount_ratio_score(features);
+    let peer_benchmark_score_for_weight = peer_benchmark_weighted_score(features);
     let rule_score = rule_matches
         .iter()
         .map(|rule_match| rule_match.score_contribution as u32)
@@ -129,13 +130,13 @@ pub fn aggregate_with_routing_policy(
     let medical_reasonableness_score = medical_reasonableness_score(features);
     let provider_network_score = provider_network_score(features);
     let final_score_value = weighted_final_score(&[
-        (peer_deviation_score, 0.15),
-        (rule_score, 0.20),
-        (anomaly_score.score, 0.15),
-        (model_score.score, 0.25),
-        (medical_reasonableness_score, 0.10),
-        (provider_network_score, 0.10),
-        (similar_case_score, 0.05),
+        (peer_benchmark_score_for_weight, 0.15),
+        (Some(rule_score), 0.20),
+        (Some(anomaly_score.score), 0.15),
+        (Some(model_score.score), 0.25),
+        (Some(medical_reasonableness_score), 0.10),
+        (Some(provider_network_score), 0.10),
+        (Some(similar_case_score), 0.05),
     ]);
     let risk_score = RiskScore::saturating(final_score_value);
     let risk_level = risk_level_for_policy(risk_score.value(), &routing_policy).to_string();
@@ -166,8 +167,8 @@ pub fn aggregate_with_routing_policy(
             "L1_PEER_BENCHMARK",
             "Peer Benchmark",
             peer_deviation_score,
-            "active",
-            "统计偏离检测：同类金额、频次或费用结构偏离",
+            peer_benchmark_layer_status(peer_benchmark_score_for_weight),
+            peer_benchmark_layer_reason(peer_benchmark_score_for_weight),
             feature_evidence_refs(
                 features,
                 &[
@@ -423,19 +424,41 @@ fn routing_reason(
     }
 }
 
-fn weighted_final_score(available_scores: &[(u8, f64)]) -> u8 {
+fn weighted_final_score(available_scores: &[(Option<u8>, f64)]) -> u8 {
     let total_weight = available_scores
         .iter()
-        .map(|(_, weight)| weight)
+        .filter(|(score, _)| score.is_some())
+        .map(|(_, weight)| *weight)
         .sum::<f64>();
     if total_weight == 0.0 {
         return 0;
     }
     let weighted = available_scores
         .iter()
-        .map(|(score, weight)| *score as f64 * weight)
+        .filter_map(|(score, weight)| score.map(|score| score as f64 * weight))
         .sum::<f64>();
     (weighted / total_weight).round().clamp(0.0, 100.0) as u8
+}
+
+fn peer_benchmark_weighted_score(features: &FeatureMap) -> Option<u8> {
+    numeric_feature(features, "claim_amount_peer_percentile")
+        .map(|percentile| percentile.round().clamp(0.0, 100.0) as u8)
+}
+
+fn peer_benchmark_layer_status(weighted_score: Option<u8>) -> &'static str {
+    if weighted_score.is_some() {
+        "active"
+    } else {
+        "proxy_excluded"
+    }
+}
+
+fn peer_benchmark_layer_reason(weighted_score: Option<u8>) -> &'static str {
+    if weighted_score.is_some() {
+        "统计偏离检测：同类金额、频次或费用结构偏离"
+    } else {
+        "Peer benchmark 缺少真实同侪分布，仅展示金额/保额代理值，已从最终加权分排除"
+    }
 }
 
 fn amount_ratio_score(features: &FeatureMap) -> u8 {

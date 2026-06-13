@@ -239,6 +239,37 @@ fn aggregates_seven_layer_scores() {
 }
 
 #[test]
+fn excludes_peer_proxy_from_final_weight_when_peer_percentile_is_missing() {
+    let mut features = BTreeMap::new();
+    features.insert(
+        "claim_amount_to_limit_ratio".into(),
+        feature(serde_json::json!(1.0)),
+    );
+
+    let decision = aggregate(&features, &[], &model(0), &anomaly(0), 0);
+
+    assert_eq!(decision.peer_deviation_score, 100);
+    assert_eq!(decision.layers[0].status, "proxy_excluded");
+    assert!(decision.layers[0].reason.contains("已从最终加权分排除"));
+    assert_eq!(decision.risk_score.value(), 0);
+}
+
+#[test]
+fn includes_real_zero_peer_percentile_in_final_weight() {
+    let mut features = BTreeMap::new();
+    features.insert(
+        "claim_amount_peer_percentile".into(),
+        feature(serde_json::json!(0)),
+    );
+
+    let decision = aggregate(&features, &[], &model(0), &anomaly(0), 100);
+
+    assert_eq!(decision.peer_deviation_score, 0);
+    assert_eq!(decision.layers[0].status, "active");
+    assert_eq!(decision.risk_score.value(), 5);
+}
+
+#[test]
 fn every_detection_layer_carries_evidence_refs() {
     let mut features = BTreeMap::new();
     features.insert(
