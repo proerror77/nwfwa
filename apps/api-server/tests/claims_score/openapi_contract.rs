@@ -185,10 +185,12 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             .unwrap()
             .contains("Non-negative decimal")
     );
-    assert_eq!(
+    assert!(
         schema["components"]["schemas"]["ProviderProfilePayload"]["properties"]["windows"]
-            ["minItems"],
-        1
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("May be empty only when oig_excluded or sam_debarred is true")
     );
     assert_eq!(
         schema["components"]["schemas"]["ProviderProfilePayload"]["properties"]["oig_excluded"]
@@ -236,7 +238,9 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "high_risk_neighbor_ratio",
         "provider_patient_overlap_score",
         "referral_concentration_score",
+        "referral_concentration_entropy",
         "temporal_co_billing_score",
+        "temporal_co_billing_frequency_7d",
     ] {
         assert_eq!(
             schema["components"]["schemas"]["ProviderRelationshipGraphPayload"]["properties"]
@@ -251,6 +255,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             "missing ProviderRelationshipGraphPayload.{field} maximum"
         );
     }
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderRelationshipGraphPayload"]["properties"]
+            ["billing_ring_membership"]["type"][0],
+        "boolean"
+    );
     assert_eq!(
         schema["components"]["schemas"]["ProviderRelationshipGraphPayload"]["properties"]
             ["network_component_risk_score"]["maximum"],

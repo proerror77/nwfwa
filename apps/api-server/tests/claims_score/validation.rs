@@ -361,7 +361,8 @@ async fn rejects_invalid_provider_risk_signal_ranges() {
               "provider_relationships": {
                 "high_risk_neighbor_ratio": 0.2,
                 "provider_patient_overlap_score": 0.3,
-                "referral_concentration_score": 1.4,
+                "referral_concentration_score": 0.4,
+                "referral_concentration_entropy": 1.4,
                 "connected_confirmed_fwa_count": 2,
                 "network_component_risk_score": 101,
                 "evidence_refs": ["relationship_edges:PRV-1"]
@@ -373,7 +374,7 @@ async fn rejects_invalid_provider_risk_signal_ranges() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
-    assert!(body.contains("provider_relationships.referral_concentration_score"));
+    assert!(body.contains("provider_relationships.referral_concentration_entropy"));
 
     let request = Request::builder()
         .method("POST")

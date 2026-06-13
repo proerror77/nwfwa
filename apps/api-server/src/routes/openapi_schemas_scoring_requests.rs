@@ -454,11 +454,27 @@ pub(super) fn scoring_request_schemas() -> Value {
                 "high_risk_neighbor_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
                 "provider_patient_overlap_score": { "type": "number", "minimum": 0, "maximum": 1 },
                 "referral_concentration_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+                "referral_concentration_entropy": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Optional normalized Shannon entropy for referral concentration. Lower entropy means more concentrated referrals and higher graph risk."
+                },
                 "temporal_co_billing_score": {
                     "type": ["number", "null"],
                     "minimum": 0,
                     "maximum": 1,
                     "description": "Optional co-billing frequency for same-member short-window provider pairs."
+                },
+                "temporal_co_billing_frequency_7d": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Optional fraction of same-member claims co-billed with another provider inside a 7-day window."
+                },
+                "billing_ring_membership": {
+                    "type": ["boolean", "null"],
+                    "description": "True when upstream graph rollup flags the provider as a member of a suspicious billing ring."
                 },
                 "connected_confirmed_fwa_count": { "type": "integer", "minimum": 0 },
                 "network_component_risk_score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },

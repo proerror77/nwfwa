@@ -445,7 +445,9 @@ async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
               "provider_relationships": {
                 "high_risk_neighbor_ratio": 0.34,
                 "provider_patient_overlap_score": 0.68,
-                "referral_concentration_score": 0.72,
+                "referral_concentration_entropy": 0.18,
+                "temporal_co_billing_frequency_7d": 0.56,
+                "billing_ring_membership": true,
                 "connected_confirmed_fwa_count": 2,
                 "network_component_risk_score": 82,
                 "evidence_refs": ["relationship_edges:PRV-GRAPH-1"]
@@ -477,6 +479,18 @@ async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("relationship_edges:PRV-GRAPH-1")));
+    assert!(graph["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "provider_graph:PRV-GRAPH-1:billing_ring_membership"
+        )));
+    assert!(graph["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "provider_graph:PRV-GRAPH-1:temporal_co_billing_frequency_7d"
+        )));
 
     let audit_request = Request::builder()
         .method("GET")

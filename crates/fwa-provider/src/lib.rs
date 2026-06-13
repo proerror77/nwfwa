@@ -58,7 +58,10 @@ pub struct ProviderRelationshipGraphInput {
     pub high_risk_neighbor_ratio: f64,
     pub provider_patient_overlap_score: f64,
     pub referral_concentration_score: Option<f64>,
+    pub referral_concentration_entropy: Option<f64>,
     pub temporal_co_billing_score: Option<f64>,
+    pub temporal_co_billing_frequency_7d: Option<f64>,
+    pub billing_ring_membership: Option<bool>,
     pub connected_confirmed_fwa_count: u32,
     pub network_component_risk_score: Option<u8>,
     pub evidence_refs: Vec<String>,
@@ -258,23 +261,50 @@ pub fn assess_provider_relationship_graph(
         ));
     }
 
-    if graph.referral_concentration_score.unwrap_or(0.0) >= 0.70 {
+    let referral_concentration = graph
+        .referral_concentration_entropy
+        .map(|entropy| 1.0 - entropy.clamp(0.0, 1.0))
+        .or(graph.referral_concentration_score)
+        .unwrap_or(0.0);
+    if referral_concentration >= 0.70 {
         score += 20;
         findings.push(graph_finding(
             provider_id,
-            "referral_concentration_score",
+            if graph.referral_concentration_entropy.is_some() {
+                "referral_concentration_entropy"
+            } else {
+                "referral_concentration_score"
+            },
             20,
             "转诊或关联服务路径集中度偏高",
         ));
     }
 
-    if graph.temporal_co_billing_score.unwrap_or(0.0) >= 0.70 {
-        score += 20;
+    let temporal_co_billing = graph
+        .temporal_co_billing_frequency_7d
+        .or(graph.temporal_co_billing_score)
+        .unwrap_or(0.0);
+    if temporal_co_billing >= 0.50 {
+        score += 25;
         findings.push(graph_finding(
             provider_id,
-            "temporal_co_billing_score",
-            20,
+            if graph.temporal_co_billing_frequency_7d.is_some() {
+                "temporal_co_billing_frequency_7d"
+            } else {
+                "temporal_co_billing_score"
+            },
+            25,
             "Provider 在同一 Member 短窗口内共现出账频率偏高",
+        ));
+    }
+
+    if graph.billing_ring_membership.unwrap_or(false) {
+        score += 40;
+        findings.push(graph_finding(
+            provider_id,
+            "billing_ring_membership",
+            40,
+            "Provider 命中疑似账单环路成员关系",
         ));
     }
 
@@ -606,7 +636,10 @@ mod tests {
             high_risk_neighbor_ratio: 0.34,
             provider_patient_overlap_score: 0.68,
             referral_concentration_score: Some(0.72),
+            referral_concentration_entropy: None,
             temporal_co_billing_score: Some(0.75),
+            temporal_co_billing_frequency_7d: None,
+            billing_ring_membership: None,
             connected_confirmed_fwa_count: 2,
             network_component_risk_score: Some(82),
             evidence_refs: vec!["relationship_edges:PRV-1".into()],
@@ -629,5 +662,43 @@ mod tests {
         assert!(assessment
             .evidence_refs
             .contains(&"provider_graph:PRV-1:network_component_risk_score".into()));
+    }
+
+    #[test]
+    fn detects_billing_ring_and_entropy_graph_risk() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-RING"),
+            external_provider_id: "PRV-RING".into(),
+            name: "Demo Clinic".into(),
+            provider_type: "clinic".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Low,
+        };
+        let graph = ProviderRelationshipGraphInput {
+            high_risk_neighbor_ratio: 0.05,
+            provider_patient_overlap_score: 0.20,
+            referral_concentration_score: None,
+            referral_concentration_entropy: Some(0.20),
+            temporal_co_billing_score: None,
+            temporal_co_billing_frequency_7d: Some(0.55),
+            billing_ring_membership: Some(true),
+            connected_confirmed_fwa_count: 0,
+            network_component_risk_score: None,
+            evidence_refs: vec!["provider_graph_rollups:PRV-RING".into()],
+        };
+
+        let assessment = assess_provider_relationship_graph(&provider, Some(&graph));
+
+        assert!(assessment.risk_score >= 85);
+        assert!(assessment.review_required);
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_graph:PRV-RING:billing_ring_membership".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_graph:PRV-RING:temporal_co_billing_frequency_7d".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_graph:PRV-RING:referral_concentration_entropy".into()));
     }
 }

@@ -127,6 +127,12 @@ pub use provider_profile_rollup::{
     ProviderProfileRollupInput, ProviderProfileWindowOutput, ProviderProfileWindowRollupReport,
 };
 
+mod provider_graph_rollup;
+pub use provider_graph_rollup::{
+    build_provider_graph_signal_rollup, ProviderGraphClaimInput, ProviderGraphRollupInput,
+    ProviderGraphSignalRollup, ProviderGraphSignalRollupReport, ProviderReferralInput,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,

@@ -233,10 +233,22 @@ fn validate_provider_relationship_graph_payload(
             "provider_relationships.referral_concentration_score",
         )?;
     }
+    if let Some(referral_concentration_entropy) = payload.referral_concentration_entropy {
+        require_unit_interval(
+            referral_concentration_entropy,
+            "provider_relationships.referral_concentration_entropy",
+        )?;
+    }
     if let Some(temporal_co_billing_score) = payload.temporal_co_billing_score {
         require_unit_interval(
             temporal_co_billing_score,
             "provider_relationships.temporal_co_billing_score",
+        )?;
+    }
+    if let Some(temporal_co_billing_frequency_7d) = payload.temporal_co_billing_frequency_7d {
+        require_unit_interval(
+            temporal_co_billing_frequency_7d,
+            "provider_relationships.temporal_co_billing_frequency_7d",
         )?;
     }
     if let Some(network_component_risk_score) = payload.network_component_risk_score {
