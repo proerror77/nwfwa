@@ -46,6 +46,10 @@ As of the P1/P2 remediation commits after this review:
 - `fwa-agent` now exposes an `InvestigationOrchestrator` trait and deterministic
   specialist-plan contract for intake triage, evidence review, and network
   analysis slots while preserving the assistive-only boundary.
+- `fwa-features` now has a `ClinicalCompatibilityFeatureContext` input path so
+  governed ICD-10/CPT compatibility scores can replace the
+  `diagnosis_procedure_match_score` heuristic without treating fallback values
+  as real clinical compatibility data.
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
@@ -73,19 +77,19 @@ As of the P1/P2 remediation commits after this review:
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, execution-time
 cancellation checks inside long-running/specialist agents, multi-agent runtime
-dispatch/tool mediation, ICD-10/CPT comparator data, customer-approved feature
-lineage/source mappings, calibrated-probability serving activation, and
-replacement of the L3 heuristic anomaly scorer with a validated statistical
-baseline. Audit retention still needs customer-environment partitioning, archive
-storage, legal-hold reconciliation writes, and approved destruction workflow
-execution.
+dispatch/tool mediation, governed ICD-10/CPT comparator reference data and
+worker rollups, customer-approved feature lineage/source mappings,
+calibrated-probability serving activation, and replacement of the L3 heuristic
+anomaly scorer with a validated statistical baseline. Audit retention still
+needs customer-environment partitioning, archive storage, legal-hold
+reconciliation writes, and approved destruction workflow execution.
 
 ## A. Scoring Layer Gaps
 
 | ID | Gap | Required planning response |
 | --- | --- | --- |
 | A-1 | L1 peer percentile fallback can be confused with a real peer percentile when real peer data is absent. | Mark proxy/baseline paths explicitly and reduce or exclude L1 weight when only proxy data is available. |
-| A-2 | `diagnosis_procedure_match_score` is a hard-coded heuristic but appears like a clinical compatibility score. | Label as placeholder, rename with a heuristic suffix when code is touched, and replace with ICD-10/CPT compatibility data. |
+| A-2 | `diagnosis_procedure_match_score` has a real clinical compatibility input path, but the default remains a hard-coded heuristic fallback. | Populate `ClinicalCompatibilityFeatureContext` from governed ICD-10/CPT compatibility or medical-policy reference data before using this layer as production clinical consistency. |
 | A-3 | Confidence scoring overweights rule/anomaly/model agreement and ignores other high-signal layers. | Move to a weighted multi-layer confidence model or high-confidence rule based on two independent high-risk signals. |
 | A-4 | Provider graph input needs billing ring, temporal co-billing, and referral entropy signals. | Add fields to the provider graph contract and require worker rollups that compute them from claim/referral history. |
 | A-5 | Seven-layer weights are hard-coded and do not renormalize when data is missing. | Represent layer values as data-present vs. actual zero and renormalize across available layers. |
