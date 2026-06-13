@@ -20,9 +20,8 @@ The production gaps cluster in three areas:
   windows, peer percentile benchmarks, graph signals, episode aggregation, PSI
   actions, and rule hit-rate trending are not all implemented as autonomous
   worker commands;
-- agentic control plane: database and audit concepts exist, but runtime
-  identity enforcement, investigation grouping, PHI field enforcement, and
-  kill-switch behavior remain incomplete.
+- agentic control plane: database and audit concepts exist, but specialist
+  orchestration and execution-time cancellation checks remain incomplete.
 
 ## Post-Review Implementation Notes
 
@@ -41,6 +40,9 @@ As of the P1/P2 remediation commits after this review:
   agent audit records include non-empty PHI field names without values;
 - the deterministic agent route now enforces active registry capability and PHI
   field allowlists before executing `knowledge.search_similar`.
+- Agent run cancellation now has an API control-plane contract: queued/running
+  runs can be marked `cancelled`, cancellation requires run evidence, and
+  `agent.run.cancelled` is emitted as a governance audit event.
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
@@ -66,9 +68,10 @@ As of the P1/P2 remediation commits after this review:
   insufficient.
 
 Remaining boundaries after those commits are production scheduling, DB write
-paths for customer rollups, customer claim/history data, kill-switch behavior,
-specialist agent orchestration, ICD-10/CPT comparator data, customer-approved
-feature lineage/source mappings, calibrated-probability serving activation, and
+paths for customer rollups, customer claim/history data, execution-time
+cancellation checks inside long-running/specialist agents, specialist agent
+orchestration, ICD-10/CPT comparator data, customer-approved feature
+lineage/source mappings, calibrated-probability serving activation, and
 replacement of the L3 heuristic anomaly scorer with a validated statistical
 baseline. Audit retention still needs customer-environment partitioning, archive
 storage, legal-hold reconciliation writes, and approved destruction workflow
@@ -103,7 +106,7 @@ execution.
 | C-1 | Agent identity registry is missing as a runtime authority. | Add `agent_registry` with identity, kind, version, capability scope, PHI field allowlist, status, registration, and deprovision timestamps. |
 | C-2 | No independent `investigations` entity groups multiple agent runs for the same claim. | Add `investigations` and make agent audit events reference a stable investigation id instead of a run-derived string. |
 | C-3 | PHI field access is not enforced by registry policy, and accessed fields can be empty in audit events. | Enforce field allowlists at investigation/tool boundaries and persist actual PHI field names without values. |
-| C-4 | Kill-switch behavior is not implemented. | Add cancellable agent execution, persisted cancellation state, and safe cancellation checks before tool calls or long steps. |
+| C-4 | Kill-switch behavior is partially implemented as a cancellation control plane, but execution-time cancellation checks are still missing. | Add cancellable agent execution and safe cancellation checks before tool calls or long steps. |
 | C-5 | Deterministic investigation remains a single broad investigator rather than specialist agents. | Define an orchestrator boundary and specialist agent interfaces before adding LLM-backed investigators. |
 
 ## D. ML Lifecycle And Governance Gaps
