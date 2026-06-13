@@ -15,6 +15,7 @@ mod build_mlops_monitoring_report;
 mod build_mlops_scheduler_execution_report;
 mod build_model_promotion_orchestration_report;
 mod build_peer_benchmarks;
+mod build_probability_calibration_report;
 mod build_provider_graph_signals;
 mod build_provider_profile_windows;
 mod build_training_handoff;
@@ -72,6 +73,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         }
         "build-episode-aggregation" => build_episode_aggregation::run(args),
         "build-peer-benchmarks" => build_peer_benchmarks::run(args),
+        "build-probability-calibration-report" => build_probability_calibration_report::run(args),
         "build-provider-graph-signals" => build_provider_graph_signals::run(args),
         "build-provider-profile-windows" => build_provider_profile_windows::run(args),
         "submit-mlops-alert-delivery-tasks" => submit_mlops_alert_delivery_tasks::run(args).await,

@@ -91,6 +91,12 @@ pub use audit_retention::{
     AuditRetentionReviewTask, AuditRetentionScanInput, AuditRetentionScanReport,
 };
 
+mod probability_calibration;
+pub use probability_calibration::{
+    build_probability_calibration_report, ProbabilityCalibrationBin, ProbabilityCalibrationInput,
+    ProbabilityCalibrationReport, ProbabilityCalibrationReviewTask, ProbabilityCalibrationRow,
+};
+
 mod model_artifact_evaluation;
 pub use model_artifact_evaluation::evaluate_model_artifact;
 
