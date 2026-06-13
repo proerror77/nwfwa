@@ -272,6 +272,7 @@ impl ModelScorer for ArtifactModelScorer {
                 "serving_version_lock_status": version_lock_status,
                 "feature_count": artifact.feature_columns.len(),
                 "fraud_probability": round_probability(probability),
+                "probability_calibration_status": "uncalibrated_raw_sigmoid",
                 "threshold": artifact.threshold
             }),
             latency_ms: started_at

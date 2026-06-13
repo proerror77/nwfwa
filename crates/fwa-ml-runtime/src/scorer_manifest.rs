@@ -241,6 +241,7 @@ pub(crate) fn score_onnx_manifest(
             "training_artifact_uri": manifest.training_artifact_uri,
             "feature_count": feature_count,
             "fraud_probability": round_probability(probability),
+            "probability_calibration_status": "uncalibrated_raw_sigmoid",
             "onnx_input_name": input_name,
             "onnx_output_name": output_name,
             "onnx_session_cache_status": cache_status

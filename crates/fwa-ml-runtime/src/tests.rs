@@ -401,6 +401,10 @@ async fn artifact_scorer_verifies_hmac_signature() {
         result.metadata["artifact_signature_status"],
         serde_json::json!("passed")
     );
+    assert_eq!(
+        result.metadata["probability_calibration_status"],
+        serde_json::json!("uncalibrated_raw_sigmoid")
+    );
     fs::remove_file(artifact_path).unwrap();
 }
 
@@ -514,6 +518,10 @@ async fn serving_manifest_scorer_scores_rust_logistic_artifact() {
     assert_eq!(
         result.metadata["artifact_signature_status"],
         serde_json::json!("passed")
+    );
+    assert_eq!(
+        result.metadata["probability_calibration_status"],
+        serde_json::json!("uncalibrated_raw_sigmoid")
     );
 
     fs::remove_file(artifact_path).unwrap();
