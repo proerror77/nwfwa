@@ -135,6 +135,23 @@ fn builds_feature_set_manifest_from_labeled_parquet_manifest() {
     assert!(feature_names.contains(&"amount_to_limit_ratio"));
     assert!(!feature_names.contains(&"confirmed_fwa"));
     assert!(!feature_names.contains(&"claim_id"));
+    let amount_ratio = feature_set
+        .feature_columns
+        .iter()
+        .find(|column| column.name == "amount_to_limit_ratio")
+        .expect("amount_to_limit_ratio metadata");
+    assert!(!amount_ratio.is_proxy);
+    assert_eq!(
+        amount_ratio.data_source,
+        "claim.claim_amount_and_policy.coverage_limit"
+    );
+    let peer_percentile = feature_set
+        .feature_columns
+        .iter()
+        .find(|column| column.name == "peer_percentile")
+        .expect("peer_percentile metadata");
+    assert!(peer_percentile.is_proxy);
+    assert_eq!(peer_percentile.data_source, "demo_peer_percentile_baseline");
     assert_eq!(feature_set.split_summaries.len(), 3);
     assert_eq!(feature_set.split_summaries[0].row_count, 8);
     assert!(feature_set

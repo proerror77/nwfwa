@@ -72,6 +72,8 @@ pub struct FeatureSetColumn {
     pub logical_type: String,
     pub nullable: bool,
     pub source: String,
+    pub is_proxy: bool,
+    pub data_source: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
