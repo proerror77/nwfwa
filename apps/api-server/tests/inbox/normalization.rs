@@ -162,6 +162,15 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
             .contains("SAAS0300040388200349"),
         "idempotency key must not expose raw claim report ids"
     );
+    let response_canonical_context = body["canonical_claim_context"].to_string();
+    assert!(
+        !response_canonical_context.contains("D209475"),
+        "canonical claim context response must not expose raw member identifiers"
+    );
+    assert!(
+        !response_canonical_context.contains("王向龙"),
+        "canonical claim context response must not expose raw patient names"
+    );
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["service_date"],
         "2025-12-26"

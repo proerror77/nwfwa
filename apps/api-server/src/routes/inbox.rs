@@ -3,6 +3,7 @@ use crate::{
     auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{PersistedAuditEvent, PersistedInboxClaimRun},
+    routes::pii,
 };
 use axum::{extract::State, http::StatusCode, Json};
 use fwa_core::AuditEventId;
@@ -288,7 +289,7 @@ pub async fn normalize_claim_inbox(
             validation_result,
             scoring_ready,
             validation_errors,
-            canonical_claim_context,
+            canonical_claim_context: pii::mask_claim_response_payload(&canonical_claim_context),
             data_quality_signals,
             evidence_refs,
         }),
@@ -323,7 +324,9 @@ fn inbox_response_from_record(
             scoring_ready: record.scoring_ready,
             raw_payload_ref: record.raw_payload_ref,
             validation_errors,
-            canonical_claim_context: record.canonical_claim_context,
+            canonical_claim_context: pii::mask_claim_response_payload(
+                &record.canonical_claim_context,
+            ),
             data_quality_signals,
             evidence_refs,
         }),

@@ -1,3 +1,5 @@
+use serde_json::{Map, Value};
+
 pub fn contains_pii(values: impl IntoIterator<Item = impl AsRef<str>>) -> bool {
     values
         .into_iter()
@@ -10,6 +12,79 @@ pub fn redact_text(value: &str) -> String {
         .map(redact_pii_token)
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+pub fn mask_claim_response_payload(value: &Value) -> Value {
+    mask_value_at_path(value, &mut Vec::new())
+}
+
+fn mask_value_at_path(value: &Value, path: &mut Vec<String>) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(mask_object(object, path)),
+        Value::Array(values) => Value::Array(
+            values
+                .iter()
+                .map(|value| mask_value_at_path(value, path))
+                .collect(),
+        ),
+        Value::String(_) if should_mask_path(path) => {
+            Value::String(response_placeholder_for_path(path).into())
+        }
+        Value::String(text) => Value::String(redact_text(text)),
+        other => other.clone(),
+    }
+}
+
+fn mask_object(object: &Map<String, Value>, path: &mut Vec<String>) -> Map<String, Value> {
+    object
+        .iter()
+        .map(|(key, value)| {
+            path.push(key.clone());
+            let masked = mask_value_at_path(value, path);
+            path.pop();
+            (key.clone(), masked)
+        })
+        .collect()
+}
+
+fn should_mask_path(path: &[String]) -> bool {
+    path.last()
+        .map(|key| known_phi_field_key(key))
+        .unwrap_or(false)
+}
+
+fn known_phi_field_key(key: &str) -> bool {
+    matches!(
+        normalize_field_key(key).as_str(),
+        "insuredname"
+            | "insuredno"
+            | "certno"
+            | "certificateno"
+            | "certificateid"
+            | "memberid"
+            | "membername"
+            | "patientname"
+            | "accidentpersonname"
+    )
+}
+
+fn response_placeholder_for_path(path: &[String]) -> &'static str {
+    match path.last().map(|key| normalize_field_key(key)).as_deref() {
+        Some("insuredname" | "membername" | "patientname" | "accidentpersonname") => {
+            "[REDACTED_NAME]"
+        }
+        Some("insuredno" | "certno" | "certificateno" | "certificateid" | "memberid") => {
+            "[REDACTED_ID]"
+        }
+        _ => "[REDACTED_PHI]",
+    }
+}
+
+fn normalize_field_key(key: &str) -> String {
+    key.chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn token_has_pii(token: &str) -> bool {
@@ -121,6 +196,46 @@ mod tests {
                 "email alice@example.com phone:13800138000 id 11010519491231002X 卡号：00002602523"
             ),
             "email [REDACTED_EMAIL] [REDACTED_PHONE] id [REDACTED_ID] [REDACTED_PHONE]"
+        );
+    }
+
+    #[test]
+    fn masks_claim_response_payload_by_field_key() {
+        let payload = serde_json::json!({
+            "canonical_claim_context": {
+                "insuredName": "LEE, Peter",
+                "certificateNo": "D209475(0)",
+                "nested": [
+                    {
+                        "patientName": "王向龙",
+                        "accidentPersonName": "王向龙",
+                        "hospitalName": "南京同仁医院"
+                    }
+                ]
+            }
+        });
+
+        let masked = mask_claim_response_payload(&payload);
+
+        assert_eq!(
+            masked["canonical_claim_context"]["insuredName"],
+            "[REDACTED_NAME]"
+        );
+        assert_eq!(
+            masked["canonical_claim_context"]["certificateNo"],
+            "[REDACTED_ID]"
+        );
+        assert_eq!(
+            masked["canonical_claim_context"]["nested"][0]["patientName"],
+            "[REDACTED_NAME]"
+        );
+        assert_eq!(
+            masked["canonical_claim_context"]["nested"][0]["accidentPersonName"],
+            "[REDACTED_NAME]"
+        );
+        assert_eq!(
+            masked["canonical_claim_context"]["nested"][0]["hospitalName"],
+            "南京同仁医院"
         );
     }
 }
