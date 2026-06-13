@@ -54,11 +54,14 @@ As of the P1/P2 remediation commits after this review:
 - Rust feature-set manifests now include per-column `is_proxy` and
   `data_source` metadata so training/governance artifacts can distinguish demo
   baselines from worker-owned peer/profile rollups.
+- Online scoring `FeatureValue` payloads now include `is_proxy` and
+  `data_source` metadata, with OpenAPI coverage and claims-score response tests
+  verifying the contract.
 
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, kill-switch behavior,
-specialist agent orchestration, ICD-10/CPT comparator data, online scoring
-response feature-source metadata, actual probability calibration evidence, and
+specialist agent orchestration, ICD-10/CPT comparator data, customer-approved
+feature lineage/source mappings, actual probability calibration evidence, and
 replacement of the L3 heuristic anomaly scorer with a validated statistical
 baseline.
 
