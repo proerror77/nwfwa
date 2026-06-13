@@ -41,6 +41,9 @@ As of the P1/P2 remediation commits after this review:
   agent audit records include non-empty PHI field names without values;
 - the deterministic agent route now enforces active registry capability and PHI
   field allowlists before executing `knowledge.search_similar`.
+- `ServingManifestModelScorer` now caches the parsed serving manifest, removing
+  avoidable per-score manifest file reads while preserving request-time
+  identity and feature-order validation.
 
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, kill-switch behavior,
