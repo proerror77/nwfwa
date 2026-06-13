@@ -84,6 +84,11 @@ pub struct ProviderRelationshipGraphAssessment {
     pub evidence_refs: Vec<String>,
 }
 
+/// Assesses provider-level risk from upstream profile rollups.
+///
+/// Sanctions status is not part of `Provider`; callers that know OIG/SAM status must pass a
+/// `ProviderProfileInput` even when no rollup windows are available. A sanctions-only profile with
+/// `windows: []` is valid and forces `provider_sanctions_review`.
 pub fn assess_provider_profile(
     provider: &Provider,
     profile: Option<&ProviderProfileInput>,
