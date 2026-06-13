@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fs;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 #[derive(Debug, Clone)]
@@ -68,23 +68,33 @@ impl ArtifactModelScorer {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn poison_artifact_cache_for_test(&self) {
+        let cache = self.artifact_cache.clone();
+        let _ = std::panic::catch_unwind(move || {
+            let _guard = cache.lock().unwrap();
+            panic!("poison artifact cache for recovery test");
+        });
+    }
+
     fn loaded_artifact(&self) -> Result<Arc<LoadedArtifact>, ModelRuntimeError> {
-        if let Some(artifact) = self
-            .artifact_cache
-            .lock()
-            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?
-            .clone()
-        {
+        if let Some(artifact) = self.artifact_cache_guard().clone() {
             return Ok(artifact);
         }
 
         let artifact = Arc::new(self.load_artifact()?);
-        *self
-            .artifact_cache
-            .lock()
-            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))? =
-            Some(artifact.clone());
+        *self.artifact_cache_guard() = Some(artifact.clone());
         Ok(artifact)
+    }
+
+    fn artifact_cache_guard(&self) -> MutexGuard<'_, Option<Arc<LoadedArtifact>>> {
+        self.artifact_cache.lock().unwrap_or_else(|error| {
+            tracing::error!(
+                error = %error,
+                "model artifact cache lock poisoned; recovering"
+            );
+            error.into_inner()
+        })
     }
 
     fn load_artifact(&self) -> Result<LoadedArtifact, ModelRuntimeError> {

@@ -162,9 +162,13 @@ pub(crate) fn score_onnx_manifest(
     let input_tensor = Tensor::from_array(([1usize, feature_count], feature_values))
         .map_err(onnx_runtime_error)?;
     let cache_key = onnx_session_cache_key(manifest);
-    let mut sessions = onnx_sessions.lock().map_err(|_| {
-        ModelRuntimeError::InvalidResponse("ONNX session cache lock poisoned".into())
-    })?;
+    let mut sessions = onnx_sessions.lock().unwrap_or_else(|error| {
+        tracing::error!(
+            error = %error,
+            "ONNX session cache lock poisoned; recovering"
+        );
+        error.into_inner()
+    });
     let mut cache_status = "hit";
     let cached = match sessions.entry(cache_key) {
         Entry::Occupied(entry) => entry.into_mut(),
