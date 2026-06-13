@@ -157,6 +157,8 @@ impl From<ProviderProfilePayload> for ProviderProfileInput {
         Self {
             specialty: value.specialty,
             network_status: value.network_status,
+            oig_excluded: value.oig_excluded,
+            sam_debarred: value.sam_debarred,
             windows: value
                 .windows
                 .into_iter()

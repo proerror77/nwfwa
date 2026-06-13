@@ -13,6 +13,8 @@ pub(super) fn provider_profile_schemas() -> Value {
                 "review_failure_count",
                 "confirmed_fwa_count",
                 "false_positive_count",
+                "oig_excluded",
+                "sam_debarred",
                 "outlier_flags",
                 "window_findings",
                 "evidence_refs"
@@ -22,12 +24,14 @@ pub(super) fn provider_profile_schemas() -> Value {
                 "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
                 "risk_tier": { "type": "string", "enum": ["low", "medium", "high"] },
                 "review_required": { "type": "boolean" },
-                "review_route": { "type": "string", "enum": ["none", "provider_review"] },
+                "review_route": { "type": "string", "enum": ["none", "provider_review", "provider_sanctions_review"] },
                 "specialty": { "type": ["string", "null"] },
                 "network_status": { "type": ["string", "null"] },
                 "review_failure_count": { "type": "integer", "minimum": 0 },
                 "confirmed_fwa_count": { "type": "integer", "minimum": 0 },
                 "false_positive_count": { "type": "integer", "minimum": 0 },
+                "oig_excluded": { "type": "boolean" },
+                "sam_debarred": { "type": "boolean" },
                 "outlier_flags": {
                     "type": "array",
                     "items": { "type": "string" }

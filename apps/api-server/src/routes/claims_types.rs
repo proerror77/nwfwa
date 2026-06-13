@@ -97,6 +97,8 @@ pub struct DocumentPayload {
 pub struct ProviderProfilePayload {
     pub specialty: Option<String>,
     pub network_status: Option<String>,
+    pub oig_excluded: Option<bool>,
+    pub sam_debarred: Option<bool>,
     pub windows: Vec<ProviderProfileWindowPayload>,
 }
 

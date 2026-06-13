@@ -46,6 +46,21 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
             "integer"
         );
     }
+    for field in ["oig_excluded", "sam_debarred"] {
+        assert!(
+            schema["components"]["schemas"]["ProviderProfileAssessment"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing ProviderProfileAssessment.{field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderProfileAssessment"]["properties"][field]
+                ["type"],
+            "boolean"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["ProviderRiskSummaryItem"]["properties"]
             ["network_risk_score"]["type"],

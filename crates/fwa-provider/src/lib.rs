@@ -20,6 +20,8 @@ pub struct ProviderProfileWindow {
 pub struct ProviderProfileInput {
     pub specialty: Option<String>,
     pub network_status: Option<String>,
+    pub oig_excluded: Option<bool>,
+    pub sam_debarred: Option<bool>,
     pub windows: Vec<ProviderProfileWindow>,
 }
 
@@ -44,6 +46,8 @@ pub struct ProviderProfileAssessment {
     pub review_failure_count: u32,
     pub confirmed_fwa_count: u32,
     pub false_positive_count: u32,
+    pub oig_excluded: bool,
+    pub sam_debarred: bool,
     pub outlier_flags: Vec<String>,
     pub window_findings: Vec<ProviderProfileWindowFinding>,
     pub evidence_refs: Vec<String>,
@@ -101,6 +105,8 @@ pub fn assess_provider_profile(
             review_failure_count: 0,
             confirmed_fwa_count: 0,
             false_positive_count: 0,
+            oig_excluded: false,
+            sam_debarred: false,
             outlier_flags: Vec::new(),
             window_findings: Vec::new(),
             evidence_refs: vec![format!("providers:{}", provider.external_provider_id)],
@@ -114,16 +120,38 @@ pub fn assess_provider_profile(
         .collect::<Vec<_>>();
     let risk_score = weighted_profile_risk_score(&window_findings)
         .unwrap_or_else(|| tier_score(provider.risk_tier));
-    let outlier_flags = window_findings
+    let mut outlier_flags = window_findings
         .iter()
         .flat_map(|finding| finding.outlier_flags.iter().cloned())
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let evidence_refs = window_findings
+    let mut evidence_refs = window_findings
         .iter()
         .map(|finding| finding.evidence_ref.clone())
         .collect::<Vec<_>>();
+    let oig_excluded = profile.oig_excluded.unwrap_or(false);
+    let sam_debarred = profile.sam_debarred.unwrap_or(false);
+    if oig_excluded {
+        outlier_flags.push("oig_excluded".into());
+        evidence_refs.push(format!(
+            "provider_sanctions:{}:oig",
+            provider.external_provider_id
+        ));
+    }
+    if sam_debarred {
+        outlier_flags.push("sam_debarred".into());
+        evidence_refs.push(format!(
+            "provider_sanctions:{}:sam",
+            provider.external_provider_id
+        ));
+    }
+    outlier_flags.sort();
+    outlier_flags.dedup();
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    let sanctions_hit = oig_excluded || sam_debarred;
+    let risk_score = if sanctions_hit { 100 } else { risk_score };
     let review_failure_count = profile
         .windows
         .iter()
@@ -148,7 +176,9 @@ pub fn assess_provider_profile(
         risk_score,
         risk_tier: risk_tier(risk_score).into(),
         review_required: risk_score >= 70,
-        review_route: if risk_score >= 70 {
+        review_route: if sanctions_hit {
+            "provider_sanctions_review".into()
+        } else if risk_score >= 70 {
             "provider_review".into()
         } else {
             "none".into()
@@ -158,6 +188,8 @@ pub fn assess_provider_profile(
         review_failure_count,
         confirmed_fwa_count,
         false_positive_count,
+        oig_excluded,
+        sam_debarred,
         outlier_flags,
         window_findings,
         evidence_refs,
@@ -400,6 +432,8 @@ mod tests {
         let profile = ProviderProfileInput {
             specialty: Some("imaging".into()),
             network_status: Some("in_network".into()),
+            oig_excluded: None,
+            sam_debarred: None,
             windows: vec![ProviderProfileWindow {
                 window_days: 90,
                 claim_count: 126,
@@ -465,6 +499,8 @@ mod tests {
         let profile = ProviderProfileInput {
             specialty: Some("imaging".into()),
             network_status: Some("in_network".into()),
+            oig_excluded: None,
+            sam_debarred: None,
             windows: vec![high_recent_window, quiet_window(90), quiet_window(365)],
         };
 
@@ -473,6 +509,53 @@ mod tests {
         assert_eq!(assessment.risk_score, 50);
         assert_eq!(assessment.risk_tier, "medium");
         assert!(!assessment.review_required);
+    }
+
+    #[test]
+    fn sanctions_status_forces_provider_profile_review() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-1"),
+            external_provider_id: "PRV-1".into(),
+            name: "Demo Hospital".into(),
+            provider_type: "hospital".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Low,
+        };
+        let profile = ProviderProfileInput {
+            specialty: Some("imaging".into()),
+            network_status: Some("in_network".into()),
+            oig_excluded: Some(true),
+            sam_debarred: Some(true),
+            windows: vec![ProviderProfileWindow {
+                window_days: 90,
+                claim_count: 2,
+                total_claim_amount: Decimal::new(2000, 0),
+                high_cost_item_ratio: 0.10,
+                diagnosis_procedure_mismatch_rate: 0.0,
+                peer_amount_percentile: 40,
+                peer_frequency_percentile: 35,
+                review_failure_count: 0,
+                confirmed_fwa_count: 0,
+                false_positive_count: 0,
+            }],
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.risk_score, 100);
+        assert_eq!(assessment.risk_tier, "high");
+        assert!(assessment.review_required);
+        assert_eq!(assessment.review_route, "provider_sanctions_review");
+        assert!(assessment.oig_excluded);
+        assert!(assessment.sam_debarred);
+        assert!(assessment.outlier_flags.contains(&"oig_excluded".into()));
+        assert!(assessment.outlier_flags.contains(&"sam_debarred".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_sanctions:PRV-1:oig".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_sanctions:PRV-1:sam".into()));
     }
 
     #[test]

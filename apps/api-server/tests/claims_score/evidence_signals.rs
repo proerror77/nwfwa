@@ -307,6 +307,101 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
 }
 
 #[tokio::test]
+async fn returns_provider_sanctions_evidence_for_excluded_provider() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PROVIDER-SANCTIONS-1",
+                "claim_amount": "2500",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "CONSULT-001",
+                  "item_type": "procedure",
+                  "description": "Consultation",
+                  "quantity": 1,
+                  "unit_amount": "2500",
+                  "total_amount": "2500"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PROVIDER-SANCTIONS-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-PROVIDER-SANCTIONS-1",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "20000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-SANCTIONED-1",
+                "name": "Sanctioned Provider",
+                "provider_type": "clinic",
+                "region": "SH",
+                "risk_tier": "Low"
+              },
+              "provider_profile": {
+                "specialty": "primary_care",
+                "network_status": "in_network",
+                "oig_excluded": true,
+                "sam_debarred": true,
+                "windows": [
+                  {
+                    "window_days": 90,
+                    "claim_count": 2,
+                    "total_claim_amount": "2500",
+                    "high_cost_item_ratio": 0.10,
+                    "diagnosis_procedure_mismatch_rate": 0.0,
+                    "peer_amount_percentile": 40,
+                    "peer_frequency_percentile": 35,
+                    "review_failure_count": 0,
+                    "confirmed_fwa_count": 0,
+                    "false_positive_count": 0
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let profile = &body["provider_profile"];
+
+    assert_eq!(profile["risk_score"], 100);
+    assert_eq!(profile["risk_tier"], "high");
+    assert_eq!(profile["review_required"], true);
+    assert_eq!(profile["review_route"], "provider_sanctions_review");
+    assert_eq!(profile["oig_excluded"], true);
+    assert_eq!(profile["sam_debarred"], true);
+    assert!(profile["outlier_flags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "oig_excluded"));
+    assert!(profile["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "provider_sanctions:PRV-SANCTIONED-1:oig"));
+}
+
+#[tokio::test]
 async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
     let app = build_app(test_config());
 

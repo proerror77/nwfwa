@@ -401,6 +401,14 @@ pub(super) fn scoring_request_schemas() -> Value {
             "properties": {
                 "specialty": { "type": "string" },
                 "network_status": { "type": "string" },
+                "oig_excluded": {
+                    "type": "boolean",
+                    "description": "Optional upstream OIG exclusion-list match. If true, provider profile risk is treated as critical."
+                },
+                "sam_debarred": {
+                    "type": "boolean",
+                    "description": "Optional upstream SAM.gov debarment match. If true, provider profile risk is treated as critical."
+                },
                 "windows": {
                     "type": "array",
                     "minItems": 1,

@@ -191,6 +191,16 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["ProviderProfilePayload"]["properties"]["oig_excluded"]
+            ["type"],
+        "boolean"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderProfilePayload"]["properties"]["sam_debarred"]
+            ["type"],
+        "boolean"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"]
             ["window_days"]["enum"],
         serde_json::json!([30, 90, 365])
@@ -412,6 +422,14 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     );
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderProfileAssessment"].is_object());
+    assert!(
+        schema["components"]["schemas"]["ProviderProfileAssessment"]["properties"]["review_route"]
+            ["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == "provider_sanctions_review")
+    );
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphAssessment"].is_object());
     assert_eq!(
         response_properties["feature_values"]["items"]["$ref"],
