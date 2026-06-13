@@ -1,11 +1,12 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{PersistedAuditEvent, RoutingPolicyRecord},
 };
 use axum::{extract::State, http::StatusCode, Json};
 use fwa_audit::ActorContext;
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{AuditEventId, ScoringRunId};
 use fwa_scoring::RoutingPolicy;
 use serde::{Deserialize, Serialize};
@@ -67,10 +68,11 @@ pub async fn list_routing_policies(
 
 pub async fn save_routing_policy_candidate(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<SaveRoutingPolicyCandidateRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_candidate(&request)?;
+    let actor = require_permission(principal, "ops:routing:write")?;
     let owner = request.owner.unwrap_or_else(|| "policy-ops".into());
     if let Some(existing) = state
         .repository
@@ -109,6 +111,20 @@ pub async fn save_routing_policy_candidate(
     .await
     .map_err(internal_error("ROUTING_POLICY_AUDIT_SAVE_FAILED"))?;
     Ok(Json(record))
+}
+
+pub(super) fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
 
 fn validate_routing_policy_candidate(

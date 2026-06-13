@@ -1,10 +1,10 @@
 use super::ops_routing_policies::{
-    internal_error, record_routing_policy_audit, RoutingPolicyAuditInput,
+    internal_error, record_routing_policy_audit, require_permission, RoutingPolicyAuditInput,
     RoutingPolicyLifecycleRequest, RoutingPolicyPromotionGate, RoutingPolicyPromotionGatesResponse,
 };
 use crate::{
-    app::AppState, auth::AuthenticatedActor, error::ApiError, repository::RoutingPolicyRecord,
-    routes::pii,
+    app::AppState, auth::AuthenticatedApiPrincipal, error::ApiError,
+    repository::RoutingPolicyRecord, routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -14,7 +14,7 @@ use axum::{
 
 pub async fn routing_policy_promotion_gates(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    _principal: AuthenticatedApiPrincipal,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
 ) -> Result<Json<RoutingPolicyPromotionGatesResponse>, ApiError> {
     let record = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
@@ -23,11 +23,12 @@ pub async fn routing_policy_promotion_gates(
 
 pub async fn submit_routing_policy(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:routing:write")?;
     update_routing_policy_status(
         state,
         actor,
@@ -45,11 +46,12 @@ pub async fn submit_routing_policy(
 
 pub async fn approve_routing_policy(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:routing:approve")?;
     update_routing_policy_status(
         state,
         actor,
@@ -67,11 +69,12 @@ pub async fn approve_routing_policy(
 
 pub async fn activate_routing_policy(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:routing:activate")?;
     let previous = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
     require_status(&previous, "approved", "ROUTING_POLICY_APPROVAL_REQUIRED")?;
     let gates = build_routing_policy_promotion_gates(&previous);
@@ -113,11 +116,12 @@ pub async fn activate_routing_policy(
 
 pub async fn rollback_routing_policy(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
+    let actor = require_permission(principal, "ops:routing:rollback")?;
     update_routing_policy_status(
         state,
         actor,
