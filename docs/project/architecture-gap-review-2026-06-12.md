@@ -44,11 +44,15 @@ As of the P1/P2 remediation commits after this review:
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
+- Rust artifact and serving-manifest scorers now emit
+  `probability_calibration_status = "uncalibrated_raw_sigmoid"` in score
+  metadata so downstream users do not confuse raw sigmoid output with a
+  calibrated fraud probability.
 
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, kill-switch behavior,
-specialist agent orchestration, ICD-10/CPT comparator data, and feature source
-metadata.
+specialist agent orchestration, ICD-10/CPT comparator data, feature source
+metadata, and actual probability calibration evidence.
 
 ## A. Scoring Layer Gaps
 
