@@ -5,7 +5,7 @@ use super::support::{json_request, rule_lifecycle_payload, test_config};
 
 #[tokio::test]
 async fn saves_discovered_candidate_rule_for_lifecycle() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -106,7 +106,7 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
 
 #[tokio::test]
 async fn records_rejected_discovered_candidate_review_without_saving_rule() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -179,7 +179,7 @@ async fn records_rejected_discovered_candidate_review_without_saving_rule() {
 
 #[tokio::test]
 async fn accepted_discovered_candidate_review_requires_backtest_and_shadow() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let candidate_rule = r#"{
       "rule_id": "candidate_tree_accepted_review",
@@ -396,7 +396,7 @@ async fn accepted_discovered_candidate_review_requires_backtest_and_shadow() {
 
 #[tokio::test]
 async fn deterministic_adjudication_rule_requires_customer_policy_gates() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -486,7 +486,7 @@ async fn deterministic_adjudication_rule_requires_customer_policy_gates() {
 
 #[tokio::test]
 async fn saves_candidate_rule_with_explicit_scheme_family() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -540,7 +540,7 @@ async fn saves_candidate_rule_with_explicit_scheme_family() {
 
 #[tokio::test]
 async fn rejects_candidate_rule_without_valid_scheme_family() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let missing_scheme = r#"{
       "owner": "rule-discovery",

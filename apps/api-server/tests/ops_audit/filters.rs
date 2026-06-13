@@ -9,7 +9,7 @@ use super::support::{json_request, test_config};
 
 #[tokio::test]
 async fn filters_global_audit_events_for_governance_search() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -225,7 +225,7 @@ async fn filters_global_audit_events_for_governance_search() {
 
 #[tokio::test]
 async fn filters_routing_policy_audit_events_for_lifecycle_history() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -310,7 +310,7 @@ async fn filters_routing_policy_audit_events_for_lifecycle_history() {
 
 #[tokio::test]
 async fn filters_rule_and_model_audit_events_for_lifecycle_history() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -429,7 +429,7 @@ async fn filters_rule_and_model_audit_events_for_lifecycle_history() {
 
 #[tokio::test]
 async fn global_audit_events_require_api_key() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let response = app
         .oneshot(

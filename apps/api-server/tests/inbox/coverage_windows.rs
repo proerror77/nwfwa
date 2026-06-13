@@ -5,7 +5,7 @@ use super::support::{post_inbox, test_config};
 
 #[tokio::test]
 async fn preserves_all_product_liability_windows_in_canonical_context() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -177,7 +177,7 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
 
 #[tokio::test]
 async fn flags_non_primary_product_liability_window_mismatches() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -359,7 +359,7 @@ async fn flags_non_primary_product_liability_window_mismatches() {
 
 #[tokio::test]
 async fn flags_service_date_outside_product_and_liability_windows() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -493,7 +493,7 @@ async fn flags_service_date_outside_product_and_liability_windows() {
 
 #[tokio::test]
 async fn flags_accident_date_after_claim_receive_date() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -550,7 +550,7 @@ async fn flags_accident_date_after_claim_receive_date() {
 
 #[tokio::test]
 async fn flags_non_primary_invoice_after_claim_receive_date() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -624,7 +624,7 @@ async fn flags_non_primary_invoice_after_claim_receive_date() {
 
 #[tokio::test]
 async fn flags_non_primary_invoice_end_date_before_start_date() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -690,7 +690,7 @@ async fn flags_non_primary_invoice_end_date_before_start_date() {
 
 #[tokio::test]
 async fn flags_non_primary_medical_record_after_claim_receive_date() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -763,7 +763,7 @@ async fn flags_non_primary_medical_record_after_claim_receive_date() {
 
 #[tokio::test]
 async fn flags_non_primary_medical_record_operation_after_claim_receive_date() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -838,7 +838,7 @@ async fn flags_non_primary_medical_record_operation_after_claim_receive_date() {
 
 #[tokio::test]
 async fn flags_non_primary_medical_record_first_happen_after_claim_receive_date() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{

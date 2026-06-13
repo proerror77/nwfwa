@@ -28,7 +28,7 @@ use support::test_config;
 
 #[tokio::test]
 async fn rejects_missing_api_key_for_model_ops() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("GET")
@@ -42,7 +42,7 @@ async fn rejects_missing_api_key_for_model_ops() {
 
 #[tokio::test]
 async fn rejects_missing_api_key_for_model_promotion_gates() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("GET")

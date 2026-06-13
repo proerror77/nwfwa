@@ -5,7 +5,7 @@ use super::{json_request, register_model_dataset_for_dashboard, test_config};
 
 #[tokio::test]
 async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, score) = json_request(
         app.clone(),

@@ -9,7 +9,7 @@ use super::support::test_config;
 
 #[tokio::test]
 async fn rejects_claim_id_with_top_level_payload_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -33,7 +33,7 @@ async fn rejects_claim_id_with_top_level_payload_fields() {
 
 #[tokio::test]
 async fn rejects_duplicate_nested_and_top_level_payload_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -68,7 +68,7 @@ async fn rejects_duplicate_nested_and_top_level_payload_fields() {
 
 #[tokio::test]
 async fn rejects_canonical_context_with_full_payload_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -98,7 +98,7 @@ async fn rejects_canonical_context_with_full_payload_fields() {
 
 #[tokio::test]
 async fn rejects_missing_api_key() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -115,7 +115,7 @@ async fn rejects_missing_api_key() {
 
 #[tokio::test]
 async fn rejects_invalid_review_mode() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -145,7 +145,7 @@ async fn rejects_invalid_review_mode() {
 
 #[tokio::test]
 async fn rejects_both_review_mode_for_scoring_contract() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -176,7 +176,7 @@ async fn rejects_both_review_mode_for_scoring_contract() {
 
 #[tokio::test]
 async fn rejects_source_system_mismatch_for_authenticated_scoring() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -200,7 +200,7 @@ async fn rejects_source_system_mismatch_for_authenticated_scoring() {
 
 #[tokio::test]
 async fn rejects_blank_scoring_identity_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -266,7 +266,7 @@ async fn rejects_blank_scoring_identity_fields() {
 
 #[tokio::test]
 async fn rejects_invalid_provider_risk_signal_ranges() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -406,7 +406,7 @@ async fn rejects_invalid_provider_risk_signal_ranges() {
 
 #[tokio::test]
 async fn rejects_invalid_scoring_business_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let cases = [
         (
             r#"{

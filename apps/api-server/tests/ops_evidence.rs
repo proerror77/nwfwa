@@ -71,7 +71,7 @@ async fn json_request_with_key(
 
 #[tokio::test]
 async fn registers_ai_evidence_metadata_and_audit_trail() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, document) = json_request(
         app.clone(),
@@ -223,7 +223,7 @@ async fn registers_ai_evidence_metadata_and_audit_trail() {
 
 #[tokio::test]
 async fn rejects_orphan_evidence_children() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,

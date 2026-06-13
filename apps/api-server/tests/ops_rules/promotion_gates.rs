@@ -5,7 +5,7 @@ use super::support::{json_request, seed_rule_promotion_evidence, test_config};
 
 #[tokio::test]
 async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -117,7 +117,7 @@ async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
 
 #[tokio::test]
 async fn backtests_candidate_rule_against_samples() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -215,7 +215,7 @@ async fn backtests_candidate_rule_against_samples() {
 
 #[tokio::test]
 async fn backtests_dataset_mined_rule_against_parquet_dataset() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -265,7 +265,7 @@ async fn backtests_dataset_mined_rule_against_parquet_dataset() {
 
 #[tokio::test]
 async fn backtest_recommends_review_when_labeled_metrics_pass() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -352,7 +352,7 @@ async fn backtest_recommends_review_when_labeled_metrics_pass() {
 
 #[tokio::test]
 async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -488,7 +488,7 @@ async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
 
 #[tokio::test]
 async fn rule_shadow_run_evidence_feeds_rule_promotion_gates() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     seed_rule_promotion_evidence(app.clone()).await;
 
@@ -548,7 +548,7 @@ async fn rule_shadow_run_evidence_feeds_rule_promotion_gates() {
 
 #[tokio::test]
 async fn rule_promotion_gates_block_unresolved_backtest_blockers() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -628,7 +628,7 @@ async fn rule_promotion_gates_block_unresolved_backtest_blockers() {
 
 #[tokio::test]
 async fn rule_promotion_gates_include_rule_feedback_labels() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -754,7 +754,7 @@ async fn rule_promotion_gates_include_rule_feedback_labels() {
 
 #[tokio::test]
 async fn rule_promotion_gates_ignore_feedback_for_other_rules() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),

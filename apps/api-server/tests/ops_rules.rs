@@ -19,7 +19,7 @@ use support::{
 
 #[tokio::test]
 async fn records_rule_candidate_and_lifecycle_audit_events() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -91,7 +91,7 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
 
 #[tokio::test]
 async fn rule_approval_requires_different_actor_from_submitter() {
-    let app = build_app(test_config_with_rule_actors());
+    let app = build_app(test_config_with_rule_actors()).unwrap();
 
     let (status, body) = json_request_with_key(
         app.clone(),
@@ -173,7 +173,7 @@ async fn rule_approval_requires_different_actor_from_submitter() {
 
 #[tokio::test]
 async fn returns_rule_performance_metrics_from_scoring_and_outcomes() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -299,7 +299,7 @@ async fn returns_rule_performance_metrics_from_scoring_and_outcomes() {
 
 #[tokio::test]
 async fn advances_rule_lifecycle() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     seed_rule_promotion_evidence(app.clone()).await;
 
     let (status, body) = json_request(
@@ -357,7 +357,7 @@ async fn advances_rule_lifecycle() {
 
 #[tokio::test]
 async fn blocks_rule_publish_before_approval() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -379,7 +379,7 @@ async fn blocks_rule_publish_before_approval() {
 
 #[tokio::test]
 async fn blocks_rule_approval_before_submit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -405,7 +405,7 @@ async fn blocks_rule_approval_before_submit() {
 
 #[tokio::test]
 async fn blocks_rule_publish_when_promotion_gates_are_blocked() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -450,7 +450,7 @@ async fn blocks_rule_publish_when_promotion_gates_are_blocked() {
 
 #[tokio::test]
 async fn rolls_back_active_rule_with_audit_event() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -493,7 +493,7 @@ async fn rolls_back_active_rule_with_audit_event() {
 
 #[tokio::test]
 async fn blocks_rule_rollback_when_rule_is_not_active() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),

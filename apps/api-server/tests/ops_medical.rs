@@ -51,7 +51,7 @@ async fn json_request(
 
 #[tokio::test]
 async fn lists_medical_review_queue_from_clinical_evidence_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -194,7 +194,7 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
 
 #[tokio::test]
 async fn medical_review_preserves_canonical_trace_from_scoring_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -324,7 +324,7 @@ async fn medical_review_preserves_canonical_trace_from_scoring_audit() {
 
 #[tokio::test]
 async fn medical_review_records_controlled_clinical_outcomes_for_labels() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, review) = json_request(
         app.clone(),
@@ -387,7 +387,7 @@ async fn medical_review_records_controlled_clinical_outcomes_for_labels() {
 
 #[tokio::test]
 async fn medical_review_derives_false_positive_outcome_for_no_medical_issue() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, review) = json_request(
         app.clone(),
@@ -426,7 +426,7 @@ async fn medical_review_derives_false_positive_outcome_for_no_medical_issue() {
 
 #[tokio::test]
 async fn rejects_medical_review_result_without_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -482,7 +482,7 @@ async fn rejects_medical_review_result_without_evidence() {
 
 #[tokio::test]
 async fn rejects_pii_in_medical_review_writeback() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),

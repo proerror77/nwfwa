@@ -118,7 +118,7 @@ fn renewal_dataset_payload(storage_format: &str) -> String {
 
 #[tokio::test]
 async fn registers_and_reads_parquet_dataset_catalog() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, created) = json_request(
         app.clone(),
@@ -160,7 +160,7 @@ async fn registers_and_reads_parquet_dataset_catalog() {
 
 #[tokio::test]
 async fn returns_factor_readiness_summary_from_profiled_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (_, created) = json_request(
         app.clone(),
         "POST",
@@ -312,7 +312,7 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
 
 #[tokio::test]
 async fn returns_dataset_health_from_profiled_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (_, created) = json_request(
         app.clone(),
         "POST",
@@ -351,7 +351,7 @@ async fn returns_dataset_health_from_profiled_fields() {
 
 #[tokio::test]
 async fn rejects_non_parquet_dataset_registration() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -367,7 +367,7 @@ async fn rejects_non_parquet_dataset_registration() {
 
 #[tokio::test]
 async fn rejects_csv_split_uri_even_when_storage_format_says_parquet() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let payload = renewal_dataset_payload("parquet").replace(
         "data/external/renewal_automl_20211105/v1/split=train/",
         "data/external/renewal_automl_20211105/v1/train.csv",
@@ -381,7 +381,7 @@ async fn rejects_csv_split_uri_even_when_storage_format_says_parquet() {
 
 #[tokio::test]
 async fn requires_split_row_counts_to_match_dataset_total() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let payload =
         renewal_dataset_payload("parquet").replace("\"row_count\": 88622", "\"row_count\": 1");
 
@@ -393,7 +393,7 @@ async fn requires_split_row_counts_to_match_dataset_total() {
 
 #[tokio::test]
 async fn requires_entity_keys_to_be_string_fields() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let payload = renewal_dataset_payload("parquet").replace(
         "\"logical_type\": \"string\"",
         "\"logical_type\": \"float64\"",
@@ -407,7 +407,7 @@ async fn requires_entity_keys_to_be_string_fields() {
 
 #[tokio::test]
 async fn rejects_pii_in_dataset_factor_metadata() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let payload = renewal_dataset_payload("parquet").replace(
         "External policy number stored as string to avoid scientific notation corruption.",
@@ -422,7 +422,7 @@ async fn rejects_pii_in_dataset_factor_metadata() {
 
 #[tokio::test]
 async fn adds_external_field_mapping_to_dataset() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (_, created) = json_request(
         app.clone(),
         "POST",
@@ -540,7 +540,7 @@ async fn adds_external_field_mapping_to_dataset() {
 
 #[tokio::test]
 async fn rejects_csv_feature_matrix_uri() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (_, created) = json_request(
         app.clone(),
         "POST",
@@ -664,7 +664,7 @@ async fn rejects_csv_feature_matrix_uri() {
 
 #[tokio::test]
 async fn rejects_invalid_model_dataset_registration() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (_, created) = json_request(
         app.clone(),
         "POST",
@@ -754,7 +754,7 @@ async fn rejects_invalid_model_dataset_registration() {
 
 #[tokio::test]
 async fn rejects_invalid_model_evaluation_registration() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let valid_request = serde_json::json!({
         "evaluation_run_id": "eval_renewal_v1",
         "model_key": "renewal_baseline",

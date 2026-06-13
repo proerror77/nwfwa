@@ -5,7 +5,7 @@ use super::support::{json_request, test_config};
 
 #[tokio::test]
 async fn lists_qa_feedback_items_for_rule_and_model_operators() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     for (qa_case_id, feedback_target, issue_type) in [
         ("QA-RULE-1001", "rules", "alert_handling_incomplete"),
@@ -98,7 +98,7 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
 
 #[tokio::test]
 async fn accepts_prd_model_feedback_target_and_canonicalizes_legacy_alias() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     for (qa_case_id, feedback_target) in [
         ("QA-MODEL-PRD-1001", "model"),
@@ -163,7 +163,7 @@ async fn accepts_prd_model_feedback_target_and_canonicalizes_legacy_alias() {
 
 #[tokio::test]
 async fn updates_qa_feedback_item_status_with_audit_trail() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -334,7 +334,7 @@ async fn updates_qa_feedback_item_status_with_audit_trail() {
 
 #[tokio::test]
 async fn summarizes_qa_feedback_queue_for_review_operations() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     for (qa_case_id, feedback_target, issue_type, qa_conclusion) in [
         (
@@ -437,7 +437,7 @@ async fn summarizes_qa_feedback_queue_for_review_operations() {
 
 #[tokio::test]
 async fn lists_qa_queue_items_from_audit_samples() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, score) = json_request(
         app.clone(),
@@ -549,7 +549,7 @@ async fn lists_qa_queue_items_from_audit_samples() {
 
 #[tokio::test]
 async fn qa_queue_items_include_canonical_trace_from_prior_scoring_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -658,7 +658,7 @@ async fn qa_queue_items_include_canonical_trace_from_prior_scoring_audit() {
 
 #[tokio::test]
 async fn qa_result_writeback_preserves_canonical_evidence_refs_from_scoring_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),

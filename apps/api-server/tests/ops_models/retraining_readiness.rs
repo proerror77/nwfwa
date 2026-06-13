@@ -5,7 +5,7 @@ use super::support::{get_json, json_request, register_model_dataset_for_test, te
 
 #[tokio::test]
 async fn model_retraining_readiness_blocks_without_training_inputs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) =
         get_json(app, "/api/v1/ops/models/baseline_fwa/retraining-readiness").await;
@@ -38,7 +38,7 @@ async fn model_retraining_readiness_blocks_without_training_inputs() {
 
 #[tokio::test]
 async fn model_retraining_readiness_ignores_feedback_and_labels_for_other_model_versions() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -101,7 +101,7 @@ async fn model_retraining_readiness_ignores_feedback_and_labels_for_other_model_
 
 #[tokio::test]
 async fn model_retraining_readiness_prepares_when_drift_and_labels_are_ready() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "retraining_ready").await;
 
     let (status, _) = json_request(

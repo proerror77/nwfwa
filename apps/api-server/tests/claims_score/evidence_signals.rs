@@ -9,7 +9,7 @@ use super::support::test_config;
 
 #[tokio::test]
 async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -187,7 +187,7 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
 
 #[tokio::test]
 async fn returns_provider_profile_outlier_evidence_for_network_risk() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -308,7 +308,7 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
 
 #[tokio::test]
 async fn returns_provider_sanctions_evidence_for_excluded_provider() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -403,7 +403,7 @@ async fn returns_provider_sanctions_evidence_for_excluded_provider() {
 
 #[tokio::test]
 async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -514,7 +514,7 @@ async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
 
 #[tokio::test]
 async fn scoring_includes_similar_case_signal_from_knowledge_base() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")

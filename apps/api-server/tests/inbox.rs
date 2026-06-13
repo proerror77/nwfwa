@@ -14,7 +14,7 @@ use support::{json_request, post_inbox, test_config};
 
 #[tokio::test]
 async fn repeated_inbox_payload_upserts_same_audit_trace() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let payload = r#"{
       "systemCode": "AiClaim Core",
       "transNo": "duplicate-message-001",
@@ -84,7 +84,7 @@ async fn repeated_inbox_payload_upserts_same_audit_trace() {
 
 #[tokio::test]
 async fn rejects_same_inbox_idempotency_key_with_different_payload_checksum() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let payload = r#"{
       "systemCode": "AiClaim Core",
       "transNo": "duplicate-message-conflict-001",

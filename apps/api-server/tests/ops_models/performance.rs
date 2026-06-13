@@ -5,7 +5,7 @@ use super::support::{get_json, json_request, test_config};
 
 #[tokio::test]
 async fn lists_baseline_model_versions() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = get_json(app, "/api/v1/ops/models").await;
 
@@ -19,7 +19,7 @@ async fn lists_baseline_model_versions() {
 
 #[tokio::test]
 async fn returns_empty_model_performance_without_scores() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/performance").await;
 
@@ -35,7 +35,7 @@ async fn returns_empty_model_performance_without_scores() {
 
 #[tokio::test]
 async fn returns_model_drift_from_latest_evaluation_metrics() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (_, dataset) = json_request(
         app.clone(),

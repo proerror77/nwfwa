@@ -5,7 +5,7 @@ use super::support::{get_json, json_request, test_config};
 
 #[tokio::test]
 async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -257,7 +257,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
 
 #[tokio::test]
 async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, response) = json_request(
         app.clone(),

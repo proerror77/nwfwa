@@ -5,7 +5,7 @@ use super::support::{json_request, test_config};
 
 #[tokio::test]
 async fn lists_rule_library() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(app, "GET", "/api/v1/ops/rules", "{}").await;
 
@@ -45,7 +45,7 @@ async fn lists_rule_library() {
 
 #[tokio::test]
 async fn ships_minimum_mvp_default_rule_set() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(app, "GET", "/api/v1/ops/rules", "{}").await;
 
@@ -101,7 +101,7 @@ async fn ships_minimum_mvp_default_rule_set() {
 
 #[tokio::test]
 async fn returns_rule_detail_with_versions() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(app, "GET", "/api/v1/ops/rules/rule_early_claim", "{}").await;
 
@@ -121,7 +121,7 @@ async fn returns_rule_detail_with_versions() {
 
 #[tokio::test]
 async fn returns_rule_promotion_gates_for_unreviewed_rule() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,

@@ -5,7 +5,7 @@ use super::{json_request, test_config};
 
 #[tokio::test]
 async fn submits_agent_approval_decision_for_governance_review() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -170,7 +170,7 @@ async fn submits_agent_approval_decision_for_governance_review() {
 
 #[tokio::test]
 async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -276,7 +276,7 @@ async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
 
 #[tokio::test]
 async fn rejects_agent_approval_with_pii_in_reason_or_evidence_refs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -338,7 +338,7 @@ async fn rejects_agent_approval_with_pii_in_reason_or_evidence_refs() {
 
 #[tokio::test]
 async fn lists_agent_approval_alert_until_decision_is_recorded() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),

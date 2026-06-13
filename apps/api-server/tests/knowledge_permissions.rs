@@ -40,7 +40,11 @@ async fn search_similar_with_key(api_key: &str) -> (StatusCode, serde_json::Valu
             }"#,
         ))
         .unwrap();
-    let response = build_app(test_config()).oneshot(request).await.unwrap();
+    let response = build_app(test_config())
+        .unwrap()
+        .oneshot(request)
+        .await
+        .unwrap();
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));

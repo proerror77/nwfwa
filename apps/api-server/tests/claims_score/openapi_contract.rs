@@ -9,7 +9,7 @@ use super::support::test_config;
 
 #[tokio::test]
 async fn exposes_openapi_schema_for_scoring_contract() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("GET")

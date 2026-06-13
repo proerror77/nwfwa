@@ -150,7 +150,7 @@ async fn tpa_contract_docs_and_mock_client_match_openapi() {
 }
 
 async fn openapi_schema() -> serde_json::Value {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let request = Request::builder()
         .method("GET")
         .uri("/api/openapi.json")

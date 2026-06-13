@@ -102,9 +102,13 @@ impl ScoringLookupCache {
     }
 }
 
-pub fn build_app(config: AppConfig) -> Router {
-    let scorer = configured_model_scorer(&config).expect("failed to configure model scorer");
-    build_app_with_parts(config, scorer, InMemoryScoringRepository::shared())
+pub fn build_app(config: AppConfig) -> anyhow::Result<Router> {
+    let scorer = configured_model_scorer(&config)?;
+    Ok(build_app_with_parts(
+        config,
+        scorer,
+        InMemoryScoringRepository::shared(),
+    ))
 }
 
 pub fn configured_model_scorer(

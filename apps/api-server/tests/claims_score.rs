@@ -30,7 +30,7 @@ use support::{activate_post_payment_rule, test_config, RequestEchoScorer};
 
 #[tokio::test]
 async fn approved_demo_hard_deny_rule_auto_denies_coverage_ineligible_claim() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -91,7 +91,7 @@ async fn approved_demo_hard_deny_rule_auto_denies_coverage_ineligible_claim() {
 
 #[tokio::test]
 async fn scoring_uses_only_active_rule_versions() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let submit_request = Request::builder()
         .method("POST")
@@ -257,7 +257,7 @@ async fn scoring_filters_active_rules_by_review_mode() {
 
 #[tokio::test]
 async fn scores_existing_claim_after_full_payload_upsert() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let first = Request::builder()
         .method("POST")

@@ -159,7 +159,7 @@ async fn audit_queries_are_scoped_to_authenticated_customer() {
 
 #[tokio::test]
 async fn lists_global_audit_events_for_governance_review() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -207,7 +207,7 @@ async fn lists_global_audit_events_for_governance_review() {
 
 #[tokio::test]
 async fn lists_audit_backed_tpa_api_calls() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, score) = json_request(
         app.clone(),
@@ -359,7 +359,7 @@ async fn lists_audit_backed_tpa_api_calls() {
 
 #[tokio::test]
 async fn records_audit_sample_creation_for_governance_review() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, sample) = json_request(
         app.clone(),

@@ -8,7 +8,7 @@ use super::support::{
 
 #[tokio::test]
 async fn blocks_model_promotion_when_score_drift_is_detected() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "drift_gate").await;
 
     let (status, _) = json_request(
@@ -65,7 +65,7 @@ async fn blocks_model_promotion_when_score_drift_is_detected() {
 
 #[tokio::test]
 async fn version_scoped_promotion_gates_use_candidate_drift_metrics() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "candidate_drift").await;
 
@@ -120,7 +120,7 @@ async fn version_scoped_promotion_gates_use_candidate_drift_metrics() {
 
 #[tokio::test]
 async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -245,7 +245,7 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
 
 #[tokio::test]
 async fn blocks_model_activation_when_promotion_gates_are_blocked() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
 
     let (status, body) = json_request(
@@ -270,7 +270,7 @@ async fn blocks_model_activation_when_promotion_gates_are_blocked() {
 
 #[tokio::test]
 async fn activates_candidate_model_after_promotion_gates_pass() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
 
     let (status, review) = json_request(
@@ -427,7 +427,7 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
 
 #[tokio::test]
 async fn model_promotion_and_activation_are_version_scoped() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
 
     let review_uri =
@@ -482,7 +482,7 @@ async fn model_promotion_and_activation_are_version_scoped() {
 
 #[tokio::test]
 async fn rolls_back_active_model_version() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
     activate_candidate_for_test(app.clone(), &candidate_version).await;
 
@@ -538,7 +538,7 @@ async fn rolls_back_active_model_version() {
 
 #[tokio::test]
 async fn rollback_requires_active_model_evidence_ref() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
     activate_candidate_for_test(app.clone(), &candidate_version).await;
 
@@ -560,7 +560,7 @@ async fn rollback_requires_active_model_evidence_ref() {
 
 #[tokio::test]
 async fn rollback_can_restore_replaced_active_version_from_rollback_history() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
     activate_candidate_for_test(app.clone(), &candidate_version).await;
 
@@ -606,7 +606,7 @@ async fn rollback_can_restore_replaced_active_version_from_rollback_history() {
 
 #[tokio::test]
 async fn rollback_uses_lifecycle_history_when_non_lifecycle_governance_events_exceed_window() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
     activate_candidate_for_test(app.clone(), &candidate_version).await;
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "rollback_window").await;
@@ -655,7 +655,7 @@ async fn rollback_uses_lifecycle_history_when_non_lifecycle_governance_events_ex
 
 #[tokio::test]
 async fn rejects_rollback_to_active_model_when_newer_candidate_exists() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
 
     let (status, body) = json_request(
@@ -685,7 +685,7 @@ async fn rejects_rollback_to_active_model_when_newer_candidate_exists() {
 
 #[tokio::test]
 async fn blocks_model_rollback_without_approved_target() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,

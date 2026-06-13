@@ -5,7 +5,7 @@ use super::support::{json_request, test_config};
 
 #[tokio::test]
 async fn rejects_invalid_model_retraining_output_contract() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let valid_request = serde_json::json!({
         "actor": "trainer-worker",
         "notes": "Candidate model and validation report registered.",

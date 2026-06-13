@@ -5,7 +5,7 @@ use super::{json_request, renewal_dataset_payload, test_config};
 
 #[tokio::test]
 async fn registers_feature_set_model_dataset_and_evaluation_trace() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (_, created) = json_request(
         app.clone(),
         "POST",

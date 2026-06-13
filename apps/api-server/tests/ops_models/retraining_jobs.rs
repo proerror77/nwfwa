@@ -5,7 +5,7 @@ use super::support::{get_json, json_request, register_model_dataset_for_test, te
 
 #[tokio::test]
 async fn blocks_model_retraining_job_when_readiness_is_blocked() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -24,7 +24,7 @@ async fn blocks_model_retraining_job_when_readiness_is_blocked() {
 
 #[tokio::test]
 async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "retraining_job").await;
 
     let (status, _) = json_request(

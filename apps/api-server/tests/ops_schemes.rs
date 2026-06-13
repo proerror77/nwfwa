@@ -27,7 +27,7 @@ fn test_config() -> AppConfig {
 
 #[tokio::test]
 async fn lists_governed_fwa_scheme_taxonomy() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let request = Request::builder()
         .method("GET")
         .uri("/api/v1/ops/fwa-schemes")
@@ -59,7 +59,7 @@ async fn lists_governed_fwa_scheme_taxonomy() {
 
 #[tokio::test]
 async fn scheme_taxonomy_requires_api_key() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let request = Request::builder()
         .method("GET")
         .uri("/api/v1/ops/fwa-schemes")

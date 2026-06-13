@@ -16,7 +16,7 @@ use super::support::{
 
 #[tokio::test]
 async fn scores_claim_with_review_mode_and_audits_routing_policy() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -202,7 +202,7 @@ async fn pending_evidence_rule_returns_required_evidence() {
 
 #[tokio::test]
 async fn generated_tpa_rule_funnel_demo_payloads_match_expected_outcomes() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let dataset_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/tpa-rule-funnel-demo");

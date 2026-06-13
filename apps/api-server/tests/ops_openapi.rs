@@ -28,7 +28,7 @@ use support::{assert_writeback_pii_contract, test_config};
 
 #[tokio::test]
 async fn openapi_includes_operations_paths() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("GET")

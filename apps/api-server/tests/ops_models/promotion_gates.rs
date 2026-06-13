@@ -8,7 +8,7 @@ use super::support::{
 
 #[tokio::test]
 async fn returns_model_promotion_gates_without_evaluation_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
 
@@ -86,7 +86,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
 
 #[tokio::test]
 async fn model_promotion_gates_require_data_quality_and_label_provenance() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "quality_gate").await;
 
     let (status, _) = json_request(
@@ -162,7 +162,7 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
 
 #[tokio::test]
 async fn model_promotion_gates_require_rust_feature_set_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "rust_feature_set").await;
 
     let (status, _) = json_request(
@@ -231,7 +231,7 @@ async fn model_promotion_gates_require_rust_feature_set_evidence() {
 
 #[tokio::test]
 async fn model_promotion_gates_require_rust_serving_artifact_evaluation() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "rust_serving_gate").await;
 
     let (status, _) = json_request(
@@ -301,7 +301,7 @@ async fn model_promotion_gates_require_rust_serving_artifact_evaluation() {
 
 #[tokio::test]
 async fn model_promotion_gates_require_time_group_split_strategy() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "split_strategy").await;
 
     let (status, _) = json_request(
@@ -354,7 +354,7 @@ async fn model_promotion_gates_require_time_group_split_strategy() {
 
 #[tokio::test]
 async fn model_promotion_gates_block_public_research_dataset_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "public_research").await;
 
     let (status, _) = json_request(
@@ -417,7 +417,7 @@ async fn model_promotion_gates_block_public_research_dataset_evidence() {
 
 #[tokio::test]
 async fn model_promotion_gates_block_unhealthy_source_dataset() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let model_dataset_id =
         register_unhealthy_model_dataset_for_test(app.clone(), "unhealthy_source").await;
 
@@ -480,7 +480,7 @@ async fn model_promotion_gates_block_unhealthy_source_dataset() {
 
 #[tokio::test]
 async fn model_promotion_gates_include_label_governance_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -614,7 +614,7 @@ async fn model_promotion_gates_include_label_governance_evidence() {
 
 #[tokio::test]
 async fn model_promotion_gates_ignore_feedback_and_labels_for_other_model_versions() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
 
     let (status, body) = json_request(

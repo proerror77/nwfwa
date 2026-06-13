@@ -9,7 +9,7 @@ use super::support::test_config;
 
 #[tokio::test]
 async fn scores_inbox_canonical_claim_context() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -133,7 +133,7 @@ async fn scores_inbox_canonical_claim_context() {
 
 #[tokio::test]
 async fn canonical_claim_context_audits_defaulted_field_warnings() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -220,7 +220,7 @@ async fn canonical_claim_context_audits_defaulted_field_warnings() {
 
 #[tokio::test]
 async fn scores_scoring_ready_inbox_run_handoff() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let normalize_request = Request::builder()
         .method("POST")

@@ -127,7 +127,7 @@ async fn agent_run_logs_and_approvals_are_scoped_to_authenticated_customer() {
 
 #[tokio::test]
 async fn investigates_case_as_assistive_agent_with_evidence_refs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -383,7 +383,7 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
 
 #[tokio::test]
 async fn downgrades_unconfirmed_fraud_language_in_agent_outputs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -430,7 +430,7 @@ async fn downgrades_unconfirmed_fraud_language_in_agent_outputs() {
 
 #[tokio::test]
 async fn redacts_pii_from_agent_free_text_outputs_and_logs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -480,7 +480,7 @@ async fn redacts_pii_from_agent_free_text_outputs_and_logs() {
 
 #[tokio::test]
 async fn redacts_structured_pii_tags_from_agent_context_and_logs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -524,7 +524,7 @@ async fn redacts_structured_pii_tags_from_agent_context_and_logs() {
 
 #[tokio::test]
 async fn lists_agent_run_logs_for_governance_review() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -649,7 +649,7 @@ async fn lists_agent_run_logs_for_governance_review() {
 async fn agent_policy_check_uses_configured_policy_id_for_governance_trace() {
     let mut config = test_config();
     config.agent_policy_id = "customer-alpha-agent-policy-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -702,7 +702,7 @@ async fn agent_policy_check_uses_configured_policy_id_for_governance_trace() {
 async fn agent_investigation_audit_payload_traces_governance_controls() {
     let mut config = test_config();
     config.agent_policy_id = "customer-beta-agent-policy-v2".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -765,7 +765,7 @@ async fn agent_investigation_audit_payload_traces_governance_controls() {
 
 #[tokio::test]
 async fn agent_context_uses_canonical_trace_from_prior_scoring_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),

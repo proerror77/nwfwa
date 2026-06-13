@@ -127,7 +127,7 @@ fn lead_id_for_claim(leads: &serde_json::Value, claim_id: &str) -> String {
 
 #[tokio::test]
 async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, score) = json_request(
         app.clone(),
@@ -449,7 +449,7 @@ async fn lead_and_case_lists_are_scoped_to_authenticated_customer() {
 
 #[tokio::test]
 async fn triages_lead_without_opening_case_for_non_case_dispositions() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     score_high_risk_claim(app.clone(), "CLM-LEAD-REJECT").await;
     score_high_risk_claim(app.clone(), "CLM-LEAD-EVIDENCE").await;
 
@@ -532,7 +532,7 @@ async fn triages_lead_without_opening_case_for_non_case_dispositions() {
 
 #[tokio::test]
 async fn triaged_case_preserves_review_mode_from_lead() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -622,7 +622,7 @@ async fn triaged_case_preserves_review_mode_from_lead() {
 
 #[tokio::test]
 async fn triage_decisions_create_lead_disposition_labels() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     for claim_id in [
         "CLM-LEAD-LABEL-OPEN",
         "CLM-LEAD-LABEL-REJECT",
@@ -756,7 +756,7 @@ async fn triage_decisions_create_lead_disposition_labels() {
 
 #[tokio::test]
 async fn merges_lead_into_target_without_opening_case() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     score_high_risk_claim(app.clone(), "CLM-LEAD-MERGE-SOURCE").await;
     score_high_risk_claim(app.clone(), "CLM-LEAD-MERGE-TARGET").await;
 

@@ -5,7 +5,7 @@ use super::{json_request, score_high_risk_claim, test_config};
 
 #[tokio::test]
 async fn links_investigation_result_outcome_back_to_case() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     score_high_risk_claim(app.clone(), "CLM-CASE-FINAL").await;
 
     let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
@@ -90,7 +90,7 @@ async fn links_investigation_result_outcome_back_to_case() {
 
 #[tokio::test]
 async fn rejects_investigation_result_for_unknown_case() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -120,7 +120,7 @@ async fn rejects_investigation_result_for_unknown_case() {
 
 #[tokio::test]
 async fn replayed_investigation_result_clears_case_projection_when_unlinked() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     score_high_risk_claim(app.clone(), "CLM-CASE-REPLAY").await;
 
     let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;

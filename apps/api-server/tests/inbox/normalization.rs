@@ -5,7 +5,7 @@ use super::support::{json_request, post_inbox, test_config};
 
 #[tokio::test]
 async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app.clone(),
         r#"{

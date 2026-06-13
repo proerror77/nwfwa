@@ -23,7 +23,7 @@ use support::{json_request, scoped_config, test_config, unauthenticated_request}
 
 #[tokio::test]
 async fn lists_governed_outcome_labels_from_investigation_and_qa() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -166,7 +166,7 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
 
 #[tokio::test]
 async fn lists_governed_outcome_labels_from_terminal_case_status() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -316,7 +316,7 @@ async fn lists_governed_outcome_labels_from_terminal_case_status() {
 
 #[tokio::test]
 async fn returns_member_profile_summary_from_scored_claims() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     for (claim_id, policy_id, amount, limit) in [
         ("CLM-MEMBER-1001", "POL-MEMBER-1001", "9200.00", "10000.00"),

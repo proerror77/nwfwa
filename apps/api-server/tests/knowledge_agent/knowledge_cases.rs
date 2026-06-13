@@ -10,7 +10,7 @@ use super::{json_request, scoped_config, test_config};
 
 #[tokio::test]
 async fn lists_knowledge_cases() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(app, "GET", "/api/v1/ops/knowledge/cases", "{}").await;
 
@@ -30,7 +30,7 @@ async fn lists_knowledge_cases() {
 
 #[tokio::test]
 async fn searches_similar_knowledge_cases_with_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -121,7 +121,7 @@ async fn searches_similar_knowledge_cases_with_evidence() {
 
 #[tokio::test]
 async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -397,7 +397,7 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
 
 #[tokio::test]
 async fn publish_knowledge_case_preserves_canonical_evidence_refs_from_scoring_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _body) = json_request(
         app.clone(),

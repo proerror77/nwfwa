@@ -13,7 +13,7 @@ use super::support::{scoped_config, test_config, HighRiskScorer};
 
 #[tokio::test]
 async fn scores_full_payload_with_api_key() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")
@@ -154,7 +154,7 @@ async fn claim_id_scoring_is_scoped_to_authenticated_customer() {
 
 #[tokio::test]
 async fn scores_spec_style_top_level_full_payload() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let request = Request::builder()
         .method("POST")

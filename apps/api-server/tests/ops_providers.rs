@@ -47,7 +47,7 @@ async fn json_request(
 
 #[tokio::test]
 async fn returns_provider_risk_summary_from_scoring_profiles() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -147,7 +147,7 @@ async fn returns_provider_risk_summary_from_scoring_profiles() {
 
 #[tokio::test]
 async fn returns_provider_graph_risk_summary_from_relationships() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -239,7 +239,7 @@ async fn returns_provider_graph_risk_summary_from_relationships() {
 
 #[tokio::test]
 async fn records_unsupervised_anomaly_candidate_review_without_auto_actions() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -308,7 +308,7 @@ async fn records_unsupervised_anomaly_candidate_review_without_auto_actions() {
 
 #[tokio::test]
 async fn submits_anomaly_clustering_report_and_derives_review_queue() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let source_report_uri =
         "data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json";
 
@@ -422,7 +422,7 @@ async fn submits_anomaly_clustering_report_and_derives_review_queue() {
 
 #[tokio::test]
 async fn anomaly_clustering_report_submission_requires_report_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -462,7 +462,7 @@ async fn anomaly_clustering_report_submission_requires_report_evidence() {
 
 #[tokio::test]
 async fn anomaly_candidate_review_requires_clustering_report_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,

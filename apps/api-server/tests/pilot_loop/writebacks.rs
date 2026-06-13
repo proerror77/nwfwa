@@ -5,7 +5,7 @@ use super::support::{json_request, test_config};
 
 #[tokio::test]
 async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -272,7 +272,7 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
 
 #[tokio::test]
 async fn investigation_result_writeback_preserves_canonical_evidence_refs_from_scoring_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -402,7 +402,7 @@ async fn investigation_result_writeback_preserves_canonical_evidence_refs_from_s
 
 #[tokio::test]
 async fn rejects_pii_in_investigation_and_qa_writebacks() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -444,7 +444,7 @@ async fn rejects_pii_in_investigation_and_qa_writebacks() {
 
 #[tokio::test]
 async fn rejects_unsupported_qa_feedback_target() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -468,7 +468,7 @@ async fn rejects_unsupported_qa_feedback_target() {
 
 #[tokio::test]
 async fn rejects_unsupported_qa_conclusion() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -492,7 +492,7 @@ async fn rejects_unsupported_qa_conclusion() {
 
 #[tokio::test]
 async fn rejects_unsupported_qa_issue_type() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -516,7 +516,7 @@ async fn rejects_unsupported_qa_issue_type() {
 
 #[tokio::test]
 async fn accepts_prd_issue_types_for_qa_writeback() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     for issue_type in [
         "confirmed_fwa",

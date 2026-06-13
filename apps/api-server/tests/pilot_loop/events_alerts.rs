@@ -5,7 +5,7 @@ use super::support::{json_request, test_config};
 
 #[tokio::test]
 async fn lists_webhook_events_for_tpa_integrations() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -204,7 +204,7 @@ async fn lists_webhook_events_for_tpa_integrations() {
 
 #[tokio::test]
 async fn lists_ops_alerts_for_high_risk_routing() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, score) = json_request(
         app.clone(),

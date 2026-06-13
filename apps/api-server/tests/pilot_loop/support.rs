@@ -58,6 +58,10 @@ pub(super) async fn unauthenticated_request(method: &str, uri: &str, body: &str)
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
         .unwrap();
-    let response = build_app(test_config()).oneshot(request).await.unwrap();
+    let response = build_app(test_config())
+        .unwrap()
+        .oneshot(request)
+        .await
+        .unwrap();
     response.status()
 }

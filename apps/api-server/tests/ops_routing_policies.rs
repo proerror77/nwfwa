@@ -34,7 +34,7 @@ fn test_config() -> AppConfig {
 
 #[tokio::test]
 async fn lists_default_routing_policies_for_governance_visibility() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let response = app
         .oneshot(
@@ -111,7 +111,7 @@ async fn lists_injected_active_routing_policy_versions() {
 
 #[tokio::test]
 async fn saves_draft_routing_policy_candidate_without_affecting_scoring() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = post_json(
         app.clone(),
@@ -298,7 +298,7 @@ async fn saves_draft_routing_policy_candidate_without_affecting_scoring() {
 
 #[tokio::test]
 async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, saved) = post_json(
         app.clone(),
@@ -466,7 +466,7 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
 
 #[tokio::test]
 async fn routing_policy_promotion_gates_block_invalid_thresholds() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, saved) = post_json(
         app.clone(),
@@ -539,7 +539,7 @@ async fn routing_policy_promotion_gates_block_invalid_thresholds() {
 
 #[tokio::test]
 async fn routing_policy_list_requires_api_key() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let response = app
         .oneshot(

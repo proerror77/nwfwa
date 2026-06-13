@@ -5,7 +5,7 @@ use super::support::{json_request, post_inbox, test_config};
 
 #[tokio::test]
 async fn rejects_inbox_payload_with_structured_field_errors() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app.clone(),
         r#"{
@@ -45,7 +45,7 @@ async fn rejects_inbox_payload_with_structured_field_errors() {
 
 #[tokio::test]
 async fn normalizes_medical_record_ocr_artifacts_before_evidence_output() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -110,7 +110,7 @@ async fn normalizes_medical_record_ocr_artifacts_before_evidence_output() {
 
 #[tokio::test]
 async fn flags_document_invoice_diagnosis_mismatch() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -188,7 +188,7 @@ async fn flags_document_invoice_diagnosis_mismatch() {
 
 #[tokio::test]
 async fn flags_document_invoice_diagnosis_mismatch_on_non_primary_invoice() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -276,7 +276,7 @@ async fn flags_document_invoice_diagnosis_mismatch_on_non_primary_invoice() {
 
 #[tokio::test]
 async fn flags_bill_lines_without_invoice_diagnosis() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -342,7 +342,7 @@ async fn flags_bill_lines_without_invoice_diagnosis() {
 
 #[tokio::test]
 async fn flags_medical_record_patient_name_identity_mismatch() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -405,7 +405,7 @@ async fn flags_medical_record_patient_name_identity_mismatch() {
 
 #[tokio::test]
 async fn flags_non_primary_medical_record_patient_identity_mismatch() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -474,7 +474,7 @@ async fn flags_non_primary_medical_record_patient_identity_mismatch() {
 
 #[tokio::test]
 async fn flags_non_primary_invoice_person_identity_mismatch() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -551,7 +551,7 @@ async fn flags_non_primary_invoice_person_identity_mismatch() {
 
 #[tokio::test]
 async fn preserves_all_medical_records_as_document_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -645,7 +645,7 @@ async fn preserves_all_medical_records_as_document_evidence() {
 
 #[tokio::test]
 async fn preserves_bill_lines_from_all_invoices() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{
@@ -816,7 +816,7 @@ async fn preserves_bill_lines_from_all_invoices() {
 
 #[tokio::test]
 async fn flags_bill_lines_without_diagnosis_on_non_primary_invoice() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let (status, body) = post_inbox(
         app,
         r#"{

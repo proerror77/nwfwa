@@ -5,7 +5,7 @@ use super::support::{json_request, test_config};
 
 #[tokio::test]
 async fn discovers_candidate_rules_from_labeled_samples() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -113,7 +113,7 @@ async fn discovers_candidate_rules_from_labeled_samples() {
 
 #[tokio::test]
 async fn discovers_candidate_rules_from_parquet_dataset() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -157,7 +157,7 @@ async fn discovers_candidate_rules_from_parquet_dataset() {
 
 #[tokio::test]
 async fn empty_candidate_feature_fields_discovers_all_parquet_features() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -186,7 +186,7 @@ async fn empty_candidate_feature_fields_discovers_all_parquet_features() {
 
 #[tokio::test]
 async fn discovers_shallow_tree_rule_candidates_from_labeled_samples() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,
@@ -302,7 +302,7 @@ async fn discovers_shallow_tree_rule_candidates_from_labeled_samples() {
 
 #[tokio::test]
 async fn discovers_rule_candidates_from_model_explanations() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app,

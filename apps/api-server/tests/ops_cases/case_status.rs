@@ -5,7 +5,7 @@ use super::{json_request, test_config};
 
 #[tokio::test]
 async fn updates_case_status_with_audit_trail() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, score) = json_request(
         app.clone(),

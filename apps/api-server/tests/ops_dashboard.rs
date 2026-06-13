@@ -162,7 +162,7 @@ async fn register_model_dataset_for_dashboard(app: axum::Router) -> String {
 
 #[tokio::test]
 async fn returns_dashboard_canonical_trace_coverage() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -272,7 +272,7 @@ async fn returns_dashboard_canonical_trace_coverage() {
 
 #[tokio::test]
 async fn dashboard_attributes_savings_to_governed_rule_and_model_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -369,7 +369,7 @@ async fn dashboard_attributes_savings_to_governed_rule_and_model_evidence() {
 
 #[tokio::test]
 async fn dashboard_separates_observed_and_estimated_value() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     for body in [
         r#"{
@@ -449,7 +449,7 @@ async fn dashboard_separates_observed_and_estimated_value() {
 
 #[tokio::test]
 async fn dashboard_summarizes_case_sla_metrics() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -539,7 +539,7 @@ async fn dashboard_summarizes_case_sla_metrics() {
 
 #[tokio::test]
 async fn dashboard_summarizes_rule_governance_from_rule_performance() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -749,7 +749,11 @@ async fn dashboard_summary_requires_api_key() {
         .uri("/api/v1/ops/dashboard/summary")
         .body(Body::empty())
         .unwrap();
-    let response = build_app(test_config()).oneshot(request).await.unwrap();
+    let response = build_app(test_config())
+        .unwrap()
+        .oneshot(request)
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
