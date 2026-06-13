@@ -79,6 +79,12 @@ mod mlops_monitoring_runtime;
 mod mlops_cycle;
 pub use mlops_cycle::{build_mlops_monitoring_cycle_evidence, run_mlops_monitoring_cycle};
 
+mod anomaly_upgrade;
+pub use anomaly_upgrade::{
+    build_anomaly_upgrade_readiness_report, AnomalyUpgradeReadinessInput,
+    AnomalyUpgradeReadinessReport, AnomalyUpgradeReviewTask,
+};
+
 mod model_artifact_evaluation;
 pub use model_artifact_evaluation::evaluate_model_artifact;
 

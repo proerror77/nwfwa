@@ -2,6 +2,7 @@ use super::*;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod alertmanager;
+mod anomaly_upgrade;
 mod automl_lifecycle;
 mod automl_ranking;
 mod clustering;
