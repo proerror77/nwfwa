@@ -168,12 +168,27 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["canceller"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
         schema["paths"]["/api/v1/ops/agent-runs/{agent_run_id}/approvals"]["post"]["responses"]
             ["409"]["content"]["application/json"]["schema"]["$ref"],
         "#/components/schemas/ErrorResponse"
     );
     assert_eq!(
+        schema["paths"]["/api/v1/ops/agent-runs/{agent_run_id}/cancel"]["post"]["responses"]["409"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ErrorResponse"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]["reason"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["reason"]
             ["minLength"],
         1
     );
@@ -183,8 +198,18 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
             ["evidence_refs"]["items"]["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
+            ["items"]["minLength"],
         1
     );
     assert_eq!(
@@ -192,9 +217,21 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
             ["evidence_refs"]["contains"]["pattern"],
         "^agent_run:"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
+            ["contains"]["pattern"],
+        "^agent_run:"
+    );
     assert!(
         schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
             ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("agent_run:{agent_run_id}")
+    );
+    assert!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
+            ["description"]
             .as_str()
             .unwrap()
             .contains("agent_run:{agent_run_id}")
@@ -207,8 +244,22 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
             .contains("must not contain PII")
     );
     assert!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["reason"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
+    assert!(
         schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
             ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("must not contain PII")
+    );
+    assert!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
+            ["description"]
             .as_str()
             .unwrap()
             .contains("must not contain PII")

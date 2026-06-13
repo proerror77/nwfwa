@@ -372,6 +372,26 @@ pub(super) async fn list_agent_runs(
     Ok(runs)
 }
 
+pub(super) async fn cancel_agent_run(
+    repository: &PostgresScoringRepository,
+    agent_run_id: &str,
+) -> anyhow::Result<()> {
+    let result = sqlx::query(
+        "UPDATE agent_runs
+             SET status = 'cancelled',
+                 completed_at = COALESCE(completed_at, NOW())
+             WHERE agent_run_id = $1",
+    )
+    .bind(agent_run_id)
+    .execute(&repository.pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        anyhow::bail!("agent run not found: {agent_run_id}");
+    }
+    Ok(())
+}
+
 pub(super) async fn save_agent_approval(
     repository: &PostgresScoringRepository,
     approval: AgentApprovalRecord,

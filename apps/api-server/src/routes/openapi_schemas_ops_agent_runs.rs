@@ -135,6 +135,36 @@ pub(super) fn agent_run_schemas() -> Value {
                 "audit_id": { "type": "string" }
             }
         },
+        "CancelAgentRunRequest": {
+            "type": "object",
+            "required": ["canceller", "reason", "evidence_refs"],
+            "properties": {
+                "canceller": { "type": "string", "minLength": 1 },
+                "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Agent cancellation reason must not contain PII."
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Must include agent_run:{agent_run_id} for the run being cancelled and must not contain PII. The platform appends policy:{FWA_AGENT_POLICY_ID} to the persisted audit event.",
+                    "items": { "type": "string", "minLength": 1 },
+                    "contains": {
+                        "type": "string",
+                        "pattern": "^agent_run:"
+                    }
+                }
+            }
+        },
+        "CancelAgentRunResponse": {
+            "type": "object",
+            "required": ["run", "audit_id"],
+            "properties": {
+                "run": { "$ref": "#/components/schemas/AgentRunLogRecord" },
+                "audit_id": { "type": "string" }
+            }
+        },
         "AgentRunLogListResponse": {
             "type": "object",
             "required": ["runs"],

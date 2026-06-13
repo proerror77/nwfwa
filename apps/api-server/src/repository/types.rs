@@ -24,6 +24,7 @@ pub(super) const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "model.activation.completed",
     "model.rollback.completed",
     "agent.approval.decided",
+    "agent.run.cancelled",
     "audit_sample.created",
     "qa.feedback.status.updated",
     "routing_policy.candidate.saved",

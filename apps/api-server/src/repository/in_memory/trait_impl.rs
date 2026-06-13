@@ -674,6 +674,10 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_list_agent_runs(customer_scope_id).await
     }
 
+    async fn cancel_agent_run(&self, agent_run_id: &str) -> anyhow::Result<()> {
+        self.in_memory_cancel_agent_run(agent_run_id).await
+    }
+
     async fn save_agent_approval(
         &self,
         approval: AgentApprovalRecord,

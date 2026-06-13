@@ -127,6 +127,18 @@ impl InMemoryScoringRepository {
         Ok(runs)
     }
 
+    pub(super) async fn in_memory_cancel_agent_run(
+        &self,
+        agent_run_id: &str,
+    ) -> anyhow::Result<()> {
+        let mut runs = self.agent_runs.lock().await;
+        let Some(run) = runs.iter_mut().find(|run| run.agent_run_id == agent_run_id) else {
+            anyhow::bail!("agent run not found: {agent_run_id}");
+        };
+        run.status = "cancelled".into();
+        Ok(())
+    }
+
     pub(super) async fn in_memory_save_agent_approval(
         &self,
         approval: AgentApprovalRecord,

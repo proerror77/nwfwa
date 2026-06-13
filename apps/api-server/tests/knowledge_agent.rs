@@ -1,7 +1,9 @@
 use api_server::{
     app::{build_app, build_app_with_parts},
     config::AppConfig,
-    repository::{AgentRegistryRecord, InMemoryScoringRepository},
+    repository::{
+        AgentRegistryRecord, InMemoryScoringRepository, PersistedAgentRun, PersistedAuditEvent,
+    },
 };
 use axum::{
     body::{to_bytes, Body},
@@ -123,6 +125,122 @@ async fn agent_run_logs_and_approvals_are_scoped_to_authenticated_customer() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["code"], "AGENT_RUN_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn cancels_running_agent_run_and_records_governance_audit_event() {
+    let repository = InMemoryScoringRepository::shared();
+    repository
+        .save_agent_run(PersistedAgentRun {
+            agent_run_id: "agent_cancel_running_1".into(),
+            claim_id: "CLM-AGENT-CANCEL".into(),
+            status: "running".into(),
+            decision_boundary: "assistive_only".into(),
+            output_json: serde_json::json!({
+                "risk_summary": "Agent run is still collecting evidence.",
+                "findings": [],
+                "evidence_sufficiency": "insufficient"
+            }),
+            evidence_refs: vec![serde_json::json!("agent_run:agent_cancel_running_1")],
+            steps: vec![],
+            context_snapshots: vec![],
+            policy_checks: vec![],
+            tool_calls: vec![],
+            tool_results: vec![],
+            approvals: vec![],
+        })
+        .await
+        .unwrap();
+    repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: "audit_agent_cancel_scope".into(),
+            run_id: "seed_agent_cancel_scope".into(),
+            claim_id: "CLM-AGENT-CANCEL".into(),
+            source_system: "tpa-demo".into(),
+            actor_id: "seed".into(),
+            actor_role: "test".into(),
+            event_type: "agent.run.seeded".into(),
+            event_status: "succeeded".into(),
+            summary: "Seed running agent run for cancellation scope.".into(),
+            payload: serde_json::json!({
+                "customer_scope_id": "demo-customer",
+                "claim_id": "CLM-AGENT-CANCEL"
+            }),
+            evidence_refs: vec![serde_json::json!("agent_run:agent_cancel_running_1")],
+        })
+        .await
+        .unwrap();
+    let app = build_app_with_parts(test_config(), Arc::new(HeuristicModelScorer), repository);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
+          "reason": "Policy kill-switch triggered during evidence collection.",
+          "evidence_refs": ["agent_run:agent_cancel_running_1", "policy:manual-kill-switch"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["run"]["agent_run_id"], "agent_cancel_running_1");
+    assert_eq!(body["run"]["status"], "cancelled");
+    assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
+
+    let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?event_group=governance&event_type=agent.run.cancelled&actor_id=ops-lead&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let events = body["events"].as_array().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0]["payload"]["agent_run_id"],
+        "agent_cancel_running_1"
+    );
+    assert_eq!(events[0]["payload"]["previous_status"], "running");
+    assert_eq!(events[0]["payload"]["status"], "cancelled");
+    assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
+    assert!(events[0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
+          "reason": "Second cancellation should not be accepted.",
+          "evidence_refs": ["agent_run:agent_cancel_running_1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "AGENT_RUN_NOT_CANCELLABLE");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
+          "reason": "Missing required run evidence.",
+          "evidence_refs": ["policy:manual-kill-switch"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_AGENT_CANCEL_RUN_EVIDENCE");
 }
 
 #[tokio::test]

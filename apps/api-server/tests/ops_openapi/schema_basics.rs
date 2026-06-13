@@ -73,6 +73,7 @@ pub(crate) fn assert_paths_health_and_inbox_contract(schema: &serde_json::Value)
         "/api/v1/ops/api-calls",
         "/api/v1/ops/agent-runs",
         "/api/v1/ops/agent-runs/{agent_run_id}/approvals",
+        "/api/v1/ops/agent-runs/{agent_run_id}/cancel",
         "/api/v1/ops/medical-review/queue",
         "/api/v1/ops/medical-review/results",
         "/api/v1/ops/fwa-schemes",

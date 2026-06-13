@@ -703,6 +703,10 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_agents::list_agent_runs(self, customer_scope_id).await
     }
 
+    async fn cancel_agent_run(&self, agent_run_id: &str) -> anyhow::Result<()> {
+        postgres_agents::cancel_agent_run(self, agent_run_id).await
+    }
+
     async fn save_agent_approval(
         &self,
         approval: AgentApprovalRecord,

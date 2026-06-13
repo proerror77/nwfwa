@@ -486,5 +486,45 @@ pub(super) fn operational_paths() -> Value {
                 }
             }
         },
+        "/api/v1/ops/agent-runs/{agent_run_id}/cancel": {
+            "post": {
+                "summary": "Cancel a queued or running agent run",
+                "security": [{ "ApiKeyAuth": [] }],
+                "parameters": [
+                    {
+                        "name": "agent_run_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": { "type": "string" }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": { "$ref": "#/components/schemas/CancelAgentRunRequest" }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Agent run cancellation accepted and audited",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/CancelAgentRunResponse" }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Agent run has already reached a terminal state",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
     })
 }

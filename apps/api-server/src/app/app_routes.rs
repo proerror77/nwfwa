@@ -87,6 +87,10 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             post(ops_agents::submit_agent_approval),
         )
         .route(
+            "/api/v1/ops/agent-runs/:agent_run_id/cancel",
+            post(ops_agents::cancel_agent_run),
+        )
+        .route(
             "/api/v1/agent/cases/investigate",
             post(agent::investigate_case),
         )

@@ -477,6 +477,8 @@ pub trait KnowledgeRepository: Send + Sync {
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AgentRunLogRecord>>;
 
+    async fn cancel_agent_run(&self, agent_run_id: &str) -> anyhow::Result<()>;
+
     async fn save_agent_approval(
         &self,
         approval: AgentApprovalRecord,
