@@ -51,12 +51,16 @@ As of the P1/P2 remediation commits after this review:
 - the worker now emits an L3 anomaly upgrade readiness report that checks the
   confirmed-FWA label threshold and 30-day recall signal before opening an
   IQR/MAD statistical-baseline evaluation task.
+- Rust feature-set manifests now include per-column `is_proxy` and
+  `data_source` metadata so training/governance artifacts can distinguish demo
+  baselines from worker-owned peer/profile rollups.
 
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, kill-switch behavior,
-specialist agent orchestration, ICD-10/CPT comparator data, feature source
-metadata, actual probability calibration evidence, and replacement of the L3
-heuristic anomaly scorer with a validated statistical baseline.
+specialist agent orchestration, ICD-10/CPT comparator data, online scoring
+response feature-source metadata, actual probability calibration evidence, and
+replacement of the L3 heuristic anomaly scorer with a validated statistical
+baseline.
 
 ## A. Scoring Layer Gaps
 
