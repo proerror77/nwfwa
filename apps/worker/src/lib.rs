@@ -115,6 +115,12 @@ pub use ops_plans::{
     build_ai_evidence_execution_plan, build_analytics_export_plan, build_governance_ops_plan,
 };
 
+mod sanctions;
+pub use sanctions::{
+    build_sanctions_sync_report, SanctionsProviderUpsert, SanctionsSourceRecord,
+    SanctionsSourceSnapshot, SanctionsSyncReport, SanctionsSyncReviewTask,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,

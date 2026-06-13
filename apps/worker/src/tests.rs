@@ -11,6 +11,7 @@ mod mlops_monitoring_runtime;
 mod model_artifact;
 mod ops_plans;
 mod rule_candidates;
+mod sanctions;
 mod training_handoff;
 mod training_output_enrichment;
 

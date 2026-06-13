@@ -33,6 +33,7 @@ mod serve_mlops_alert_router;
 mod submit_anomaly_clustering_report;
 mod submit_mlops_alert_delivery_tasks;
 mod submit_mlops_monitoring_report;
+mod sync_oig_sam_sanctions;
 mod verify_demo_automl_lifecycle;
 
 pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
@@ -63,6 +64,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         }
         "submit-mlops-alert-delivery-tasks" => submit_mlops_alert_delivery_tasks::run(args).await,
         "submit-anomaly-clustering-report" => submit_anomaly_clustering_report::run(args).await,
+        "sync-oig-sam-sanctions" => sync_oig_sam_sanctions::run(args),
         "deliver-mlops-alert-receiver-webhook" => {
             deliver_mlops_alert_receiver_webhook::run(args).await
         }
