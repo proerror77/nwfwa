@@ -393,6 +393,11 @@ async fn returns_provider_sanctions_evidence_for_excluded_provider() {
         .find(|feature| feature["name"] == "provider_profile_score")
         .expect("provider profile score feature");
     assert_eq!(provider_profile_feature["value"], 100);
+    assert_eq!(provider_profile_feature["is_proxy"], false);
+    assert_eq!(
+        provider_profile_feature["data_source"],
+        "worker.provider_profile_window_rollup"
+    );
 }
 
 #[tokio::test]

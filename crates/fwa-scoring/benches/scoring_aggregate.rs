@@ -14,6 +14,8 @@ fn feature(name: &str, value: serde_json::Value, field: &str) -> FeatureValue {
         name: name.into(),
         version: 1,
         value,
+        is_proxy: false,
+        data_source: "benchmark_fixture".into(),
         evidence_refs: vec![EvidenceRef {
             entity_type: "claim".into(),
             entity_id: "CLM-BENCH".into(),

@@ -312,6 +312,8 @@ async fn scores_spec_style_top_level_full_payload() {
         .expect("feature trace should include claim amount ratio");
     assert_eq!(amount_ratio_feature["version"], 1);
     assert_eq!(amount_ratio_feature["value"], serde_json::json!(0.8));
+    assert_eq!(amount_ratio_feature["is_proxy"], false);
+    assert_eq!(amount_ratio_feature["data_source"], "claim");
     assert!(amount_ratio_feature["evidence_refs"]
         .as_array()
         .unwrap()

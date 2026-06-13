@@ -188,6 +188,8 @@ mod tests {
                 name: "days_since_policy_start".into(),
                 version: 1,
                 value: serde_json::json!(5),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![fwa_features::EvidenceRef {
                     entity_type: "claim".into(),
                     entity_id: "CLM-1".into(),
@@ -271,6 +273,8 @@ mod tests {
                 name: "claim_item_count".into(),
                 version: 1,
                 value: serde_json::json!(5),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );
@@ -313,6 +317,8 @@ mod tests {
                 name: "provider_region".into(),
                 version: 1,
                 value: serde_json::json!("shanghai"),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );
@@ -369,6 +375,8 @@ mod tests {
                 name: "dental_xray_missing".into(),
                 version: 1,
                 value: serde_json::json!(1),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );
@@ -417,6 +425,8 @@ mod tests {
                 name: "coverage_exception".into(),
                 version: 1,
                 value: serde_json::json!("approved"),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );

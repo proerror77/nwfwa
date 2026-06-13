@@ -10,6 +10,8 @@ fn feature(value: serde_json::Value) -> FeatureValue {
         name: "test_feature".into(),
         version: 1,
         value,
+        is_proxy: false,
+        data_source: "test_fixture".into(),
         evidence_refs: vec![],
     }
 }
@@ -19,6 +21,8 @@ fn feature_with_source(name: &str, value: serde_json::Value, field: &str) -> Fea
         name: name.into(),
         version: 1,
         value,
+        is_proxy: false,
+        data_source: "test_fixture".into(),
         evidence_refs: vec![fwa_features::EvidenceRef {
             entity_type: "claim".into(),
             entity_id: "CLM-LAYER-EVIDENCE".into(),
@@ -94,6 +98,8 @@ fn aggregates_seven_layer_scores() {
             name: "claim_amount_to_limit_ratio".into(),
             version: 1,
             value: serde_json::json!(0.8),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -103,6 +109,8 @@ fn aggregates_seven_layer_scores() {
             name: "claim_amount_peer_percentile".into(),
             version: 1,
             value: serde_json::json!(95),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -112,6 +120,8 @@ fn aggregates_seven_layer_scores() {
             name: "claim_item_count".into(),
             version: 1,
             value: serde_json::json!(1),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -121,6 +131,8 @@ fn aggregates_seven_layer_scores() {
             name: "high_cost_item_ratio".into(),
             version: 1,
             value: serde_json::json!(1.0),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -130,6 +142,8 @@ fn aggregates_seven_layer_scores() {
             name: "diagnosis_procedure_match_score".into(),
             version: 1,
             value: serde_json::json!(0.35),
+            is_proxy: true,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -139,6 +153,8 @@ fn aggregates_seven_layer_scores() {
             name: "provider_risk_tier".into(),
             version: 1,
             value: serde_json::json!("HIGH"),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -148,6 +164,8 @@ fn aggregates_seven_layer_scores() {
             name: "provider_profile_score".into(),
             version: 1,
             value: serde_json::json!(80),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -157,6 +175,8 @@ fn aggregates_seven_layer_scores() {
             name: "provider_graph_risk_score".into(),
             version: 1,
             value: serde_json::json!(92),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );

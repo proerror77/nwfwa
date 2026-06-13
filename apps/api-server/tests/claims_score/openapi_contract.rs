@@ -458,6 +458,25 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             ["$ref"],
         "#/components/schemas/EvidenceRef"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["FeatureValue"]["required"],
+        serde_json::json!([
+            "name",
+            "version",
+            "value",
+            "is_proxy",
+            "data_source",
+            "evidence_refs"
+        ])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FeatureValue"]["properties"]["is_proxy"]["type"],
+        "boolean"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FeatureValue"]["properties"]["data_source"]["minLength"],
+        1
+    );
     let layer_schema = &schema["components"]["schemas"]["DetectionLayerScore"];
     assert_eq!(
         layer_schema["required"],

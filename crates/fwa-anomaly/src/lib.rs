@@ -94,6 +94,8 @@ mod tests {
                 name: "claim_amount_peer_percentile".into(),
                 version: 1,
                 value: serde_json::json!(95),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );
@@ -103,6 +105,8 @@ mod tests {
                 name: "high_cost_item_ratio".into(),
                 version: 1,
                 value: serde_json::json!(1.0),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );
@@ -112,6 +116,8 @@ mod tests {
                 name: "diagnosis_procedure_match_score".into(),
                 version: 1,
                 value: serde_json::json!(0.35),
+                is_proxy: true,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );

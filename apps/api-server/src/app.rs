@@ -442,6 +442,8 @@ mod tests {
                         name: name.to_string(),
                         version: 1,
                         value: serde_json::json!(value),
+                        is_proxy: false,
+                        data_source: "test_fixture".into(),
                         evidence_refs: vec![],
                     },
                 )

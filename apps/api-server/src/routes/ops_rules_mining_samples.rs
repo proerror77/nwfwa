@@ -84,6 +84,8 @@ pub(super) fn feature_map_from_mining_sample(sample: &MiningSample) -> FeatureMa
                     name: name.clone(),
                     version: 1,
                     value: serde_json::json!(value),
+                    is_proxy: false,
+                    data_source: "rule_mining_sample".into(),
                     evidence_refs: vec![],
                 },
             )

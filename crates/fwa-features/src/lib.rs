@@ -16,10 +16,18 @@ pub struct FeatureValue {
     pub name: String,
     pub version: u16,
     pub value: Value,
+    #[serde(default)]
+    pub is_proxy: bool,
+    #[serde(default = "default_feature_data_source")]
+    pub data_source: String,
     pub evidence_refs: Vec<EvidenceRef>,
 }
 
 pub type FeatureMap = BTreeMap<String, FeatureValue>;
+
+fn default_feature_data_source() -> String {
+    "unknown".into()
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PeerFeatureContext {
@@ -79,13 +87,15 @@ pub fn calculate_features_with_contexts(
     if let Some(peer_percentile) =
         peer_context.and_then(|context| context.claim_amount_peer_percentile)
     {
-        insert_number(
+        insert_number_with_metadata(
             &mut features,
             "claim_amount_peer_percentile",
             peer_percentile.min(100),
             "claim_peer_stats",
             &claim_id,
             "claim_amount_peer_percentile",
+            false,
+            "worker.peer_percentile_benchmark_rollup",
         );
     }
 
@@ -105,13 +115,15 @@ pub fn calculate_features_with_contexts(
         &claim_id,
         "claim_items",
     );
-    insert_number(
+    insert_number_with_metadata(
         &mut features,
         "diagnosis_procedure_match_score",
         diagnosis_procedure_match_score(context),
         "claim",
         &claim_id,
         "diagnosis_code",
+        true,
+        "diagnosis_procedure_heuristic",
     );
 
     let provider_risk = match context.provider.risk_tier {
@@ -127,16 +139,25 @@ pub fn calculate_features_with_contexts(
         &context.provider.external_provider_id,
         "risk_tier",
     );
-    insert_number(
+    let provider_profile_score = provider_profile_context
+        .and_then(|context| context.risk_score)
+        .map(|score| (score, false, "worker.provider_profile_window_rollup"))
+        .unwrap_or_else(|| {
+            (
+                provider_profile_score(context.provider.risk_tier),
+                true,
+                "provider.risk_tier_baseline",
+            )
+        });
+    insert_number_with_metadata(
         &mut features,
         "provider_profile_score",
-        provider_profile_context
-            .and_then(|context| context.risk_score)
-            .unwrap_or_else(|| provider_profile_score(context.provider.risk_tier))
-            .min(100),
+        provider_profile_score.0.min(100),
         "provider",
         &context.provider.external_provider_id,
         "risk_tier",
+        provider_profile_score.1,
+        provider_profile_score.2,
     );
 
     features
@@ -193,12 +214,36 @@ fn insert_number(
     entity_id: &str,
     field: &str,
 ) {
+    insert_number_with_metadata(
+        features,
+        name,
+        value,
+        entity_type,
+        entity_id,
+        field,
+        false,
+        entity_type,
+    )
+}
+
+fn insert_number_with_metadata(
+    features: &mut FeatureMap,
+    name: &str,
+    value: impl serde::Serialize,
+    entity_type: &str,
+    entity_id: &str,
+    field: &str,
+    is_proxy: bool,
+    data_source: &str,
+) {
     features.insert(
         name.to_string(),
         FeatureValue {
             name: name.to_string(),
             version: 1,
             value: serde_json::to_value(value).expect("feature value serializes"),
+            is_proxy,
+            data_source: data_source.to_string(),
             evidence_refs: vec![EvidenceRef {
                 entity_type: entity_type.to_string(),
                 entity_id: entity_id.to_string(),
@@ -222,6 +267,8 @@ fn insert_string(
             name: name.to_string(),
             version: 1,
             value: Value::String(value.to_string()),
+            is_proxy: false,
+            data_source: entity_type.to_string(),
             evidence_refs: vec![EvidenceRef {
                 entity_type: entity_type.to_string(),
                 entity_id: entity_id.to_string(),
@@ -297,6 +344,8 @@ mod tests {
             features["claim_amount_to_limit_ratio"].value,
             serde_json::json!(0.8)
         );
+        assert!(!features["claim_amount_to_limit_ratio"].is_proxy);
+        assert_eq!(features["claim_amount_to_limit_ratio"].data_source, "claim");
     }
 
     #[test]
@@ -333,6 +382,11 @@ mod tests {
             features["claim_amount_peer_percentile"].evidence_refs[0].entity_type,
             "claim_peer_stats"
         );
+        assert!(!features["claim_amount_peer_percentile"].is_proxy);
+        assert_eq!(
+            features["claim_amount_peer_percentile"].data_source,
+            "worker.peer_percentile_benchmark_rollup"
+        );
     }
 
     #[test]
@@ -347,9 +401,19 @@ mod tests {
             features["diagnosis_procedure_match_score"].value,
             serde_json::json!(0.35)
         );
+        assert!(features["diagnosis_procedure_match_score"].is_proxy);
+        assert_eq!(
+            features["diagnosis_procedure_match_score"].data_source,
+            "diagnosis_procedure_heuristic"
+        );
         assert_eq!(
             features["provider_profile_score"].value,
             serde_json::json!(45)
+        );
+        assert!(features["provider_profile_score"].is_proxy);
+        assert_eq!(
+            features["provider_profile_score"].data_source,
+            "provider.risk_tier_baseline"
         );
     }
 
@@ -363,6 +427,11 @@ mod tests {
         assert_eq!(
             features["provider_profile_score"].value,
             serde_json::json!(100)
+        );
+        assert!(!features["provider_profile_score"].is_proxy);
+        assert_eq!(
+            features["provider_profile_score"].data_source,
+            "worker.provider_profile_window_rollup"
         );
     }
 }

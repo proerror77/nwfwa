@@ -27,6 +27,8 @@ async fn heuristic_scorer_maps_amount_ratio_to_score() {
             name: "claim_amount_to_limit_ratio".into(),
             version: 1,
             value: serde_json::json!(0.82),
+            is_proxy: false,
+            data_source: "test_fixture".into(),
             evidence_refs: vec![],
         },
     );
@@ -801,6 +803,8 @@ fn features(
                     name: name.to_string(),
                     version: 1,
                     value: serde_json::json!(value),
+                    is_proxy: false,
+                    data_source: "test_fixture".into(),
                     evidence_refs: vec![],
                 },
             )

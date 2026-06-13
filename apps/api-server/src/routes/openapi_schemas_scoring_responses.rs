@@ -233,11 +233,13 @@ pub(super) fn scoring_response_schemas() -> Value {
         },
         "FeatureValue": {
             "type": "object",
-            "required": ["name", "version", "value", "evidence_refs"],
+            "required": ["name", "version", "value", "is_proxy", "data_source", "evidence_refs"],
             "properties": {
                 "name": { "type": "string" },
                 "version": { "type": "integer", "minimum": 0 },
                 "value": {},
+                "is_proxy": { "type": "boolean" },
+                "data_source": { "type": "string", "minLength": 1 },
                 "evidence_refs": {
                     "type": "array",
                     "items": { "$ref": "#/components/schemas/EvidenceRef" }

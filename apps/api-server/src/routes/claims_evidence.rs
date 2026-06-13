@@ -236,6 +236,8 @@ pub(super) fn apply_clinical_evidence_features(
                 name: name.into(),
                 version: 1,
                 value: serde_json::json!(value),
+                is_proxy: false,
+                data_source: "clinical_evidence_assessment".into(),
                 evidence_refs: vec![evidence_ref.clone()],
             },
         );
@@ -253,6 +255,8 @@ pub(super) fn apply_provider_profile_features(
             name: "provider_profile_score".into(),
             version: 1,
             value: serde_json::json!(provider_profile.risk_score),
+            is_proxy: false,
+            data_source: "worker.provider_profile_window_rollup".into(),
             evidence_refs: vec![EvidenceRef {
                 entity_type: "provider".into(),
                 entity_id: context.provider.external_provider_id.clone(),
@@ -276,6 +280,8 @@ pub(super) fn apply_provider_profile_features(
                 })
                 .max()
                 .unwrap_or(0)),
+            is_proxy: false,
+            data_source: "worker.peer_percentile_benchmark_rollup".into(),
             evidence_refs: vec![EvidenceRef {
                 entity_type: "provider".into(),
                 entity_id: context.provider.external_provider_id.clone(),
@@ -296,6 +302,8 @@ pub(super) fn apply_provider_relationship_features(
             name: "provider_graph_risk_score".into(),
             version: 1,
             value: serde_json::json!(provider_relationships.risk_score),
+            is_proxy: false,
+            data_source: "worker.provider_graph_signal_rollup".into(),
             evidence_refs: vec![EvidenceRef {
                 entity_type: "provider".into(),
                 entity_id: context.provider.external_provider_id.clone(),
@@ -312,6 +320,8 @@ pub(super) fn apply_provider_relationship_features(
                 .findings
                 .iter()
                 .any(|finding| finding.signal == "high_risk_neighbor_ratio")),
+            is_proxy: false,
+            data_source: "worker.provider_graph_signal_rollup".into(),
             evidence_refs: vec![EvidenceRef {
                 entity_type: "provider".into(),
                 entity_id: context.provider.external_provider_id.clone(),
