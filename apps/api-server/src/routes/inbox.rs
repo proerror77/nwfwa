@@ -197,7 +197,7 @@ pub async fn normalize_claim_inbox(
                     "same inbox idempotency key was received with a different raw payload checksum",
                 ));
             }
-            return Ok(inbox_response_from_record(existing));
+            return inbox_response_from_record(existing);
         }
     }
 
@@ -293,12 +293,20 @@ pub async fn normalize_claim_inbox(
 
 fn inbox_response_from_record(
     record: PersistedInboxClaimRun,
-) -> (StatusCode, Json<InboxNormalizeResponse>) {
-    let validation_errors = serde_json::from_value(record.validation_errors).unwrap_or_default();
-    let data_quality_signals =
-        serde_json::from_value(record.data_quality_signals).unwrap_or_default();
-    let evidence_refs = serde_json::from_value(record.evidence_refs).unwrap_or_default();
-    (
+) -> Result<(StatusCode, Json<InboxNormalizeResponse>), ApiError> {
+    let validation_errors = decode_inbox_record_json(
+        &record.run_id,
+        "validation_errors",
+        record.validation_errors,
+    )?;
+    let data_quality_signals = decode_inbox_record_json(
+        &record.run_id,
+        "data_quality_signals",
+        record.data_quality_signals,
+    )?;
+    let evidence_refs =
+        decode_inbox_record_json(&record.run_id, "evidence_refs", record.evidence_refs)?;
+    Ok((
         status_for_validation_result(&record.validation_result),
         Json(InboxNormalizeResponse {
             run_id: record.run_id,
@@ -315,7 +323,30 @@ fn inbox_response_from_record(
             data_quality_signals,
             evidence_refs,
         }),
-    )
+    ))
+}
+
+fn decode_inbox_record_json<T>(
+    run_id: &str,
+    field: &'static str,
+    value: serde_json::Value,
+) -> Result<T, ApiError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::from_value(value).map_err(|error| {
+        tracing::warn!(
+            run_id,
+            field,
+            error = %error,
+            "stored inbox idempotency payload is not decodable"
+        );
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INBOX_RECORD_CORRUPT",
+            "stored inbox normalization record is corrupt",
+        )
+    })
 }
 
 fn status_for_validation_result(validation_result: &str) -> StatusCode {

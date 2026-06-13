@@ -411,7 +411,7 @@ pub(super) fn scoring_request_schemas() -> Value {
                 },
                 "windows": {
                     "type": "array",
-                    "minItems": 1,
+                    "description": "Provider rollup windows. May be empty only when oig_excluded or sam_debarred is true.",
                     "items": { "$ref": "#/components/schemas/ProviderProfileWindowPayload" }
                 }
             }

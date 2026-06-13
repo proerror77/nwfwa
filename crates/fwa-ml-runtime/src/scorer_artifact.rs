@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fs;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 #[derive(Debug, Clone)]
@@ -15,6 +16,7 @@ pub struct ArtifactModelScorer {
     version_lock: Option<String>,
     expected_signature: Option<String>,
     signing_key: Option<String>,
+    artifact_cache: Arc<Mutex<Option<Arc<LoadedArtifact>>>>,
 }
 
 impl ArtifactModelScorer {
@@ -25,6 +27,7 @@ impl ArtifactModelScorer {
             version_lock: None,
             expected_signature: None,
             signing_key: None,
+            artifact_cache: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -61,8 +64,75 @@ impl ArtifactModelScorer {
             version_lock: version_lock.filter(|value| !value.trim().is_empty()),
             expected_signature: expected_signature.filter(|value| !value.trim().is_empty()),
             signing_key: signing_key.filter(|value| !value.trim().is_empty()),
+            artifact_cache: Arc::new(Mutex::new(None)),
         }
     }
+
+    fn loaded_artifact(&self) -> Result<Arc<LoadedArtifact>, ModelRuntimeError> {
+        if let Some(artifact) = self
+            .artifact_cache
+            .lock()
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?
+            .clone()
+        {
+            return Ok(artifact);
+        }
+
+        let artifact = Arc::new(self.load_artifact()?);
+        *self
+            .artifact_cache
+            .lock()
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))? =
+            Some(artifact.clone());
+        Ok(artifact)
+    }
+
+    fn load_artifact(&self) -> Result<LoadedArtifact, ModelRuntimeError> {
+        let artifact_path = local_artifact_path(&self.artifact_uri)?;
+        let artifact_bytes = fs::read(artifact_path)
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        let artifact_sha256 = sha256_hex(&artifact_bytes);
+
+        if let Some(expected_sha256) = &self.expected_sha256 {
+            if expected_sha256 != &artifact_sha256 {
+                return Err(ModelRuntimeError::InvalidResponse(format!(
+                    "artifact checksum mismatch: expected {expected_sha256}, got {artifact_sha256}"
+                )));
+            }
+        }
+
+        let artifact: LogisticRegressionArtifact = serde_json::from_slice(&artifact_bytes)
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+
+        if let Some(version_lock) = &self.version_lock {
+            if version_lock != &artifact.model_version {
+                return Err(ModelRuntimeError::InvalidResponse(format!(
+                    "serving version lock mismatch: expected {version_lock}, got {}",
+                    artifact.model_version
+                )));
+            }
+        }
+        let signature_status = verify_artifact_signature(
+            &artifact.model_key,
+            &artifact.model_version,
+            &artifact_sha256,
+            self.expected_signature.as_deref(),
+            self.signing_key.as_deref(),
+        )?;
+
+        Ok(LoadedArtifact {
+            artifact,
+            artifact_sha256,
+            signature_status: signature_status.to_string(),
+        })
+    }
+}
+
+#[derive(Debug)]
+struct LoadedArtifact {
+    artifact: LogisticRegressionArtifact,
+    artifact_sha256: String,
+    signature_status: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,21 +186,8 @@ pub(crate) fn round_probability(value: f64) -> f64 {
 impl ModelScorer for ArtifactModelScorer {
     async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
         let started_at = Instant::now();
-        let artifact_path = local_artifact_path(&self.artifact_uri)?;
-        let artifact_bytes = fs::read(artifact_path)
-            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
-        let artifact_sha256 = sha256_hex(&artifact_bytes);
-
-        if let Some(expected_sha256) = &self.expected_sha256 {
-            if expected_sha256 != &artifact_sha256 {
-                return Err(ModelRuntimeError::InvalidResponse(format!(
-                    "artifact checksum mismatch: expected {expected_sha256}, got {artifact_sha256}"
-                )));
-            }
-        }
-
-        let artifact: LogisticRegressionArtifact = serde_json::from_slice(&artifact_bytes)
-            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        let loaded_artifact = self.loaded_artifact()?;
+        let artifact = &loaded_artifact.artifact;
         if artifact.model_key != request.model_key
             || artifact.model_version != request.model_version
         {
@@ -142,22 +199,6 @@ impl ModelScorer for ArtifactModelScorer {
                 artifact.model_version
             )));
         }
-
-        if let Some(version_lock) = &self.version_lock {
-            if version_lock != &artifact.model_version {
-                return Err(ModelRuntimeError::InvalidResponse(format!(
-                    "serving version lock mismatch: expected {version_lock}, got {}",
-                    artifact.model_version
-                )));
-            }
-        }
-        let signature_status = verify_artifact_signature(
-            &artifact.model_key,
-            &artifact.model_version,
-            &artifact_sha256,
-            self.expected_signature.as_deref(),
-            self.signing_key.as_deref(),
-        )?;
 
         let mut logit = artifact.intercept;
         let mut explanations = Vec::new();
@@ -200,10 +241,10 @@ impl ModelScorer for ArtifactModelScorer {
             .to_string();
 
         Ok(ModelScore {
-            model_key: artifact.model_key,
-            model_version: artifact.model_version,
-            runtime_kind: artifact.runtime_kind,
-            execution_provider: artifact.execution_provider,
+            model_key: artifact.model_key.clone(),
+            model_version: artifact.model_version.clone(),
+            runtime_kind: artifact.runtime_kind.clone(),
+            execution_provider: artifact.execution_provider.clone(),
             score,
             label: if probability >= artifact.threshold {
                 "HIGH_RISK"
@@ -214,9 +255,9 @@ impl ModelScorer for ArtifactModelScorer {
             explanations,
             metadata: serde_json::json!({
                 "artifact_uri": self.artifact_uri,
-                "artifact_sha256": artifact_sha256,
+                "artifact_sha256": loaded_artifact.artifact_sha256,
                 "artifact_integrity_status": "passed",
-                "artifact_signature_status": signature_status,
+                "artifact_signature_status": loaded_artifact.signature_status,
                 "serving_version_lock": serving_version_lock,
                 "serving_version_lock_status": version_lock_status,
                 "feature_count": artifact.feature_columns.len(),

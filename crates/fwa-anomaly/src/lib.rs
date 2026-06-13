@@ -15,6 +15,7 @@ pub struct AnomalyScore {
     pub explanations: Vec<AnomalyExplanation>,
 }
 
+// BASELINE: heuristic thresholds; replace with IQR/MAD ensemble once historical data is available.
 pub fn detect_anomaly(features: &FeatureMap) -> AnomalyScore {
     let mut score = 0_u16;
     let mut explanations = Vec::new();

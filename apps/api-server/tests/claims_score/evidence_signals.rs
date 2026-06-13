@@ -358,20 +358,7 @@ async fn returns_provider_sanctions_evidence_for_excluded_provider() {
                 "network_status": "in_network",
                 "oig_excluded": true,
                 "sam_debarred": true,
-                "windows": [
-                  {
-                    "window_days": 90,
-                    "claim_count": 2,
-                    "total_claim_amount": "2500",
-                    "high_cost_item_ratio": 0.10,
-                    "diagnosis_procedure_mismatch_rate": 0.0,
-                    "peer_amount_percentile": 40,
-                    "peer_frequency_percentile": 35,
-                    "review_failure_count": 0,
-                    "confirmed_fwa_count": 0,
-                    "false_positive_count": 0
-                  }
-                ]
+                "windows": []
               }
             }"#,
         ))
@@ -399,6 +386,13 @@ async fn returns_provider_sanctions_evidence_for_excluded_provider() {
         .unwrap()
         .iter()
         .any(|item| item == "provider_sanctions:PRV-SANCTIONED-1:oig"));
+    let provider_profile_feature = body["feature_values"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|feature| feature["name"] == "provider_profile_score")
+        .expect("provider profile score feature");
+    assert_eq!(provider_profile_feature["value"], 100);
 }
 
 #[tokio::test]

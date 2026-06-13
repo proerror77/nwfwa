@@ -33,6 +33,7 @@ pub use fwa_core::EvidenceSufficiency;
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct EvidenceReferenceBuckets {
     pub claim: Vec<String>,
+    pub provider: Vec<String>,
     pub rule: Vec<String>,
     pub model: Vec<String>,
     pub anomaly: Vec<String>,
@@ -143,6 +144,7 @@ fn evidence_text(request: &InvestigationRequest) -> String {
 
 fn bucket_evidence_refs(evidence_refs: &[String]) -> EvidenceReferenceBuckets {
     let mut claim = BTreeSet::new();
+    let mut provider = BTreeSet::new();
     let mut rule = BTreeSet::new();
     let mut model = BTreeSet::new();
     let mut anomaly = BTreeSet::new();
@@ -153,6 +155,9 @@ fn bucket_evidence_refs(evidence_refs: &[String]) -> EvidenceReferenceBuckets {
         match evidence_ref_bucket(reference) {
             Some("claim") => {
                 claim.insert(reference.clone());
+            }
+            Some("provider") => {
+                provider.insert(reference.clone());
             }
             Some("rule") => {
                 rule.insert(reference.clone());
@@ -175,6 +180,7 @@ fn bucket_evidence_refs(evidence_refs: &[String]) -> EvidenceReferenceBuckets {
 
     EvidenceReferenceBuckets {
         claim: claim.into_iter().collect(),
+        provider: provider.into_iter().collect(),
         rule: rule.into_iter().collect(),
         model: model.into_iter().collect(),
         anomaly: anomaly.into_iter().collect(),
@@ -204,6 +210,11 @@ fn evidence_ref_bucket(reference: &str) -> Option<&'static str> {
         || reference.starts_with("claim_items:")
     {
         Some("claim")
+    } else if reference.starts_with("provider_sanctions:")
+        || reference.starts_with("provider_profile:")
+        || reference.starts_with("providers:")
+    {
+        Some("provider")
     } else if reference.starts_with("anomaly:")
         || (reference.starts_with("scoring_runs:") && reference.contains("anomaly"))
     {
@@ -288,5 +299,30 @@ mod tests {
         assert!(first.agent_run_id.starts_with("agent_"));
         assert!(second.agent_run_id.starts_with("agent_"));
         assert_ne!(first.agent_run_id, second.agent_run_id);
+    }
+
+    #[test]
+    fn buckets_provider_sanctions_evidence_refs() {
+        let request = InvestigationRequest {
+            claim_id: "CLM-0287".into(),
+            risk_score: 100,
+            rag: "RED".into(),
+            scheme_family: "provider_peer_outlier".into(),
+            top_reasons: Vec::new(),
+            similar_cases: vec![SimilarCaseInput {
+                case_id: "KC-1001".into(),
+                similarity_score: 0.82,
+                matched_signals: vec![],
+                provenance_refs: vec![],
+                evidence_refs: vec!["provider_sanctions:PRV-1:oig".into()],
+            }],
+        };
+
+        let package = DeterministicInvestigator.investigate(request);
+
+        assert!(package
+            .evidence_refs_by_type
+            .provider
+            .contains(&"provider_sanctions:PRV-1:oig".into()));
     }
 }

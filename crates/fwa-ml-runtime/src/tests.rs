@@ -228,6 +228,45 @@ async fn artifact_scorer_scores_logistic_regression_json() {
 }
 
 #[tokio::test]
+async fn artifact_scorer_reuses_loaded_artifact_between_scores() {
+    let artifact_path = write_artifact(
+        "rust-logistic-cached",
+        serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "runtime_kind": "rust_logistic_regression",
+            "execution_provider": "cpu",
+            "threshold": 0.5,
+            "feature_columns": ["claim_amount_to_limit_ratio", "provider_profile_score"],
+            "intercept": -2.0,
+            "coefficients": {
+                "claim_amount_to_limit_ratio": 4.0,
+                "provider_profile_score": 0.01
+            }
+        }),
+    );
+    let scorer = ArtifactModelScorer::new(artifact_path.to_string_lossy());
+    let request = ModelScoreRequest {
+        run_id: ScoringRunId::from_external("run_artifact_cached"),
+        claim_id: ClaimId::from_external("CLM-ARTIFACT-CACHED"),
+        model_key: "baseline_fwa".into(),
+        model_version: "0.2.0-rust".into(),
+        endpoint_url: None,
+        features: features([
+            ("claim_amount_to_limit_ratio", 0.8),
+            ("provider_profile_score", 20.0),
+        ]),
+    };
+
+    scorer.score(request.clone()).await.unwrap();
+    fs::remove_file(artifact_path).unwrap();
+    let result = scorer.score(request).await.unwrap();
+
+    assert_eq!(result.model_key, "baseline_fwa");
+    assert_eq!(result.model_version, "0.2.0-rust");
+}
+
+#[tokio::test]
 async fn artifact_scorer_rejects_checksum_mismatch() {
     let artifact_path = write_artifact(
         "rust-logistic-checksum",

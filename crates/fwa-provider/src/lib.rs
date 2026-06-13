@@ -559,6 +559,35 @@ mod tests {
     }
 
     #[test]
+    fn sanctions_status_forces_review_without_profile_windows() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-1"),
+            external_provider_id: "PRV-1".into(),
+            name: "Demo Hospital".into(),
+            provider_type: "hospital".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Low,
+        };
+        let profile = ProviderProfileInput {
+            specialty: None,
+            network_status: None,
+            oig_excluded: Some(true),
+            sam_debarred: None,
+            windows: Vec::new(),
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.risk_score, 100);
+        assert_eq!(assessment.risk_tier, "high");
+        assert!(assessment.review_required);
+        assert_eq!(assessment.review_route, "provider_sanctions_review");
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_sanctions:PRV-1:oig".into()));
+    }
+
+    #[test]
     fn detects_relationship_graph_risk_from_network_signals() {
         let provider = Provider {
             id: ProviderId::from_external("PRV-1"),

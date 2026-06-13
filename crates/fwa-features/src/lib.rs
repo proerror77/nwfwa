@@ -26,6 +26,11 @@ pub struct PeerFeatureContext {
     pub claim_amount_peer_percentile: Option<u8>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProviderProfileFeatureContext {
+    pub risk_score: Option<u8>,
+}
+
 pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
     calculate_features_with_peer_context(context, None)
 }
@@ -33,6 +38,14 @@ pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
 pub fn calculate_features_with_peer_context(
     context: &ClaimContext,
     peer_context: Option<&PeerFeatureContext>,
+) -> FeatureMap {
+    calculate_features_with_contexts(context, peer_context, None)
+}
+
+pub fn calculate_features_with_contexts(
+    context: &ClaimContext,
+    peer_context: Option<&PeerFeatureContext>,
+    provider_profile_context: Option<&ProviderProfileFeatureContext>,
 ) -> FeatureMap {
     let mut features = FeatureMap::new();
     let claim_id = context.claim.external_claim_id.clone();
@@ -117,7 +130,10 @@ pub fn calculate_features_with_peer_context(
     insert_number(
         &mut features,
         "provider_profile_score",
-        provider_profile_score(context.provider.risk_tier),
+        provider_profile_context
+            .and_then(|context| context.risk_score)
+            .unwrap_or_else(|| provider_profile_score(context.provider.risk_tier))
+            .min(100),
         "provider",
         &context.provider.external_provider_id,
         "risk_tier",
@@ -331,6 +347,19 @@ mod tests {
         assert_eq!(
             features["provider_profile_score"].value,
             serde_json::json!(45)
+        );
+    }
+
+    #[test]
+    fn accepts_provider_profile_score_from_profile_context() {
+        let provider_context = ProviderProfileFeatureContext {
+            risk_score: Some(100),
+        };
+        let features = calculate_features_with_contexts(&context(), None, Some(&provider_context));
+
+        assert_eq!(
+            features["provider_profile_score"].value,
+            serde_json::json!(100)
         );
     }
 }
