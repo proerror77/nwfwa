@@ -11,7 +11,8 @@ use crate::{
 };
 use axum::{extract::State, http::StatusCode, Json};
 use fwa_agent::{
-    DeterministicInvestigator, EvidenceSufficiency, InvestigationRequest, SimilarCaseInput,
+    DeterministicInvestigator, EvidenceSufficiency, InvestigationOrchestrator,
+    InvestigationRequest, SimilarCaseInput,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -175,7 +176,7 @@ pub async fn investigate_case(
         &context_json["canonical_claim_context_trace"]["source_refs"],
     ));
 
-    let package = DeterministicInvestigator.investigate(InvestigationRequest {
+    let package = DeterministicInvestigator.orchestrate(InvestigationRequest {
         claim_id: masked_claim_ref,
         risk_score: request.risk_score,
         rag: request.rag,

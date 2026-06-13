@@ -55,6 +55,23 @@ pub struct InvestigationPackage {
     pub evidence_refs_by_type: EvidenceReferenceBuckets,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SpecialistAgentTask {
+    pub agent_kind: String,
+    pub responsibility: String,
+    pub input_scope: Vec<String>,
+    pub phi_fields_allowed: Vec<String>,
+    pub decision_boundary: String,
+}
+
+pub trait InvestigationOrchestrator {
+    fn orchestrator_version(&self) -> &'static str;
+
+    fn specialist_plan(&self, request: &InvestigationRequest) -> Vec<SpecialistAgentTask>;
+
+    fn orchestrate(&self, request: InvestigationRequest) -> InvestigationPackage;
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct DeterministicInvestigator;
 
@@ -100,6 +117,20 @@ impl DeterministicInvestigator {
     }
 }
 
+impl InvestigationOrchestrator for DeterministicInvestigator {
+    fn orchestrator_version(&self) -> &'static str {
+        "deterministic_orchestrator_v1"
+    }
+
+    fn specialist_plan(&self, request: &InvestigationRequest) -> Vec<SpecialistAgentTask> {
+        build_specialist_plan(request)
+    }
+
+    fn orchestrate(&self, request: InvestigationRequest) -> InvestigationPackage {
+        self.investigate(request)
+    }
+}
+
 pub fn crate_ready() -> bool {
     true
 }
@@ -130,6 +161,55 @@ fn build_findings(request: &InvestigationRequest) -> Vec<InvestigationFinding> {
 
 fn build_evidence_sufficiency(request: &InvestigationRequest) -> EvidenceSufficiency {
     assess_evidence_sufficiency(&request.scheme_family, &evidence_text(request))
+}
+
+fn build_specialist_plan(request: &InvestigationRequest) -> Vec<SpecialistAgentTask> {
+    let mut tasks = vec![
+        SpecialistAgentTask {
+            agent_kind: "intake_triage".into(),
+            responsibility: "Normalize claim context and preserve the assistive-only boundary."
+                .into(),
+            input_scope: vec![
+                "claim_id".into(),
+                "risk_score".into(),
+                "rag".into(),
+                "top_reasons".into(),
+            ],
+            phi_fields_allowed: vec!["claim_id".into(), "risk_score".into(), "rag".into()],
+            decision_boundary: "assistive_only".into(),
+        },
+        SpecialistAgentTask {
+            agent_kind: "evidence_review".into(),
+            responsibility:
+                "Check whether findings have claim, rule, model, document, or knowledge evidence."
+                    .into(),
+            input_scope: vec![
+                "scheme_family".into(),
+                "top_reasons".into(),
+                "similar_cases.evidence_refs".into(),
+            ],
+            phi_fields_allowed: vec!["claim_id".into(), "diagnosis_code".into()],
+            decision_boundary: "assistive_only".into(),
+        },
+    ];
+
+    if request.scheme_family.contains("provider") || !request.similar_cases.is_empty() {
+        tasks.push(SpecialistAgentTask {
+            agent_kind: "network_analysis".into(),
+            responsibility:
+                "Review provider relationship, peer outlier, and similar-case network signals."
+                    .into(),
+            input_scope: vec![
+                "scheme_family".into(),
+                "similar_cases.matched_signals".into(),
+                "similar_cases.provenance_refs".into(),
+            ],
+            phi_fields_allowed: vec!["claim_id".into(), "provider_region".into()],
+            decision_boundary: "assistive_only".into(),
+        });
+    }
+
+    tasks
 }
 
 fn evidence_text(request: &InvestigationRequest) -> String {
@@ -299,6 +379,52 @@ mod tests {
         assert!(first.agent_run_id.starts_with("agent_"));
         assert!(second.agent_run_id.starts_with("agent_"));
         assert_ne!(first.agent_run_id, second.agent_run_id);
+    }
+
+    #[test]
+    fn deterministic_orchestrator_exposes_specialist_agent_plan() {
+        let request = InvestigationRequest {
+            claim_id: "CLM-0287".into(),
+            risk_score: 87,
+            rag: "RED".into(),
+            scheme_family: "provider_peer_outlier".into(),
+            top_reasons: vec!["Provider peer outlier".into()],
+            similar_cases: vec![SimilarCaseInput {
+                case_id: "KC-1001".into(),
+                similarity_score: 0.82,
+                matched_signals: vec!["provider_network_signal".into()],
+                provenance_refs: vec!["retrieval:structured_signal_overlap".into()],
+                evidence_refs: vec!["knowledge_cases:KC-1001".into()],
+            }],
+        };
+
+        let orchestrator: &dyn InvestigationOrchestrator = &DeterministicInvestigator;
+        let plan = orchestrator.specialist_plan(&request);
+        let package = orchestrator.orchestrate(request);
+
+        assert_eq!(
+            orchestrator.orchestrator_version(),
+            "deterministic_orchestrator_v1"
+        );
+        assert!(plan.iter().any(|task| task.agent_kind == "intake_triage"));
+        assert!(plan.iter().any(|task| task.agent_kind == "evidence_review"));
+        let network_task = plan
+            .iter()
+            .find(|task| task.agent_kind == "network_analysis")
+            .expect("provider investigations should include a network analysis specialist slot");
+        assert_eq!(network_task.decision_boundary, "assistive_only");
+        assert!(network_task
+            .input_scope
+            .contains(&"similar_cases.matched_signals".into()));
+        assert!(plan.iter().all(|task| {
+            task.decision_boundary == "assistive_only"
+                && task
+                    .phi_fields_allowed
+                    .iter()
+                    .all(|field| !field.contains("name") && !field.contains("certificate"))
+        }));
+        assert_eq!(package.decision_boundary, "assistive_only");
+        assert!(package.agent_run_id.starts_with("agent_"));
     }
 
     #[test]
