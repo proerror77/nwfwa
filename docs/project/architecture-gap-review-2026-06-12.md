@@ -48,11 +48,15 @@ As of the P1/P2 remediation commits after this review:
   `probability_calibration_status = "uncalibrated_raw_sigmoid"` in score
   metadata so downstream users do not confuse raw sigmoid output with a
   calibrated fraud probability.
+- the worker now emits an L3 anomaly upgrade readiness report that checks the
+  confirmed-FWA label threshold and 30-day recall signal before opening an
+  IQR/MAD statistical-baseline evaluation task.
 
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, kill-switch behavior,
 specialist agent orchestration, ICD-10/CPT comparator data, feature source
-metadata, and actual probability calibration evidence.
+metadata, actual probability calibration evidence, and replacement of the L3
+heuristic anomaly scorer with a validated statistical baseline.
 
 ## A. Scoring Layer Gaps
 
