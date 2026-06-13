@@ -141,7 +141,15 @@ pub fn aggregate_with_routing_policy(
     let risk_score = RiskScore::saturating(final_score_value);
     let risk_level = risk_level_for_policy(risk_score.value(), &routing_policy).to_string();
     let rag = rag_for_policy(risk_score, &routing_policy);
-    let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);
+    let confidence_score = confidence_score(
+        rule_score,
+        anomaly_score.score,
+        model_score.score,
+        peer_benchmark_score_for_weight,
+        medical_reasonableness_score,
+        provider_network_score,
+        similar_case_score,
+    );
     let confidence = confidence_level_for_policy(confidence_score, &routing_policy).to_string();
     let recommended_action = recommended_action(
         &risk_level,
@@ -324,12 +332,33 @@ fn rag_for_policy(score: RiskScore, policy: &RoutingPolicy) -> RiskLevel {
     )
 }
 
-fn confidence_score(rule_score: u8, anomaly_score: u8, ml_score: u8) -> u8 {
-    let supporting_layers = [rule_score, anomaly_score, ml_score]
-        .into_iter()
-        .filter(|score| *score >= 60)
-        .count() as u8;
-    (55 + supporting_layers * 15).min(100)
+fn confidence_score(
+    rule_score: u8,
+    anomaly_score: u8,
+    ml_score: u8,
+    peer_score: Option<u8>,
+    medical_reasonableness_score: u8,
+    provider_network_score: u8,
+    similar_case_score: u8,
+) -> u8 {
+    let supporting_layers = [
+        Some(rule_score >= 60),
+        Some(anomaly_score >= 60),
+        Some(ml_score >= 60),
+        peer_score.map(|score| score >= 60),
+        Some(medical_reasonableness_score >= 60),
+        Some(provider_network_score >= 60),
+        Some(similar_case_score >= 70),
+    ]
+    .into_iter()
+    .filter(|supported| matches!(supported, Some(true)))
+    .count();
+    match supporting_layers {
+        0 => 55,
+        1 => 70,
+        2 => 85,
+        _ => 100,
+    }
 }
 
 fn confidence_level_for_policy(score: u8, policy: &RoutingPolicy) -> &'static str {

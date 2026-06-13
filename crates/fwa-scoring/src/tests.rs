@@ -750,6 +750,46 @@ fn routes_low_confidence_to_evidence_request() {
 }
 
 #[test]
+fn clinical_and_provider_signals_raise_confidence_without_rule_model_agreement() {
+    let mut features = BTreeMap::new();
+    features.insert(
+        "diagnosis_procedure_match_score".into(),
+        feature(serde_json::json!(0.35)),
+    );
+    features.insert(
+        "high_cost_item_ratio".into(),
+        feature(serde_json::json!(0.0)),
+    );
+    features.insert(
+        "provider_graph_risk_score".into(),
+        feature(serde_json::json!(80)),
+    );
+
+    let decision = aggregate(&features, &[], &model(0), &anomaly(0), 0);
+
+    assert_eq!(decision.medical_reasonableness_score, 65);
+    assert_eq!(decision.provider_network_score, 80);
+    assert_eq!(decision.confidence_score, 85);
+    assert_eq!(decision.confidence, "High");
+}
+
+#[test]
+fn peer_proxy_score_does_not_raise_confidence() {
+    let mut features = BTreeMap::new();
+    features.insert(
+        "claim_amount_to_limit_ratio".into(),
+        feature(serde_json::json!(1.0)),
+    );
+
+    let decision = aggregate(&features, &[], &model(0), &anomaly(0), 0);
+
+    assert_eq!(decision.peer_deviation_score, 100);
+    assert_eq!(decision.layers[0].status, "proxy_excluded");
+    assert_eq!(decision.confidence_score, 55);
+    assert_eq!(decision.confidence, "Low");
+}
+
+#[test]
 fn clinical_evidence_gaps_raise_medical_reasonableness_score() {
     let mut features = BTreeMap::new();
     features.insert(
