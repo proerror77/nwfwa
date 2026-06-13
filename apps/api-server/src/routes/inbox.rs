@@ -209,6 +209,11 @@ pub async fn normalize_claim_inbox(
     .flatten()
     .collect::<Vec<_>>();
     let source_paths = canonical_source_paths(&canonical_claim_context);
+    let validation_errors_value =
+        serialize_inbox_record_value("validation_errors", &validation_errors)?;
+    let data_quality_signals_value =
+        serialize_inbox_record_value("data_quality_signals", &data_quality_signals)?;
+    let evidence_refs_value = serialize_inbox_record_value("evidence_refs", &evidence_refs)?;
 
     state
         .repository
@@ -234,8 +239,8 @@ pub async fn normalize_claim_inbox(
                 "scoring_ready": scoring_ready,
                 "raw_payload_ref": raw_payload_ref,
                 "source_paths": source_paths,
-                "validation_errors": validation_errors,
-                "data_quality_signals": data_quality_signals,
+                "validation_errors": validation_errors_value.clone(),
+                "data_quality_signals": data_quality_signals_value.clone(),
                 "status_code": status.as_u16()
             }),
             evidence_refs: evidence_refs
@@ -263,10 +268,9 @@ pub async fn normalize_claim_inbox(
             source_system: system_code.clone().unwrap_or(actor.source_system.clone()),
             customer_scope_id: actor.customer_scope_id.clone(),
             canonical_claim_context: canonical_claim_context.clone(),
-            validation_errors: serde_json::to_value(&validation_errors)
-                .unwrap_or_else(|_| serde_json::json!([])),
-            data_quality_signals: serde_json::json!(data_quality_signals.clone()),
-            evidence_refs: serde_json::json!(evidence_refs.clone()),
+            validation_errors: validation_errors_value,
+            data_quality_signals: data_quality_signals_value,
+            evidence_refs: evidence_refs_value,
         })
         .await
         .map_err(internal_error("INBOX_RECORD_PERSISTENCE_FAILED"))?;
@@ -346,6 +350,20 @@ where
             "INBOX_RECORD_CORRUPT",
             "stored inbox normalization record is corrupt",
         )
+    })
+}
+
+fn serialize_inbox_record_value<T: Serialize>(
+    field: &'static str,
+    value: &T,
+) -> Result<Value, ApiError> {
+    serde_json::to_value(value).map_err(|error| {
+        tracing::error!(
+            field,
+            error = %error,
+            "inbox normalization record field failed to serialize"
+        );
+        ApiError::internal("INBOX_RECORD_SERIALIZATION_FAILED", error)
     })
 }
 
