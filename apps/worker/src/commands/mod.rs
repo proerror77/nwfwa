@@ -3,6 +3,7 @@ mod flags;
 mod build_ai_evidence_execution_plan;
 mod build_analytics_export_plan;
 mod build_anomaly_upgrade_readiness;
+mod build_audit_retention_scan;
 mod build_automl_lifecycle_closure_report;
 mod build_demo_automl_lifecycle_evidence;
 mod build_demo_ml_datasets;
@@ -56,6 +57,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-demo-automl-lifecycle-evidence" => build_demo_automl_lifecycle_evidence::run(args),
         "verify-demo-automl-lifecycle" => verify_demo_automl_lifecycle::run(args),
         "build-training-handoff" => build_training_handoff::run(args),
+        "build-audit-retention-scan" => build_audit_retention_scan::run(args),
         "build-anomaly-upgrade-readiness" => build_anomaly_upgrade_readiness::run(args),
         "build-mlops-monitoring-plan" => build_mlops_monitoring_plan::run(args),
         "run-scheduled-mlops-monitoring" => run_scheduled_mlops_monitoring::run(args),

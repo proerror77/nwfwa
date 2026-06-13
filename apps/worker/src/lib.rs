@@ -85,6 +85,12 @@ pub use anomaly_upgrade::{
     AnomalyUpgradeReadinessReport, AnomalyUpgradeReviewTask,
 };
 
+mod audit_retention;
+pub use audit_retention::{
+    build_audit_retention_scan_report, AuditRetentionCandidate, AuditRetentionRecord,
+    AuditRetentionReviewTask, AuditRetentionScanInput, AuditRetentionScanReport,
+};
+
 mod model_artifact_evaluation;
 pub use model_artifact_evaluation::evaluate_model_artifact;
 

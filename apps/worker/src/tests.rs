@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod alertmanager;
 mod anomaly_upgrade;
+mod audit_retention;
 mod automl_lifecycle;
 mod automl_ranking;
 mod clustering;
