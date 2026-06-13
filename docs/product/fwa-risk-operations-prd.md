@@ -1,7 +1,7 @@
 # FWA Risk And Operations Platform PRD
 
 Date: 2026-05-27
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 
 Status: living product blueprint
 
@@ -1113,6 +1113,78 @@ Reference anchors:
   https://www.kaggle.com/c/ieee-fraud-detection
 - NVIDIA write-up on the IEEE-CIS winning fraud-detection solution:
   https://developer.nvidia.com/blog/leveraging-machine-learning-to-detect-fraud-tips-to-developing-a-winning-kaggle-solution/
+
+## June 2026 Architecture Gap Roadmap
+
+The June 12 architecture review is recorded in
+`docs/project/architecture-gap-review-2026-06-12.md`. The items below convert
+that review into PRD-level requirements. This section describes product and
+architecture intent; repository completion status remains in
+`docs/project/prd-coverage.md`.
+
+Immediate correctness and compliance requirements:
+
+- Any scoring layer that uses a proxy, baseline, or placeholder implementation
+  must label that status in code comments, feature metadata, and operator-facing
+  evidence where it affects interpretation.
+- L1 peer benchmark scoring must not treat amount-to-limit ratio as a real peer
+  percentile in production. If peer data is missing, the scoring layer must
+  either downweight the signal or exclude it from final-score normalization.
+- L5 diagnosis/procedure compatibility must identify heuristic outputs as
+  placeholder clinical signals until a governed ICD-10/CPT or policy-reference
+  comparator is available.
+- Routing policy lifecycle writes must require fine-grained permissions for
+  submit, approve, activate, rollback, and other high-impact transitions.
+- Inbox validation and audit serialization failures must fail loudly or emit
+  critical audit events; they must not silently persist empty arrays or
+  misleading successful records.
+- Runtime scorer shared-state failures, including poisoned locks around model
+  sessions, must recover with logging and alerting where safe instead of
+  permanently failing all future scoring requests.
+
+Current-month architecture requirements:
+
+- Scoring aggregation must distinguish missing data from a real zero score and
+  renormalize layer weights across the available evidence-bearing layers.
+- Confidence scoring must use multiple evidence families, including clinical,
+  provider, and graph signals, rather than depending only on rule/anomaly/model
+  agreement.
+- Provider graph contracts must include billing ring membership, temporal
+  co-billing frequency, and referral concentration entropy, with worker-owned
+  rollups for those values.
+- Worker commands must own daily OIG/SAM sanctions refresh, provider
+  30/90/365-day profile windows, PSI actioning, and 7-day/90-day rule hit-rate
+  trending.
+- Canonical claim context and evidence responses must apply field-path PHI/PII
+  masking before leaving the API boundary.
+
+Next-quarter foundation requirements:
+
+- Worker pipelines must add billing-ring detection, temporal co-billing,
+  referral entropy, monthly peer percentile benchmarks, and episode-level
+  member-provider aggregation.
+- Feature records must carry proxy/source metadata so reviewers can distinguish
+  real peer distributions, customer data, public data, synthetic data, and
+  fallback estimates.
+- The agentic control plane must add a runtime `agent_registry`, stable
+  `investigations` entity, enforced PHI field allowlists, populated
+  `phi_fields_accessed` audit records, and cancellation/kill-switch semantics.
+- The Rust ML runtime should cache parsed serving manifests and label raw
+  sigmoid outputs as uncalibrated until calibration evidence exists.
+- The L3 anomaly layer must define a measurable upgrade gate for replacing
+  heuristic baselines with IQR, MAD, or unsupervised ensemble methods.
+
+Medium-term requirements:
+
+- Audit retention must move from documentation to executable policy with
+  retention evidence, archival workflow, and customer-environment proof.
+- Agentic investigation should evolve from one deterministic investigator into
+  an orchestrated set of specialist agents, while preserving assistive-only
+  decision boundaries and human approval gates.
+- Scheme coverage must expand beyond provider outliers into duplicate billing,
+  unbundling, excessive utilization, lab, telehealth, genetic testing,
+  pharmacy/opioid, DME/home health, and China-market-specific organized fraud
+  patterns using episode, policy, and peer-distribution features.
 
 ## Non-Goals
 

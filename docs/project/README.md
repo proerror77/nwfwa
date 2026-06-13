@@ -15,6 +15,9 @@ the technical stack fits together, and what is ready for demo or pilot use.
   requirement, main inputs, outputs, and side effects.
 - [PRD Coverage](prd-coverage.md): PRD capability matrix, repository evidence,
   and customer-data/customer-environment boundaries.
+- [Architecture Gap Review 2026-06-12](architecture-gap-review-2026-06-12.md):
+  dated scoring, worker, agentic, ML, compliance, and scheme-coverage gap
+  ledger that feeds the PRD roadmap.
 - [Data Model](data-model.md): PostgreSQL schema groups, relationships, and
   table responsibilities.
 - [ML Algorithm Strategy](ml-algorithm-strategy.md): researched model plan,
