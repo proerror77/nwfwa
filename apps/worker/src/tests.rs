@@ -10,6 +10,7 @@ mod mlops_monitoring_reports;
 mod mlops_monitoring_runtime;
 mod model_artifact;
 mod ops_plans;
+mod provider_profile_rollup;
 mod rule_candidates;
 mod sanctions;
 mod training_handoff;

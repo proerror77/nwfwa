@@ -11,6 +11,7 @@ mod build_mlops_monitoring_plan;
 mod build_mlops_monitoring_report;
 mod build_mlops_scheduler_execution_report;
 mod build_model_promotion_orchestration_report;
+mod build_provider_profile_windows;
 mod build_training_handoff;
 mod check_pilot_readiness;
 mod claim_retraining_job;
@@ -62,6 +63,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-model-promotion-orchestration-report" => {
             build_model_promotion_orchestration_report::run(args)
         }
+        "build-provider-profile-windows" => build_provider_profile_windows::run(args),
         "submit-mlops-alert-delivery-tasks" => submit_mlops_alert_delivery_tasks::run(args).await,
         "submit-anomaly-clustering-report" => submit_anomaly_clustering_report::run(args).await,
         "sync-oig-sam-sanctions" => sync_oig_sam_sanctions::run(args),

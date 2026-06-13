@@ -121,6 +121,12 @@ pub use sanctions::{
     SanctionsSourceSnapshot, SanctionsSyncReport, SanctionsSyncReviewTask,
 };
 
+mod provider_profile_rollup;
+pub use provider_profile_rollup::{
+    build_provider_profile_window_rollup, ProviderProfileClaimInput, ProviderProfileRollup,
+    ProviderProfileRollupInput, ProviderProfileWindowOutput, ProviderProfileWindowRollupReport,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,
