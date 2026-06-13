@@ -9,13 +9,14 @@ use ort::{
 use serde::Deserialize;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 #[derive(Clone)]
 pub struct ServingManifestModelScorer {
     pub(crate) manifest_uri: String,
     pub(crate) signing_key: Option<String>,
+    pub(crate) manifest_cache: Arc<Mutex<Option<Arc<ServingManifest>>>>,
     pub(crate) onnx_sessions: Arc<Mutex<BTreeMap<String, CachedOnnxSession>>>,
 }
 
@@ -56,6 +57,7 @@ impl ServingManifestModelScorer {
         Self {
             manifest_uri: manifest_uri.into(),
             signing_key: None,
+            manifest_cache: Arc::new(Mutex::new(None)),
             onnx_sessions: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
@@ -69,19 +71,44 @@ impl ServingManifestModelScorer {
         Self {
             manifest_uri: manifest_uri.into(),
             signing_key: signing_key.filter(|value| !value.trim().is_empty()),
+            manifest_cache: Arc::new(Mutex::new(None)),
             onnx_sessions: Arc::new(Mutex::new(BTreeMap::new())),
         }
+    }
+
+    fn loaded_manifest(&self) -> Result<Arc<ServingManifest>, ModelRuntimeError> {
+        if let Some(manifest) = self.manifest_cache_guard().clone() {
+            return Ok(manifest);
+        }
+
+        let manifest = Arc::new(self.load_manifest()?);
+        *self.manifest_cache_guard() = Some(manifest.clone());
+        Ok(manifest)
+    }
+
+    fn manifest_cache_guard(&self) -> MutexGuard<'_, Option<Arc<ServingManifest>>> {
+        self.manifest_cache.lock().unwrap_or_else(|error| {
+            tracing::error!(
+                error = %error,
+                "serving manifest cache lock poisoned; recovering"
+            );
+            error.into_inner()
+        })
+    }
+
+    fn load_manifest(&self) -> Result<ServingManifest, ModelRuntimeError> {
+        let manifest_path = local_artifact_path(&self.manifest_uri)?;
+        let manifest_bytes = fs::read(manifest_path)
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        serde_json::from_slice(&manifest_bytes)
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))
     }
 }
 
 #[async_trait]
 impl ModelScorer for ServingManifestModelScorer {
     async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
-        let manifest_path = local_artifact_path(&self.manifest_uri)?;
-        let manifest_bytes = fs::read(manifest_path)
-            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
-        let manifest: ServingManifest = serde_json::from_slice(&manifest_bytes)
-            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        let manifest = self.loaded_manifest()?;
         validate_serving_manifest(&manifest, &request)?;
         validate_manifest_feature_order(&manifest, &request)?;
 

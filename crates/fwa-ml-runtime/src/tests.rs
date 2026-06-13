@@ -521,6 +521,60 @@ async fn serving_manifest_scorer_scores_rust_logistic_artifact() {
 }
 
 #[tokio::test]
+async fn serving_manifest_scorer_caches_parsed_manifest() {
+    let artifact_path = write_artifact(
+        "serving-manifest-cache-artifact",
+        serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.3.0-cache",
+            "runtime_kind": "rust_logistic_regression",
+            "execution_provider": "cpu",
+            "threshold": 0.5,
+            "feature_columns": ["claim_amount_to_limit_ratio"],
+            "intercept": -1.0,
+            "coefficients": {
+                "claim_amount_to_limit_ratio": 2.5
+            }
+        }),
+    );
+    let manifest_path = write_artifact(
+        "serving-manifest-cache",
+        serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.3.0-cache",
+            "runtime_kind": "rust_logistic_regression",
+            "artifact_uri": artifact_path.to_string_lossy(),
+            "artifact_sha256": artifact_sha256(&artifact_path),
+            "version_lock": "0.3.0-cache",
+            "feature_columns": ["claim_amount_to_limit_ratio"],
+            "threshold": 0.5
+        }),
+    );
+    let scorer = ServingManifestModelScorer::new(manifest_path.to_string_lossy());
+    let request = ModelScoreRequest {
+        run_id: ScoringRunId::from_external("run_serving_manifest_cache"),
+        claim_id: ClaimId::from_external("CLM-SERVING-MANIFEST-CACHE"),
+        model_key: "baseline_fwa".into(),
+        model_version: "0.3.0-cache".into(),
+        endpoint_url: None,
+        features: features([("claim_amount_to_limit_ratio", 0.82)]),
+    };
+
+    let first = scorer.score(request.clone()).await.unwrap();
+    fs::write(&manifest_path, b"{not valid json").unwrap();
+    let second = scorer.score(request).await.unwrap();
+
+    assert_eq!(first.model_version, "0.3.0-cache");
+    assert_eq!(second.model_version, "0.3.0-cache");
+    assert_eq!(
+        second.metadata["serving_manifest_status"],
+        serde_json::json!("passed")
+    );
+    fs::remove_file(artifact_path).unwrap();
+    fs::remove_file(manifest_path).unwrap();
+}
+
+#[tokio::test]
 async fn serving_manifest_scorer_rejects_missing_ordered_feature() {
     let artifact_path = write_artifact(
         "serving-manifest-missing-feature-artifact",
