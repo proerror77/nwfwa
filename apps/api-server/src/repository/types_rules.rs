@@ -23,6 +23,7 @@ pub struct RuleSummaryRecord {
     pub name: String,
     pub status: String,
     pub owner: String,
+    pub submitted_by_actor_id: Option<String>,
     pub active_version: Option<u32>,
     pub latest_version: u32,
     pub review_mode: String,

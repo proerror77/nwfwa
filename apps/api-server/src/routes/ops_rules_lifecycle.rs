@@ -7,11 +7,8 @@ use super::{
     ops_rules_validation::validate_rule_lifecycle_request,
 };
 use crate::{
-    app::AppState,
-    auth::AuthenticatedApiPrincipal,
-    error::ApiError,
-    repository::RulePromotionReviewRecord,
-    routes::pii,
+    app::AppState, auth::AuthenticatedApiPrincipal, error::ApiError,
+    repository::RulePromotionReviewRecord, routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -45,6 +42,7 @@ pub async fn approve_rule(
         rule_id,
         "approved",
         Some("submitted"),
+        true,
         request.evidence_refs,
     )
     .await
@@ -85,7 +83,7 @@ pub async fn publish_rule(
     }
     let rule = state
         .repository
-        .update_rule_status(&rule_id, "active")
+        .update_rule_status(&rule_id, "active", None)
         .await
         .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
@@ -136,7 +134,7 @@ pub async fn rollback_rule(
     }
     let rule = state
         .repository
-        .update_rule_status(&rule_id, "approved")
+        .update_rule_status(&rule_id, "approved", None)
         .await
         .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
@@ -170,7 +168,8 @@ async fn update_status(
     status: &'static str,
     evidence_refs: Vec<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    update_status_with_required_previous(state, actor, rule_id, status, None, evidence_refs).await
+    update_status_with_required_previous(state, actor, rule_id, status, None, false, evidence_refs)
+        .await
 }
 
 async fn update_status_with_required_previous(
@@ -179,6 +178,7 @@ async fn update_status_with_required_previous(
     rule_id: String,
     status: &'static str,
     required_previous_status: Option<&'static str>,
+    enforce_four_eyes: bool,
     evidence_refs: Vec<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     let previous = state
@@ -197,9 +197,32 @@ async fn update_status_with_required_previous(
             ));
         }
     }
+    if enforce_four_eyes {
+        match previous.submitted_by_actor_id.as_deref() {
+            Some(submitter) if submitter != actor.actor_id => {}
+            Some(_) => {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "RULE_APPROVER_MUST_DIFFER_FROM_SUBMITTER",
+                    "rule approval requires a different actor from the submitter",
+                ));
+            }
+            None => {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "RULE_SUBMITTER_REQUIRED",
+                    "rule must record a submitter before approval",
+                ));
+            }
+        }
+    }
     let rule = state
         .repository
-        .update_rule_status(&rule_id, status)
+        .update_rule_status(
+            &rule_id,
+            status,
+            (status == "submitted").then_some(actor.actor_id.as_str()),
+        )
         .await
         .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;

@@ -27,6 +27,7 @@ pub struct InMemoryScoringRepository {
     audit_sample_sequence: Mutex<u64>,
     candidate_rules: Mutex<HashMap<String, RuleDetailRecord>>,
     rule_statuses: Mutex<HashMap<String, String>>,
+    rule_submitters: Mutex<HashMap<String, String>>,
     rule_backtests: Mutex<Vec<RuleBacktestRecord>>,
     rule_shadow_runs: Mutex<Vec<RuleShadowRunRecord>>,
     rule_promotion_reviews: Mutex<Vec<RulePromotionReviewRecord>>,

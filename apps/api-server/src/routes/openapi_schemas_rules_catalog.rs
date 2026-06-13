@@ -4,12 +4,13 @@ pub(super) fn catalog_schemas() -> Value {
     json!({
         "RuleSummary": {
             "type": "object",
-            "required": ["rule_id", "name", "status", "owner", "latest_version", "review_mode", "scheme_family", "score", "alert_code", "recommended_action", "applicability_scope", "backtest_result", "estimated_saving", "false_positive_history", "evidence_refs"],
+            "required": ["rule_id", "name", "status", "owner", "submitted_by_actor_id", "latest_version", "review_mode", "scheme_family", "score", "alert_code", "recommended_action", "applicability_scope", "backtest_result", "estimated_saving", "false_positive_history", "evidence_refs"],
             "properties": {
                 "rule_id": { "type": "string" },
                 "name": { "type": "string" },
                 "status": { "type": "string", "enum": ["draft", "active", "submitted", "approved"] },
                 "owner": { "type": "string" },
+                "submitted_by_actor_id": { "type": ["string", "null"] },
                 "active_version": { "type": ["integer", "null"] },
                 "latest_version": { "type": "integer" },
                 "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },

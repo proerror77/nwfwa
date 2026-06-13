@@ -8,6 +8,7 @@ use config_validation::{api_key_principal_from_spec, api_key_principal_specs};
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub api_key: String,
+    pub api_key_principals: Vec<String>,
     pub source_system: String,
     pub database_url: String,
     pub model_service_url: String,
@@ -27,6 +28,7 @@ impl AppConfig {
     pub fn from_env() -> Self {
         let config = Self {
             api_key: std::env::var("FWA_API_KEY").unwrap_or_else(|_| "dev-secret".into()),
+            api_key_principals: api_key_principal_specs(),
             source_system: std::env::var("FWA_SOURCE_SYSTEM").unwrap_or_else(|_| "tpa-demo".into()),
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/fwa".into()),
@@ -58,7 +60,7 @@ impl AppConfig {
     }
 
     pub fn api_key_config(&self) -> ApiKeyConfig {
-        self.api_key_config_from_specs(api_key_principal_specs())
+        self.api_key_config_from_specs(self.api_key_principals.clone())
     }
 
     fn api_key_config_from_specs(&self, specs: Vec<String>) -> ApiKeyConfig {
@@ -157,6 +159,7 @@ mod tests {
     fn api_key_config_disables_default_dev_key_when_principals_are_configured() {
         let config = AppConfig {
             api_key: "dev-secret".into(),
+            api_key_principals: vec![],
             source_system: "tpa-demo".into(),
             database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
             model_service_url: "http://127.0.0.1:8001".into(),
@@ -240,6 +243,7 @@ mod tests {
         );
         let config = AppConfig {
             api_key: "dev-secret".into(),
+            api_key_principals: vec![],
             source_system: "tpa-demo".into(),
             database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
             model_service_url: "http://127.0.0.1:8001".into(),
@@ -269,6 +273,7 @@ mod tests {
     fn api_key_config_keeps_custom_legacy_principal_and_adds_configured_principals() {
         let config = AppConfig {
             api_key: "legacy-secret".into(),
+            api_key_principals: vec![],
             source_system: "tpa-demo".into(),
             database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
             model_service_url: "http://127.0.0.1:8001".into(),

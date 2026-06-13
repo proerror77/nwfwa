@@ -167,6 +167,7 @@ mod tests {
     fn config(model_service_url: String) -> AppConfig {
         AppConfig {
             api_key: "dev-secret".into(),
+            api_key_principals: vec![],
             source_system: "tpa-demo".into(),
             database_url: "postgres://unused".into(),
             model_service_url,

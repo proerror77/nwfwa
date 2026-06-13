@@ -4,8 +4,18 @@ pub(super) async fn list_rules(
     repository: &PostgresScoringRepository,
 ) -> anyhow::Result<Vec<RuleSummaryRecord>> {
     ensure_default_rules_seeded(&repository.pool).await?;
-    let rows: Vec<(String, String, String, String, i32, Value, i32, String)> = sqlx::query_as(
-        "SELECT r.rule_key, r.name, r.status, r.owner, rv.version, rv.dsl, rv.score, rv.recommended_action
+    let rows: Vec<(
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        i32,
+        Value,
+        i32,
+        String,
+    )> = sqlx::query_as(
+        "SELECT r.rule_key, r.name, r.status, r.owner, r.submitted_by_actor_id, rv.version, rv.dsl, rv.score, rv.recommended_action
              FROM rules r
              JOIN LATERAL (
                SELECT version, dsl, score, recommended_action
@@ -22,7 +32,17 @@ pub(super) async fn list_rules(
     let summaries = rows
         .into_iter()
         .map(
-            |(rule_id, name, status, owner, version, dsl, score, recommended_action)| {
+            |(
+                rule_id,
+                name,
+                status,
+                owner,
+                submitted_by_actor_id,
+                version,
+                dsl,
+                score,
+                recommended_action,
+            )| {
                 let action = dsl.get("action").cloned().unwrap_or(Value::Null);
                 let review_mode = review_mode_from_dsl(&dsl);
                 let scheme_family = scheme_family_from_dsl(&dsl);
@@ -39,6 +59,7 @@ pub(super) async fn list_rules(
                     scheme_family: scheme_family.clone(),
                     status,
                     owner,
+                    submitted_by_actor_id,
                     score: score as u8,
                     alert_code: action["alert_code"]
                         .as_str()
@@ -183,9 +204,19 @@ pub(super) async fn get_rule(
     ensure_default_rules_seeded(&repository.pool).await?;
 
     // Direct single-rule query — avoids fetching all rules and filtering in memory.
-    let summary_row: Option<(String, String, String, String, i32, Value, i32, String)> =
+    let summary_row: Option<(
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        i32,
+        Value,
+        i32,
+        String,
+    )> =
         sqlx::query_as(
-            "SELECT r.rule_key, r.name, r.status, r.owner, rv.version, rv.dsl, rv.score, rv.recommended_action
+            "SELECT r.rule_key, r.name, r.status, r.owner, r.submitted_by_actor_id, rv.version, rv.dsl, rv.score, rv.recommended_action
              FROM rules r
              JOIN LATERAL (
                SELECT version, dsl, score, recommended_action
@@ -200,7 +231,17 @@ pub(super) async fn get_rule(
         .fetch_optional(&repository.pool)
         .await?;
 
-    let Some((rid, name, status, owner, version, dsl, score, recommended_action)) = summary_row
+    let Some((
+        rid,
+        name,
+        status,
+        owner,
+        submitted_by_actor_id,
+        version,
+        dsl,
+        score,
+        recommended_action,
+    )) = summary_row
     else {
         return Ok(None);
     };
@@ -221,6 +262,7 @@ pub(super) async fn get_rule(
         scheme_family: scheme_family.clone(),
         status,
         owner,
+        submitted_by_actor_id,
         score: score as u8,
         alert_code: action["alert_code"]
             .as_str()
@@ -389,15 +431,25 @@ pub(super) async fn update_rule_status(
     repository: &PostgresScoringRepository,
     rule_id: &str,
     status: &str,
+    status_actor_id: Option<&str>,
 ) -> anyhow::Result<Option<RuleSummaryRecord>> {
     ensure_default_rules_seeded(&repository.pool).await?;
     ensure_rule_condition_library_table(&repository.pool).await?;
-    let result =
-        sqlx::query("UPDATE rules SET status = $1, updated_at = now() WHERE rule_key = $2")
-            .bind(status)
-            .bind(rule_id)
-            .execute(&repository.pool)
-            .await?;
+    let result = sqlx::query(
+        "UPDATE rules
+             SET status = $1,
+                 submitted_by_actor_id = CASE
+                     WHEN $1 = 'submitted' THEN $3
+                     ELSE submitted_by_actor_id
+                 END,
+                 updated_at = now()
+             WHERE rule_key = $2",
+    )
+    .bind(status)
+    .bind(rule_id)
+    .bind(status_actor_id)
+    .execute(&repository.pool)
+    .await?;
     if result.rows_affected() == 0 {
         return Ok(None);
     }

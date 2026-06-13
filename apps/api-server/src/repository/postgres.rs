@@ -227,8 +227,9 @@ impl RulesRepository for PostgresScoringRepository {
         &self,
         rule_id: &str,
         status: &str,
+        status_actor_id: Option<&str>,
     ) -> anyhow::Result<Option<RuleSummaryRecord>> {
-        postgres_rules::update_rule_status(self, rule_id, status).await
+        postgres_rules::update_rule_status(self, rule_id, status, status_actor_id).await
     }
 
     async fn list_rule_conditions(&self) -> anyhow::Result<Vec<RuleConditionLibraryRecord>> {

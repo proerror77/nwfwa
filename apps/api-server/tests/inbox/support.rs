@@ -9,6 +9,7 @@ use tower::ServiceExt;
 pub(super) fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "AiClaim Core".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),

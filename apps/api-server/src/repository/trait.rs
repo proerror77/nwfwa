@@ -118,6 +118,7 @@ pub trait RulesRepository: Send + Sync {
         &self,
         rule_id: &str,
         status: &str,
+        status_actor_id: Option<&str>,
     ) -> anyhow::Result<Option<RuleSummaryRecord>>;
 
     async fn list_rule_conditions(&self) -> anyhow::Result<Vec<RuleConditionLibraryRecord>>;

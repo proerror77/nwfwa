@@ -12,7 +12,10 @@ mod promotion_gates;
 #[path = "ops_rules/support.rs"]
 mod support;
 
-use support::{json_request, rule_lifecycle_payload, seed_rule_promotion_evidence, test_config};
+use support::{
+    json_request, json_request_with_key, rule_lifecycle_payload, seed_rule_promotion_evidence,
+    test_config, test_config_with_rule_actors,
+};
 
 #[tokio::test]
 async fn records_rule_candidate_and_lifecycle_audit_events() {
@@ -84,6 +87,88 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
         audit_events[1]["evidence_refs"][0],
         "rules:candidate_audit_rule:v1"
     );
+}
+
+#[tokio::test]
+async fn rule_approval_requires_different_actor_from_submitter() {
+    let app = build_app(test_config_with_rule_actors());
+
+    let (status, body) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        r#"{
+          "owner": "rule-discovery",
+          "rule": {
+            "rule_id": "candidate_four_eyes_rule",
+            "version": 1,
+            "name": "Four eyes candidate rule",
+            "scheme_family": "high_risk_claim",
+            "conditions": [
+              {
+                "field": "days_since_policy_start",
+                "operator": "<=",
+                "value": 10
+              }
+            ],
+            "action": {
+              "score": 25,
+              "alert_code": "FOUR_EYES_CANDIDATE",
+              "recommended_action": "ManualReview",
+              "reason": "候选规则需要双人审批"
+            }
+          }
+        }"#,
+        "submit-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_four_eyes_rule/submit",
+        &rule_lifecycle_payload("candidate_four_eyes_rule", 1),
+        "submit-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_four_eyes_rule/approve",
+        &rule_lifecycle_payload("candidate_four_eyes_rule", 1),
+        "submit-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(error["code"], "RULE_APPROVER_MUST_DIFFER_FROM_SUBMITTER");
+
+    let (status, body) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_four_eyes_rule/approve",
+        &rule_lifecycle_payload("candidate_four_eyes_rule", 1),
+        "approve-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["status"], "approved");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "GET",
+        "/api/v1/ops/rules/candidate_four_eyes_rule",
+        "{}",
+        "approve-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["summary"]["submitted_by_actor_id"], "rule-submitter");
 }
 
 #[tokio::test]

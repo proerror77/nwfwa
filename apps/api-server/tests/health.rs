@@ -8,6 +8,7 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "tpa-demo".into(),
         database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
         model_service_url: "http://127.0.0.1:8001".into(),
@@ -27,6 +28,7 @@ fn test_config() -> AppConfig {
 fn customer_pilot_config() -> AppConfig {
     AppConfig {
         api_key: "customer-pilot-secret".into(),
+        api_key_principals: vec![],
         source_system: "customer-claims-system".into(),
         database_url: "postgres://customer-db.internal:5432/fwa".into(),
         model_service_url: "https://models.customer.internal".into(),

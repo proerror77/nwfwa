@@ -3,6 +3,7 @@ use super::*;
 impl InMemoryScoringRepository {
     pub(super) async fn in_memory_list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
         let statuses = self.rule_statuses.lock().await;
+        let submitters = self.rule_submitters.lock().await;
         let backtests = self.rule_backtests.lock().await.clone();
         let mut details = default_rule_details();
         details.extend(self.candidate_rules.lock().await.values().cloned());
@@ -10,6 +11,7 @@ impl InMemoryScoringRepository {
             .into_iter()
             .map(|mut detail| {
                 apply_rule_status(&mut detail, &statuses);
+                apply_rule_submitter(&mut detail, &submitters);
                 if let Some(backtest) = latest_rule_backtest_for(
                     &backtests,
                     &detail.summary.rule_id,
@@ -43,6 +45,7 @@ impl InMemoryScoringRepository {
         rule_id: &str,
     ) -> anyhow::Result<Option<RuleDetailRecord>> {
         let statuses = self.rule_statuses.lock().await;
+        let submitters = self.rule_submitters.lock().await;
         let backtests = self.rule_backtests.lock().await.clone();
         let mut details = default_rule_details();
         details.extend(self.candidate_rules.lock().await.values().cloned());
@@ -52,6 +55,7 @@ impl InMemoryScoringRepository {
             .find(|detail| detail.summary.rule_id == rule_id)
             .map(|mut detail| {
                 apply_rule_status(&mut detail, &statuses);
+                apply_rule_submitter(&mut detail, &submitters);
                 if let Some(backtest) = latest_rule_backtest_for(
                     &backtests,
                     &detail.summary.rule_id,
@@ -105,6 +109,7 @@ impl InMemoryScoringRepository {
         &self,
         rule_id: &str,
         status: &str,
+        status_actor_id: Option<&str>,
     ) -> anyhow::Result<Option<RuleSummaryRecord>> {
         if self.in_memory_get_rule(rule_id).await?.is_none() {
             return Ok(None);
@@ -113,6 +118,14 @@ impl InMemoryScoringRepository {
             .lock()
             .await
             .insert(rule_id.to_string(), status.to_string());
+        if status == "submitted" {
+            if let Some(actor_id) = status_actor_id {
+                self.rule_submitters
+                    .lock()
+                    .await
+                    .insert(rule_id.to_string(), actor_id.to_string());
+            }
+        }
         Ok(self
             .in_memory_get_rule(rule_id)
             .await?
@@ -251,5 +264,11 @@ impl InMemoryScoringRepository {
             .rev()
             .find(|review| review.rule_id == rule_id && review.rule_version == rule_version)
             .cloned())
+    }
+}
+
+fn apply_rule_submitter(detail: &mut RuleDetailRecord, submitters: &HashMap<String, String>) {
+    if let Some(actor_id) = submitters.get(&detail.summary.rule_id) {
+        detail.summary.submitted_by_actor_id = Some(actor_id.clone());
     }
 }

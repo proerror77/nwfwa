@@ -30,6 +30,7 @@ pub(super) fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> 
         name: rule.name.clone(),
         status: status.into(),
         owner,
+        submitted_by_actor_id: None,
         active_version,
         latest_version: rule.version,
         review_mode: review_mode.clone(),

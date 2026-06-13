@@ -159,8 +159,10 @@ impl RulesRepository for InMemoryScoringRepository {
         &self,
         rule_id: &str,
         status: &str,
+        status_actor_id: Option<&str>,
     ) -> anyhow::Result<Option<RuleSummaryRecord>> {
-        self.in_memory_update_rule_status(rule_id, status).await
+        self.in_memory_update_rule_status(rule_id, status, status_actor_id)
+            .await
     }
 
     async fn list_rule_conditions(&self) -> anyhow::Result<Vec<RuleConditionLibraryRecord>> {

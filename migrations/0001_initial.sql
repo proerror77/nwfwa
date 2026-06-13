@@ -117,12 +117,14 @@ CREATE TABLE IF NOT EXISTS rules (
   name TEXT NOT NULL,
   status TEXT NOT NULL,
   owner TEXT NOT NULL,
+  submitted_by_actor_id TEXT,
   hit_rate_7d FLOAT,
   hit_rate_90d FLOAT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE rules ADD COLUMN IF NOT EXISTS submitted_by_actor_id TEXT;
 ALTER TABLE rules ADD COLUMN IF NOT EXISTS hit_rate_7d FLOAT;
 ALTER TABLE rules ADD COLUMN IF NOT EXISTS hit_rate_90d FLOAT;
 
