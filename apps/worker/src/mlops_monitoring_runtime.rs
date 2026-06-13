@@ -206,6 +206,9 @@ pub(super) fn mlops_runtime_report_for_job(
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!("hit_rate_7d < 0.5 * hit_rate_90d"));
             report["rule_drift_alerts"] = serde_json::json!([]);
+            if let Some(monitoring_input) = monitoring_input {
+                apply_rule_hit_rate_trend(&mut report, monitoring_input);
+            }
         }
         "segment_fairness_review" => {
             report["segments"] = serde_json::json!([
@@ -226,6 +229,7 @@ pub(super) fn mlops_runtime_report_for_job(
     if let Some(monitoring_input) = monitoring_input {
         apply_mlops_monitoring_input(&mut report, monitoring_input, job_kind);
     }
+    apply_monitoring_actions(&mut report, job_kind);
     report
 }
 
@@ -268,6 +272,143 @@ fn f64_array(input: &serde_json::Value, field: &str) -> Option<Vec<f64>> {
             .filter_map(|value| value.as_f64())
             .collect::<Vec<_>>()
     })
+}
+
+fn apply_rule_hit_rate_trend(report: &mut serde_json::Value, monitoring_input: &serde_json::Value) {
+    let Some(rules) = monitoring_input
+        .get("rules")
+        .and_then(|value| value.as_array())
+    else {
+        return;
+    };
+    let alerts = rules
+        .iter()
+        .filter_map(rule_hit_rate_alert)
+        .collect::<Vec<_>>();
+    report["rules_evaluated"] = serde_json::json!(rules.len());
+    report["rule_drift_alerts"] = serde_json::json!(alerts);
+    report["status"] = serde_json::json!(if report["rule_drift_alerts"]
+        .as_array()
+        .is_some_and(|alerts| alerts.is_empty())
+    {
+        "stable"
+    } else {
+        "alert"
+    });
+}
+
+fn rule_hit_rate_alert(rule: &serde_json::Value) -> Option<serde_json::Value> {
+    let rule_id = rule.get("rule_id")?.as_str()?;
+    let hit_rate_7d = rule.get("hit_rate_7d")?.as_f64()?;
+    let hit_rate_90d = rule.get("hit_rate_90d")?.as_f64()?;
+    if hit_rate_90d <= 0.0 || hit_rate_7d >= 0.5 * hit_rate_90d {
+        return None;
+    }
+    Some(serde_json::json!({
+        "rule_id": rule_id,
+        "hit_rate_7d": hit_rate_7d,
+        "hit_rate_90d": hit_rate_90d,
+        "trigger": "rule_hit_rate_drop",
+        "review_reason": "7-day rule hit rate fell below half of the 90-day baseline",
+        "evidence_refs": rule
+            .get("evidence_refs")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([format!("rules:{rule_id}")]))
+    }))
+}
+
+fn apply_monitoring_actions(report: &mut serde_json::Value, job_kind: &str) {
+    match job_kind {
+        "feature_distribution_psi" => apply_feature_psi_actions(report),
+        "rule_hit_rate_trend" => apply_rule_hit_rate_actions(report),
+        _ => {}
+    }
+}
+
+fn apply_feature_psi_actions(report: &mut serde_json::Value) {
+    let psi = report
+        .get("psi")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0);
+    let threshold = report
+        .get("thresholds")
+        .and_then(|thresholds| thresholds.get("watch_below"))
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.25);
+    if psi <= threshold {
+        report["monitoring_alerts"] = serde_json::json!([]);
+        report["review_tasks"] = serde_json::json!([]);
+        return;
+    }
+    let feature = report
+        .get("feature")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unknown_feature")
+        .to_string();
+    let alert = serde_json::json!({
+        "alert_kind": "feature_distribution_psi",
+        "severity": "high",
+        "trigger": "feature_psi_threshold_exceeded",
+        "feature": feature,
+        "psi": psi,
+        "threshold": threshold,
+        "recommended_action": "open drift review before retraining or routing-policy changes",
+        "evidence_refs": [format!("feature_distribution_psi:{feature}")]
+    });
+    report["monitoring_alerts"] = serde_json::json!([alert]);
+    report["review_tasks"] = serde_json::json!([serde_json::json!({
+        "task_kind": "mlops_drift_review",
+        "review_queue": "mlops_drift_review",
+        "trigger": "feature_psi_threshold_exceeded",
+        "feature": feature,
+        "required_review": "review feature distribution drift and retraining readiness",
+        "decision_options": ["acknowledge_monitoring", "prepare_retraining", "open_governance_review"]
+    })]);
+}
+
+fn apply_rule_hit_rate_actions(report: &mut serde_json::Value) {
+    let alerts = report
+        .get("rule_drift_alerts")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    if alerts.is_empty() {
+        report["monitoring_alerts"] = serde_json::json!([]);
+        report["review_tasks"] = serde_json::json!([]);
+        return;
+    }
+    report["monitoring_alerts"] = serde_json::Value::Array(
+        alerts
+            .iter()
+            .map(|alert| {
+                serde_json::json!({
+                    "alert_kind": "rule_hit_rate_trend",
+                    "severity": "high",
+                    "trigger": "rule_hit_rate_drop",
+                    "rule_id": alert.get("rule_id").cloned().unwrap_or(serde_json::Value::Null),
+                    "hit_rate_7d": alert.get("hit_rate_7d").cloned().unwrap_or(serde_json::Value::Null),
+                    "hit_rate_90d": alert.get("hit_rate_90d").cloned().unwrap_or(serde_json::Value::Null),
+                    "recommended_action": "open rule drift review before disabling or editing rules",
+                    "evidence_refs": alert.get("evidence_refs").cloned().unwrap_or_else(|| serde_json::json!([]))
+                })
+            })
+            .collect(),
+    );
+    report["review_tasks"] = serde_json::Value::Array(
+        alerts
+            .iter()
+            .map(|alert| {
+                serde_json::json!({
+                    "task_kind": "rule_drift_review",
+                    "review_queue": "rules_governance_review",
+                    "trigger": "rule_hit_rate_drop",
+                    "rule_id": alert.get("rule_id").cloned().unwrap_or(serde_json::Value::Null),
+                    "required_review": "review whether the rule is being bypassed or affected by seasonality",
+                    "decision_options": ["acknowledge_monitoring", "open_shadow_backtest", "open_governance_review"]
+                })
+            })
+            .collect(),
+    );
 }
 
 fn is_protected_mlops_report_field(key: &str) -> bool {

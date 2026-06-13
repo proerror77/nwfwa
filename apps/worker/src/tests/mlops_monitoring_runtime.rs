@@ -333,3 +333,86 @@ fn scheduled_mlops_monitoring_binds_customer_monitoring_inputs() {
     assert_eq!(shadow["comparison_count"], 240);
     assert_eq!(shadow["max_abs_probability_delta"], 0.07);
 }
+
+#[test]
+fn scheduled_mlops_monitoring_actions_psi_and_rule_hit_rate_drift() {
+    let root = temp_root("scheduled-mlops-monitoring-actions");
+    let inputs_path = root.join("monitoring_inputs.json");
+    write_json(
+        inputs_path.clone(),
+        &serde_json::json!({
+            "jobs": {
+                "feature_distribution_psi": {
+                    "baseline": [5, 15, 25, 35, 45, 55, 65, 75, 85, 95],
+                    "current": [85, 86, 87, 88, 89, 90, 91, 92, 93, 94]
+                },
+                "rule_hit_rate_trend": {
+                    "rules": [
+                        {
+                            "rule_id": "RULE-BYPASSED",
+                            "hit_rate_7d": 0.03,
+                            "hit_rate_90d": 0.10,
+                            "evidence_refs": ["rules:RULE-BYPASSED:v1"]
+                        },
+                        {
+                            "rule_id": "RULE-STABLE",
+                            "hit_rate_7d": 0.08,
+                            "hit_rate_90d": 0.10
+                        }
+                    ]
+                }
+            }
+        }),
+    )
+    .unwrap();
+
+    run_scheduled_mlops_monitoring_with_options(
+        "data/training/manifest.json",
+        "s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json",
+        "baseline_fwa",
+        "0.2.0",
+        "0 2 * * *",
+        root.join("runtime"),
+        None,
+        Some(&inputs_path.to_string_lossy()),
+    )
+    .expect("scheduled runtime reports");
+
+    let feature_psi = read_json_report(
+        &root
+            .join("runtime/feature_psi_report.json")
+            .to_string_lossy(),
+    )
+    .expect("feature PSI report");
+    assert_eq!(feature_psi["status"], "alert");
+    assert!(feature_psi["psi"].as_f64().unwrap() > 0.25);
+    assert_eq!(
+        feature_psi["monitoring_alerts"][0]["trigger"],
+        "feature_psi_threshold_exceeded"
+    );
+    assert_eq!(
+        feature_psi["review_tasks"][0]["review_queue"],
+        "mlops_drift_review"
+    );
+
+    let rule_hit_rate = read_json_report(
+        &root
+            .join("runtime/rule_hit_rate_report.json")
+            .to_string_lossy(),
+    )
+    .expect("rule hit rate report");
+    assert_eq!(rule_hit_rate["status"], "alert");
+    assert_eq!(rule_hit_rate["rules_evaluated"], 2);
+    assert_eq!(
+        rule_hit_rate["rule_drift_alerts"][0]["rule_id"],
+        "RULE-BYPASSED"
+    );
+    assert_eq!(
+        rule_hit_rate["monitoring_alerts"][0]["trigger"],
+        "rule_hit_rate_drop"
+    );
+    assert_eq!(
+        rule_hit_rate["review_tasks"][0]["review_queue"],
+        "rules_governance_review"
+    );
+}
