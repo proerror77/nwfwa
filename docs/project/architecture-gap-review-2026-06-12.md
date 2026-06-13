@@ -43,6 +43,9 @@ As of the P1/P2 remediation commits after this review:
 - Agent run cancellation now has an API control-plane contract: queued/running
   runs can be marked `cancelled`, cancellation requires run evidence, and
   `agent.run.cancelled` is emitted as a governance audit event.
+- `fwa-agent` now exposes an `InvestigationOrchestrator` trait and deterministic
+  specialist-plan contract for intake triage, evidence review, and network
+  analysis slots while preserving the assistive-only boundary.
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
@@ -69,8 +72,8 @@ As of the P1/P2 remediation commits after this review:
 
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, execution-time
-cancellation checks inside long-running/specialist agents, specialist agent
-orchestration, ICD-10/CPT comparator data, customer-approved feature
+cancellation checks inside long-running/specialist agents, multi-agent runtime
+dispatch/tool mediation, ICD-10/CPT comparator data, customer-approved feature
 lineage/source mappings, calibrated-probability serving activation, and
 replacement of the L3 heuristic anomaly scorer with a validated statistical
 baseline. Audit retention still needs customer-environment partitioning, archive
@@ -107,7 +110,7 @@ execution.
 | C-2 | No independent `investigations` entity groups multiple agent runs for the same claim. | Add `investigations` and make agent audit events reference a stable investigation id instead of a run-derived string. |
 | C-3 | PHI field access is not enforced by registry policy, and accessed fields can be empty in audit events. | Enforce field allowlists at investigation/tool boundaries and persist actual PHI field names without values. |
 | C-4 | Kill-switch behavior is partially implemented as a cancellation control plane, but execution-time cancellation checks are still missing. | Add cancellable agent execution and safe cancellation checks before tool calls or long steps. |
-| C-5 | Deterministic investigation remains a single broad investigator rather than specialist agents. | Define an orchestrator boundary and specialist agent interfaces before adding LLM-backed investigators. |
+| C-5 | Deterministic investigation now has an orchestrator trait and specialist-plan contract, but not a multi-agent runtime dispatcher. | Add runtime specialist dispatch, tool mediation, and LLM-backed investigators only after governance checks are stable. |
 
 ## D. ML Lifecycle And Governance Gaps
 
