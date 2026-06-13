@@ -38,12 +38,14 @@ As of the P1/P2 remediation commits after this review:
   implemented as local worker contracts;
 - `agent_registry` and `investigations` now exist as additive schema/runtime
   contracts, agent audit events use stable investigation ids, and deterministic
-  agent audit records include non-empty PHI field names without values.
+  agent audit records include non-empty PHI field names without values;
+- the deterministic agent route now enforces active registry capability and PHI
+  field allowlists before executing `knowledge.search_similar`.
 
 Remaining boundaries after those commits are production scheduling, DB write
-paths for customer rollups, customer claim/history data, dynamic registry
-allowlist enforcement before tool execution, kill-switch behavior, specialist
-agent orchestration, ICD-10/CPT comparator data, and feature source metadata.
+paths for customer rollups, customer claim/history data, kill-switch behavior,
+specialist agent orchestration, ICD-10/CPT comparator data, and feature source
+metadata.
 
 ## A. Scoring Layer Gaps
 
