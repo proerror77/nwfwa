@@ -418,6 +418,32 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   completed_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS agent_audit_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  audit_event_id TEXT NOT NULL UNIQUE,
+  investigation_id TEXT NOT NULL,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  agent_kind TEXT NOT NULL,
+  agent_version INTEGER NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_role TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  input_digest TEXT NOT NULL,
+  decision_boundary TEXT NOT NULL,
+  findings_count INTEGER NOT NULL,
+  evidence_sufficiency TEXT NOT NULL,
+  tool_call_count INTEGER NOT NULL,
+  human_review_required BOOLEAN NOT NULL,
+  phi_fields_accessed JSONB NOT NULL DEFAULT '[]'::jsonb,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  previous_event_hash TEXT,
+  event_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS agent_audit_events_run_idx
+  ON agent_audit_events(agent_run_id, created_at);
+
 CREATE TABLE IF NOT EXISTS agent_steps (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,

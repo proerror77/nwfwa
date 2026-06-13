@@ -39,7 +39,17 @@ impl InMemoryScoringRepository {
         &self,
         run: PersistedAgentRun,
     ) -> anyhow::Result<()> {
+        let previous_event_hash = self
+            .agent_audit_events
+            .lock()
+            .await
+            .iter()
+            .rev()
+            .find(|event| event.agent_run_id == run.agent_run_id)
+            .map(|event| event.event_hash.clone());
+        let audit_event = agent_audit_event_from_run(&run, previous_event_hash);
         self.agent_runs.lock().await.push(run);
+        self.agent_audit_events.lock().await.push(audit_event);
         Ok(())
     }
 

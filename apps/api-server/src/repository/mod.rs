@@ -65,7 +65,7 @@ mod types_outcomes;
 mod types_rules;
 mod webhook_helpers;
 
-use self::agent_helpers::agent_run_log_from_persisted;
+use self::agent_helpers::{agent_audit_event_from_run, agent_run_log_from_persisted};
 use self::audit_helpers::{
     audit_event_payload_matches_customer_scope, audit_history_from_persisted,
     evidence_values_to_strings, persisted_audit_event_matches_filter,

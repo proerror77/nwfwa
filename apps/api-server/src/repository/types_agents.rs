@@ -18,6 +18,28 @@ pub struct PersistedAgentRun {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentAuditEventRecord {
+    pub audit_event_id: String,
+    pub investigation_id: String,
+    pub agent_run_id: String,
+    pub agent_kind: String,
+    pub agent_version: u32,
+    pub actor_id: String,
+    pub actor_role: String,
+    pub action_type: String,
+    pub input_digest: String,
+    pub decision_boundary: String,
+    pub findings_count: usize,
+    pub evidence_sufficiency: String,
+    pub tool_call_count: usize,
+    pub human_review_required: bool,
+    pub phi_fields_accessed: Vec<String>,
+    pub payload: Value,
+    pub previous_event_hash: Option<String>,
+    pub event_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentRunLogRecord {
     pub agent_run_id: String,
     pub claim_id: String,

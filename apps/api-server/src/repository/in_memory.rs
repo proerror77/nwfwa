@@ -20,6 +20,7 @@ pub struct InMemoryScoringRepository {
     runs: Mutex<Vec<PersistedScoringRun>>,
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
+    agent_audit_events: Mutex<Vec<AgentAuditEventRecord>>,
     leads: Mutex<HashMap<String, LeadRecord>>,
     cases: Mutex<HashMap<String, CaseRecord>>,
     audit_samples: Mutex<HashMap<String, AuditSampleRecord>>,
@@ -125,5 +126,39 @@ mod tests {
         assert_eq!(payload["dob"], "1988-XX-XX");
         assert_eq!(payload["gender"], "MASKED");
         assert_eq!(payload["risk_score"], 72);
+    }
+
+    #[tokio::test]
+    async fn in_memory_agent_run_appends_structured_audit_event() {
+        let repository = InMemoryScoringRepository::default();
+
+        repository
+            .save_agent_run(PersistedAgentRun {
+                agent_run_id: "agent_01HX".into(),
+                claim_id: "CLM-0287".into(),
+                status: "succeeded".into(),
+                decision_boundary: "assistive_only".into(),
+                output_json: serde_json::json!({
+                    "findings": [{"finding": "peer outlier"}],
+                    "evidence_sufficiency": "sufficient"
+                }),
+                evidence_refs: vec![Value::String("agent_run:agent_01HX".into())],
+                steps: vec![],
+                context_snapshots: vec![],
+                policy_checks: vec![],
+                tool_calls: vec![],
+                tool_results: vec![],
+                approvals: vec![],
+            })
+            .await
+            .unwrap();
+
+        let audit_events = repository.agent_audit_events.lock().await;
+        assert_eq!(audit_events.len(), 1);
+        assert_eq!(audit_events[0].investigation_id, "agent_run:agent_01HX");
+        assert_eq!(audit_events[0].decision_boundary, "assistive_only");
+        assert_eq!(audit_events[0].findings_count, 1);
+        assert!(audit_events[0].input_digest.starts_with("sha256:"));
+        assert!(!audit_events[0].payload.to_string().contains("CLM-0287"));
     }
 }

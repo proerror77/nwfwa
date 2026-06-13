@@ -143,6 +143,47 @@ pub(super) async fn save_agent_run(
         .await?;
     }
 
+    let previous_event_hash: Option<String> = sqlx::query_scalar(
+        "SELECT event_hash
+             FROM agent_audit_events
+             WHERE agent_run_id = $1
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1",
+    )
+    .bind(&run.agent_run_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let audit_event = agent_audit_event_from_run(&run, previous_event_hash);
+    sqlx::query(
+        "INSERT INTO agent_audit_events
+             (audit_event_id, investigation_id, agent_run_id, agent_kind, agent_version,
+              actor_id, actor_role, action_type, input_digest, decision_boundary,
+              findings_count, evidence_sufficiency, tool_call_count, human_review_required,
+              phi_fields_accessed, payload, previous_event_hash, event_hash)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                     $11, $12, $13, $14, $15, $16, $17, $18)",
+    )
+    .bind(&audit_event.audit_event_id)
+    .bind(&audit_event.investigation_id)
+    .bind(&audit_event.agent_run_id)
+    .bind(&audit_event.agent_kind)
+    .bind(audit_event.agent_version as i32)
+    .bind(&audit_event.actor_id)
+    .bind(&audit_event.actor_role)
+    .bind(&audit_event.action_type)
+    .bind(&audit_event.input_digest)
+    .bind(&audit_event.decision_boundary)
+    .bind(audit_event.findings_count as i32)
+    .bind(&audit_event.evidence_sufficiency)
+    .bind(audit_event.tool_call_count as i32)
+    .bind(audit_event.human_review_required)
+    .bind(string_values(&audit_event.phi_fields_accessed))
+    .bind(&audit_event.payload)
+    .bind(&audit_event.previous_event_hash)
+    .bind(&audit_event.event_hash)
+    .execute(&mut *tx)
+    .await?;
+
     tx.commit().await?;
     Ok(())
 }
