@@ -4,9 +4,13 @@ pub(super) fn agent_run_schemas() -> Value {
     json!({
         "AgentRunLogRecord": {
             "type": "object",
-            "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "context_snapshots", "policy_checks", "tool_calls", "tool_results", "approvals"],
+            "required": ["agent_run_id", "investigation_id", "agent_identity_id", "agent_kind", "agent_version", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "context_snapshots", "policy_checks", "tool_calls", "tool_results", "approvals"],
             "properties": {
                 "agent_run_id": { "type": "string" },
+                "investigation_id": { "type": "string" },
+                "agent_identity_id": { "type": "string" },
+                "agent_kind": { "type": "string" },
+                "agent_version": { "type": "integer", "minimum": 1 },
                 "claim_id": { "type": "string" },
                 "status": { "type": "string" },
                 "decision_boundary": { "type": "string" },

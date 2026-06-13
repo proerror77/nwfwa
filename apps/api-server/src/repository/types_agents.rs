@@ -18,6 +18,24 @@ pub struct PersistedAgentRun {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRegistryRecord {
+    pub agent_identity_id: String,
+    pub agent_kind: String,
+    pub agent_version: u32,
+    pub capability_scope: Vec<String>,
+    pub phi_fields_allowed: Vec<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentInvestigationRecord {
+    pub investigation_id: String,
+    pub claim_id: String,
+    pub status: String,
+    pub orchestrator_version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentAuditEventRecord {
     pub audit_event_id: String,
     pub investigation_id: String,
@@ -42,6 +60,10 @@ pub struct AgentAuditEventRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentRunLogRecord {
     pub agent_run_id: String,
+    pub investigation_id: String,
+    pub agent_identity_id: String,
+    pub agent_kind: String,
+    pub agent_version: u32,
     pub claim_id: String,
     pub status: String,
     pub decision_boundary: String,

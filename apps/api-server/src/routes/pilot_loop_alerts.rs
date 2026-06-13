@@ -311,6 +311,10 @@ mod tests {
     fn build_ops_alerts_includes_pending_agent_approval_alerts() {
         let run = AgentRunLogRecord {
             agent_run_id: "agent_CLM-AGENT-ALERT-1".into(),
+            investigation_id: "investigation:test-agent-alert-1".into(),
+            agent_identity_id: "agent_identity:deterministic_investigator:v1".into(),
+            agent_kind: "deterministic_investigator".into(),
+            agent_version: 1,
             claim_id: "CLM-AGENT-ALERT-1".into(),
             status: "succeeded".into(),
             decision_boundary: "assistive_only".into(),

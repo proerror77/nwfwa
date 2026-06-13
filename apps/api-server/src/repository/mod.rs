@@ -65,7 +65,13 @@ mod types_outcomes;
 mod types_rules;
 mod webhook_helpers;
 
-use self::agent_helpers::{agent_audit_event_from_run, agent_run_log_from_persisted};
+#[cfg(test)]
+use self::agent_helpers::DEFAULT_ORCHESTRATOR_VERSION;
+use self::agent_helpers::{
+    agent_audit_event_from_run, agent_investigation_record_for_claim, agent_run_log_from_persisted,
+    default_agent_registry_record, stable_investigation_id_for_claim, DEFAULT_AGENT_IDENTITY_ID,
+    DEFAULT_AGENT_KIND, DEFAULT_AGENT_VERSION,
+};
 use self::audit_helpers::{
     audit_event_payload_matches_customer_scope, audit_history_from_persisted,
     evidence_values_to_strings, persisted_audit_event_matches_filter,

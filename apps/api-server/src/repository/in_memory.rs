@@ -20,6 +20,8 @@ pub struct InMemoryScoringRepository {
     runs: Mutex<Vec<PersistedScoringRun>>,
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
+    agent_registry: Mutex<HashMap<String, AgentRegistryRecord>>,
+    agent_investigations: Mutex<HashMap<String, AgentInvestigationRecord>>,
     agent_audit_events: Mutex<Vec<AgentAuditEventRecord>>,
     leads: Mutex<HashMap<String, LeadRecord>>,
     cases: Mutex<HashMap<String, CaseRecord>>,
@@ -156,10 +158,24 @@ mod tests {
 
         let audit_events = repository.agent_audit_events.lock().await;
         assert_eq!(audit_events.len(), 1);
-        assert_eq!(audit_events[0].investigation_id, "agent_run:agent_01HX");
+        assert!(audit_events[0]
+            .investigation_id
+            .starts_with("investigation:"));
         assert_eq!(audit_events[0].decision_boundary, "assistive_only");
         assert_eq!(audit_events[0].findings_count, 1);
         assert!(audit_events[0].input_digest.starts_with("sha256:"));
         assert!(!audit_events[0].payload.to_string().contains("CLM-0287"));
+        drop(audit_events);
+
+        let registry = repository.agent_registry.lock().await;
+        assert!(registry.contains_key(DEFAULT_AGENT_IDENTITY_ID));
+        drop(registry);
+
+        let investigations = repository.agent_investigations.lock().await;
+        assert_eq!(investigations.len(), 1);
+        assert_eq!(
+            investigations.values().next().unwrap().orchestrator_version,
+            DEFAULT_ORCHESTRATOR_VERSION
+        );
     }
 }

@@ -420,6 +420,32 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   completed_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS agent_registry (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_identity_id TEXT NOT NULL UNIQUE,
+  agent_kind TEXT NOT NULL,
+  agent_version INTEGER NOT NULL,
+  capability_scope JSONB NOT NULL DEFAULT '[]'::jsonb,
+  phi_fields_allowed JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status TEXT NOT NULL,
+  registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deprovisioned_at TIMESTAMPTZ,
+  UNIQUE (agent_kind, agent_version)
+);
+
+CREATE TABLE IF NOT EXISTS investigations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  investigation_id TEXT NOT NULL UNIQUE,
+  claim_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  orchestrator_version TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS investigations_claim_id_idx
+  ON investigations(claim_id);
+
 CREATE TABLE IF NOT EXISTS agent_audit_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   audit_event_id TEXT NOT NULL UNIQUE,

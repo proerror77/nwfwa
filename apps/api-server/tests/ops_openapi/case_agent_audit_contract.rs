@@ -112,6 +112,21 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
         );
     }
     assert!(schema["components"]["schemas"]["AgentRunLogRecord"].is_object());
+    for field in [
+        "investigation_id",
+        "agent_identity_id",
+        "agent_kind",
+        "agent_version",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["AgentRunLogRecord"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing AgentRunLogRecord field {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["steps"]["items"]
             ["type"],

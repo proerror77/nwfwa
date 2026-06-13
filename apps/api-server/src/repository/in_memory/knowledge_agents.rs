@@ -39,6 +39,16 @@ impl InMemoryScoringRepository {
         &self,
         run: PersistedAgentRun,
     ) -> anyhow::Result<()> {
+        let registry = default_agent_registry_record();
+        self.agent_registry
+            .lock()
+            .await
+            .insert(registry.agent_identity_id.clone(), registry);
+        let investigation = agent_investigation_record_for_claim(&run.claim_id);
+        self.agent_investigations.lock().await.insert(
+            investigation.investigation_id.clone(),
+            investigation.clone(),
+        );
         let previous_event_hash = self
             .agent_audit_events
             .lock()
@@ -47,7 +57,8 @@ impl InMemoryScoringRepository {
             .rev()
             .find(|event| event.agent_run_id == run.agent_run_id)
             .map(|event| event.event_hash.clone());
-        let audit_event = agent_audit_event_from_run(&run, previous_event_hash);
+        let audit_event =
+            agent_audit_event_from_run(&run, &investigation.investigation_id, previous_event_hash);
         self.agent_runs.lock().await.push(run);
         self.agent_audit_events.lock().await.push(audit_event);
         Ok(())

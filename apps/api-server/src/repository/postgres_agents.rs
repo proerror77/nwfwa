@@ -5,6 +5,41 @@ pub(super) async fn save_agent_run(
     run: PersistedAgentRun,
 ) -> anyhow::Result<()> {
     let mut tx = repository.pool.begin().await?;
+    let registry = default_agent_registry_record();
+    let investigation = agent_investigation_record_for_claim(&run.claim_id);
+    sqlx::query(
+        "INSERT INTO agent_registry
+             (agent_identity_id, agent_kind, agent_version, capability_scope, phi_fields_allowed, status)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (agent_identity_id) DO UPDATE
+             SET capability_scope = EXCLUDED.capability_scope,
+                 phi_fields_allowed = EXCLUDED.phi_fields_allowed,
+                 status = EXCLUDED.status",
+    )
+    .bind(&registry.agent_identity_id)
+    .bind(&registry.agent_kind)
+    .bind(registry.agent_version as i32)
+    .bind(string_values(&registry.capability_scope))
+    .bind(string_values(&registry.phi_fields_allowed))
+    .bind(&registry.status)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO investigations
+             (investigation_id, claim_id, status, orchestrator_version)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (investigation_id) DO UPDATE
+             SET status = CASE
+                   WHEN investigations.closed_at IS NULL THEN EXCLUDED.status
+                   ELSE investigations.status
+                 END",
+    )
+    .bind(&investigation.investigation_id)
+    .bind(&investigation.claim_id)
+    .bind(&investigation.status)
+    .bind(&investigation.orchestrator_version)
+    .execute(&mut *tx)
+    .await?;
     sqlx::query(
         "INSERT INTO agent_runs
              (agent_run_id, claim_id, status, decision_boundary, output_json, evidence_refs, completed_at)
@@ -153,7 +188,8 @@ pub(super) async fn save_agent_run(
     .bind(&run.agent_run_id)
     .fetch_optional(&mut *tx)
     .await?;
-    let audit_event = agent_audit_event_from_run(&run, previous_event_hash);
+    let audit_event =
+        agent_audit_event_from_run(&run, &investigation.investigation_id, previous_event_hash);
     sqlx::query(
         "INSERT INTO agent_audit_events
              (audit_event_id, investigation_id, agent_run_id, agent_kind, agent_version,
@@ -253,6 +289,10 @@ pub(super) async fn list_agent_runs(
         let approvals = repository.load_agent_approvals(&agent_run_id).await?;
         runs.push(AgentRunLogRecord {
             agent_run_id,
+            investigation_id: stable_investigation_id_for_claim(&claim_id),
+            agent_identity_id: DEFAULT_AGENT_IDENTITY_ID.into(),
+            agent_kind: DEFAULT_AGENT_KIND.into(),
+            agent_version: DEFAULT_AGENT_VERSION,
             claim_id,
             status,
             decision_boundary,
