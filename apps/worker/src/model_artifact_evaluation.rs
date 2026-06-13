@@ -321,6 +321,8 @@ fn feature_map_from_values(values: &BTreeMap<String, f64>) -> FeatureMap {
                     name: name.clone(),
                     version: 1,
                     value: serde_json::json!(value),
+                    is_proxy: false,
+                    data_source: "model_artifact_evaluation_dataset".into(),
                     evidence_refs: Vec::new(),
                 },
             )
