@@ -24,6 +24,27 @@ The production gaps cluster in three areas:
   identity enforcement, investigation grouping, PHI field enforcement, and
   kill-switch behavior remain incomplete.
 
+## Post-Review Implementation Notes
+
+As of the P1/P2 remediation commits after this review:
+
+- scoring missing-data reweighting, broader confidence scoring, field-path PHI
+  response masking, sanctions sync contract, provider profile windows, PSI
+  actioning, and rule hit-rate trending are tracked as implemented in
+  `docs/project/prd-coverage.md`;
+- provider graph signal rollups for billing-ring membership, temporal
+  co-billing, and referral entropy are implemented as local worker contracts;
+- peer percentile benchmark and member-provider episode aggregation are
+  implemented as local worker contracts;
+- `agent_registry` and `investigations` now exist as additive schema/runtime
+  contracts, agent audit events use stable investigation ids, and deterministic
+  agent audit records include non-empty PHI field names without values.
+
+Remaining boundaries after those commits are production scheduling, DB write
+paths for customer rollups, customer claim/history data, dynamic registry
+allowlist enforcement before tool execution, kill-switch behavior, specialist
+agent orchestration, ICD-10/CPT comparator data, and feature source metadata.
+
 ## A. Scoring Layer Gaps
 
 | ID | Gap | Required planning response |
