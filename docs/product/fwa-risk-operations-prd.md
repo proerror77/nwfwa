@@ -1,6 +1,7 @@
 # FWA Risk And Operations Platform PRD
 
 Date: 2026-05-27
+Last updated: 2026-06-12
 
 Status: living product blueprint
 
@@ -184,7 +185,31 @@ Required signals:
 - duplicate or repeated service patterns;
 - diagnosis-procedure mismatch rate;
 - review failure, confirmed FWA, and false-positive history;
-- sudden volume increase for new or previously low-activity providers.
+- sudden volume increase for new or previously low-activity providers;
+- OIG exclusion list and SAM.gov debarment status; these signals must be
+  refreshed at minimum daily and evaluated before claim scoring begins; claims
+  from an excluded or debarred provider must be flagged regardless of
+  claim-level risk score;
+- peer percentile signals must derive from statistical distributions computed
+  over actual peer claim populations segmented by specialty, region, and service
+  type; synthetic proxies such as amount-to-limit ratios must not substitute for
+  real peer percentiles in any production scoring layer; peer benchmarks must be
+  recomputed at minimum monthly with p25, p50, p75, p90, and p99 quantiles
+  stored per segment;
+- billing ring membership score: provider sets sharing elevated patient overlap
+  within rolling 30-day windows, flagged when pairwise patient-overlap ratio
+  exceeds a configurable threshold;
+- temporal co-billing frequency: rate at which the provider and a secondary
+  provider both appear in the same member's claims within a 7-day window, used
+  to detect coordinated billing patterns without requiring multi-hop graph
+  inference;
+- referral concentration entropy: Shannon entropy of the provider's
+  referral-source distribution; low entropy flags concentrated referral chains
+  as a higher-risk signal than raw referral volume alone;
+- multi-window risk scores must use a weighted combination that gives higher
+  weight to shorter windows for near-term surveillance while using longer windows
+  as background context; the maximum of all window scores must not be the sole
+  aggregation method.
 
 ### FWA Rule Pack
 
@@ -262,7 +287,19 @@ Required feature groups:
 - policy-level coverage, waiting-period, and limit features;
 - time-window features over 7/30/90/180 days;
 - network concentration features for provider-member and provider-agent
-  relationships.
+  relationships;
+- episode-level aggregation features spanning all claims for a member-provider
+  pair within 30, 90, and 365-day windows, covering total episode cost, episode
+  DRG mix deviation from peer episodes, and episode-level diagnosis-procedure
+  coherence; episode-level features complement claim-level features and are
+  required for unbundling and utilization-pattern detection;
+- ICD-10 and CPT unbundling detection features: presence of component codes
+  alongside bundled-code comparators within the same episode window,
+  supplemented by fee-detail line count and service-category concentration;
+- peer percentile production requirement: all peer deviation features must derive
+  from statistical distributions over actual peer claim populations; ratio-to-limit
+  proxies are acceptable as labeled temporary baselines only and must be clearly
+  marked in the feature registry until replaced by real peer data.
 
 ### Outcome, Drift, And ROI Monitoring
 
@@ -279,7 +316,15 @@ Required monitoring:
 - avoided future exposure;
 - deterrence or provider behavior-change indicators;
 - review cost;
-- rule-level and model-level saving attribution.
+- rule-level and model-level saving attribution;
+- feature distribution drift using Population Stability Index (PSI) computed
+  monthly over key scoring features; PSI above 0.25 on any tier-1 feature must
+  generate a review task for the model or rule that uses it;
+- rule hit rate trending: a 7-day rolling hit rate and a 90-day rolling hit rate
+  must be maintained per production rule; when the 7-day rate falls below 50
+  percent of the 90-day baseline without a seasonal explanation, the platform
+  must open a drift review task and may automatically trigger a shadow rerun
+  with relaxed thresholds to detect potential provider evasion.
 
 ## Integration Roadmap
 
@@ -663,6 +708,59 @@ Staged infrastructure roadmap:
   network isolation, OpenTelemetry dashboards, alerting, disaster recovery, and
   release/rollback runbooks.
 
+### Agentic Investigation Control Plane
+
+Agentic workflows that access PHI or produce investigation outputs must be
+governed by a five-layer control plane. This applies to any agent that reads
+claim data, member data, provider data, or evidence packages, regardless of
+whether the agent uses an LLM or a deterministic algorithm.
+
+Required control layers:
+
+1. Identity and persona registry: every agent deployment must be registered with
+   a unique identity, version, defined capability scope, and enumerated PHI field
+   access list before it can run in any environment.
+
+2. Orchestration and cross-domain mediation: an investigation orchestrator manages
+   the lifecycle state machine and coordinates specialist agents; only the
+   orchestrator holds the full investigation context; specialist agents receive
+   only the data their registered scope requires.
+
+3. PHI-bounded context and memory: agents must access only the PHI fields
+   declared in their registry entry; field-level access must be enforced at tool
+   invocation time and must not depend on agent self-reporting.
+
+4. Runtime policy enforcement with kill-switch: every agent action must be
+   validated against the platform policy engine before execution; a kill-switch
+   mechanism must be able to halt any running agent without data loss.
+
+5. Lifecycle management and decommissioning: agent versions must be registered,
+   monitored for output quality drift, and decommissioned with an auditable
+   deprovisioning record.
+
+Agent audit event schema must include at minimum: agent identity and version,
+investigation identifier, action type, timestamp, actor context, PHI fields
+accessed by field name without values, tool calls with input and output digests,
+decision rationale, confidence score, and whether human review was triggered.
+Audit records must be append-only with a cryptographic hash chain linking
+consecutive records for the same investigation. Audit records must be retained
+for at least six years to satisfy HIPAA retention requirements. No standardized
+schema for agentic AI audit artifacts exists as of this document's last update;
+the platform must define and own its schema until regulatory standards are
+finalized by NIST or CMS.
+
+Agent run identifiers must use collision-resistant sortable identifiers such as
+ULID or UUID v7 so that audit records across multiple runs for the same claim
+remain uniquely traceable. Format strings derived from claim identifiers alone
+must not be used as agent run identifiers.
+
+Agent decision boundary must be hardcoded to assistive-only for all versions
+until a customer-approved deterministic escalation path with explicit rule
+authority is in place. Agents may generate investigation packages, checklist
+items, evidence summaries, and disposition recommendations, but the final
+adjudication decision must remain with a human reviewer or a customer-approved
+deterministic rule with published approval status.
+
 The system should support agent-native operation by giving agents parity with
 operator-readable capabilities through approved tools, while reserving
 high-impact writes for human approval. This keeps the architecture compatible
@@ -838,6 +936,18 @@ structured models:
   supervised-learning candidates for structured claim-risk scoring, provided
   they carry feature importance or SHAP-style explanation and pass strict
   validation gates.
+
+Unsupervised ensemble scoring is a required complement to supervised ML and is
+particularly valuable early in a deployment when labeled data is scarce.
+Billing-pattern anomaly scoring using statistical methods such as IQR and
+MAD-based deviation, DRG peer-group frequency comparison, and code-diversity
+metrics does not require fraud labels and produces significantly higher precision
+than random targeting when evaluated against confirmed enforcement records.
+Unsupervised ensemble outputs must feed the L3 Unsupervised Anomaly scoring
+layer as a first-class signal, replacing heuristic threshold implementations once
+sufficient historical claim data is available. Unsupervised scores must carry
+evidence refs identifying the statistical signal that contributed to the anomaly
+and must not be presented as fraud conclusions.
 
 Explainable supervised model outputs should also feed Rule Studio. High-value
 feature contributions, tree paths, or SHAP-style patterns may become candidate
@@ -1040,3 +1150,21 @@ Reference anchors:
   exposure, review cost, and estimated impact.
 - Kaggle-inspired work remains an offline research input until validated on
   customer or pilot data.
+- Peer percentile signals in the L1 Peer Benchmark layer are derived from actual
+  peer distribution data segmented by specialty and region; ratio-to-limit proxy
+  values must not be used as peer percentile substitutes in production scoring.
+- Provider graph signals include OIG exclusion status, billing ring membership
+  score, temporal co-billing frequency, and referral concentration entropy;
+  these signals are refreshed at minimum nightly.
+- Feature distribution PSI is computed monthly for tier-1 scoring features; PSI
+  violations above 0.25 generate actionable review tasks.
+- Rule hit rate trending is maintained with 7-day and 90-day baselines per
+  production rule; rates significantly below baseline trigger drift review tasks.
+- Agent audit events include agent identity, version, investigation identifier,
+  PHI fields accessed by name, tool call records, decision rationale, and
+  human-review flag; the audit store is append-only with a cryptographic hash
+  chain.
+- The L3 Unsupervised Anomaly layer uses statistical IQR, MAD, or
+  billing-pattern ensemble methods rather than fixed heuristic thresholds once
+  sufficient historical claim data is available; heuristic thresholds are
+  acceptable as labeled baselines only.
