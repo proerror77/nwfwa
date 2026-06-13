@@ -442,6 +442,9 @@ fn amount_ratio_score(features: &FeatureMap) -> u8 {
     if let Some(percentile) = numeric_feature(features, "claim_amount_peer_percentile") {
         return percentile.round().clamp(0.0, 100.0) as u8;
     }
+    // PROXY BASELINE: this fallback is an amount-to-limit ratio, not a real
+    // peer percentile. Production L1 scoring must use peer distribution data or
+    // downweight/exclude this layer when peer context is missing.
     numeric_feature(features, "claim_amount_to_limit_ratio")
         .map(|ratio| (ratio * 100.0).round().clamp(0.0, 100.0) as u8)
         .unwrap_or(0)

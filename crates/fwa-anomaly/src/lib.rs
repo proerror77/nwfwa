@@ -15,7 +15,9 @@ pub struct AnomalyScore {
     pub explanations: Vec<AnomalyExplanation>,
 }
 
-// BASELINE: heuristic thresholds; replace with IQR/MAD ensemble once historical data is available.
+// BASELINE: heuristic thresholds; replace with IQR/MAD or unsupervised ensemble
+// scoring after accumulated labels/history are sufficient, initially defined as
+// >=500 confirmed_fwa labels or 30-day recall below 0.70 in monitoring.
 pub fn detect_anomaly(features: &FeatureMap) -> AnomalyScore {
     let mut score = 0_u16;
     let mut explanations = Vec::new();

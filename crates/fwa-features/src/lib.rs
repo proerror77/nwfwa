@@ -161,6 +161,9 @@ fn high_cost_item_ratio(context: &ClaimContext) -> f64 {
 }
 
 fn diagnosis_procedure_match_score(context: &ClaimContext) -> f64 {
+    // PLACEHOLDER: hard-coded ICD prefix heuristic. Replace with governed
+    // ICD-10/CPT compatibility or medical-policy reference data before using as
+    // a production clinical consistency score.
     let has_imaging = context.items.iter().any(|item| {
         item.item_type.eq_ignore_ascii_case("procedure")
             && item.description.to_ascii_lowercase().contains("imaging")
