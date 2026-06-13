@@ -39,6 +39,12 @@ pub struct ProviderProfileFeatureContext {
     pub risk_score: Option<u8>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct ClinicalCompatibilityFeatureContext {
+    pub diagnosis_procedure_match_score: Option<f64>,
+    pub data_source: Option<String>,
+}
+
 pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
     calculate_features_with_peer_context(context, None)
 }
@@ -54,6 +60,15 @@ pub fn calculate_features_with_contexts(
     context: &ClaimContext,
     peer_context: Option<&PeerFeatureContext>,
     provider_profile_context: Option<&ProviderProfileFeatureContext>,
+) -> FeatureMap {
+    calculate_features_with_all_contexts(context, peer_context, provider_profile_context, None)
+}
+
+pub fn calculate_features_with_all_contexts(
+    context: &ClaimContext,
+    peer_context: Option<&PeerFeatureContext>,
+    provider_profile_context: Option<&ProviderProfileFeatureContext>,
+    clinical_compatibility_context: Option<&ClinicalCompatibilityFeatureContext>,
 ) -> FeatureMap {
     let mut features = FeatureMap::new();
     let claim_id = context.claim.external_claim_id.clone();
@@ -115,15 +130,30 @@ pub fn calculate_features_with_contexts(
         &claim_id,
         "claim_items",
     );
+    let clinical_match_score = clinical_compatibility_context
+        .and_then(|context| {
+            context
+                .diagnosis_procedure_match_score
+                .map(|score| (score.clamp(0.0, 1.0), false, context.data_source.as_deref()))
+        })
+        .unwrap_or_else(|| {
+            (
+                diagnosis_procedure_match_score(context),
+                true,
+                Some("diagnosis_procedure_heuristic"),
+            )
+        });
     insert_number_with_metadata(
         &mut features,
         "diagnosis_procedure_match_score",
-        diagnosis_procedure_match_score(context),
+        clinical_match_score.0,
         "claim",
         &claim_id,
         "diagnosis_code",
-        true,
-        "diagnosis_procedure_heuristic",
+        clinical_match_score.1,
+        clinical_match_score
+            .2
+            .unwrap_or("worker.icd_cpt_compatibility_reference"),
     );
 
     let provider_risk = match context.provider.risk_tier {
@@ -432,6 +462,26 @@ mod tests {
         assert_eq!(
             features["provider_profile_score"].data_source,
             "worker.provider_profile_window_rollup"
+        );
+    }
+
+    #[test]
+    fn accepts_real_clinical_compatibility_score_from_reference_context() {
+        let clinical_context = ClinicalCompatibilityFeatureContext {
+            diagnosis_procedure_match_score: Some(1.2),
+            data_source: Some("worker.icd_cpt_compatibility_reference".into()),
+        };
+        let features =
+            calculate_features_with_all_contexts(&context(), None, None, Some(&clinical_context));
+
+        assert_eq!(
+            features["diagnosis_procedure_match_score"].value,
+            serde_json::json!(1.0)
+        );
+        assert!(!features["diagnosis_procedure_match_score"].is_proxy);
+        assert_eq!(
+            features["diagnosis_procedure_match_score"].data_source,
+            "worker.icd_cpt_compatibility_reference"
         );
     }
 }
