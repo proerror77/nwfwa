@@ -5,6 +5,7 @@ mod build_analytics_export_plan;
 mod build_anomaly_upgrade_readiness;
 mod build_audit_retention_scan;
 mod build_automl_lifecycle_closure_report;
+mod build_clinical_compatibility_reference;
 mod build_demo_automl_lifecycle_evidence;
 mod build_demo_ml_datasets;
 mod build_episode_aggregation;
@@ -60,6 +61,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-training-handoff" => build_training_handoff::run(args),
         "build-audit-retention-scan" => build_audit_retention_scan::run(args),
         "build-anomaly-upgrade-readiness" => build_anomaly_upgrade_readiness::run(args),
+        "build-clinical-compatibility-reference" => {
+            build_clinical_compatibility_reference::run(args)
+        }
         "build-mlops-monitoring-plan" => build_mlops_monitoring_plan::run(args),
         "run-scheduled-mlops-monitoring" => run_scheduled_mlops_monitoring::run(args),
         "build-mlops-monitoring-report" => build_mlops_monitoring_report::run(args),

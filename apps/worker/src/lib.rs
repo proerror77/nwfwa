@@ -163,6 +163,13 @@ pub use episode_rollup::{
     EpisodeRollupInput, EpisodeWindowRollup, MemberProviderEpisodeRollup,
 };
 
+mod clinical_compatibility;
+pub use clinical_compatibility::{
+    build_clinical_compatibility_reference_report, ClinicalCompatibilityRecord,
+    ClinicalCompatibilityReferenceInput, ClinicalCompatibilityReferenceReport,
+    ClinicalCompatibilityReferenceRow, ClinicalCompatibilityReviewTask,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,

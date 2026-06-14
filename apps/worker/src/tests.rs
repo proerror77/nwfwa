@@ -6,6 +6,7 @@ mod anomaly_upgrade;
 mod audit_retention;
 mod automl_lifecycle;
 mod automl_ranking;
+mod clinical_compatibility;
 mod clustering;
 mod dataset;
 mod episode_rollup;
