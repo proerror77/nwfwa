@@ -151,8 +151,9 @@ As of the P1/P2 remediation commits after this review:
   evidence records `ready`/`blocked`/`missing`, and missing or blocked readiness
   creates an operations review task instead of silently allowing downstream use.
 - The worker also emits a run-status template contract so customer schedulers
-  can start from the planned job list and readiness report URI instead of
-  hand-authoring the execution input JSON.
+  can start from the planned job list, readiness report URI, build commands,
+  source inputs, dependency list, artifact-only markers, and planned targets
+  instead of hand-authoring the execution input JSON.
 - The claims scoring API now accepts inline materialized worker contexts and
   also loads the latest persisted scoring-feature-context materialization by
   claim when no inline context is supplied, passing peer, clinical

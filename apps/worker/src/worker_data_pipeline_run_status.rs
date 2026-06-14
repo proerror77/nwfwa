@@ -29,6 +29,14 @@ pub fn build_worker_data_pipeline_run_status_template(
         .map(|job| {
             serde_json::json!({
                 "job_kind": json_string(job, "job_kind").unwrap_or_else(|| "unknown".into()),
+                "cadence": json_string(job, "cadence"),
+                "build_command": json_string(job, "build_command"),
+                "source_input": json_string(job, "source_input"),
+                "depends_on": job
+                    .get("depends_on")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
+                "artifact_kind": json_string(job, "artifact_kind"),
                 "planned_report_uri": json_string(job, "report_uri"),
                 "submit_command": json_string(job, "submit_command"),
                 "api_path": json_string(job, "api_path"),

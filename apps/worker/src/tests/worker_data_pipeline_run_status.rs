@@ -40,6 +40,16 @@ fn builds_worker_data_pipeline_run_status_template() {
         "oig_sam_sanctions_snapshot_fetch"
     );
     assert_eq!(
+        job_statuses[0]["build_command"],
+        "fetch-oig-sam-sanctions-snapshot"
+    );
+    assert_eq!(
+        job_statuses[0]["source_input"],
+        "customer_configured_oig_sam_compatible_endpoints"
+    );
+    assert_eq!(job_statuses[0]["artifact_kind"], "source_snapshot");
+    assert_eq!(job_statuses[0]["depends_on"], serde_json::json!([]));
+    assert_eq!(
         job_statuses[0]["planned_report_uri"],
         "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/{as_of_date}/oig_sam_sanctions_snapshot.json"
     );
@@ -51,6 +61,12 @@ fn builds_worker_data_pipeline_run_status_template() {
     );
     assert_eq!(job_statuses[0]["artifact_uri"], serde_json::Value::Null);
     assert_eq!(job_statuses[0]["submitted"], false);
+    assert_eq!(job_statuses[1]["job_kind"], "oig_sam_sanctions_sync");
+    assert_eq!(job_statuses[1]["build_command"], "sync-oig-sam-sanctions");
+    assert_eq!(
+        job_statuses[1]["depends_on"],
+        serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
+    );
     assert!(report["evidence_refs"]
         .as_array()
         .expect("evidence refs")

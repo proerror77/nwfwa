@@ -133,6 +133,7 @@ CAPABILITIES = [
             ("apps/worker/src/commands/mod.rs", "submit-probability-calibration-report"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "readiness_gate_status"),
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "readiness_report_uri"),
+            ("apps/worker/src/worker_data_pipeline_run_status.rs", "build_command"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_sanctions"),
             ("apps/api-server/src/routes/claims.rs", "provider_sanctions_for_provider"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_profile_windows"),
