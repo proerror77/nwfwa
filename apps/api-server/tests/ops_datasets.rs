@@ -113,7 +113,7 @@ fn scoring_feature_context_materialization_payload() -> &'static str {
             "unbundling_candidate_count": 1,
             "data_source": "worker.episode_utilization_rollup"
           },
-          "evidence_refs": ["scoring_feature_contexts:CLM-WORKER-CONTEXT-1"]
+          "evidence_refs": ["claims:CLM-WORKER-CONTEXT-1", "scoring_feature_contexts:CLM-WORKER-CONTEXT-1"]
         }
       ],
       "evidence_refs": [
@@ -1931,6 +1931,27 @@ async fn scoring_feature_context_materialization_requires_context_evidence_refs(
     let mut payload: serde_json::Value =
         serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
     payload["contexts"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_context_claim_source_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["contexts"][0]["evidence_refs"] =
+        serde_json::json!(["scoring_feature_contexts:CLM-WORKER-CONTEXT-1"]);
 
     let (status, body) = json_request_with_key(
         app,

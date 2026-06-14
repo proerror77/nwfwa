@@ -365,6 +365,23 @@ pub(super) fn validate_scoring_feature_context_materialization(
                 "each context must include non-empty evidence_refs",
             ));
         }
+        let expected_claim_ref = format!("claims:{}", claim_id.trim());
+        let has_claim_source_ref = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .is_some_and(|references| {
+                references
+                    .iter()
+                    .filter_map(|reference| reference.as_str())
+                    .any(|reference| reference.trim() == expected_claim_ref)
+            });
+        if !has_claim_source_ref {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                format!("each context evidence_refs must include {expected_claim_ref}"),
+            ));
+        }
     }
     Ok(())
 }
