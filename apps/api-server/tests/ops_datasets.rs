@@ -794,6 +794,58 @@ async fn worker_data_pipeline_execution_report_requires_review_task_for_pending_
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_review_task_for_blocked_readiness_gate() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["readiness_gate_status"] = serde_json::json!("blocked");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_accepts_blocked_readiness_with_review_task() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["readiness_gate_status"] = serde_json::json!("blocked");
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["review_tasks"]
+        .as_array_mut()
+        .expect("review tasks")
+        .push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_readiness_gate_review",
+            "readiness_gate_status": "blocked"
+        }));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["readiness_gate_status"], "blocked");
+    assert_eq!(body["review_task_count"], 2);
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_rejects_completed_job_without_artifact() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =

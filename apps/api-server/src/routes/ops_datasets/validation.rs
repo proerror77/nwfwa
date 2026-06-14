@@ -719,6 +719,21 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             "readiness_report_uri is required when readiness_gate_status is ready or blocked",
         ));
     }
+    if request.readiness_gate_status.as_deref() != Some("ready") {
+        let has_readiness_gate_review = request.review_tasks.iter().any(|review_task| {
+            review_task
+                .get("task_kind")
+                .and_then(|value| value.as_str())
+                == Some("worker_data_pipeline_readiness_gate_review")
+        });
+        if !has_readiness_gate_review {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK",
+                "non-ready readiness_gate_status requires a worker_data_pipeline_readiness_gate_review task",
+            ));
+        }
+    }
     let expected_report_ref = format!(
         "worker_data_pipeline_execution_reports:{}",
         request.source_report_uri
