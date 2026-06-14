@@ -102,6 +102,14 @@ MODEL_SERVING_SLO_ACCEPTANCE_CHECK_IDS = {
     "model_serving_evidence_refs_present",
 }
 
+CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_customer_data_governance_report",
+    "dataset_and_label_provenance_approved",
+    "holdout_and_shadow_plan_approved",
+    "customer_validation_samples_present",
+    "customer_data_evidence_refs_present",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -211,6 +219,26 @@ def validate_contract(contract: dict) -> list[dict]:
                 require(
                     check.get("description"),
                     f"model serving SLO acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "customer_data_governance":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "customer data governance gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECK_IDS,
+                "customer data governance gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"customer data governance acceptance check {check.get('check_id')} missing description",
                 )
     return gates
 
@@ -450,6 +478,48 @@ def validate_model_serving_slo_evidence(report: dict) -> None:
         )
 
 
+def validate_customer_data_governance_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "customer_data_governance_report",
+        "customer data governance evidence has wrong artifact_kind",
+    )
+    for field_name in (
+        "dataset_provenance_status",
+        "label_provenance_status",
+        "holdout_split_status",
+        "shadow_traffic_plan_status",
+    ):
+        require(
+            report.get(field_name) == "approved",
+            f"customer data governance evidence must have {field_name} approved",
+        )
+    approved_label_count = report.get("approved_label_count")
+    holdout_claim_count = report.get("holdout_claim_count")
+    require(
+        isinstance(approved_label_count, int) and approved_label_count > 0,
+        "customer data governance evidence must include positive approved_label_count",
+    )
+    require(
+        isinstance(holdout_claim_count, int) and holdout_claim_count > 0,
+        "customer data governance evidence must include positive holdout_claim_count",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "customer data governance evidence must include evidence_refs",
+    )
+    for prefix in (
+        "dataset_provenance:",
+        "label_provenance:",
+        "holdout_split:",
+        "shadow_traffic_plan:",
+    ):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"customer data governance evidence_refs missing {prefix}",
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract-dir", default="artifacts/production-readiness")
@@ -466,6 +536,9 @@ def main() -> int:
     if args.evidence_dir:
         evidence_dir = Path(args.evidence_dir)
         artifacts = validate_evidence_dir(evidence_dir, gates)
+        validate_customer_data_governance_evidence(
+            artifacts["customer_data_governance_report.json"]
+        )
         validate_retention_legal_hold_evidence(
             artifacts["retention_legal_hold_report.json"]
         )

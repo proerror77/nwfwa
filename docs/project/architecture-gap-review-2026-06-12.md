@@ -193,6 +193,9 @@ As of the P1/P2 remediation commits after this review:
 - The production readiness validator now deep-checks model-serving SLO
   evidence for model identity, p95 latency, error rate, checksum/signature
   verification, fallback health, rollback readiness, and evidence refs.
+- The production readiness validator now deep-checks customer-data governance
+  evidence for approved dataset provenance, label provenance, holdout split,
+  shadow-traffic plan, positive validation sample counts, and evidence refs.
 - The worker now has a probability-calibration evidence report that computes
   ECE and Brier score from labeled holdout predictions and opens calibration
   review tasks when raw probabilities are miscalibrated or sample size is

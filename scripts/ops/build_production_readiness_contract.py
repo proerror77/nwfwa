@@ -132,6 +132,29 @@ MODEL_SERVING_SLO_ACCEPTANCE_CHECKS = [
     },
 ]
 
+CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECKS = [
+    {
+        "check_id": "report_kind_is_customer_data_governance_report",
+        "description": "Customer data governance evidence artifact has artifact_kind = customer_data_governance_report.",
+    },
+    {
+        "check_id": "dataset_and_label_provenance_approved",
+        "description": "Dataset provenance and label provenance are approved before production readiness is claimed.",
+    },
+    {
+        "check_id": "holdout_and_shadow_plan_approved",
+        "description": "Holdout split and live shadow-traffic plan are approved.",
+    },
+    {
+        "check_id": "customer_validation_samples_present",
+        "description": "Customer evidence includes positive approved label and holdout claim counts.",
+    },
+    {
+        "check_id": "customer_data_evidence_refs_present",
+        "description": "Customer evidence includes dataset provenance, label provenance, holdout split, and shadow-traffic evidence refs.",
+    },
+]
+
 REQUIRED_EVIDENCE = [
     {
         "gate_id": "production_deployment_apply",
@@ -178,6 +201,7 @@ REQUIRED_EVIDENCE = [
         "gate_id": "customer_data_governance",
         "required_artifact": "customer_data_governance_report.json",
         "description": "Customer dataset provenance, label provenance, holdout split, and live shadow-traffic plan were approved.",
+        "acceptance_checks": CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECKS,
     },
     {
         "gate_id": "worker_data_pipeline_execution",

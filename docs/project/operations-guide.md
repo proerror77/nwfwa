@@ -759,6 +759,10 @@ is attached for deployment apply, smoke, observability, secrets/access,
 backup/restore, rollback, alert delivery, retention/legal hold, customer data
 governance, worker data-pipeline scheduler execution, model serving SLO, and
 OCR/vector/analytics execution.
+The customer-data governance gate requires
+`customer_data_governance_report.json` to show approved dataset provenance,
+label provenance, holdout split, and shadow-traffic plan, plus positive
+approved-label and holdout-claim counts and matching evidence refs.
 The retention/legal-hold gate requires `retention_legal_hold_report.json` to
 show at least six retention years, explicit retention and legal-hold policy ids,
 archive storage, completed legal-hold reconciliation, human approval before
