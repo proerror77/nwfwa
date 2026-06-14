@@ -174,6 +174,12 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         .unwrap()
         .contains(&serde_json::json!("missing_customer_readiness_check")));
     assert_eq!(report["review_task_count"], 10);
+    assert!(report["review_tasks"]
+        .as_array()
+        .expect("review tasks")
+        .iter()
+        .any(|task| task["job_kind"] == "provider_profile_window_rollup"
+            && task["required_permission"] == "ops:providers:write"));
     assert!(output_dir
         .join("worker_data_pipeline_readiness_report.json")
         .exists());

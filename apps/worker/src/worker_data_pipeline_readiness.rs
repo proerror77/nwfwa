@@ -173,6 +173,7 @@ pub fn build_worker_data_pipeline_readiness_report(
                 "task_kind": "worker_data_pipeline_readiness_review",
                 "customer_scope_id": customer_scope_id,
                 "job_kind": job["job_kind"].clone(),
+                "required_permission": job["required_permission"].clone(),
                 "blockers": job["blockers"].clone(),
                 "review_queue": "worker_data_pipeline_ops",
                 "required_review": "resolve customer data, approval, quality, or external-fetch readiness before scheduled writes"
