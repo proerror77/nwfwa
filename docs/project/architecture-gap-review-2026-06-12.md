@@ -54,6 +54,9 @@ As of the P1/P2 remediation commits after this review:
   validates ICD/CPT-style compatibility rows with policy authority refs and
   evidence refs, then emits records suitable for the clinical compatibility
   feature input path.
+- The worker now has an unbundling comparator contract that joins governed
+  bundled/component code rules with episode procedure-code snapshots and emits
+  medical-review candidates without assigning fraud labels.
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
@@ -82,11 +85,12 @@ Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, execution-time
 cancellation checks inside long-running/specialist agents, multi-agent runtime
 dispatch/tool mediation, customer-approved ICD-10/CPT or medical-policy
-reference data, customer-approved feature lineage/source mappings,
-calibrated-probability serving activation, and replacement of the L3 heuristic
-anomaly scorer with a validated statistical baseline. Audit retention still
-needs customer-environment partitioning, archive storage, legal-hold
-reconciliation writes, and approved destruction workflow execution.
+reference data, customer-approved unbundling rule packs, customer-approved
+feature lineage/source mappings, calibrated-probability serving activation, and
+replacement of the L3 heuristic anomaly scorer with a validated statistical
+baseline. Audit retention still needs customer-environment partitioning, archive
+storage, legal-hold reconciliation writes, and approved destruction workflow
+execution.
 
 ## A. Scoring Layer Gaps
 
@@ -107,7 +111,7 @@ reconciliation writes, and approved destruction workflow execution.
 | --- | --- | --- |
 | B-1 | Peer percentile fallback is still a proxy path unless upstream supplies peer context. | Feature metadata must expose `is_proxy`, `data_source`, and source lineage. |
 | B-2 | Episode-level features are missing. | Add member-provider 30/90/365 episode aggregation for unbundling and excessive utilization. |
-| B-3 | ICD-10/CPT clinical compatibility reference ingestion exists, but unbundling comparator logic is still missing. | Introduce bundled-code and component-code reference data plus episode co-occurrence checks. |
+| B-3 | ICD-10/CPT clinical compatibility ingestion and unbundling comparator contracts exist, but customer-approved rule packs and production DB write paths are still missing. | Connect bundled/component code references and episode co-occurrence outputs to governed customer data before treating unbundling detection as production-covered. |
 | B-4 | Feature registry lacks proxy/source metadata. | Extend feature records and PRD acceptance criteria so compliance reports can distinguish real distributions from estimates. |
 
 ## C. Agentic Investigation Control-Plane Gaps
