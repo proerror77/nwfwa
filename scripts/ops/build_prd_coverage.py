@@ -296,6 +296,14 @@ CAPABILITIES = [
                 "validate_ocr_vector_analytics_execution_evidence",
             ),
             (
+                "scripts/ops/build_ocr_vector_analytics_execution_report.py",
+                "ocr_vector_analytics_execution_report",
+            ),
+            (
+                "scripts/ops/build_ocr_vector_analytics_execution_report.py",
+                "raw_phi_exported_not_false",
+            ),
+            (
                 "scripts/ops/build_production_evidence_package.py",
                 "production_readiness_evidence_package_template",
             ),

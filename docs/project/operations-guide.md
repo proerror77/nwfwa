@@ -826,6 +826,18 @@ The OCR/vector/analytics gate requires
 embedding/vector, retrieval ranking, ClickHouse export, dashboard access, and
 analytics retention/backup checks, positive execution counts, no raw PHI
 export, and evidence refs for each stage.
+Render customer execution results into the required report shape:
+
+```bash
+python3 scripts/ops/build_ocr_vector_analytics_execution_report.py \
+  --source-uri artifacts/production-evidence-package/ocr-vector-analytics-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder does not run OCR, write vectors, export ClickHouse data, or move
+PHI. It only packages customer-produced execution evidence and keeps the report
+blocked if any stage is incomplete, counts are zero, raw PHI was exported, or
+stage evidence refs are missing.
 The worker data-pipeline gate requires the customer
 `worker_data_pipeline_execution_report.json` to pass the contract acceptance
 checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
