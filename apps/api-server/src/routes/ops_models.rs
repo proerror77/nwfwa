@@ -459,6 +459,11 @@ async fn load_model_promotion_gates_for_optional_version(
         .latest_model_promotion_review(&model.model_key, &model.version)
         .await
         .map_err(internal_error("MODEL_PROMOTION_REVIEW_LOAD_FAILED"))?;
+    let latest_calibration_report = state
+        .repository
+        .latest_probability_calibration_report(&model.model_key, &model.version)
+        .await
+        .map_err(internal_error("PROBABILITY_CALIBRATION_LOAD_FAILED"))?;
     let outcome_labels = state
         .repository
         .list_outcome_labels(None)
@@ -476,6 +481,7 @@ async fn load_model_promotion_gates_for_optional_version(
         &outcome_labels,
         &feedback_items,
         latest_review.as_ref(),
+        latest_calibration_report.as_ref(),
         source_dataset.as_ref(),
     );
     Ok((model, gates))

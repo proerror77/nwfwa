@@ -179,6 +179,9 @@ As of the P1/P2 remediation commits after this review:
   worker command that persist calibration evidence and record audit lineage
   while explicitly avoiding calibrated serving activation, threshold changes, or
   label assignment.
+- Model promotion gates now consume the latest same-version probability
+  calibration report and block activation when calibration evidence is missing
+  or failing, without rewriting probabilities or activating calibrated serving.
 - The worker now has a scheduled data-pipeline plan contract that orders the
   build and submit commands for sanctions, provider profiles, graph signals,
   peer benchmarks, episode rollups, clinical references, unbundling candidates,
@@ -252,7 +255,7 @@ validation on customer data.
 | D-3 | PSI threshold actioning now creates monitoring/review artifacts. | Wire action artifacts into customer model-governance operations. |
 | D-4 | Rule hit-rate trending now computes 7-day vs. 90-day drift and emits review artifacts. | Validate thresholds against customer production traffic and rule governance cadence. |
 | D-5 | L3 anomaly scoring is still a heuristic baseline. | Add worker evaluation for IQR/MAD or ensemble anomaly readiness and make the upgrade trigger measurable. |
-| D-6 | Raw sigmoid outputs are explicitly marked as `uncalibrated_raw_sigmoid`, and calibration evidence report contracts exist. | Fit and activate calibrated probability serving only after customer labels, holdout, and governance approval. |
+| D-6 | Raw sigmoid outputs are explicitly marked as `uncalibrated_raw_sigmoid`, calibration evidence report contracts exist, and model activation gates now require same-version passing probability-calibration evidence. | Fit and activate calibrated probability serving only after customer labels, holdout, and governance approval. |
 
 ## E. Compliance, Security, And HIPAA Gaps
 
@@ -315,8 +318,8 @@ episode, suspicious beneficiary identity, and organized provider/member rings.
   percentile benchmarks, episode aggregation, `agent_registry`,
   `investigations`, PHI allowlist enforcement, populated PHI field audits,
   episode-level features, ICD-10/CPT clinical reference inputs, unbundling
-  comparator contracts, feature proxy/source metadata, and serving manifest
-  caching.
+  comparator contracts, feature proxy/source metadata, serving manifest caching,
+  and probability-calibration activation gating.
 - Remaining: customer-approved reference/rule packs, customer data validation,
   production scheduler execution, and LLM-backed external tool mediation.
 

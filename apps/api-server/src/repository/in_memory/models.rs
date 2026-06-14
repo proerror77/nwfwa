@@ -121,6 +121,25 @@ impl InMemoryScoringRepository {
         Ok(record)
     }
 
+    pub(super) async fn in_memory_latest_probability_calibration_report(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ProbabilityCalibrationReportRecord>> {
+        Ok(self
+            .probability_calibration_reports
+            .lock()
+            .await
+            .values()
+            .filter(|report| report.model_key == model_key && report.model_version == model_version)
+            .max_by(|left, right| {
+                left.as_of_date
+                    .cmp(&right.as_of_date)
+                    .then_with(|| left.created_at.cmp(&right.created_at))
+            })
+            .cloned())
+    }
+
     pub(super) async fn in_memory_save_model_retraining_job(
         &self,
         mut record: ModelRetrainingJobRecord,

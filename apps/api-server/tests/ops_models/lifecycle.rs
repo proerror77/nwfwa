@@ -3,7 +3,8 @@ use axum::http::StatusCode;
 
 use super::support::{
     activate_candidate_for_test, get_json, json_request, model_lifecycle_payload,
-    register_activation_candidate, register_model_dataset_for_test, test_config,
+    register_activation_candidate, register_model_dataset_for_test,
+    submit_probability_calibration_report_for_test, test_config,
 };
 
 #[tokio::test]
@@ -383,6 +384,22 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
         .unwrap()
         .contains(&candidate_version));
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "MODEL_PROMOTION_GATES_BLOCKED");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("probability calibration missing"));
+
+    submit_probability_calibration_report_for_test(app.clone(), &candidate_version).await;
+
     let (status, activated) = json_request(
         app.clone(),
         "POST",
@@ -464,6 +481,8 @@ async fn model_promotion_and_activation_are_version_scoped() {
         .unwrap();
     assert_eq!(approval_gate["passed"], true);
     assert_eq!(approval_gate["evidence_source"], "approval");
+
+    submit_probability_calibration_report_for_test(app.clone(), &candidate_version).await;
 
     let activate_uri =
         format!("/api/v1/ops/models/baseline_fwa/versions/{candidate_version}/activate");

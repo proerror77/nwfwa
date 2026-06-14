@@ -22,7 +22,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
     assert_eq!(body["source_data_quality_status"], "missing");
     assert_eq!(body["passed_count"], 2);
-    assert_eq!(body["total_count"], 22);
+    assert_eq!(body["total_count"], 23);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -75,6 +75,10 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .contains(&serde_json::json!(
             "rust serving artifact evaluation missing"
         )));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("probability calibration missing")));
     let dataset_gate = body["gates"]
         .as_array()
         .unwrap()
@@ -405,6 +409,10 @@ async fn model_promotion_gates_block_public_research_dataset_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("pilot/customer validation missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("probability calibration missing")));
     let validation_gate = body["gates"]
         .as_array()
         .unwrap()

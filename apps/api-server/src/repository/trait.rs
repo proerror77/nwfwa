@@ -227,6 +227,12 @@ pub trait ModelsRepository: Send + Sync {
         record: ProbabilityCalibrationReportRecord,
     ) -> anyhow::Result<ProbabilityCalibrationReportRecord>;
 
+    async fn latest_probability_calibration_report(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ProbabilityCalibrationReportRecord>>;
+
     async fn latest_model_promotion_review(
         &self,
         model_key: &str,

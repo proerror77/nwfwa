@@ -402,8 +402,70 @@ pub(crate) async fn approve_activation_candidate(app: axum::Router, candidate_ve
     assert_eq!(review["model_version"], candidate_version);
 }
 
+pub(crate) async fn submit_probability_calibration_report_for_test(
+    app: axum::Router,
+    model_version: &str,
+) {
+    let report_uri =
+        format!("data/model-artifacts/baseline_fwa/{model_version}/calibration/probability_calibration_report.json");
+    let (status, response) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &format!(
+            r#"{{
+              "actor": "worker:build-probability-calibration-report",
+              "notes": "Labeled holdout calibration evidence for activation gate.",
+              "report_uri": "{report_uri}",
+              "report_kind": "probability_calibration_report",
+              "model_version": "{model_version}",
+              "as_of_date": "2026-06-15",
+              "row_count": 120,
+              "minimum_calibration_rows": 100,
+              "bin_count": 2,
+              "expected_calibration_error": 0.02,
+              "max_expected_calibration_error": 0.05,
+              "brier_score": 0.12,
+              "max_brier_score": 0.20,
+              "calibration_status": "passed",
+              "bins": [
+                {{
+                  "bin_index": 0,
+                  "lower_bound": 0.0,
+                  "upper_bound": 0.5,
+                  "row_count": 60,
+                  "average_predicted_probability": 0.1,
+                  "observed_positive_rate": 0.1,
+                  "calibration_error": 0.0
+                }},
+                {{
+                  "bin_index": 1,
+                  "lower_bound": 0.5,
+                  "upper_bound": 1.0,
+                  "row_count": 60,
+                  "average_predicted_probability": 0.8,
+                  "observed_positive_rate": 0.76,
+                  "calibration_error": 0.04
+                }}
+              ],
+              "review_tasks": [],
+              "evidence_refs": [
+                "model_versions:baseline_fwa:{model_version}",
+                "probability_calibration_reports:{report_uri}"
+              ],
+              "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert_eq!(response["model_version"], model_version);
+    assert_eq!(response["calibration_status"], "passed");
+}
+
 pub(crate) async fn activate_candidate_for_test(app: axum::Router, candidate_version: &str) {
     approve_activation_candidate(app.clone(), candidate_version).await;
+    submit_probability_calibration_report_for_test(app.clone(), candidate_version).await;
     let (status, activated) = json_request(
         app,
         "POST",

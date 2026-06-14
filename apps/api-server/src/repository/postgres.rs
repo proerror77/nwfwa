@@ -370,6 +370,14 @@ impl ModelsRepository for PostgresScoringRepository {
         postgres_models::save_probability_calibration_report(self, record).await
     }
 
+    async fn latest_probability_calibration_report(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ProbabilityCalibrationReportRecord>> {
+        postgres_models::latest_probability_calibration_report(self, model_key, model_version).await
+    }
+
     async fn latest_model_promotion_review(
         &self,
         model_key: &str,
