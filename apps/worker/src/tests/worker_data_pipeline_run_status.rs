@@ -76,6 +76,20 @@ fn builds_worker_data_pipeline_run_status_template() {
         serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
     );
     assert_eq!(
+        job_statuses[2]["required_evidence_prefixes"],
+        serde_json::json!([
+            "provider_profile_window_rollups:",
+            "provider_profile_claim_snapshot:"
+        ])
+    );
+    assert_eq!(
+        job_statuses[7]["required_evidence_prefixes"],
+        serde_json::json!([
+            "unbundling_comparator_candidates:",
+            "unbundling_comparator_input:"
+        ])
+    );
+    assert_eq!(
         job_statuses[8]["required_evidence_prefixes"],
         serde_json::json!([
             "scoring_feature_contexts:",

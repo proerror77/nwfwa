@@ -346,7 +346,10 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-provider-profile-window-rollup",
                 "source_input": "customer_claim_history_30_90_365d",
                 "required_permission": "ops:providers:write",
-                "required_evidence_prefixes": ["provider_profile_window_rollups:"],
+                "required_evidence_prefixes": [
+                    "provider_profile_window_rollups:",
+                    "provider_profile_claim_snapshot:"
+                ],
                 "report_uri": format!("{root}/provider-profile/{{as_of_date}}/provider_profile_window_rollup_report.json"),
                 "api_path": "/api/v1/ops/providers/profile-window-rollups"
             },
@@ -357,7 +360,10 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-provider-graph-signal-rollup",
                 "source_input": "customer_claim_and_referral_history_with_service_dates",
                 "required_permission": "ops:providers:write",
-                "required_evidence_prefixes": ["provider_graph_signal_rollups:"],
+                "required_evidence_prefixes": [
+                    "provider_graph_signal_rollups:",
+                    "provider_graph_claim_snapshot:"
+                ],
                 "report_uri": format!("{root}/provider-graph/{{as_of_date}}/provider_graph_signal_rollup_report.json"),
                 "api_path": "/api/v1/ops/providers/graph-signal-rollups"
             },
@@ -368,7 +374,10 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-peer-benchmark",
                 "source_input": "customer_claim_history_grouped_by_specialty_region_service_segment",
                 "required_permission": "ops:providers:write",
-                "required_evidence_prefixes": ["peer_benchmarks:"],
+                "required_evidence_prefixes": [
+                    "peer_benchmarks:",
+                    "peer_benchmark_claim_snapshot:"
+                ],
                 "report_uri": format!("{root}/peer-benchmark/{{benchmark_month}}/peer_percentile_benchmark.json"),
                 "api_path": "/api/v1/ops/providers/peer-benchmarks"
             },
@@ -379,7 +388,10 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-episode-aggregation",
                 "source_input": "customer_member_provider_claim_history",
                 "required_permission": "ops:providers:write",
-                "required_evidence_prefixes": ["episode_rollups:"],
+                "required_evidence_prefixes": [
+                    "episode_rollups:",
+                    "episode_claim_snapshot:"
+                ],
                 "report_uri": format!("{root}/episodes/{{as_of_date}}/episode_aggregation_report.json"),
                 "api_path": "/api/v1/ops/providers/episode-rollups"
             },
@@ -390,7 +402,11 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-clinical-compatibility-reference",
                 "source_input": "customer_approved_icd_cpt_or_medical_policy_reference",
                 "required_permission": "ops:datasets:write",
-                "required_evidence_prefixes": ["clinical_compatibility_references:"],
+                "required_evidence_prefixes": [
+                    "clinical_compatibility_references:",
+                    "clinical_compatibility_reference:",
+                    "clinical_policy_authority:"
+                ],
                 "report_uri": format!("{root}/clinical-compatibility/{{reference_version}}/clinical_compatibility_reference_report.json"),
                 "api_path": "/api/v1/ops/clinical-compatibility-references"
             },
@@ -402,7 +418,10 @@ pub fn build_worker_data_pipeline_plan(
                 "source_input": "customer_approved_unbundling_rule_pack_plus_episode_procedure_codes",
                 "depends_on": ["episode_aggregation"],
                 "required_permission": "ops:datasets:write",
-                "required_evidence_prefixes": ["unbundling_comparator_candidates:"],
+                "required_evidence_prefixes": [
+                    "unbundling_comparator_candidates:",
+                    "unbundling_comparator_input:"
+                ],
                 "report_uri": format!("{root}/unbundling/{{as_of_date}}/unbundling_comparator_report.json"),
                 "api_path": "/api/v1/ops/unbundling-comparator-candidates"
             },

@@ -165,15 +165,52 @@ fn builds_scheduled_worker_data_pipeline_plan() {
     assert_eq!(jobs[1]["required_permission"], "ops:providers:write");
     assert_eq!(jobs[1]["depends_on"][0], "oig_sam_sanctions_snapshot_fetch");
     assert_eq!(jobs[2]["job_kind"], "provider_profile_window_rollup");
+    assert_eq!(
+        jobs[2]["required_evidence_prefixes"],
+        serde_json::json!([
+            "provider_profile_window_rollups:",
+            "provider_profile_claim_snapshot:"
+        ])
+    );
     assert_eq!(jobs[3]["job_kind"], "provider_graph_signal_rollup");
+    assert_eq!(
+        jobs[3]["required_evidence_prefixes"],
+        serde_json::json!([
+            "provider_graph_signal_rollups:",
+            "provider_graph_claim_snapshot:"
+        ])
+    );
     assert_eq!(jobs[4]["job_kind"], "peer_percentile_benchmark");
     assert_eq!(jobs[4]["cadence"], "monthly");
+    assert_eq!(
+        jobs[4]["required_evidence_prefixes"],
+        serde_json::json!(["peer_benchmarks:", "peer_benchmark_claim_snapshot:"])
+    );
     assert_eq!(jobs[5]["job_kind"], "episode_aggregation");
+    assert_eq!(
+        jobs[5]["required_evidence_prefixes"],
+        serde_json::json!(["episode_rollups:", "episode_claim_snapshot:"])
+    );
     assert_eq!(jobs[6]["job_kind"], "clinical_compatibility_reference");
     assert_eq!(jobs[6]["cadence"], "on_reference_update");
     assert_eq!(jobs[6]["required_permission"], "ops:datasets:write");
+    assert_eq!(
+        jobs[6]["required_evidence_prefixes"],
+        serde_json::json!([
+            "clinical_compatibility_references:",
+            "clinical_compatibility_reference:",
+            "clinical_policy_authority:"
+        ])
+    );
     assert_eq!(jobs[7]["job_kind"], "unbundling_comparator");
     assert_eq!(jobs[7]["depends_on"][0], "episode_aggregation");
+    assert_eq!(
+        jobs[7]["required_evidence_prefixes"],
+        serde_json::json!([
+            "unbundling_comparator_candidates:",
+            "unbundling_comparator_input:"
+        ])
+    );
     assert_eq!(
         jobs[8]["job_kind"],
         "scoring_feature_context_materialization"

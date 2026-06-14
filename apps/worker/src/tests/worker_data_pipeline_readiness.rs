@@ -57,6 +57,21 @@ fn builds_worker_data_pipeline_readiness_input_template() {
     );
     assert_eq!(checks[1]["required_permission"], "ops:providers:write");
     assert_eq!(
+        checks[2]["required_evidence_prefixes"],
+        serde_json::json!([
+            "provider_profile_window_rollups:",
+            "provider_profile_claim_snapshot:"
+        ])
+    );
+    assert_eq!(
+        checks[6]["required_evidence_prefixes"],
+        serde_json::json!([
+            "clinical_compatibility_references:",
+            "clinical_compatibility_reference:",
+            "clinical_policy_authority:"
+        ])
+    );
+    assert_eq!(
         checks[8]["required_evidence_prefixes"],
         serde_json::json!([
             "scoring_feature_contexts:",
