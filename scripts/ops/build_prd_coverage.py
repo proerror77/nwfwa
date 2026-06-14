@@ -148,6 +148,7 @@ CAPABILITIES = [
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"),
             ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "blocked_dependencies"),
             ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "reported_artifact_uri"),
+            ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "worker_data_pipeline_readiness_gate_review"),
             ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "readiness_status"),
             ("apps/worker/src/worker_data_pipeline_readiness.rs", "build_worker_data_pipeline_readiness_input_template"),
             ("apps/worker/src/worker_data_pipeline_readiness.rs", "source_freshness_status"),

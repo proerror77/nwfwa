@@ -900,6 +900,67 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             ));
         }
     }
+    for review_task in &request.review_tasks {
+        let Some(task_kind) = review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
+                "each review task must include task_kind",
+            ));
+        };
+        match task_kind {
+            "worker_data_pipeline_execution_review" => {
+                let job_kind = review_task
+                    .get("job_kind")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default();
+                let execution_status = review_task
+                    .get("execution_status")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default();
+                let matches_non_completed_job = request.job_executions.iter().any(|execution| {
+                    execution.get("job_kind").and_then(|value| value.as_str()) == Some(job_kind)
+                        && execution
+                            .get("execution_status")
+                            .and_then(|value| value.as_str())
+                            == Some(execution_status)
+                        && execution_status != "completed"
+                });
+                if !matches_non_completed_job {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
+                        "execution review tasks must match a non-completed job execution and status",
+                    ));
+                }
+            }
+            "worker_data_pipeline_readiness_gate_review" => {
+                let matches_readiness_gate = request.readiness_gate_status.as_deref()
+                    != Some("ready")
+                    && review_task
+                        .get("readiness_gate_status")
+                        .and_then(|value| value.as_str())
+                        == request.readiness_gate_status.as_deref();
+                if !matches_readiness_gate {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK",
+                        "readiness gate review tasks must match a non-ready readiness_gate_status",
+                    ));
+                }
+            }
+            _ => {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
+                    "review task kind must be worker_data_pipeline_execution_review or worker_data_pipeline_readiness_gate_review",
+                ));
+            }
+        }
+    }
     Ok(())
 }
 

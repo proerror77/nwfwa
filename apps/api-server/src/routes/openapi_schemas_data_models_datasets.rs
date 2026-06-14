@@ -483,6 +483,26 @@ pub(super) fn dataset_schemas() -> Value {
                     "items": {
                         "type": "object",
                         "properties": {
+                            "task_kind": {
+                                "type": "string",
+                                "enum": [
+                                    "worker_data_pipeline_execution_review",
+                                    "worker_data_pipeline_readiness_gate_review"
+                                ]
+                            },
+                            "job_kind": {
+                                "type": "string",
+                                "description": "Required for worker_data_pipeline_execution_review and must match a non-completed job execution."
+                            },
+                            "execution_status": {
+                                "type": "string",
+                                "description": "Required for worker_data_pipeline_execution_review and must match the reviewed job execution status."
+                            },
+                            "readiness_gate_status": {
+                                "type": "string",
+                                "enum": ["blocked", "missing"],
+                                "description": "Required for worker_data_pipeline_readiness_gate_review and must match a non-ready execution readiness gate."
+                            },
                             "required_permission": {
                                 "type": ["string", "null"],
                                 "enum": [
