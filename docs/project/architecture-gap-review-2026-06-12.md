@@ -50,6 +50,10 @@ As of the P1/P2 remediation commits after this review:
   governed ICD-10/CPT compatibility scores can replace the
   `diagnosis_procedure_match_score` heuristic without treating fallback values
   as real clinical compatibility data.
+- The worker now has a governed clinical compatibility reference contract that
+  validates ICD/CPT-style compatibility rows with policy authority refs and
+  evidence refs, then emits records suitable for the clinical compatibility
+  feature input path.
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
@@ -77,8 +81,8 @@ As of the P1/P2 remediation commits after this review:
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups, customer claim/history data, execution-time
 cancellation checks inside long-running/specialist agents, multi-agent runtime
-dispatch/tool mediation, governed ICD-10/CPT comparator reference data and
-worker rollups, customer-approved feature lineage/source mappings,
+dispatch/tool mediation, customer-approved ICD-10/CPT or medical-policy
+reference data, customer-approved feature lineage/source mappings,
 calibrated-probability serving activation, and replacement of the L3 heuristic
 anomaly scorer with a validated statistical baseline. Audit retention still
 needs customer-environment partitioning, archive storage, legal-hold
@@ -89,7 +93,7 @@ reconciliation writes, and approved destruction workflow execution.
 | ID | Gap | Required planning response |
 | --- | --- | --- |
 | A-1 | L1 peer percentile fallback can be confused with a real peer percentile when real peer data is absent. | Mark proxy/baseline paths explicitly and reduce or exclude L1 weight when only proxy data is available. |
-| A-2 | `diagnosis_procedure_match_score` has a real clinical compatibility input path, but the default remains a hard-coded heuristic fallback. | Populate `ClinicalCompatibilityFeatureContext` from governed ICD-10/CPT compatibility or medical-policy reference data before using this layer as production clinical consistency. |
+| A-2 | `diagnosis_procedure_match_score` has a real clinical compatibility input path and worker reference contract, but the default remains a hard-coded heuristic fallback until governed reference data is supplied. | Populate `ClinicalCompatibilityFeatureContext` from customer-approved ICD-10/CPT compatibility or medical-policy reference data before using this layer as production clinical consistency. |
 | A-3 | Confidence scoring overweights rule/anomaly/model agreement and ignores other high-signal layers. | Move to a weighted multi-layer confidence model or high-confidence rule based on two independent high-risk signals. |
 | A-4 | Provider graph input needs billing ring, temporal co-billing, and referral entropy signals. | Add fields to the provider graph contract and require worker rollups that compute them from claim/referral history. |
 | A-5 | Seven-layer weights are hard-coded and do not renormalize when data is missing. | Represent layer values as data-present vs. actual zero and renormalize across available layers. |
@@ -103,7 +107,7 @@ reconciliation writes, and approved destruction workflow execution.
 | --- | --- | --- |
 | B-1 | Peer percentile fallback is still a proxy path unless upstream supplies peer context. | Feature metadata must expose `is_proxy`, `data_source`, and source lineage. |
 | B-2 | Episode-level features are missing. | Add member-provider 30/90/365 episode aggregation for unbundling and excessive utilization. |
-| B-3 | ICD-10/CPT unbundling comparator is missing. | Introduce bundled-code and component-code reference data plus episode co-occurrence checks. |
+| B-3 | ICD-10/CPT clinical compatibility reference ingestion exists, but unbundling comparator logic is still missing. | Introduce bundled-code and component-code reference data plus episode co-occurrence checks. |
 | B-4 | Feature registry lacks proxy/source metadata. | Extend feature records and PRD acceptance criteria so compliance reports can distinguish real distributions from estimates. |
 
 ## C. Agentic Investigation Control-Plane Gaps
