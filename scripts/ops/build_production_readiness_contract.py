@@ -86,7 +86,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     },
     {
         "check_id": "governed_submit_jobs_include_write_evidence_refs",
-        "description": "Every governed worker data-pipeline submit job includes the expected write evidence reference for its persisted API submission plus source-lineage evidence for provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling candidates, and scoring context materialization.",
+        "description": "Every governed worker data-pipeline submit job includes the expected write evidence reference for its persisted API submission plus source-lineage evidence for provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling candidates, scoring context materialization, and probability calibration inputs/labels.",
     },
     {
         "check_id": "source_snapshot_artifact_reported",

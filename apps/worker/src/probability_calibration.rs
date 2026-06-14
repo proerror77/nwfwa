@@ -239,6 +239,15 @@ pub fn build_probability_calibration_submission(
     if report.report_kind != "probability_calibration_report" {
         bail!("report_kind must be probability_calibration_report");
     }
+    for required_prefix in ["probability_calibration_input:", "calibration_labels:"] {
+        if !report
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().starts_with(required_prefix))
+        {
+            bail!("probability calibration report requires {required_prefix} evidence");
+        }
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!(
         "model_versions:{}:{}",

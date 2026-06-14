@@ -101,7 +101,11 @@ WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
         "peer_benchmarks:",
         "clinical_compatibility:",
         "unbundling_candidates:",
-    )
+    ),
+    "probability_calibration_evidence": (
+        "probability_calibration_input:",
+        "calibration_labels:",
+    ),
 }
 
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {

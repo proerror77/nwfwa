@@ -64,13 +64,35 @@ async fn submits_probability_calibration_report_as_review_only_governance_event(
         "MISSING_PROBABILITY_CALIBRATION_EVIDENCE"
     );
 
+    let (status, missing_source_lineage) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &probability_calibration_payload(
+            r#""model_versions:baseline_fwa:0.1.0",
+            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json""#,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        missing_source_lineage["code"],
+        "MISSING_PROBABILITY_CALIBRATION_EVIDENCE"
+    );
+    assert!(missing_source_lineage["message"]
+        .as_str()
+        .unwrap()
+        .contains("probability_calibration_input:"));
+
     let (status, response) = json_request(
         app,
         "POST",
         "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
         &probability_calibration_payload(
             r#""model_versions:baseline_fwa:0.1.0",
-            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json""#,
+            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "probability_calibration_input:s3://customer-prod-artifacts/calibration/holdout-predictions.json",
+            "calibration_labels:s3://customer-prod-artifacts/calibration/holdout-labels.json""#,
         ),
     )
     .await;

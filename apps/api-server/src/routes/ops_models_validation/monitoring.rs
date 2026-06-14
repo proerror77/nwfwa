@@ -334,19 +334,33 @@ pub(in crate::routes) fn validate_probability_calibration_report_evidence(
     request: &SubmitProbabilityCalibrationReportRequest,
 ) -> Result<(), ApiError> {
     let expected_ref = format!("probability_calibration_reports:{}", request.report_uri);
-    if request
+    if !request
         .evidence_refs
         .iter()
         .any(|reference| reference.trim() == expected_ref)
     {
-        Ok(())
-    } else {
-        Err(ApiError::new(
+        return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "MISSING_PROBABILITY_CALIBRATION_EVIDENCE",
             format!("probability calibration evidence_refs must include {expected_ref}"),
-        ))
+        ));
     }
+    for required_prefix in ["probability_calibration_input:", "calibration_labels:"] {
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().starts_with(required_prefix))
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_PROBABILITY_CALIBRATION_EVIDENCE",
+                format!(
+                    "probability calibration evidence_refs must include {required_prefix} source lineage"
+                ),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub(in crate::routes) fn validate_monitoring_review_task_review_request(

@@ -456,7 +456,11 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-probability-calibration-report",
                 "source_input": "customer_labeled_holdout_predictions",
                 "required_permission": "ops:models:review",
-                "required_evidence_prefixes": ["probability_calibration_reports:"],
+                "required_evidence_prefixes": [
+                    "probability_calibration_reports:",
+                    "probability_calibration_input:",
+                    "calibration_labels:"
+                ],
                 "report_uri": format!("{root}/probability-calibration/{{benchmark_month}}/probability_calibration_report.json"),
                 "api_path": "/api/v1/ops/models/{model_key}/probability-calibration-reports"
             }

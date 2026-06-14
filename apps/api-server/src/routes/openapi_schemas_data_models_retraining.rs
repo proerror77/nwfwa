@@ -111,7 +111,7 @@ pub(super) fn retraining_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include model_versions:{model_key}:{model_version} and probability_calibration_reports:{report_uri}."
+                    "description": "Must include model_versions:{model_key}:{model_version}, probability_calibration_reports:{report_uri}, probability_calibration_input:{source_uri}, and calibration_labels:{label_source_uri}."
                 },
                 "governance_boundary": { "type": "string", "minLength": 1 }
             }

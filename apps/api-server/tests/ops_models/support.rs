@@ -451,7 +451,9 @@ pub(crate) async fn submit_probability_calibration_report_for_test(
               "review_tasks": [],
               "evidence_refs": [
                 "model_versions:baseline_fwa:{model_version}",
-                "probability_calibration_reports:{report_uri}"
+                "probability_calibration_reports:{report_uri}",
+                "probability_calibration_input:s3://customer-prod-artifacts/baseline_fwa/{model_version}/calibration/holdout-predictions.json",
+                "calibration_labels:s3://customer-prod-artifacts/baseline_fwa/{model_version}/calibration/holdout-labels.json"
               ],
               "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
             }}"#

@@ -237,6 +237,14 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         "/api/v1/ops/models/{model_key}/probability-calibration-reports"
     );
     assert_eq!(
+        jobs[9]["required_evidence_prefixes"],
+        serde_json::json!([
+            "probability_calibration_reports:",
+            "probability_calibration_input:",
+            "calibration_labels:"
+        ])
+    );
+    assert_eq!(
         plan["api_contract"]["unbundling_comparator_path"],
         "/api/v1/ops/unbundling-comparator-candidates"
     );

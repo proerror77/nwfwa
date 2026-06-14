@@ -130,7 +130,10 @@ fn builds_probability_calibration_submission() {
                 }
             ],
             "review_tasks": [],
-            "evidence_refs": ["probability_calibration_input:local://inputs/probability-calibration.json"],
+            "evidence_refs": [
+                "probability_calibration_input:local://inputs/probability-calibration.json",
+                "calibration_labels:local://labels/holdout.json"
+            ],
             "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
         }),
     )
@@ -150,10 +153,63 @@ fn builds_probability_calibration_submission() {
     assert!(submission
         .evidence_refs
         .contains(&"model_versions:baseline_fwa:0.2.0-rust".into()));
+    assert!(submission
+        .evidence_refs
+        .contains(&"calibration_labels:local://labels/holdout.json".into()));
     assert!(submission.evidence_refs.contains(&format!(
         "probability_calibration_reports:{}",
         report_uri.to_string_lossy()
     )));
+}
+
+#[test]
+fn rejects_probability_calibration_submission_without_label_lineage() {
+    let root = temp_root("probability-calibration-submission-missing-labels");
+    let report_uri = root.join("probability_calibration_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "probability_calibration_report",
+            "report_version": 1,
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/probability-calibration.json",
+            "label_source_uri": "local://labels/holdout.json",
+            "row_count": 100,
+            "minimum_calibration_rows": 100,
+            "bin_count": 1,
+            "expected_calibration_error": 0.02,
+            "max_expected_calibration_error": 0.05,
+            "brier_score": 0.12,
+            "max_brier_score": 0.20,
+            "calibration_status": "passed",
+            "bins": [
+                {
+                    "bin_index": 0,
+                    "lower_bound": 0.0,
+                    "upper_bound": 1.0,
+                    "row_count": 100,
+                    "average_predicted_probability": 0.3,
+                    "observed_positive_rate": 0.28,
+                    "calibration_error": 0.02
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": ["probability_calibration_input:local://inputs/probability-calibration.json"],
+            "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
+        }),
+    )
+    .unwrap();
+
+    let error = build_probability_calibration_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-probability-calibration-report",
+        "labeled holdout calibration evidence",
+    )
+    .expect_err("missing label lineage must fail");
+
+    assert!(error.to_string().contains("calibration_labels:"));
 }
 
 #[tokio::test]
@@ -192,7 +248,10 @@ async fn submits_probability_calibration_report_to_api() {
                 }
             ],
             "review_tasks": [],
-            "evidence_refs": ["probability_calibration_input:local://inputs/probability-calibration.json"],
+            "evidence_refs": [
+                "probability_calibration_input:local://inputs/probability-calibration.json",
+                "calibration_labels:local://labels/holdout.json"
+            ],
             "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
         }),
     )

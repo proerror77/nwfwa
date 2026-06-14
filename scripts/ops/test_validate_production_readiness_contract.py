@@ -114,6 +114,24 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         ):
             validate_worker_data_pipeline_execution_evidence(report)
 
+    def test_worker_execution_requires_probability_calibration_label_lineage(
+        self,
+    ) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        probability_calibration_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "probability_calibration_evidence"
+        )
+        probability_calibration_job["evidence_refs"] = [
+            reference
+            for reference in probability_calibration_job["evidence_refs"]
+            if not reference.startswith("calibration_labels:")
+        ]
+
+        with self.assertRaisesRegex(AssertionError, "calibration_labels:"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
 
 if __name__ == "__main__":
     unittest.main()
