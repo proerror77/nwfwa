@@ -1,5 +1,23 @@
 use super::*;
 
+fn evidence_refs_for_job(job: &serde_json::Value) -> Vec<String> {
+    let job_kind = job["job_kind"].as_str().expect("job kind");
+    job["required_evidence_prefixes"]
+        .as_array()
+        .expect("required evidence prefixes")
+        .iter()
+        .map(|prefix| {
+            format!(
+                "{}s3://nwfwa-production-artifacts/{job_kind}.json",
+                prefix.as_str().expect("prefix")
+            )
+        })
+        .chain(std::iter::once(format!(
+            "worker_job_artifacts:{job_kind}:2026-06-14"
+        )))
+        .collect()
+}
+
 #[test]
 fn builds_worker_data_pipeline_execution_report() {
     let root = temp_root("worker-data-pipeline-execution");
@@ -15,6 +33,7 @@ fn builds_worker_data_pipeline_execution_report() {
     )
     .expect("worker data pipeline plan");
     write_json(plan_uri.clone(), &plan).expect("write plan");
+    let jobs = plan["jobs"].as_array().expect("jobs");
     write_json(
         run_status_uri.clone(),
         &serde_json::json!({
@@ -26,21 +45,21 @@ fn builds_worker_data_pipeline_execution_report() {
                     "job_kind": "oig_sam_sanctions_snapshot_fetch",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/oig_sam_sanctions_snapshot.json",
-                    "evidence_refs": ["oig_sam_snapshot:2026-06-14"],
+                    "evidence_refs": evidence_refs_for_job(&jobs[0]),
                     "submitted": false
                 },
                 {
                     "job_kind": "oig_sam_sanctions_sync",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/sanctions_sync_report.json",
-                    "evidence_refs": ["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"],
+                    "evidence_refs": evidence_refs_for_job(&jobs[1]),
                     "submitted": true
                 },
                 {
                     "job_kind": "provider_profile_window_rollup",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/provider-profile/2026-06-14/provider_profile_window_rollup_report.json",
-                    "evidence_refs": ["worker_job_artifacts:provider_profile_window_rollup:2026-06-14"],
+                    "evidence_refs": evidence_refs_for_job(&jobs[2]),
                     "submitted": false
                 },
                 {
@@ -88,7 +107,7 @@ fn builds_worker_data_pipeline_execution_report() {
     );
     assert_eq!(
         executions[1]["evidence_refs"],
-        serde_json::json!(["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"])
+        serde_json::json!(evidence_refs_for_job(&jobs[1]))
     );
     assert_eq!(
         executions[2]["execution_status"],
@@ -140,6 +159,7 @@ fn blocks_worker_data_pipeline_job_when_dependency_is_not_completed() {
     )
     .expect("worker data pipeline plan");
     write_json(plan_uri.clone(), &plan).expect("write plan");
+    let jobs = plan["jobs"].as_array().expect("jobs");
     write_json(
         run_status_uri.clone(),
         &serde_json::json!({
@@ -151,7 +171,7 @@ fn blocks_worker_data_pipeline_job_when_dependency_is_not_completed() {
                     "job_kind": "oig_sam_sanctions_sync",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/sanctions_sync_report.json",
-                    "evidence_refs": ["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"],
+                    "evidence_refs": evidence_refs_for_job(&jobs[1]),
                     "submitted": true
                 }
             ]
@@ -206,6 +226,7 @@ fn marks_succeeded_job_without_evidence_refs_for_review() {
     )
     .expect("worker data pipeline plan");
     write_json(plan_uri.clone(), &plan).expect("write plan");
+    let jobs = plan["jobs"].as_array().expect("jobs");
     write_json(
         run_status_uri.clone(),
         &serde_json::json!({
@@ -217,7 +238,7 @@ fn marks_succeeded_job_without_evidence_refs_for_review() {
                     "job_kind": "oig_sam_sanctions_snapshot_fetch",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/oig_sam_sanctions_snapshot.json",
-                    "evidence_refs": ["oig_sam_snapshot:2026-06-14"],
+                    "evidence_refs": evidence_refs_for_job(&jobs[0]),
                     "submitted": false
                 },
                 {
@@ -248,6 +269,73 @@ fn marks_succeeded_job_without_evidence_refs_for_review() {
     assert_eq!(
         report["scheduler_status"],
         "completed_with_pending_or_failed_jobs"
+    );
+    assert!(report["review_tasks"]
+        .as_array()
+        .expect("review tasks")
+        .iter()
+        .any(|task| task["job_kind"] == "oig_sam_sanctions_sync"
+            && task["execution_status"] == "artifact_missing_evidence"));
+}
+
+#[test]
+fn marks_succeeded_job_missing_required_evidence_prefix_for_review() {
+    let root = temp_root("worker-data-pipeline-execution-missing-required-prefix");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let run_status_uri = root.join("worker_data_pipeline_run_status.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    let jobs = plan["jobs"].as_array().expect("jobs");
+    write_json(
+        run_status_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_statuses": [
+                {
+                    "job_kind": "oig_sam_sanctions_snapshot_fetch",
+                    "status": "succeeded",
+                    "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/oig_sam_sanctions_snapshot.json",
+                    "evidence_refs": evidence_refs_for_job(&jobs[0]),
+                    "submitted": false
+                },
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "status": "succeeded",
+                    "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/sanctions_sync_report.json",
+                    "evidence_refs": ["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"],
+                    "submitted": true
+                }
+            ]
+        }),
+    )
+    .expect("write run status");
+
+    let report = build_worker_data_pipeline_execution_report(
+        &plan_uri.to_string_lossy(),
+        &run_status_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect("worker data pipeline execution report");
+
+    let executions = report["job_executions"].as_array().expect("executions");
+    assert_eq!(executions[1]["job_kind"], "oig_sam_sanctions_sync");
+    assert_eq!(
+        executions[1]["required_evidence_prefixes"],
+        serde_json::json!(["sanctions_sync_reports:"])
+    );
+    assert_eq!(
+        executions[1]["execution_status"],
+        "artifact_missing_evidence"
     );
     assert!(report["review_tasks"]
         .as_array()
@@ -291,7 +379,7 @@ fn builds_worker_data_pipeline_execution_report_with_ready_gate() {
                 "job_kind": job_kind,
                 "status": "succeeded",
                 "artifact_uri": format!("s3://nwfwa-production-artifacts/{job_kind}.json"),
-                "evidence_refs": [format!("worker_job_artifacts:{job_kind}:2026-06-14")],
+                "evidence_refs": evidence_refs_for_job(job),
                 "submitted": true
             })
         })
@@ -368,7 +456,7 @@ fn builds_worker_data_pipeline_execution_report_with_blocked_gate() {
                 "job_kind": job_kind,
                 "status": "succeeded",
                 "artifact_uri": format!("s3://nwfwa-production-artifacts/{job_kind}.json"),
-                "evidence_refs": [format!("worker_job_artifacts:{job_kind}:2026-06-14")],
+                "evidence_refs": evidence_refs_for_job(job),
                 "submitted": true
             })
         })

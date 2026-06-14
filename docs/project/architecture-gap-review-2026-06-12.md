@@ -257,6 +257,10 @@ As of the P1/P2 remediation commits after this review:
   keep jobs blocked until customer evidence includes those prefixes, including
   scoring-context source lineage for episode, peer, clinical, and unbundling
   artifacts.
+- Worker data-pipeline execution reports now also consume those required
+  evidence prefixes, mark succeeded jobs with missing prefixes as
+  `artifact_missing_evidence`, and the execution submit API rejects completed
+  jobs whose evidence refs do not satisfy the declared prefixes.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
 execution, official OIG/SAM feed configuration and credentials, customer

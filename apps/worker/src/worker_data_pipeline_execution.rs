@@ -75,6 +75,10 @@ pub fn build_worker_data_pipeline_execution_report(
                 "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),
                 "planned_report_uri": json_string(job, "report_uri"),
+                "required_evidence_prefixes": job
+                    .get("required_evidence_prefixes")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "reported_status": reported.and_then(|status| json_string(status, "status")),
                 "reported_artifact_uri": reported.and_then(|status| json_string(status, "artifact_uri")),
                 "evidence_refs": reported
@@ -357,6 +361,9 @@ fn base_execution_status(
         if !has_reported_artifact_uri(reported) || !has_evidence_refs(reported) {
             return "artifact_missing_evidence";
         }
+        if !has_required_evidence_prefixes(job, reported) {
+            return "artifact_missing_evidence";
+        }
         if json_string(job, "submit_command").is_some() {
             if reported
                 .get("submitted")
@@ -391,4 +398,31 @@ fn has_evidence_refs(reported: &serde_json::Value) -> bool {
                         .is_some_and(|value| !value.trim().is_empty())
                 })
         })
+}
+
+fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json::Value) -> bool {
+    let Some(required_prefixes) = job
+        .get("required_evidence_prefixes")
+        .and_then(|value| value.as_array())
+    else {
+        return true;
+    };
+    required_prefixes.iter().all(|prefix| {
+        let Some(prefix) = prefix.as_str() else {
+            return false;
+        };
+        if prefix.trim().is_empty() {
+            return false;
+        }
+        reported
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .any(|reference| {
+                reference
+                    .as_str()
+                    .is_some_and(|value| value.starts_with(prefix))
+            })
+    })
 }

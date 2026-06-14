@@ -946,6 +946,43 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "completed job executions require non-empty evidence_refs",
                 ));
             }
+            let required_evidence_prefixes = execution
+                .get("required_evidence_prefixes")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|value| value.as_str())
+                .collect::<Vec<_>>();
+            if required_evidence_prefixes
+                .iter()
+                .any(|prefix| prefix.trim().is_empty())
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "required_evidence_prefixes must contain no blank values",
+                ));
+            }
+            let missing_required_evidence_prefix =
+                required_evidence_prefixes.iter().find(|prefix| {
+                    !execution
+                        .get("evidence_refs")
+                        .and_then(|value| value.as_array())
+                        .into_iter()
+                        .flatten()
+                        .any(|reference| {
+                            reference
+                                .as_str()
+                                .is_some_and(|value| value.starts_with(*prefix))
+                        })
+                });
+            if let Some(prefix) = missing_required_evidence_prefix {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    format!("completed job evidence_refs must include required prefix {prefix}"),
+                ));
+            }
             if execution
                 .get("reported_status")
                 .and_then(|value| value.as_str())

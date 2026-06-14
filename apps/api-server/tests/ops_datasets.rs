@@ -1047,6 +1047,37 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_without_evi
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_missing_required_evidence_prefix(
+) {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["required_evidence_prefixes"] =
+        serde_json::json!(["sanctions_sync_reports:"]);
+    payload["job_executions"][0]["evidence_refs"] =
+        serde_json::json!(["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("sanctions_sync_reports:"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_rejects_completed_job_without_success_status() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
