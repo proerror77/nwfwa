@@ -234,7 +234,8 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
       "review_tasks": [
         {
           "task_kind": "worker_data_pipeline_execution_review",
-          "job_kind": "provider_profile_window_rollup"
+          "job_kind": "provider_profile_window_rollup",
+          "execution_status": "artifact_pending_submission"
         }
       ],
       "evidence_refs": [
@@ -551,7 +552,8 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
     payload["review_tasks"] = serde_json::json!([
         {
             "task_kind": "worker_data_pipeline_execution_review",
-            "job_kind": "oig_sam_sanctions_snapshot_fetch"
+            "job_kind": "oig_sam_sanctions_snapshot_fetch",
+            "execution_status": "scheduled_pending_customer_execution"
         },
         {
             "task_kind": "worker_data_pipeline_execution_review",
@@ -612,6 +614,7 @@ async fn worker_data_pipeline_execution_report_accepts_missing_evidence_review_s
         serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
     payload["job_executions"][1]["execution_status"] =
         serde_json::json!("artifact_missing_evidence");
+    payload["review_tasks"][0]["execution_status"] = serde_json::json!("artifact_missing_evidence");
 
     let (status, body) = json_request_with_key(
         app,
@@ -794,11 +797,66 @@ async fn worker_data_pipeline_execution_report_requires_review_task_for_pending_
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_review_task_status_to_match_pending_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["execution_status"] =
+        serde_json::json!("scheduled_pending_customer_execution");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_review_task_for_blocked_readiness_gate() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
         serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
     payload["readiness_gate_status"] = serde_json::json!("blocked");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_readiness_review_status_to_match_gate() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["readiness_gate_status"] = serde_json::json!("blocked");
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["review_tasks"]
+        .as_array_mut()
+        .expect("review tasks")
+        .push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_readiness_gate_review",
+            "readiness_gate_status": "missing"
+        }));
 
     let (status, body) = json_request_with_key(
         app,

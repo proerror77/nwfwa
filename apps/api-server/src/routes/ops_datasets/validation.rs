@@ -725,6 +725,10 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 .get("task_kind")
                 .and_then(|value| value.as_str())
                 == Some("worker_data_pipeline_readiness_gate_review")
+                && review_task
+                    .get("readiness_gate_status")
+                    .and_then(|value| value.as_str())
+                    == request.readiness_gate_status.as_deref()
         });
         if !has_readiness_gate_review {
             return Err(ApiError::new(
@@ -765,7 +769,7 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
         }
     }
     let mut pending_or_failed_jobs = 0usize;
-    let mut non_completed_job_kinds = Vec::new();
+    let mut non_completed_jobs = Vec::new();
     for execution in &request.job_executions {
         let Some(job_kind) = execution.get("job_kind").and_then(|value| value.as_str()) else {
             return Err(ApiError::new(
@@ -808,7 +812,7 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
         }
         if execution_status != "completed" {
             pending_or_failed_jobs += 1;
-            non_completed_job_kinds.push(job_kind.to_string());
+            non_completed_jobs.push((job_kind.to_string(), execution_status.to_string()));
         } else {
             let has_reported_artifact_uri = execution
                 .get("reported_artifact_uri")
@@ -875,7 +879,7 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             "pending_or_failed_job_count must equal the number of non-completed job executions",
         ));
     }
-    for job_kind in non_completed_job_kinds {
+    for (job_kind, execution_status) in non_completed_jobs {
         let has_review_task = request.review_tasks.iter().any(|review_task| {
             review_task
                 .get("task_kind")
@@ -883,12 +887,16 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 == Some("worker_data_pipeline_execution_review")
                 && review_task.get("job_kind").and_then(|value| value.as_str())
                     == Some(job_kind.as_str())
+                && review_task
+                    .get("execution_status")
+                    .and_then(|value| value.as_str())
+                    == Some(execution_status.as_str())
         });
         if !has_review_task {
             return Err(ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
-                "each non-completed job execution requires a matching worker_data_pipeline_execution_review task",
+                "each non-completed job execution requires a matching worker_data_pipeline_execution_review task with the same execution_status",
             ));
         }
     }
