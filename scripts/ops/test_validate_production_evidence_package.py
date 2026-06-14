@@ -159,6 +159,41 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_worker_execution_template_missing_required_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            report["job_executions"] = [
+                job
+                for job in report["job_executions"]
+                if job["job_kind"] != "episode_aggregation"
+            ]
+            report["job_count"] = len(report["job_executions"])
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(AssertionError, "job kind set"):
+                validate_package(package_dir)
+
+    def test_rejects_scoring_readback_template_missing_response_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "scoring_readback_report.json"
+            report = _read_json(report_uri)
+            report["evidence_refs"] = [
+                reference
+                for reference in report["evidence_refs"]
+                if not reference.startswith("scoring_readback_score_responses:")
+            ]
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(
+                AssertionError, "scoring_readback_score_responses:"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_without_package_validator_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

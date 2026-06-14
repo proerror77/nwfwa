@@ -201,10 +201,102 @@ def validate_evidence_templates(artifacts: dict[str, dict]) -> None:
         and worker_execution.get("readiness_gate_status") == "blocked",
         "worker data pipeline execution template must remain blocked",
     )
+    validate_worker_execution_template(worker_execution)
     scoring_readback = artifacts.get("scoring_readback_report.json")
     require(
         scoring_readback is not None and scoring_readback.get("readback_status") == "blocked",
         "scoring readback template must remain blocked",
+    )
+    validate_scoring_readback_template(scoring_readback)
+
+
+def validate_worker_execution_template(report: dict) -> None:
+    require(
+        report.get("report_kind") == "worker_data_pipeline_execution_report",
+        "worker data pipeline execution template has wrong report_kind",
+    )
+    job_executions = report.get("job_executions")
+    require(
+        isinstance(job_executions, list) and job_executions,
+        "worker data pipeline execution template requires job_executions",
+    )
+    require(
+        report.get("job_count") == len(job_executions),
+        "worker data pipeline execution template job_count must match job_executions",
+    )
+    jobs_by_kind = {
+        job.get("job_kind"): job for job in job_executions if isinstance(job, dict)
+    }
+    require(
+        set(jobs_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+        "worker data pipeline execution template job kind set changed unexpectedly",
+    )
+    for job_kind, job in jobs_by_kind.items():
+        require(
+            job.get("execution_status") == "pending_customer_scheduler_run",
+            f"worker data pipeline execution template {job_kind} must stay pending",
+        )
+        require(
+            job.get("reported_status") == "pending",
+            f"worker data pipeline execution template {job_kind} reported_status must stay pending",
+        )
+        require(
+            job.get("reported_artifact_uri") == f"local://template/{job_kind}.json",
+            f"worker data pipeline execution template {job_kind} has wrong artifact URI",
+        )
+        validate_worker_required_prefixes(
+            job_kind,
+            list(expected_worker_evidence_prefixes(job_kind)),
+            job.get("evidence_refs"),
+            "worker data pipeline execution template",
+        )
+        if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+            require(
+                job.get("submitted") is False,
+                f"worker data pipeline execution template {job_kind} must not be submitted",
+            )
+            require(
+                job.get("api_path") == WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS[job_kind],
+                f"worker data pipeline execution template {job_kind} has wrong api_path",
+            )
+            require(
+                job.get("required_permission")
+                == WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind],
+                f"worker data pipeline execution template {job_kind} has wrong required_permission",
+            )
+    evidence_refs = report.get("evidence_refs")
+    for prefix in (
+        "worker_data_pipeline_plans:",
+        "worker_data_pipeline_run_status:",
+        "worker_data_pipeline_readiness_reports:",
+    ):
+        require(
+            evidence_refs_include_prefix(evidence_refs, prefix),
+            f"worker data pipeline execution template evidence_refs missing {prefix}",
+        )
+
+
+def validate_scoring_readback_template(report: dict) -> None:
+    require(
+        report.get("report_kind") == "scoring_readback_report",
+        "scoring readback template has wrong report_kind",
+    )
+    require(
+        "customer_score_response_artifact_missing" in (report.get("blockers") or []),
+        "scoring readback template must remain blocked on score response evidence",
+    )
+    evidence_refs = report.get("evidence_refs")
+    for prefix in WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES:
+        require(
+            evidence_refs_include_prefix(evidence_refs, prefix),
+            f"scoring readback template evidence_refs missing {prefix}",
+        )
+
+
+def evidence_refs_include_prefix(evidence_refs: object, prefix: str) -> bool:
+    return isinstance(evidence_refs, list) and any(
+        isinstance(reference, str) and reference.startswith(prefix)
+        for reference in evidence_refs
     )
 
 
