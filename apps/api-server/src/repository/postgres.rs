@@ -686,6 +686,13 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_provider_sanctions(self, input).await
     }
 
+    async fn save_provider_profile_windows(
+        &self,
+        input: SaveProviderProfileWindowsInput,
+    ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>> {
+        postgres_providers::save_provider_profile_windows(self, input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         postgres_knowledge::list_knowledge_cases(self).await
     }

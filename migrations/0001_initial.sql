@@ -850,6 +850,26 @@ CREATE TABLE IF NOT EXISTS provider_sanctions (
 CREATE INDEX IF NOT EXISTS provider_sanctions_scope_provider_idx
   ON provider_sanctions(customer_scope_id, provider_id);
 
+CREATE TABLE IF NOT EXISTS provider_profile_windows (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  specialty TEXT,
+  network_status TEXT,
+  as_of_date TEXT NOT NULL,
+  windows JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, provider_id, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS provider_profile_windows_scope_provider_idx
+  ON provider_profile_windows(customer_scope_id, provider_id);
+
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

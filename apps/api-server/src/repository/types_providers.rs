@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderSanctionUpsertInput {
@@ -36,6 +37,39 @@ pub struct ProviderSanctionRecord {
     pub source_ref: Option<String>,
     pub risk_feature: String,
     pub risk_score: u8,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderProfileWindowUpsertInput {
+    pub provider_id: String,
+    pub specialty: Option<String>,
+    pub network_status: Option<String>,
+    pub windows: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveProviderProfileWindowsInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub as_of_date: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub provider_profiles: Vec<ProviderProfileWindowUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderProfileWindowRecord {
+    pub customer_scope_id: String,
+    pub provider_id: String,
+    pub specialty: Option<String>,
+    pub network_status: Option<String>,
+    pub as_of_date: String,
+    pub windows: Vec<Value>,
+    pub evidence_refs: Vec<String>,
     pub source_report_uri: String,
     pub submitted_by: String,
     pub notes: String,

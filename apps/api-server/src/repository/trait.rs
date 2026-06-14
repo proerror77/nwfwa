@@ -463,6 +463,11 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SaveProviderSanctionsInput,
     ) -> anyhow::Result<Vec<ProviderSanctionRecord>>;
 
+    async fn save_provider_profile_windows(
+        &self,
+        input: SaveProviderProfileWindowsInput,
+    ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>>;
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
     async fn save_knowledge_case(

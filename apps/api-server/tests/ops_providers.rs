@@ -111,6 +111,70 @@ fn sanctions_sync_report_payload() -> &'static str {
     }"#
 }
 
+fn provider_profile_window_rollup_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-provider-profile-windows",
+      "notes": "daily provider profile window rollup",
+      "source_report_uri": "local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
+      "report_kind": "provider_profile_window_rollup",
+      "as_of_date": "2026-06-14",
+      "source_uri": "local://inputs/provider-claims.json",
+      "provider_count": 1,
+      "claim_count": 3,
+      "provider_profiles": [
+        {
+          "provider_id": "PRV-PROFILE-1",
+          "specialty": "imaging",
+          "network_status": "in_network",
+          "windows": [
+            {
+              "window_days": 30,
+              "claim_count": 1,
+              "total_claim_amount": "100.00",
+              "high_cost_item_ratio": 1.0,
+              "diagnosis_procedure_mismatch_rate": 0.5,
+              "peer_amount_percentile": 95,
+              "peer_frequency_percentile": 90,
+              "review_failure_count": 0,
+              "confirmed_fwa_count": 1,
+              "false_positive_count": 0
+            },
+            {
+              "window_days": 90,
+              "claim_count": 2,
+              "total_claim_amount": "250.00",
+              "high_cost_item_ratio": 0.5,
+              "diagnosis_procedure_mismatch_rate": 0.25,
+              "peer_amount_percentile": 92,
+              "peer_frequency_percentile": 88,
+              "review_failure_count": 1,
+              "confirmed_fwa_count": 1,
+              "false_positive_count": 0
+            },
+            {
+              "window_days": 365,
+              "claim_count": 3,
+              "total_claim_amount": "300.00",
+              "high_cost_item_ratio": 0.33,
+              "diagnosis_procedure_mismatch_rate": 0.16,
+              "peer_amount_percentile": 90,
+              "peer_frequency_percentile": 85,
+              "review_failure_count": 1,
+              "confirmed_fwa_count": 1,
+              "false_positive_count": 1
+            }
+          ],
+          "evidence_refs": ["claims:CLM-PROFILE-1", "claims:CLM-PROFILE-2"]
+        }
+      ],
+      "evidence_refs": [
+        "provider_profile_window_rollups:local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
+        "provider_profile_claim_snapshot:local://inputs/provider-claims.json"
+      ],
+      "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+    }"#
+}
+
 #[tokio::test]
 async fn submits_provider_sanctions_sync_report() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
@@ -142,6 +206,57 @@ async fn submits_provider_sanctions_sync_report() {
     );
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["label_assignment"], false);
+}
+
+#[tokio::test]
+async fn submits_provider_profile_window_rollup() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/profile-window-rollups",
+        provider_profile_window_rollup_payload(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "provider_profile_window_rollup");
+    assert_eq!(body["provider_profile_count"], 1);
+    assert_eq!(body["claim_count"], 3);
+    assert_eq!(
+        body["persisted_provider_profiles"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_provider_profiles"][0]["provider_id"],
+        "PRV-PROFILE-1"
+    );
+    assert_eq!(
+        body["persisted_provider_profiles"][0]["windows"][0]["window_days"],
+        30
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["label_assignment"], false);
+}
+
+#[tokio::test]
+async fn provider_profile_window_rollup_requires_provider_write_permission() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/profile-window-rollups",
+        provider_profile_window_rollup_payload(),
+        "provider-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:providers:write");
 }
 
 #[tokio::test]

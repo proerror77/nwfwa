@@ -52,6 +52,7 @@ pub struct InMemoryScoringRepository {
     model_retraining_job_sequence: Mutex<u64>,
     model_statuses: Mutex<HashMap<String, String>>,
     provider_sanctions: Mutex<HashMap<String, ProviderSanctionRecord>>,
+    provider_profile_windows: Mutex<HashMap<String, ProviderProfileWindowRecord>>,
     routing_policies: Mutex<Vec<RoutingPolicyRecord>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,

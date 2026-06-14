@@ -6,7 +6,7 @@ use std::{
     path::Path,
 };
 
-use crate::{read_json_report, write_json};
+use crate::{api_url, read_json_report, required_non_empty, write_json};
 
 const PROFILE_WINDOWS: [u16; 3] = [30, 90, 365];
 
@@ -66,6 +66,21 @@ pub struct ProviderProfileWindowRollupReport {
     pub provider_count: usize,
     pub claim_count: usize,
     pub windows: Vec<u16>,
+    pub provider_profiles: Vec<ProviderProfileRollup>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderProfileWindowRollupSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uri: String,
+    pub provider_count: usize,
+    pub claim_count: usize,
     pub provider_profiles: Vec<ProviderProfileRollup>,
     pub evidence_refs: Vec<String>,
     pub governance_boundary: String,
@@ -139,6 +154,71 @@ pub fn build_provider_profile_window_rollup(
         &report.provider_profiles,
     )?;
     Ok(report)
+}
+
+pub fn build_provider_profile_window_rollup_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<ProviderProfileWindowRollupSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report: ProviderProfileWindowRollupReport =
+        serde_json::from_value(read_json_report(report_uri)?)
+            .context("parse provider profile window rollup report")?;
+    if report.report_kind != "provider_profile_window_rollup" {
+        bail!("report_kind must be provider_profile_window_rollup");
+    }
+    if report.provider_profiles.is_empty() {
+        bail!("provider profile window rollup requires provider_profiles before API submission");
+    }
+    let mut evidence_refs = report.evidence_refs;
+    evidence_refs.push(format!("provider_profile_window_rollups:{report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    Ok(ProviderProfileWindowRollupSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: report_uri.into(),
+        report_kind: report.report_kind,
+        as_of_date: report.as_of_date,
+        source_uri: report.source_uri,
+        provider_count: report.provider_count,
+        claim_count: report.claim_count,
+        provider_profiles: report.provider_profiles,
+        evidence_refs,
+        governance_boundary: report.governance_boundary,
+    })
+}
+
+pub async fn submit_provider_profile_window_rollup(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_provider_profile_window_rollup_submission(report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/providers/profile-window-rollups",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit provider profile window rollup")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit provider profile window rollup failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse provider profile window rollup response")
 }
 
 fn provider_rollup(

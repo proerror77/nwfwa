@@ -78,3 +78,62 @@ pub(super) async fn save_provider_sanctions(
     tx.commit().await?;
     Ok(saved)
 }
+
+pub(super) async fn save_provider_profile_windows(
+    repository: &PostgresScoringRepository,
+    input: SaveProviderProfileWindowsInput,
+) -> anyhow::Result<Vec<ProviderProfileWindowRecord>> {
+    let mut saved = Vec::with_capacity(input.provider_profiles.len());
+    let mut tx = repository.pool.begin().await?;
+    for profile in input.provider_profiles {
+        let windows = serde_json::Value::Array(profile.windows.clone());
+        let evidence_refs = serde_json::Value::Array(
+            profile
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+        sqlx::query(
+            "INSERT INTO provider_profile_windows
+                 (customer_scope_id, provider_id, specialty, network_status, as_of_date, windows, evidence_refs, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 ON CONFLICT (customer_scope_id, provider_id, as_of_date) DO UPDATE
+                 SET specialty = EXCLUDED.specialty,
+                     network_status = EXCLUDED.network_status,
+                     windows = EXCLUDED.windows,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&profile.provider_id)
+        .bind(&profile.specialty)
+        .bind(&profile.network_status)
+        .bind(&input.as_of_date)
+        .bind(&windows)
+        .bind(&evidence_refs)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(ProviderProfileWindowRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            provider_id: profile.provider_id,
+            specialty: profile.specialty,
+            network_status: profile.network_status,
+            as_of_date: input.as_of_date.clone(),
+            windows: profile.windows,
+            evidence_refs: profile.evidence_refs,
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}

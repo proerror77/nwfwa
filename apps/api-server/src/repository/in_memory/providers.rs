@@ -32,8 +32,48 @@ impl InMemoryScoringRepository {
         }
         Ok(saved)
     }
+
+    pub(super) async fn in_memory_save_provider_profile_windows(
+        &self,
+        input: SaveProviderProfileWindowsInput,
+    ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>> {
+        let mut records = self.provider_profile_windows.lock().await;
+        let mut saved = Vec::with_capacity(input.provider_profiles.len());
+        for profile in input.provider_profiles {
+            let record = ProviderProfileWindowRecord {
+                customer_scope_id: input.customer_scope_id.clone(),
+                provider_id: profile.provider_id,
+                specialty: profile.specialty,
+                network_status: profile.network_status,
+                as_of_date: input.as_of_date.clone(),
+                windows: profile.windows,
+                evidence_refs: profile.evidence_refs,
+                source_report_uri: input.source_report_uri.clone(),
+                submitted_by: input.submitted_by.clone(),
+                notes: input.notes.clone(),
+            };
+            records.insert(
+                provider_profile_window_key(
+                    &record.customer_scope_id,
+                    &record.provider_id,
+                    &record.as_of_date,
+                ),
+                record.clone(),
+            );
+            saved.push(record);
+        }
+        Ok(saved)
+    }
 }
 
 fn provider_sanction_key(customer_scope_id: &str, sanction_key: &str) -> String {
     format!("{customer_scope_id}::{sanction_key}")
+}
+
+fn provider_profile_window_key(
+    customer_scope_id: &str,
+    provider_id: &str,
+    as_of_date: &str,
+) -> String {
+    format!("{customer_scope_id}::{provider_id}::{as_of_date}")
 }

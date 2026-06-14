@@ -656,6 +656,13 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_provider_sanctions(input).await
     }
 
+    async fn save_provider_profile_windows(
+        &self,
+        input: SaveProviderProfileWindowsInput,
+    ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>> {
+        self.in_memory_save_provider_profile_windows(input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         self.in_memory_list_knowledge_cases().await
     }

@@ -170,6 +170,88 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["provider.sanctions_sync.submitted"] }
             }
         },
+        "ProviderProfileWindowUpsert": {
+            "type": "object",
+            "required": ["provider_id", "windows", "evidence_refs"],
+            "properties": {
+                "provider_id": { "type": "string", "minLength": 1 },
+                "specialty": { "type": ["string", "null"] },
+                "network_status": { "type": ["string", "null"] },
+                "windows": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/ProviderProfileWindowPayload" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                }
+            }
+        },
+        "ProviderProfileWindowRecord": {
+            "allOf": [
+                { "$ref": "#/components/schemas/ProviderProfileWindowUpsert" },
+                {
+                    "type": "object",
+                    "required": ["customer_scope_id", "as_of_date", "source_report_uri", "submitted_by", "notes"],
+                    "properties": {
+                        "customer_scope_id": { "type": "string" },
+                        "as_of_date": { "type": "string" },
+                        "source_report_uri": { "type": "string" },
+                        "submitted_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                }
+            ]
+        },
+        "SubmitProviderProfileWindowRollupRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "as_of_date", "source_uri", "provider_count", "claim_count", "provider_profiles", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "provider_profile_window_rollup" },
+                "as_of_date": { "type": "string", "minLength": 1 },
+                "source_uri": { "type": "string", "minLength": 1 },
+                "provider_count": { "type": "integer", "minimum": 1 },
+                "claim_count": { "type": "integer", "minimum": 0 },
+                "provider_profiles": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/ProviderProfileWindowUpsert" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include provider_profile_window_rollups:{source_report_uri}."
+                },
+                "governance_boundary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Source worker report boundary. Submission writes provider profile windows only."
+                }
+            }
+        },
+        "SubmitProviderProfileWindowRollupResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "provider_profile_count", "claim_count", "persisted_provider_profiles", "active_scoring_policy_change", "label_assignment", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "provider_profile_window_rollup" },
+                "source_report_uri": { "type": "string" },
+                "provider_profile_count": { "type": "integer" },
+                "claim_count": { "type": "integer" },
+                "persisted_provider_profiles": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/ProviderProfileWindowRecord" }
+                },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["provider.profile_windows.submitted"] }
+            }
+        },
         "AnomalyReviewQueueTask": {
             "type": "object",
             "required": ["candidate_kind", "candidate_id", "task_kind", "review_queue", "required_review", "decision_options", "source_report_uri", "report_kind", "dataset_key", "dataset_version", "label_policy", "governance_boundary", "review_status", "candidate_payload", "evidence_refs"],

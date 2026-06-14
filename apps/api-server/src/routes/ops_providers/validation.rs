@@ -3,7 +3,8 @@ use axum::http::StatusCode;
 
 use super::{
     AnomalyClusteringReviewTaskInput, ReviewAnomalyCandidateRequest,
-    SubmitAnomalyClusteringReportRequest, SubmitSanctionsSyncReportRequest,
+    SubmitAnomalyClusteringReportRequest, SubmitProviderProfileWindowRollupRequest,
+    SubmitSanctionsSyncReportRequest,
 };
 
 pub(super) fn validate_anomaly_clustering_report_submission(
@@ -229,6 +230,169 @@ pub(super) fn validate_sanctions_sync_report_submission(
                 "INVALID_PROVIDER_SANCTIONS_RISK_SIGNAL",
                 "sanctions upserts must use provider_sanctions_excluded with risk_score 100",
             ));
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_provider_profile_window_rollup_submission(
+    request: &SubmitProviderProfileWindowRollupRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "provider_profile_window_rollup" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_ROLLUP_KIND",
+            "report_kind must be provider_profile_window_rollup",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+            "source_report_uri must point to a JSON provider profile rollup report",
+        ));
+    }
+    if request.provider_profiles.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_PROFILE_WINDOWS",
+            "provider_profiles are required",
+        ));
+    }
+    if request.provider_count != request.provider_profiles.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_ROLLUP_PROVIDER_COUNT",
+            "provider_count must match provider_profiles length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "provider_profile_window_rollups:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+            format!("provider profile rollup evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    for profile in &request.provider_profiles {
+        if profile.provider_id.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_PROFILE_WINDOWS",
+                "provider_id is required",
+            ));
+        }
+        if profile.windows.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_PROFILE_WINDOWS",
+                "windows are required",
+            ));
+        }
+        for window in &profile.windows {
+            validate_provider_profile_window(window)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_provider_profile_window(window: &serde_json::Value) -> Result<(), ApiError> {
+    let window_days = window
+        .get("window_days")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_PROFILE_WINDOW",
+                "window_days is required",
+            )
+        })?;
+    if !matches!(window_days, 30 | 90 | 365) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_WINDOW",
+            "window_days must be 30, 90, or 365",
+        ));
+    }
+    if window
+        .get("claim_count")
+        .and_then(serde_json::Value::as_u64)
+        .is_none()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_WINDOW",
+            "claim_count is required",
+        ));
+    }
+    for field in ["high_cost_item_ratio", "diagnosis_procedure_mismatch_rate"] {
+        if let Some(value) = window.get(field).and_then(serde_json::Value::as_f64) {
+            if !(0.0..=1.0).contains(&value) {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_PROFILE_WINDOW",
+                    format!("{field} must be between 0 and 1"),
+                ));
+            }
+        }
+    }
+    for field in ["peer_amount_percentile", "peer_frequency_percentile"] {
+        if let Some(value) = window.get(field).and_then(serde_json::Value::as_u64) {
+            if value > 100 {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_PROFILE_WINDOW",
+                    format!("{field} must be between 0 and 100"),
+                ));
+            }
         }
     }
     Ok(())

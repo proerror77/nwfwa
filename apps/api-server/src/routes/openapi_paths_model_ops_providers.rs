@@ -83,6 +83,39 @@ pub(super) fn provider_paths() -> Value {
                 }
             }
         },
+        "/api/v1/ops/providers/profile-window-rollups": {
+            "post": {
+                "summary": "Submit provider profile 30/90/365 window rollups",
+                "description": "Persists provider profile windows from a worker-generated rollup report. This writes provider profile rollups only; it does not change scoring policy, assign fraud labels, or adjudicate claims.",
+                "security": [{ "ApiKeyAuth": [] }],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": { "$ref": "#/components/schemas/SubmitProviderProfileWindowRollupRequest" }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Persisted provider profile window rollups",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitProviderProfileWindowRollupResponse" }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Requires ops:providers:write permission",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ops/providers/anomaly-review-queue": {
             "get": {
                 "summary": "List anomaly candidates derived from submitted clustering reports",

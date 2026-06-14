@@ -90,3 +90,139 @@ fn builds_provider_profile_windows_for_standard_periods() {
         .exists());
     assert!(output_dir.join("provider_profile_windows.json").exists());
 }
+
+#[test]
+fn builds_provider_profile_window_rollup_submission() {
+    let root = temp_root("provider-profile-rollup-submission");
+    let report_uri = root.join("provider_profile_window_rollup_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_profile_window_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-claims.json",
+            "provider_count": 1,
+            "claim_count": 2,
+            "windows": [30, 90, 365],
+            "provider_profiles": [
+                {
+                    "provider_id": "PRV-PROFILE-1",
+                    "specialty": "imaging",
+                    "network_status": "in_network",
+                    "windows": [
+                        {
+                            "window_days": 30,
+                            "claim_count": 1,
+                            "total_claim_amount": "100.00",
+                            "high_cost_item_ratio": 1.0,
+                            "diagnosis_procedure_mismatch_rate": 0.5,
+                            "peer_amount_percentile": 95,
+                            "peer_frequency_percentile": 90,
+                            "review_failure_count": 0,
+                            "confirmed_fwa_count": 1,
+                            "false_positive_count": 0
+                        }
+                    ],
+                    "evidence_refs": ["claims:CLM-PROFILE-1"]
+                }
+            ],
+            "evidence_refs": ["provider_profile_claim_snapshot:local://inputs/provider-claims.json"],
+            "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+        }),
+    )
+    .unwrap();
+
+    let submission = build_provider_profile_window_rollup_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-provider-profile-windows",
+        "daily rollup",
+    )
+    .expect("provider profile submission");
+
+    assert_eq!(submission.report_kind, "provider_profile_window_rollup");
+    assert_eq!(submission.provider_count, 1);
+    assert_eq!(submission.provider_profiles[0].provider_id, "PRV-PROFILE-1");
+    assert!(submission.evidence_refs.contains(&format!(
+        "provider_profile_window_rollups:{}",
+        report_uri.to_string_lossy()
+    )));
+}
+
+#[tokio::test]
+async fn submits_provider_profile_window_rollup_to_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("provider-profile-rollup-submit-api");
+    let report_uri = root.join("provider_profile_window_rollup_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_profile_window_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-claims.json",
+            "provider_count": 1,
+            "claim_count": 2,
+            "windows": [30, 90, 365],
+            "provider_profiles": [
+                {
+                    "provider_id": "PRV-PROFILE-1",
+                    "specialty": "imaging",
+                    "network_status": "in_network",
+                    "windows": [
+                        {
+                            "window_days": 30,
+                            "claim_count": 1,
+                            "total_claim_amount": "100.00",
+                            "high_cost_item_ratio": 1.0,
+                            "diagnosis_procedure_mismatch_rate": 0.5,
+                            "peer_amount_percentile": 95,
+                            "peer_frequency_percentile": 90,
+                            "review_failure_count": 0,
+                            "confirmed_fwa_count": 1,
+                            "false_positive_count": 0
+                        }
+                    ],
+                    "evidence_refs": ["claims:CLM-PROFILE-1"]
+                }
+            ],
+            "evidence_refs": ["provider_profile_claim_snapshot:local://inputs/provider-claims.json"],
+            "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+        }),
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "report_kind": "provider_profile_window_rollup",
+                "provider_profile_count": 1
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = submit_provider_profile_window_rollup(
+        &api_url,
+        "provider-write-secret",
+        &report_uri.to_string_lossy(),
+        "worker:build-provider-profile-windows",
+        "daily rollup",
+    )
+    .await
+    .expect("submit provider profile window rollup");
+
+    assert_eq!(response["provider_profile_count"], 1);
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /api/v1/ops/providers/profile-window-rollups HTTP/1.1"));
+    assert!(request.contains("x-api-key: provider-write-secret"));
+    assert!(request.contains(r#""provider_id":"PRV-PROFILE-1""#));
+    assert!(request.contains("provider_profile_window_rollups:"));
+}

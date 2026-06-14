@@ -84,6 +84,10 @@ As of the P1/P2 remediation commits after this review:
   sanctions sync report submit path and worker command that persist provider
   sanctions from an approved report while explicitly avoiding scoring-policy
   changes, fraud-label assignment, or claim adjudication.
+- The provider profile 30/90/365 window rollup now has a separate
+  permission-gated submit path and worker command that persist provider profile
+  windows from an approved rollup report while explicitly avoiding scoring-
+  policy changes, fraud-label assignment, or claim adjudication.
 - The claims scoring API now accepts those materialized worker contexts and
   passes peer, clinical compatibility, and episode-utilization inputs into
   online feature calculation while preserving the assistive-only scoring
@@ -113,13 +117,13 @@ As of the P1/P2 remediation commits after this review:
   insufficient.
 
 Remaining boundaries after those commits are production scheduling, DB write
-paths for customer rollups outside the scoring-context materialization and
-provider-sanctions submit paths, live external OIG/SAM fetch, customer
-claim/history data, LLM-backed specialist execution, real external tool-call
-runtime mediation, wiring long-running/tool-using agents into the cancellation
-signal, customer-approved ICD-10/CPT or medical-policy reference data,
-customer-approved unbundling rule packs, customer-approved feature
-lineage/source mappings, calibrated-probability serving activation, and
+paths for customer rollups outside the scoring-context materialization,
+provider-sanctions, and provider-profile-window submit paths, live external
+OIG/SAM fetch, customer claim/history data, LLM-backed specialist execution,
+real external tool-call runtime mediation, wiring long-running/tool-using agents
+into the cancellation signal, customer-approved ICD-10/CPT or medical-policy
+reference data, customer-approved unbundling rule packs, customer-approved
+feature lineage/source mappings, calibrated-probability serving activation, and
 replacement of the L3 heuristic anomaly scorer with a validated statistical
 baseline. Audit retention still needs customer-environment partitioning,
 archive storage, legal-hold reconciliation writes, approved destruction workflow

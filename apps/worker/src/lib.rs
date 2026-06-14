@@ -145,8 +145,10 @@ pub use sanctions::{
 
 mod provider_profile_rollup;
 pub use provider_profile_rollup::{
-    build_provider_profile_window_rollup, ProviderProfileClaimInput, ProviderProfileRollup,
+    build_provider_profile_window_rollup, build_provider_profile_window_rollup_submission,
+    submit_provider_profile_window_rollup, ProviderProfileClaimInput, ProviderProfileRollup,
     ProviderProfileRollupInput, ProviderProfileWindowOutput, ProviderProfileWindowRollupReport,
+    ProviderProfileWindowRollupSubmission,
 };
 
 mod provider_graph_rollup;
