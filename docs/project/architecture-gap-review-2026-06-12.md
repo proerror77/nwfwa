@@ -264,6 +264,12 @@ As of the P1/P2 remediation commits after this review:
   evidence prefixes, mark succeeded jobs with missing prefixes as
   `artifact_missing_evidence`, and the execution submit API rejects completed
   jobs whose evidence refs do not satisfy the declared prefixes.
+- Worker submit builders now fail fast before API calls when hand-authored or
+  malformed reports omit required top-level source evidence: provider sanctions,
+  provider profiles, graph signals, peer benchmarks, episode rollups, scoring
+  feature contexts, and worker data-pipeline readiness/execution reports all
+  enforce the same source-lineage evidence refs expected by their API write
+  paths.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
 execution, official OIG/SAM feed configuration and credentials, customer
@@ -291,6 +297,8 @@ required by the API submit path. Worker-generated plan/readiness/run-status
 templates now surface those required evidence prefixes before scheduler
 execution, and the production readiness
 validator can execute those checks when given the customer evidence directory.
+Worker submit builders now mirror those source-evidence requirements locally,
+so malformed reports fail before any governed write request is sent.
 
 ## A. Scoring Layer Gaps
 
@@ -332,7 +340,7 @@ validator can execute those checks when given the customer evidence directory.
 | D-2 | Poisoned ONNX/session mutex recovery is implemented with error logging. | Add customer-environment alert routing and incident evidence. |
 | D-3 | PSI threshold actioning now creates monitoring/review artifacts. | Wire action artifacts into customer model-governance operations. |
 | D-4 | Rule hit-rate trending now computes 7-day vs. 90-day drift and emits review artifacts. | Validate thresholds against customer production traffic and rule governance cadence. |
-| D-5 | L3 anomaly scoring is still a heuristic baseline. | Add worker evaluation for IQR/MAD or ensemble anomaly readiness and make the upgrade trigger measurable. |
+| D-5 | L3 anomaly scoring is still a heuristic baseline, but anomaly-upgrade readiness now has a worker report contract that checks the confirmed-FWA label threshold and 30-day recall trigger before opening upgrade review evidence. | Replace the online heuristic with IQR/MAD or ensemble scoring only after customer labels/history satisfy the readiness gates and the replacement is validated. |
 | D-6 | Raw sigmoid outputs are explicitly marked as `uncalibrated_raw_sigmoid`, calibration evidence report contracts exist, and model activation gates now require same-version passing probability-calibration evidence. | Fit and activate calibrated probability serving only after customer labels, holdout, and governance approval. |
 
 ## E. Compliance, Security, And HIPAA Gaps
