@@ -216,6 +216,14 @@ pub fn build_provider_graph_signal_rollup_submission(
     if report.provider_relationships.is_empty() {
         bail!("provider graph signal rollup requires provider_relationships before API submission");
     }
+    let required_ref = format!("provider_graph_claim_snapshot:{}", report.source_uri);
+    if !report
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == required_ref)
+    {
+        bail!("provider graph signal rollup requires {required_ref} evidence");
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("provider_graph_signal_rollups:{report_uri}"));
     evidence_refs.sort();

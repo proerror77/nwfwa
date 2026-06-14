@@ -99,6 +99,52 @@ fn builds_peer_benchmark_submission() {
         .contains(&format!("peer_benchmarks:{}", report_uri.to_string_lossy())));
 }
 
+#[test]
+fn rejects_peer_benchmark_submission_without_claim_snapshot_evidence() {
+    let root = temp_root("peer-benchmark-submission-missing-source-evidence");
+    let report_uri = root.join("peer_percentile_benchmark.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "peer_percentile_benchmark",
+            "report_version": 1,
+            "benchmark_month": "2026-06",
+            "source_uri": "local://inputs/peer-claims.json",
+            "claim_count": 5,
+            "peer_group_count": 1,
+            "peer_groups": [
+                {
+                    "peer_group_key": "dental|SH|outpatient",
+                    "specialty": "dental",
+                    "region": "SH",
+                    "service_segment": "outpatient",
+                    "claim_count": 5,
+                    "p25": 200.0,
+                    "p50": 300.0,
+                    "p75": 400.0,
+                    "p90": 500.0,
+                    "p99": 500.0,
+                    "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient"]
+                }
+            ],
+            "evidence_refs": [],
+            "governance_boundary": "benchmark computes peer percentile reference data only; it must not score claims, assign labels, or change routing policy"
+        }),
+    )
+    .unwrap();
+
+    let error = build_peer_benchmark_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-peer-benchmarks",
+        "monthly benchmark",
+    )
+    .expect_err("peer benchmark submission without source evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("peer_benchmark_claim_snapshot:local://inputs/peer-claims.json"));
+}
+
 #[tokio::test]
 async fn submits_peer_benchmark_to_api() {
     use tokio::net::TcpListener;

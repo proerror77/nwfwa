@@ -149,6 +149,60 @@ fn builds_provider_profile_window_rollup_submission() {
     )));
 }
 
+#[test]
+fn rejects_provider_profile_submission_without_claim_snapshot_evidence() {
+    let root = temp_root("provider-profile-rollup-submission-missing-source-evidence");
+    let report_uri = root.join("provider_profile_window_rollup_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_profile_window_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-claims.json",
+            "provider_count": 1,
+            "claim_count": 2,
+            "windows": [30, 90, 365],
+            "provider_profiles": [
+                {
+                    "provider_id": "PRV-PROFILE-1",
+                    "specialty": "imaging",
+                    "network_status": "in_network",
+                    "windows": [
+                        {
+                            "window_days": 30,
+                            "claim_count": 1,
+                            "total_claim_amount": "100.00",
+                            "high_cost_item_ratio": 1.0,
+                            "diagnosis_procedure_mismatch_rate": 0.5,
+                            "peer_amount_percentile": 95,
+                            "peer_frequency_percentile": 90,
+                            "review_failure_count": 0,
+                            "confirmed_fwa_count": 1,
+                            "false_positive_count": 0
+                        }
+                    ],
+                    "evidence_refs": ["claims:CLM-PROFILE-1"]
+                }
+            ],
+            "evidence_refs": [],
+            "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+        }),
+    )
+    .unwrap();
+
+    let error = build_provider_profile_window_rollup_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-provider-profile-windows",
+        "daily rollup",
+    )
+    .expect_err("provider profile submission without source evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("provider_profile_claim_snapshot:local://inputs/provider-claims.json"));
+}
+
 #[tokio::test]
 async fn submits_provider_profile_window_rollup_to_api() {
     use tokio::net::TcpListener;

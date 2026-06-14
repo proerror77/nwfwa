@@ -114,6 +114,56 @@ fn builds_episode_aggregation_submission() {
         .contains(&format!("episode_rollups:{}", report_uri.to_string_lossy())));
 }
 
+#[test]
+fn rejects_episode_submission_without_claim_snapshot_evidence() {
+    let root = temp_root("episode-rollup-submission-missing-source-evidence");
+    let report_uri = root.join("episode_aggregation_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "member_provider_episode_aggregation",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/episode-claims.json",
+            "episode_count": 1,
+            "claim_count": 2,
+            "windows": [30, 90, 365],
+            "episodes": [
+                {
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-A",
+                    "episode_key": "MBR-1|PRV-A",
+                    "windows": [
+                        {
+                            "window_days": 30,
+                            "claim_count": 2,
+                            "total_claim_amount": 200.0,
+                            "unique_procedure_code_count": 2,
+                            "max_procedure_code_frequency": 2,
+                            "duplicate_amount_day_count": 1
+                        }
+                    ],
+                    "evidence_refs": ["claims:CLM-1", "claims:CLM-2"]
+                }
+            ],
+            "evidence_refs": [],
+            "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
+        }),
+    )
+    .unwrap();
+
+    let error = build_episode_aggregation_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-episode-aggregation",
+        "daily episode rollup",
+    )
+    .expect_err("episode submission without source evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("episode_claim_snapshot:local://inputs/episode-claims.json"));
+}
+
 #[tokio::test]
 async fn submits_episode_aggregation_to_api() {
     use tokio::net::TcpListener;

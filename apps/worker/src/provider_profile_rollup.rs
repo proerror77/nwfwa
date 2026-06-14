@@ -173,6 +173,14 @@ pub fn build_provider_profile_window_rollup_submission(
     if report.provider_profiles.is_empty() {
         bail!("provider profile window rollup requires provider_profiles before API submission");
     }
+    let required_ref = format!("provider_profile_claim_snapshot:{}", report.source_uri);
+    if !report
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == required_ref)
+    {
+        bail!("provider profile window rollup requires {required_ref} evidence");
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("provider_profile_window_rollups:{report_uri}"));
     evidence_refs.sort();

@@ -153,6 +153,14 @@ pub fn build_episode_aggregation_submission(
     if report.episodes.is_empty() {
         bail!("episode aggregation requires episodes before API submission");
     }
+    let required_ref = format!("episode_claim_snapshot:{}", report.source_uri);
+    if !report
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == required_ref)
+    {
+        bail!("episode aggregation requires {required_ref} evidence");
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("episode_rollups:{report_uri}"));
     evidence_refs.sort();

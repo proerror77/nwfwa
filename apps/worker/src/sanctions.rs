@@ -228,6 +228,14 @@ pub fn build_sanctions_sync_report_submission(
     if report.provider_upserts.is_empty() {
         bail!("sanctions sync report requires provider_upserts before API submission");
     }
+    let required_ref = format!("sanctions_source_snapshot:{}", report.source_uri);
+    if !report
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == required_ref)
+    {
+        bail!("sanctions sync report requires {required_ref} evidence");
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("sanctions_sync_reports:{report_uri}"));
     evidence_refs.sort();

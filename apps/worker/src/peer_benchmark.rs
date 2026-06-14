@@ -175,6 +175,14 @@ pub fn build_peer_benchmark_submission(
     if report.peer_groups.is_empty() {
         bail!("peer benchmark requires peer_groups before API submission");
     }
+    let required_ref = format!("peer_benchmark_claim_snapshot:{}", report.source_uri);
+    if !report
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == required_ref)
+    {
+        bail!("peer benchmark requires {required_ref} evidence");
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("peer_benchmarks:{report_uri}"));
     evidence_refs.sort();

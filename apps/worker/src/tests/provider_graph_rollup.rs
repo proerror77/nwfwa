@@ -128,6 +128,52 @@ fn builds_provider_graph_signal_rollup_submission() {
     )));
 }
 
+#[test]
+fn rejects_provider_graph_submission_without_claim_snapshot_evidence() {
+    let root = temp_root("provider-graph-rollup-submission-missing-source-evidence");
+    let report_uri = root.join("provider_graph_signal_rollup.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_graph_signal_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-graph-input.json",
+            "provider_count": 1,
+            "claim_count": 3,
+            "provider_relationships": [
+                {
+                    "provider_id": "PRV-GRAPH-1",
+                    "high_risk_neighbor_ratio": 0.34,
+                    "provider_patient_overlap_score": 0.68,
+                    "referral_concentration_score": 0.78,
+                    "billing_ring_membership": true,
+                    "temporal_co_billing_frequency_7d": 0.67,
+                    "referral_concentration_entropy": 0.22,
+                    "shared_member_provider_count": 2,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 82,
+                    "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+                }
+            ],
+            "evidence_refs": [],
+            "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }),
+    )
+    .unwrap();
+
+    let error = build_provider_graph_signal_rollup_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-provider-graph-signals",
+        "daily graph rollup",
+    )
+    .expect_err("provider graph submission without source evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"));
+}
+
 #[tokio::test]
 async fn submits_provider_graph_signal_rollup_to_api() {
     use tokio::net::TcpListener;
