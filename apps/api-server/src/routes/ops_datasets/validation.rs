@@ -1072,6 +1072,7 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
     }
     let mut ready_jobs = 0usize;
     let mut blocked_jobs = 0usize;
+    let mut blocked_job_kinds = Vec::new();
     for readiness in &request.job_readiness {
         let Some(job_kind) = readiness.get("job_kind").and_then(|value| value.as_str()) else {
             return Err(ApiError::new(
@@ -1161,6 +1162,7 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             }
             "blocked" => {
                 blocked_jobs += 1;
+                blocked_job_kinds.push(job_kind.to_string());
                 let has_blockers = readiness
                     .get("blockers")
                     .and_then(|value| value.as_array())
@@ -1204,6 +1206,53 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             "INVALID_WORKER_DATA_PIPELINE_READINESS_STATUS",
             "readiness_status must match whether any job readiness record is blocked",
         ));
+    }
+    for job_kind in &blocked_job_kinds {
+        let has_review_task = request.review_tasks.iter().any(|review_task| {
+            review_task
+                .get("task_kind")
+                .and_then(|value| value.as_str())
+                == Some("worker_data_pipeline_readiness_review")
+                && review_task.get("job_kind").and_then(|value| value.as_str())
+                    == Some(job_kind.as_str())
+        });
+        if !has_review_task {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "each blocked job readiness record requires a matching worker_data_pipeline_readiness_review task",
+            ));
+        }
+    }
+    for review_task in &request.review_tasks {
+        let Some(task_kind) = review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "each readiness review task must include task_kind",
+            ));
+        };
+        if task_kind != "worker_data_pipeline_readiness_review" {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "readiness review task kind must be worker_data_pipeline_readiness_review",
+            ));
+        }
+        let job_kind = review_task
+            .get("job_kind")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        if !blocked_job_kinds.iter().any(|blocked| blocked == job_kind) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "readiness review tasks must match a blocked job readiness record",
+            ));
+        }
     }
     Ok(())
 }

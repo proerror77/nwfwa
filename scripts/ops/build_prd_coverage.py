@@ -142,6 +142,7 @@ CAPABILITIES = [
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_STATUS"),
+            ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"),

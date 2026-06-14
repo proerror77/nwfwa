@@ -617,7 +617,34 @@ pub(super) fn dataset_schemas() -> Value {
                 },
                 "review_tasks": {
                     "type": "array",
-                    "items": { "type": "object" }
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "task_kind": {
+                                "type": "string",
+                                "enum": ["worker_data_pipeline_readiness_review"]
+                            },
+                            "job_kind": {
+                                "type": "string",
+                                "description": "Required and must match a blocked job_readiness record."
+                            },
+                            "required_permission": {
+                                "type": ["string", "null"],
+                                "enum": [
+                                    "ops:providers:write",
+                                    "ops:datasets:write",
+                                    "ops:models:review",
+                                    null
+                                ],
+                                "minLength": 1,
+                                "description": "Optional API permission scope required to resolve this readiness review task."
+                            },
+                            "api_path": {
+                                "type": ["string", "null"],
+                                "description": "Optional API path associated with the review task."
+                            }
+                        }
+                    }
                 },
                 "evidence_refs": {
                     "type": "array",

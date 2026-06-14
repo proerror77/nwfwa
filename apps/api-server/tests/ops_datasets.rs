@@ -1276,6 +1276,77 @@ async fn worker_data_pipeline_readiness_report_rejects_review_task_permission_ap
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_review_task_for_blocked_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_unknown_review_task_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["task_kind"] =
+        serde_json::json!("worker_data_pipeline_unknown_review");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_review_task_for_ready_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["job_kind"] = serde_json::json!("oig_sam_sanctions_sync");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_readiness_report_rejects_ready_job_blockers() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
