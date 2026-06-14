@@ -79,8 +79,17 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES = {
     "episode_aggregation": "episode_rollups:",
     "clinical_compatibility_reference": "clinical_compatibility_references:",
     "unbundling_comparator": "unbundling_comparator_candidates:",
-    "scoring_feature_context_materialization": "scoring_feature_context_materializations:",
+    "scoring_feature_context_materialization": "scoring_feature_contexts:",
     "probability_calibration_evidence": "probability_calibration_reports:",
+}
+
+WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
+    "scoring_feature_context_materialization": (
+        "episode_rollups:",
+        "peer_benchmarks:",
+        "clinical_compatibility:",
+        "unbundling_candidates:",
+    )
 }
 
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
@@ -432,6 +441,13 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
             evidence_refs_include_prefix(job, required_evidence_prefix),
             f"worker data pipeline submit job {job_kind} evidence_refs missing {required_evidence_prefix}",
         )
+        for additional_prefix in WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(
+            job_kind, ()
+        ):
+            require(
+                evidence_refs_include_prefix(job, additional_prefix),
+                f"worker data pipeline submit job {job_kind} evidence_refs missing {additional_prefix}",
+            )
     snapshot_job = jobs_by_kind["oig_sam_sanctions_snapshot_fetch"]
     require(
         isinstance(snapshot_job.get("reported_artifact_uri"), str)

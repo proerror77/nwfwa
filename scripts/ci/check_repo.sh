@@ -657,6 +657,8 @@ def worker_execution_report(artifact_uri, include_write_refs=True):
         write_prefix = validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES.get(job_kind)
         if include_write_refs and write_prefix:
             evidence_refs.append(f"{write_prefix}s3://nwfwa-production-artifacts/{job_kind}.json")
+            for additional_prefix in validator.WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(job_kind, ()):
+                evidence_refs.append(f"{additional_prefix}s3://nwfwa-production-artifacts/{job_kind}.json")
         if job_kind == "oig_sam_sanctions_snapshot_fetch":
             evidence_refs.append("oig_sam_snapshot:2026-06-14")
         jobs.append(
@@ -714,6 +716,14 @@ assert_rejected(
     worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json", include_write_refs=False),
     "missing governed write evidence refs",
 )
+missing_scoring_source_report = worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json")
+for job in missing_scoring_source_report["job_executions"]:
+    if job["job_kind"] == "scoring_feature_context_materialization":
+        job["evidence_refs"] = [
+            reference for reference in job["evidence_refs"]
+            if not reference.startswith("peer_benchmarks:")
+        ]
+assert_rejected(missing_scoring_source_report, "missing scoring context source evidence refs")
 validator.validate_worker_data_pipeline_execution_evidence(
     worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json")
 )
