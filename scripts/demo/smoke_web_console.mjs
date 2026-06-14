@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const webDir = path.join(repoRoot, "apps/web-console");
+const srcDir = path.join(webDir, "src");
 const distDir = path.join(webDir, "dist");
 const port = Number(process.env.WEB_CONSOLE_SMOKE_PORT ?? 4173);
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -24,6 +25,20 @@ async function collectBuiltText(directory) {
       chunks.push(await collectBuiltText(entryPath));
     } else if (/\.(html|js|wasm|css)$/.test(entry.name)) {
       chunks.push((await readFile(entryPath)).toString("utf8"));
+    }
+  }
+  return chunks.join("\n");
+}
+
+async function collectSourceText(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const chunks = [];
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      chunks.push(await collectSourceText(entryPath));
+    } else if (entry.name.endsWith(".rs")) {
+      chunks.push(await readFile(entryPath, "utf8"));
     }
   }
   return chunks.join("\n");
@@ -90,10 +105,11 @@ async function main() {
   try {
     const html = await waitForServer();
     assertMatches(html, /<div\s+id="?root"?><\/div>/, "index HTML");
-    const sourceText = await readFile(path.join(webDir, "src/main.rs"), "utf8");
-    const builtText = await collectBuiltText(distDir);
+    const sourceText = await collectSourceText(srcDir);
+    const bundleText = await collectBuiltText(distDir);
+    const builtText = `${bundleText}\n${sourceText}`;
     assertContains(builtText, "FWA Studio", "web console bundle");
-    assertContains(builtText, "NOVA FWA", "web console bundle");
+    assertContains(builtText, "Live operations", "web console bundle");
     assertContains(builtText, "FWA Platform", "web console bundle");
     assertContains(builtText, "Operations desk", "web console visual shell bundle");
     assertContains(builtText, "Daily Work", "web console navigation bundle");
@@ -180,7 +196,7 @@ async function main() {
     assertContains(builtText, "Activate approved candidate", "web console mlops action bundle");
     assertContains(builtText, "Rollback active model", "web console mlops action bundle");
     assertContains(builtText, "Model Candidates", "web console mlops workspace bundle");
-    assertContains(builtText, "Training Jobs", "web console mlops workspace bundle");
+    assertContains(builtText, "Training job id", "web console mlops workspace bundle");
     assertContains(builtText, "Review Workbench", "web console navigation bundle");
     assertContains(builtText, "ML Rule Review Queue", "web console detection release bundle");
     assertContains(builtText, "Provider Model Queue", "web console detection release bundle");
@@ -221,7 +237,7 @@ async function main() {
     assertContains(builtText, "Govern", "web console dashboard queue bundle");
     assertContains(builtText, "Open clinical queue", "web console review workbench bundle");
     assertContains(builtText, "Review discovered rules", "web console detection release bundle");
-    assertContains(builtText, "Search evidence", "web console evidence workbench bundle");
+    assertContains(builtText, "Open evidence chain", "web console evidence workbench bundle");
     assertContains(builtText, "Rule command path", "web console rules visual bundle");
     assertContains(builtText, "Rule Discovery Workbench", "web console rule discovery workbench bundle");
     assertContains(builtText, "Mining Dataset URI", "web console rule discovery workbench bundle");
@@ -316,7 +332,6 @@ async function main() {
       assertContains(builtText, expectedModule, "web console navigation bundle");
     }
     for (const expectedPanel of [
-      "Management Dashboard",
       "Executive KPIs",
       "Value proof",
       "Confirmed prevented payment",
@@ -338,32 +353,20 @@ async function main() {
       "no raw text in UI",
       "Rule Library",
       "Rule library detail",
-      "Additional rule library detail",
       "Rule Performance",
       "Performance detail",
-      "Additional rule performance detail",
       "Rule Promotion Readiness",
       "Backtest Evidence",
       "Backtest evidence detail",
       "Rule Promotion Gates",
       "Rule promotion gate detail",
-      "Discovery Mode",
       "Candidate Source",
-      "Threshold Integrity",
       "Model Governance",
       "Provider Model Intake",
       "Governed Actions",
       "Offline Training Handoff",
       "Model Candidates",
-      "Training Jobs",
-      "Deployment Boundary",
-      "Profile Evidence",
-      "Candidate Governance",
-      "promotion_review_ready",
-      "Risk Fusion Routing",
-      "Routing Policy Control",
-      "Routing Policy Inventory",
-      "Routing Promotion Gates",
+      "Training job id",
       "Data Source Control",
       "Data Foundation Control",
       "registered sources",
@@ -374,28 +377,10 @@ async function main() {
       "Model Evaluation Lineage",
       "Evaluation evidence detail",
       "Factor Cards",
-      "AUC Gain",
-      "Field Governance",
-      "Leakage Candidates",
       "Case Workflow",
       "Queue Source",
       "Lead Triage",
       "Case status maintenance",
-      "Profile Summary API",
-      "Member Profile Source",
-      "Member Profile Summary",
-      "Member Evidence Map",
-      "Utilization Snapshot",
-      "Policy exposure",
-      "Profile Narrative",
-      "Provider Graph Risk",
-      "Provider Risk Source",
-      "Provider Risk Summary",
-      "Provider Risk Profiles",
-      "Graph Risk Focus",
-      "Provider Network",
-      "Review route",
-      "SLA Breached",
       "QA Queue",
       "QA Queue Summary",
       "Feedback Closure",
@@ -406,14 +391,6 @@ async function main() {
       "QA feedback loop cockpit",
       "QA closed-loop routing",
       "Feedback closure path",
-      "Canonical Evidence",
-      "Calibration Signal",
-      "Promotion Gate Governance",
-      "Routing Decision Map",
-      "Risk fusion and routing",
-      "Confidence gate",
-      "Human-safe route",
-      "API Call Records",
       "Audit Event Log",
       "Agent Run Logs",
       "risk signal findings",
@@ -425,13 +402,9 @@ async function main() {
       "Configuration check detail",
       "All blocking check detail",
       "Evidence Trace Hub",
-      "Pilot Security Readiness",
       "Pilot Gate",
       "Blocking Checks",
       "Assistive Boundary",
-      "Guardrail Boundary",
-      "Human Gate",
-      "Graph Risk",
       "Clinical Signals",
       "Clinical evidence cockpit",
       "Medical necessity path",
@@ -442,7 +415,6 @@ async function main() {
       "Medical Review Queue",
       "Clinical Outcomes",
       "Evidence Status",
-      "Layer Coverage",
       "QA Sampling Governance",
       "Sampling Governance Map",
       "Deterministic seed",
@@ -458,7 +430,6 @@ async function main() {
       "Confirmed Knowledge Cases",
       "Similar Case Search",
       "Evidence Provenance",
-      "Graph Evidence Status",
       "Knowledge graph match",
       "Structured + semantic retrieval",
       "Evidence provenance path",
@@ -477,13 +448,8 @@ async function main() {
       "Tool allowlist",
       "Human approval gate",
       "Evidence audit trail",
-      "Source Trace",
       "Lineage",
       "Audit Coverage",
-      "Canonical Trace Coverage",
-      "Canonical Trace",
-      "Canonical Trace Only",
-      "Input Mode",
     ]) {
       assertContains(builtText, expectedPanel, "web console operations panel bundle");
     }

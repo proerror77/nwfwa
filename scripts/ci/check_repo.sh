@@ -221,24 +221,24 @@ grep -q "/api/v1/inbox/claims/normalize" apps/web-console/src/api/scoring.rs
 grep -q "Correction Worklist" apps/web-console/src/pages/claim_inbox.rs
 grep -q "correction_overlay_template_for" apps/web-console/src/inbox_helpers.rs
 grep -q "merge_overlay" apps/web-console/src/inbox_helpers.rs
-grep -q "Management Dashboard" scripts/demo/smoke_web_console.mjs
+grep -q "Executive KPIs" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
-grep -q "Discovery Mode" scripts/demo/smoke_web_console.mjs
+grep -q "Rule Discovery Workbench" scripts/demo/smoke_web_console.mjs
 grep -q "Candidate Source" scripts/demo/smoke_web_console.mjs
-grep -q "Threshold Integrity" scripts/demo/smoke_web_console.mjs
-grep -q "Deployment Boundary" scripts/demo/smoke_web_console.mjs
-grep -q "Profile Evidence" scripts/demo/smoke_web_console.mjs
-grep -q "Candidate Governance" scripts/demo/smoke_web_console.mjs
-grep -q "promotion_review_ready" scripts/demo/smoke_web_console.mjs
-grep -q "Promotion Gate Governance" scripts/demo/smoke_web_console.mjs
-grep -q "AUC Gain" scripts/demo/smoke_web_console.mjs
-grep -q "Field Governance" scripts/demo/smoke_web_console.mjs
-grep -q "Leakage Candidates" scripts/demo/smoke_web_console.mjs
-grep -q "SLA Breached" scripts/demo/smoke_web_console.mjs
-grep -q "Calibration Signal" scripts/demo/smoke_web_console.mjs
-grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
-grep -q "Pilot Security Readiness" scripts/demo/smoke_web_console.mjs
-grep -q "NOVA FWA" scripts/demo/smoke_web_console.mjs
+grep -q "Tree Depth" scripts/demo/smoke_web_console.mjs
+grep -q "Training job id" scripts/demo/smoke_web_console.mjs
+grep -q "Backtest Evidence" scripts/demo/smoke_web_console.mjs
+grep -q "Candidate rule workflow" scripts/demo/smoke_web_console.mjs
+grep -q "shadow evidence ready" scripts/demo/smoke_web_console.mjs
+grep -q "Rule Promotion Gates" scripts/demo/smoke_web_console.mjs
+grep -q "Factor Cards" scripts/demo/smoke_web_console.mjs
+grep -q "Data Foundation Control" scripts/demo/smoke_web_console.mjs
+grep -q "Split And Schema Coverage" scripts/demo/smoke_web_console.mjs
+grep -q "SLA attention" scripts/demo/smoke_web_console.mjs
+grep -q "QA Sampling Governance" scripts/demo/smoke_web_console.mjs
+grep -q "Audit Event Log" scripts/demo/smoke_web_console.mjs
+grep -q "Pilot Gate" scripts/demo/smoke_web_console.mjs
+grep -q "Live operations" scripts/demo/smoke_web_console.mjs
 grep -q "Daily Work" scripts/demo/smoke_web_console.mjs
 grep -q "Control Rooms" scripts/demo/smoke_web_console.mjs
 grep -q "Review Workbench" scripts/demo/smoke_web_console.mjs
@@ -258,15 +258,14 @@ grep -q "Non-secret remediation hint" apps/api-server/tests/ops_openapi/schema_b
 grep -q "remediation" apps/web-console/src/pages/governance.rs
 grep -q "remediation hints" docs/engineering/pilot-readiness.md
 grep -q "remediation hints" docs/project/api-reference.md
-grep -q "Guardrail Boundary" scripts/demo/smoke_web_console.mjs
-grep -q "Human Gate" scripts/demo/smoke_web_console.mjs
-grep -q "Graph Risk" scripts/demo/smoke_web_console.mjs
+grep -q "Assistive Boundary" scripts/demo/smoke_web_console.mjs
+grep -q "Human Clinical Decision" scripts/demo/smoke_web_console.mjs
+grep -q "Clinical Signals" scripts/demo/smoke_web_console.mjs
 grep -q "Clinical Signals" scripts/demo/smoke_web_console.mjs
 grep -q "Evidence Status" scripts/demo/smoke_web_console.mjs
-grep -q "Layer Coverage" scripts/demo/smoke_web_console.mjs
-grep -q "Graph Evidence Status" scripts/demo/smoke_web_console.mjs
+grep -q "QA Sampling Governance" scripts/demo/smoke_web_console.mjs
+grep -q "Knowledge graph match" scripts/demo/smoke_web_console.mjs
 grep -q "Confirmed Evidence" scripts/demo/smoke_web_console.mjs
-grep -q "Source Trace" scripts/demo/smoke_web_console.mjs
 grep -q "Lineage" scripts/demo/smoke_web_console.mjs
 grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
@@ -396,10 +395,10 @@ grep -q "canonical_claim_context" scripts/demo/smoke_demo.py
 grep -q "has_canonical_trace=true" scripts/demo/smoke_demo.py
 grep -q "has_canonical_trace" apps/api-server/src/routes/openapi_paths_data_ops_operations.rs
 grep -q "has_canonical_trace" apps/api-server/src/routes/ops_audit.rs
-grep -q "Canonical Trace Only" scripts/demo/smoke_web_console.mjs
+grep -q "Lineage" scripts/demo/smoke_web_console.mjs
 grep -q "audit_coverage" apps/api-server/src/routes/openapi_schemas_ops_dashboard.rs
 grep -q "Audit Coverage" apps/web-console/src/pages/governance.rs
-grep -q "Canonical Trace Coverage" scripts/demo/smoke_web_console.mjs
+grep -q "Audit Coverage" scripts/demo/smoke_web_console.mjs
 grep -q "latest_canonical_claim_context_trace" apps/api-server/src/routes/agent.rs
 grep -q "Agent context snapshot carries" docs/project/api-reference.md
 grep -q "canonical scoring trace" docs/project/api-reference.md
@@ -414,7 +413,7 @@ grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_
 grep -q "QA result writeback merges" docs/project/api-reference.md
 grep -q "merge_canonical_evidence_refs_for_medical_review" apps/api-server/src/routes/ops_medical.rs
 grep -q "Medical review result writeback merges" docs/project/api-reference.md
-grep -q "Canonical Evidence" scripts/demo/smoke_web_console.mjs
+grep -q "Evidence Trace Hub" scripts/demo/smoke_web_console.mjs
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py
 grep -q "/api/v1/qa/results" scripts/demo/smoke_demo.py

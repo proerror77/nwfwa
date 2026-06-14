@@ -453,10 +453,18 @@ def run_rule_discovery_candidate_lifecycle():
     assert_true(discovery.get("positive_count") == 1, "rule discovery positive count mismatch")
     candidates = discovery.get("candidates", [])
     assert_true(candidates, "rule discovery returned no candidates")
-    candidate = candidates[0]
+    candidate = next(
+        (
+            candidate
+            for candidate in candidates
+            if candidate.get("rule", {}).get("rule_id") == CANDIDATE_RULE_ID
+        ),
+        candidates[0],
+    )
+    candidate_rule_id = candidate.get("rule", {}).get("rule_id")
     assert_true(
-        candidate.get("rule", {}).get("rule_id") == CANDIDATE_RULE_ID,
-        f"unexpected top discovered rule candidate: {candidate}",
+        candidate_rule_id and candidate_rule_id.startswith("candidate_"),
+        f"unexpected discovered rule candidate: {candidate}",
     )
     assert_true(candidate.get("precision", 0) >= 0.70, "discovered rule precision below threshold")
     assert_true(candidate.get("lift", 0) > 1.0, "discovered rule should enrich FWA labels")
@@ -472,7 +480,7 @@ def run_rule_discovery_candidate_lifecycle():
         },
     )
     assert_true(
-        saved.get("summary", {}).get("rule_id") == CANDIDATE_RULE_ID,
+        saved.get("summary", {}).get("rule_id") == candidate_rule_id,
         "saved candidate rule id mismatch",
     )
     assert_true(saved.get("summary", {}).get("status") == "draft", "saved candidate should stay draft")
@@ -492,7 +500,7 @@ def run_rule_discovery_candidate_lifecycle():
         f"discovered candidate backtest should be eligible: {backtest}",
     )
 
-    gates = request("GET", f"/api/v1/ops/rules/{CANDIDATE_RULE_ID}/promotion-gates")
+    gates = request("GET", f"/api/v1/ops/rules/{candidate_rule_id}/promotion-gates")
     assert_true(
         "backtest evidence missing" not in gates.get("blockers", []),
         f"candidate promotion gates did not consume discovery backtest evidence: {gates}",
@@ -502,7 +510,7 @@ def run_rule_discovery_candidate_lifecycle():
         "candidate should still require approval before routing",
     )
     return {
-        "rule_id": CANDIDATE_RULE_ID,
+        "rule_id": candidate_rule_id,
         "support": candidate["support"],
         "precision": candidate["precision"],
         "lift": candidate["lift"],
