@@ -109,6 +109,7 @@ def validate_package(package_dir: Path) -> dict:
         index.get("artifact_count") == len(artifacts),
         "index artifact_count must match required evidence templates",
     )
+    validate_evidence_templates(artifacts)
 
     validate_index_entries(package_dir, index, "source_templates", REQUIRED_SOURCE_TEMPLATES)
     validate_index_entries(package_dir, index, "worker_templates", REQUIRED_WORKER_TEMPLATES)
@@ -151,6 +152,37 @@ def validate_index_entries(
     require(
         required_paths.issubset(observed_paths),
         f"index {field_name} missing required paths: {sorted(required_paths - observed_paths)}",
+    )
+
+
+def validate_evidence_templates(artifacts: dict[str, dict]) -> None:
+    for artifact_name, artifact in artifacts.items():
+        require(
+            artifact.get("readiness_claim") in (None, False),
+            f"evidence template {artifact_name} must not claim readiness",
+        )
+        require(
+            artifact.get("status") in {"pending_customer_evidence", "blocked"}
+            or artifact.get("readiness_gate_status") == "blocked"
+            or artifact.get("readback_status") == "blocked",
+            f"evidence template {artifact_name} must remain blocked or pending",
+        )
+        artifact_text = json.dumps(artifact, sort_keys=True)
+        require(
+            "local://template" in artifact_text
+            or artifact.get("customer_data_required") is False,
+            f"evidence template {artifact_name} must preserve template placeholder URIs",
+        )
+    worker_execution = artifacts.get("worker_data_pipeline_execution_report.json")
+    require(
+        worker_execution is not None
+        and worker_execution.get("readiness_gate_status") == "blocked",
+        "worker data pipeline execution template must remain blocked",
+    )
+    scoring_readback = artifacts.get("scoring_readback_report.json")
+    require(
+        scoring_readback is not None and scoring_readback.get("readback_status") == "blocked",
+        "scoring readback template must remain blocked",
     )
 
 

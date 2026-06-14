@@ -51,6 +51,32 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "forbidden placeholder string"):
                 validate_package(package_dir)
 
+    def test_rejects_evidence_template_that_claims_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "model_serving_slo_report.json"
+            report = _read_json(report_uri)
+            report["readiness_claim"] = True
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(AssertionError, "must not claim readiness"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_execution_template_marked_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            report["readiness_gate_status"] = "ready"
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(
+                AssertionError, "worker data pipeline execution template must remain blocked"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_without_package_validator_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
