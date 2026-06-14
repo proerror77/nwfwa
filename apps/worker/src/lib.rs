@@ -144,6 +144,9 @@ pub use worker_data_pipeline_execution::{
     submit_worker_data_pipeline_execution_report, WorkerDataPipelineExecutionReportSubmission,
 };
 
+mod worker_data_pipeline_run_status;
+pub use worker_data_pipeline_run_status::build_worker_data_pipeline_run_status_template;
+
 mod worker_data_pipeline_readiness;
 pub use worker_data_pipeline_readiness::{
     build_worker_data_pipeline_readiness_report, build_worker_data_pipeline_readiness_submission,

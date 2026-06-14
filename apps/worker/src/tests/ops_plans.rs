@@ -204,6 +204,10 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         "build-worker-data-pipeline-readiness-report"
     );
     assert_eq!(
+        plan["downstream_contracts"]["run_status_template"],
+        "build-worker-data-pipeline-run-status-template"
+    );
+    assert_eq!(
         plan["downstream_contracts"]["scheduler_execution_report"],
         "build-worker-data-pipeline-execution-report"
     );

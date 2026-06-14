@@ -416,6 +416,7 @@ pub fn build_worker_data_pipeline_plan(
         ],
         "downstream_contracts": {
             "readiness_report": "build-worker-data-pipeline-readiness-report",
+            "run_status_template": "build-worker-data-pipeline-run-status-template",
             "scheduler_execution_report": "build-worker-data-pipeline-execution-report"
         }
     }))

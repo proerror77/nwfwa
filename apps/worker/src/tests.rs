@@ -26,6 +26,7 @@ mod training_output_enrichment;
 mod unbundling_comparator;
 mod worker_data_pipeline_execution;
 mod worker_data_pipeline_readiness;
+mod worker_data_pipeline_run_status;
 
 async fn read_http_request(socket: &mut tokio::net::TcpStream) -> String {
     use tokio::io::AsyncReadExt;
