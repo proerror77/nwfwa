@@ -180,6 +180,17 @@ OCR_VECTOR_ANALYTICS_ACCEPTANCE_CHECK_IDS = {
     "ocr_vector_analytics_evidence_refs_present",
 }
 
+SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES = {
+    "scoring_feature_contexts:",
+    "provider_profile_window_rollups:",
+    "sanctions_sync_reports:",
+    "provider_graph_signal_rollups:",
+    "peer_benchmarks:",
+    "episode_rollups:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -591,6 +602,19 @@ def validate_scoring_readback_evidence(report: dict) -> None:
     require(
         isinstance(checks, list) and len(checks) == expected_count,
         "scoring readback evidence checks must match expected_evidence_prefix_count",
+    )
+    checked_prefixes = {
+        check.get("expected_evidence_prefix")
+        for check in checks
+        if isinstance(check, dict)
+    }
+    missing_required_prefixes = sorted(
+        SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES - checked_prefixes
+    )
+    require(
+        not missing_required_prefixes,
+        "scoring readback evidence checks missing required worker score-response prefixes: "
+        + ", ".join(missing_required_prefixes),
     )
     for check in checks:
         require(

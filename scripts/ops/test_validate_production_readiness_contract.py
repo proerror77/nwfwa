@@ -7,6 +7,7 @@ import copy
 import unittest
 
 from scripts.ops.validate_production_readiness_contract import (
+    SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES,
     WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
     WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES,
@@ -92,6 +93,21 @@ def worker_execution_report(include_snapshot_evidence: bool = True) -> dict:
 
 
 def scoring_readback_report() -> dict:
+    checks = [
+        {
+            "expected_evidence_prefix": prefix,
+            "matched": True,
+            "matched_evidence_refs": [
+                f"{prefix}s3://customer-prod-artifacts/{prefix.rstrip(':')}/report.json"
+            ],
+        }
+        for prefix in sorted(SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES)
+    ]
+    observed_evidence_refs = [
+        reference
+        for check in checks
+        for reference in check["matched_evidence_refs"]
+    ]
     return {
         "report_kind": "scoring_readback_report",
         "report_version": 1,
@@ -102,28 +118,10 @@ def scoring_readback_report() -> dict:
         "input_uri": "s3://customer-prod-artifacts/scoring-readback/input.json",
         "score_request_uri": "s3://customer-prod-artifacts/scoring-readback/request.json",
         "score_response_uri": "s3://customer-prod-artifacts/scoring-readback/response.json",
-        "expected_evidence_prefix_count": 2,
-        "matched_evidence_prefix_count": 2,
-        "checks": [
-            {
-                "expected_evidence_prefix": "scoring_feature_contexts:",
-                "matched": True,
-                "matched_evidence_refs": [
-                    "scoring_feature_contexts:s3://customer-prod-artifacts/scoring-context/report.json"
-                ],
-            },
-            {
-                "expected_evidence_prefix": "peer_benchmarks:",
-                "matched": True,
-                "matched_evidence_refs": [
-                    "peer_benchmarks:s3://customer-prod-artifacts/peer/report.json"
-                ],
-            },
-        ],
-        "observed_evidence_refs": [
-            "scoring_feature_contexts:s3://customer-prod-artifacts/scoring-context/report.json",
-            "peer_benchmarks:s3://customer-prod-artifacts/peer/report.json",
-        ],
+        "expected_evidence_prefix_count": len(checks),
+        "matched_evidence_prefix_count": len(checks),
+        "checks": checks,
+        "observed_evidence_refs": observed_evidence_refs,
         "blockers": [],
         "review_task_count": 0,
         "review_tasks": [],
@@ -204,6 +202,21 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
 
     def test_scoring_readback_accepts_verified_response_artifact(self) -> None:
         validate_scoring_readback_evidence(scoring_readback_report())
+
+    def test_scoring_readback_requires_all_worker_score_response_prefixes(self) -> None:
+        report = scoring_readback_report()
+        report["checks"] = [
+            check
+            for check in report["checks"]
+            if check["expected_evidence_prefix"] != "provider_graph_signal_rollups:"
+        ]
+        report["expected_evidence_prefix_count"] = len(report["checks"])
+        report["matched_evidence_prefix_count"] = len(report["checks"])
+
+        with self.assertRaisesRegex(
+            AssertionError, "provider_graph_signal_rollups:"
+        ):
+            validate_scoring_readback_evidence(report)
 
     def test_scoring_readback_rejects_blocked_contract_only_report(self) -> None:
         report = scoring_readback_report()

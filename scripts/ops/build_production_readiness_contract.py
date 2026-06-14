@@ -122,7 +122,7 @@ SCORING_READBACK_ACCEPTANCE_CHECKS = [
     },
     {
         "check_id": "expected_evidence_prefixes_matched",
-        "description": "Every expected worker evidence prefix was observed in the captured score response.",
+        "description": "Every expected worker evidence prefix was observed in the captured score response, including scoring context, provider profile, sanctions, provider graph, peer benchmark, episode, clinical compatibility, and unbundling prefixes.",
     },
     {
         "check_id": "no_scoring_readback_review_tasks",
