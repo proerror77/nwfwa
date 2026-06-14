@@ -70,6 +70,36 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_source_template_that_claims_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            source_uri = package_dir / "sources" / "model-serving-slo-source.json"
+            source = _read_json(source_uri)
+            source["readiness_claim"] = True
+            _write_json(source_uri, source)
+
+            with self.assertRaisesRegex(AssertionError, "must not claim readiness"):
+                validate_package(package_dir)
+
+    def test_rejects_source_template_missing_required_evidence_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            source_uri = package_dir / "sources" / "model-serving-slo-source.json"
+            source = _read_json(source_uri)
+            source["evidence_refs"] = [
+                reference
+                for reference in source["evidence_refs"]
+                if not reference.startswith("probability_calibration_reports:")
+            ]
+            _write_json(source_uri, source)
+
+            with self.assertRaisesRegex(
+                AssertionError, "probability_calibration_reports:"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_worker_readiness_input_missing_required_job(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

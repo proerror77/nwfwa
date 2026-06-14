@@ -33,6 +33,31 @@ REQUIRED_SOURCE_TEMPLATES = {
     "sources/model-serving-slo-source.json",
     "sources/ocr-vector-analytics-source.json",
 }
+REQUIRED_SOURCE_TEMPLATE_EVIDENCE_PREFIXES = {
+    "sources/customer-data-governance-source.json": {
+        "dataset_provenance:",
+        "label_provenance:",
+        "holdout_split:",
+        "shadow_traffic_plan:",
+    },
+    "sources/retention-legal-hold-source.json": {
+        "retention_policy:",
+        "legal_hold_policy:",
+    },
+    "sources/model-serving-slo-source.json": {
+        "model_serving:",
+        "model_artifact:",
+        "probability_calibration_reports:",
+    },
+    "sources/ocr-vector-analytics-source.json": {
+        "ai_evidence_execution:",
+        "ocr_outputs:",
+        "embedding_jobs:",
+        "retrieval_audits:",
+        "analytics_exports:",
+        "clickhouse_dashboard:",
+    },
+}
 REQUIRED_WORKER_TEMPLATES = {
     "worker/score_request.json",
     "worker/scoring_readback_input.json",
@@ -137,6 +162,7 @@ def validate_package(package_dir: Path) -> dict:
     validate_index_entries(package_dir, index, "worker_templates", REQUIRED_WORKER_TEMPLATES)
     validate_index_entries(package_dir, index, "runbooks", REQUIRED_RUNBOOKS)
     validate_command_includes_package_validator(index.get("validation_command"), "index")
+    validate_source_templates(package_dir)
     validate_worker_templates(package_dir)
     validate_runbook(package_dir)
     validate_render_summary_if_present(package_dir, index)
@@ -208,6 +234,29 @@ def validate_evidence_templates(artifacts: dict[str, dict]) -> None:
         "scoring readback template must remain blocked",
     )
     validate_scoring_readback_template(scoring_readback)
+
+
+def validate_source_templates(package_dir: Path) -> None:
+    for template_path, required_prefixes in REQUIRED_SOURCE_TEMPLATE_EVIDENCE_PREFIXES.items():
+        source = load_json(package_dir / template_path)
+        require(
+            source.get("artifact_kind") == "production_readiness_source_template",
+            f"source template {template_path} has wrong artifact_kind",
+        )
+        require(
+            source.get("status") == "pending_customer_input",
+            f"source template {template_path} must stay pending customer input",
+        )
+        require(
+            source.get("readiness_claim") is False,
+            f"source template {template_path} must not claim readiness",
+        )
+        evidence_refs = source.get("evidence_refs")
+        for prefix in required_prefixes:
+            require(
+                evidence_refs_include_prefix(evidence_refs, prefix),
+                f"source template {template_path} evidence_refs missing {prefix}",
+            )
 
 
 def validate_worker_execution_template(report: dict) -> None:
