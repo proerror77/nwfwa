@@ -5,6 +5,7 @@ use api_server::{
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
+    Router,
 };
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -700,6 +701,249 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
 }
 
 #[tokio::test]
+async fn score_response_contains_all_worker_readback_prefixes() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/providers/sanctions-sync-reports",
+        r#"{
+          "actor": "worker:sync-oig-sam-sanctions",
+          "notes": "readback prefix sanctions evidence",
+          "source_report_uri": "local://artifacts/readback/sanctions_sync_report.json",
+          "report_kind": "oig_sam_sanctions_sync_report",
+          "run_date": "2026-06-14",
+          "source_uri": "local://inputs/readback/oig-sam-snapshot.json",
+          "source_date": "2026-06-14",
+          "sync_status": "completed",
+          "source_record_count": 1,
+          "valid_record_count": 1,
+          "invalid_record_count": 0,
+          "provider_upserts": [
+            {
+              "sanction_key": "OIG:PRV-READBACK-ALL",
+              "provider_id": "PRV-READBACK-ALL",
+              "provider_name": "Readback All Hospital",
+              "list": "OIG",
+              "source_record_id": "OIG-READBACK-ALL",
+              "effective_date": "2026-06-01",
+              "risk_feature": "provider_sanctions_excluded",
+              "risk_score": 100,
+              "evidence_refs": ["provider_sanctions:PRV-READBACK-ALL:oig"]
+            }
+          ],
+          "evidence_refs": [
+            "sanctions_sync_reports:local://artifacts/readback/sanctions_sync_report.json",
+            "sanctions_source_snapshot:local://inputs/readback/oig-sam-snapshot.json"
+          ],
+          "governance_boundary": "sanctions sync submission writes provider sanctions only; it must not change scoring policy, assign fraud labels, or adjudicate claims"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/providers/profile-window-rollups",
+        r#"{
+          "actor": "worker:build-provider-profile-windows",
+          "notes": "readback prefix provider profile evidence",
+          "source_report_uri": "local://artifacts/readback/provider_profile_window_rollup.json",
+          "report_kind": "provider_profile_window_rollup",
+          "as_of_date": "2026-06-14",
+          "source_uri": "local://inputs/readback/provider-profile-claims.json",
+          "provider_count": 1,
+          "claim_count": 3,
+          "provider_profiles": [
+            {
+              "provider_id": "PRV-READBACK-ALL",
+              "specialty": "dental",
+              "network_status": "in_network",
+              "windows": [
+                {
+                  "window_days": 30,
+                  "claim_count": 3,
+                  "total_claim_amount": 1800.0,
+                  "high_cost_item_ratio": 0.25,
+                  "diagnosis_procedure_mismatch_rate": 0.1,
+                  "peer_amount_percentile": 75,
+                  "peer_frequency_percentile": 72,
+                  "review_failure_count": 0,
+                  "confirmed_fwa_count": 0,
+                  "false_positive_count": 0
+                }
+              ],
+              "evidence_refs": ["provider_profile_windows:PRV-READBACK-ALL", "claims:CLM-READBACK-ALL"]
+            }
+          ],
+          "evidence_refs": [
+            "provider_profile_window_rollups:local://artifacts/readback/provider_profile_window_rollup.json",
+            "provider_profile_claim_snapshot:local://inputs/readback/provider-profile-claims.json"
+          ],
+          "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/providers/graph-signal-rollups",
+        r#"{
+          "actor": "worker:build-provider-graph-signals",
+          "notes": "readback prefix provider graph evidence",
+          "source_report_uri": "local://artifacts/readback/provider_graph_signal_rollup.json",
+          "report_kind": "provider_graph_signal_rollup",
+          "as_of_date": "2026-06-14",
+          "source_uri": "local://inputs/readback/provider-graph-claims.json",
+          "provider_count": 1,
+          "claim_count": 3,
+          "provider_relationships": [
+            {
+              "provider_id": "PRV-READBACK-ALL",
+              "high_risk_neighbor_ratio": 0.31,
+              "provider_patient_overlap_score": 0.62,
+              "referral_concentration_score": 0.74,
+              "billing_ring_membership": true,
+              "temporal_co_billing_frequency_7d": 0.51,
+              "referral_concentration_entropy": 0.2,
+              "shared_member_provider_count": 2,
+              "connected_confirmed_fwa_count": 2,
+              "network_component_risk_score": 78,
+              "evidence_refs": ["provider_graph_rollups:PRV-READBACK-ALL", "claims:CLM-READBACK-ALL"]
+            }
+          ],
+          "evidence_refs": [
+            "provider_graph_signal_rollups:local://artifacts/readback/provider_graph_signal_rollup.json",
+            "provider_graph_claim_snapshot:local://inputs/readback/provider-graph-claims.json"
+          ],
+          "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/scoring-feature-context-materializations",
+        r#"{
+          "materialization_id": "sfc-mat-readback-all-2026-06-14",
+          "actor": "worker:scoring-feature-contexts",
+          "notes": "readback prefix scoring context evidence",
+          "report_uri": "local://artifacts/readback/scoring_feature_context_report.json",
+          "report_kind": "scoring_feature_context_materialization",
+          "as_of_date": "2026-06-14",
+          "source_uris": {
+            "claims_uri": "local://inputs/readback/scoring-claims.json",
+            "episode_rollups_uri": "local://artifacts/readback/episode_aggregation_report.json",
+            "peer_benchmarks_uri": "local://artifacts/readback/peer_percentile_benchmark.json",
+            "clinical_compatibility_uri": "local://artifacts/readback/clinical_compatibility_reference_report.json",
+            "unbundling_candidates_uri": "local://artifacts/readback/unbundling_comparator_report.json"
+          },
+          "claim_count": 1,
+          "context_count": 1,
+          "contexts": [
+            {
+              "claim_id": "CLM-READBACK-ALL",
+              "peer_context": {"claim_amount_peer_percentile": 94},
+              "clinical_compatibility_context": {
+                "diagnosis_procedure_match_score": 0.22,
+                "data_source": "worker.icd_cpt_compatibility_reference:readback"
+              },
+              "episode_utilization_context": {
+                "member_provider_claim_count_30d": 5,
+                "duplicate_claim_similarity_score": 0.6,
+                "procedure_frequency_peer_percentile": 91,
+                "unbundling_candidate_count": 2,
+                "data_source": "worker.episode_utilization_rollup"
+              },
+              "evidence_refs": [
+                "claims:CLM-READBACK-ALL",
+                "scoring_feature_contexts:CLM-READBACK-ALL",
+                "unbundling:READBACK-ALL"
+              ]
+            }
+          ],
+          "evidence_refs": [
+            "scoring_feature_contexts:local://artifacts/readback/scoring_feature_context_report.json",
+            "scoring_feature_context_claim_snapshot:local://inputs/readback/scoring-claims.json",
+            "episode_rollups:local://artifacts/readback/episode_aggregation_report.json",
+            "peer_benchmarks:local://artifacts/readback/peer_percentile_benchmark.json",
+            "clinical_compatibility:local://artifacts/readback/clinical_compatibility_reference_report.json",
+            "unbundling_candidates:local://artifacts/readback/unbundling_comparator_report.json"
+          ],
+          "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = post_json(
+        app,
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-READBACK-ALL",
+            "claim_amount": "9500",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "IMG-900",
+              "item_type": "procedure",
+              "description": "Imaging bundle",
+              "quantity": 1,
+              "unit_amount": "9500",
+              "total_amount": "9500"
+            }
+          ],
+          "member": {"external_member_id": "MBR-READBACK-ALL"},
+          "policy": {
+            "external_policy_id": "POL-READBACK-ALL",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-READBACK-ALL",
+            "name": "Readback All Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "Medium"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    for prefix in [
+        "scoring_feature_contexts:",
+        "provider_profile_window_rollups:",
+        "sanctions_sync_reports:",
+        "provider_graph_signal_rollups:",
+        "peer_benchmarks:",
+        "episode_rollups:",
+        "clinical_compatibility:",
+        "unbundling_candidates:",
+    ] {
+        assert!(
+            evidence_refs.iter().any(|reference| reference
+                .as_str()
+                .is_some_and(|value| value.starts_with(prefix))),
+            "score response missing readback prefix {prefix}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
     let app = build_app(test_config()).unwrap();
 
@@ -1249,4 +1493,19 @@ async fn scores_full_payload_with_persisted_unbundling_candidates() {
     assert!(evidence_refs.contains(&serde_json::json!(
         "unbundling_comparator_candidate:unbundling:UNBUNDLE-KNEE-001:MBR-UNB-1|PRV-UNB-1:2026-06-13"
     )));
+}
+
+async fn post_json(app: Router, uri: &str, body: &'static str) -> (StatusCode, serde_json::Value) {
+    let request = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(body))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
+    (status, body)
 }
