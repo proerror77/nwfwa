@@ -262,11 +262,15 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
         {
           "job_kind": "oig_sam_sanctions_sync",
           "required_permission": "ops:providers:write",
+          "coverage_window_days": 1,
+          "source_freshness_status": "fresh",
           "readiness_status": "ready"
         },
         {
           "job_kind": "provider_profile_window_rollup",
           "required_permission": "ops:providers:write",
+          "coverage_window_days": 0,
+          "source_freshness_status": "stale",
           "readiness_status": "blocked",
           "blockers": ["customer_approval_missing"]
         }
@@ -992,6 +996,30 @@ async fn worker_data_pipeline_readiness_report_rejects_ready_job_blockers() {
     assert_eq!(
         body["code"],
         "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_without_fresh_source_window() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["coverage_window_days"] = serde_json::json!(0);
+    payload["job_readiness"][0]["source_freshness_status"] = serde_json::json!("stale");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_COVERAGE_WINDOW"
     );
 }
 

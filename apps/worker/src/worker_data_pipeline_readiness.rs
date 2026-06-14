@@ -20,7 +20,9 @@ pub struct WorkerDataPipelineReadinessCheck {
     pub external_fetch_configured: bool,
     pub row_count: Option<u64>,
     pub minimum_row_count: Option<u64>,
+    pub coverage_window_days: Option<u64>,
     pub data_quality_status: Option<String>,
+    pub source_freshness_status: Option<String>,
     #[serde(default)]
     pub evidence_refs: Vec<String>,
 }
@@ -81,7 +83,9 @@ pub fn build_worker_data_pipeline_readiness_input_template(
                 "external_fetch_configured": false,
                 "row_count": serde_json::Value::Null,
                 "minimum_row_count": 1,
+                "coverage_window_days": serde_json::Value::Null,
                 "data_quality_status": "pending_customer_validation",
+                "source_freshness_status": "pending_customer_validation",
                 "evidence_refs": []
             })
         })
@@ -155,7 +159,10 @@ pub fn build_worker_data_pipeline_readiness_report(
                     .unwrap_or(false),
                 "row_count": check.and_then(|check| check.row_count),
                 "minimum_row_count": check.and_then(|check| check.minimum_row_count),
+                "coverage_window_days": check.and_then(|check| check.coverage_window_days),
                 "data_quality_status": check.and_then(|check| check.data_quality_status.clone()),
+                "source_freshness_status": check
+                    .and_then(|check| check.source_freshness_status.clone()),
                 "readiness_status": if blockers.is_empty() { "ready" } else { "blocked" },
                 "blockers": blockers,
                 "evidence_refs": check
@@ -345,6 +352,12 @@ fn readiness_blockers(
         .is_some_and(|status| matches!(status, "blocked" | "failed"))
     {
         blockers.push("data_quality_status_blocked".into());
+    }
+    if check.coverage_window_days.unwrap_or(0) == 0 {
+        blockers.push("missing_coverage_window".into());
+    }
+    if check.source_freshness_status.as_deref() != Some("fresh") {
+        blockers.push("source_freshness_not_confirmed".into());
     }
     if check.evidence_refs.is_empty()
         || check

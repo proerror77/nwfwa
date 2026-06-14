@@ -42,6 +42,11 @@ fn builds_worker_data_pipeline_readiness_input_template() {
     assert_eq!(checks[0]["api_path"], serde_json::Value::Null);
     assert_eq!(checks[0]["required_permission"], serde_json::Value::Null);
     assert_eq!(checks[0]["minimum_row_count"], 1);
+    assert_eq!(checks[0]["coverage_window_days"], serde_json::Value::Null);
+    assert_eq!(
+        checks[0]["source_freshness_status"],
+        "pending_customer_validation"
+    );
     assert_eq!(
         checks[1]["depends_on"],
         serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
@@ -98,6 +103,14 @@ fn readiness_input_template_remains_blocked_until_customer_evidence_is_filled() 
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("missing_evidence_refs")));
+    assert!(first_job["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("missing_coverage_window")));
+    assert!(first_job["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("source_freshness_not_confirmed")));
 }
 
 #[test]
@@ -127,6 +140,8 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
                     "row_count": 12,
                     "minimum_row_count": 1,
                     "data_quality_status": "passed",
+                    "coverage_window_days": 1,
+                    "source_freshness_status": "fresh",
                     "evidence_refs": ["customer_approval:sanctions:2026-06-14"]
                 },
                 {
@@ -136,6 +151,8 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
                     "row_count": 20,
                     "minimum_row_count": 100,
                     "data_quality_status": "blocked",
+                    "coverage_window_days": 0,
+                    "source_freshness_status": "stale",
                     "evidence_refs": []
                 }
             ]
@@ -179,6 +196,14 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("customer_approval_missing")));
+    assert!(jobs[2]["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("missing_coverage_window")));
+    assert!(jobs[2]["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("source_freshness_not_confirmed")));
     assert!(jobs[4]["blockers"]
         .as_array()
         .unwrap()
@@ -227,6 +252,8 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
                 "row_count": 100,
                 "minimum_row_count": 10,
                 "data_quality_status": "passed",
+                "coverage_window_days": if job_kind == "peer_percentile_benchmark" { 365 } else { 90 },
+                "source_freshness_status": "fresh",
                 "evidence_refs": [format!("customer_approval:{job_kind}:2026-06-14")]
             })
         })

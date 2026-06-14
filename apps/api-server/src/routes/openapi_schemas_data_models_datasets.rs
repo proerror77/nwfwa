@@ -550,6 +550,16 @@ pub(super) fn dataset_schemas() -> Value {
                         "properties": {
                             "job_kind": { "type": "string", "minLength": 1 },
                             "readiness_status": { "type": "string", "enum": ["ready", "blocked"] },
+                            "coverage_window_days": {
+                                "type": ["integer", "null"],
+                                "minimum": 1,
+                                "description": "Customer-approved source coverage window in days; required and positive for ready jobs."
+                            },
+                            "source_freshness_status": {
+                                "type": ["string", "null"],
+                                "enum": ["fresh", "stale", "pending_customer_validation", null],
+                                "description": "Customer-confirmed source freshness; must be fresh for ready jobs."
+                            },
                             "blockers": {
                                 "type": "array",
                                 "items": { "type": "string", "minLength": 1 },

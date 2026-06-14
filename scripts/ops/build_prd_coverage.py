@@ -140,6 +140,8 @@ CAPABILITIES = [
             ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "blocked_dependencies"),
             ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "readiness_status"),
             ("apps/worker/src/worker_data_pipeline_readiness.rs", "build_worker_data_pipeline_readiness_input_template"),
+            ("apps/worker/src/worker_data_pipeline_readiness.rs", "source_freshness_status"),
+            ("apps/worker/src/worker_data_pipeline_readiness.rs", "coverage_window_days"),
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "readiness_report_uri"),
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "build_command"),
             ("apps/worker/src/ops_plans.rs", "required_permission"),

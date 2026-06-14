@@ -161,6 +161,10 @@ As of the P1/P2 remediation commits after this review:
   can start from the planned job list, readiness report URI, build commands,
   source inputs, dependency list, artifact-only markers, and planned targets
   instead of hand-authoring the execution input JSON.
+- Worker data-pipeline readiness now requires customer evidence for fresh
+  source data and a positive coverage window before a job can be marked ready,
+  so stale peer/profile/graph/episode/calibration inputs cannot be submitted as
+  production-ready prerequisites.
 - The claims scoring API now accepts inline materialized worker contexts and
   also loads the latest persisted scoring-feature-context materialization by
   claim when no inline context is supplied, passing peer, clinical
