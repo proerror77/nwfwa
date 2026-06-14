@@ -142,6 +142,8 @@ CAPABILITIES = [
             ("apps/api-server/src/routes/ops_datasets.rs", "worker_data_pipeline.execution_report.submitted"),
             ("apps/api-server/src/routes/ops_models_mlops.rs", "submit_probability_calibration_report"),
             ("apps/api-server/src/repository/trait.rs", "save_scoring_feature_context_materialization"),
+            ("apps/api-server/src/repository/trait.rs", "save_clinical_compatibility_references"),
+            ("apps/api-server/src/repository/trait.rs", "save_unbundling_comparator_candidates"),
         ],
         "customer_data_required": True,
     },
