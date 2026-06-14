@@ -205,6 +205,7 @@ pub fn build_worker_data_pipeline_execution_submission(
         .and_then(|value| value.as_array())
         .cloned()
         .context("worker data pipeline execution report requires job_executions")?;
+    validate_completed_job_evidence_prefixes(&job_executions)?;
     let review_tasks = report
         .get("review_tasks")
         .and_then(|value| value.as_array())
@@ -445,4 +446,101 @@ fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json
                     .is_some_and(|value| value.starts_with(prefix))
             })
     })
+}
+
+fn validate_completed_job_evidence_prefixes(
+    job_executions: &[serde_json::Value],
+) -> anyhow::Result<()> {
+    for job in job_executions {
+        if json_string(job, "execution_status").as_deref() != Some("completed") {
+            continue;
+        }
+        let Some(job_kind) = json_string(job, "job_kind") else {
+            continue;
+        };
+        let Some(required_prefixes) = canonical_required_evidence_prefixes(&job_kind) else {
+            continue;
+        };
+        for prefix in required_prefixes {
+            if !job
+                .get("required_evidence_prefixes")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .any(|value| value.as_str() == Some(prefix))
+            {
+                bail!("{job_kind} required_evidence_prefixes must include {prefix}");
+            }
+            if !job
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .any(|value| {
+                    value
+                        .as_str()
+                        .is_some_and(|reference| reference.starts_with(prefix))
+                })
+            {
+                bail!("{job_kind} evidence_refs must include {prefix}");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn canonical_required_evidence_prefixes(job_kind: &str) -> Option<&'static [&'static str]> {
+    match job_kind {
+        "oig_sam_sanctions_snapshot_fetch" => Some(&["oig_sam_snapshot:"]),
+        "oig_sam_sanctions_sync" => Some(&["sanctions_sync_reports:"]),
+        "provider_profile_window_rollup" => Some(&[
+            "provider_profile_window_rollups:",
+            "provider_profile_claim_snapshot:",
+        ]),
+        "provider_graph_signal_rollup" => Some(&[
+            "provider_graph_signal_rollups:",
+            "provider_graph_claim_snapshot:",
+        ]),
+        "peer_percentile_benchmark" => {
+            Some(&["peer_benchmarks:", "peer_benchmark_claim_snapshot:"])
+        }
+        "episode_aggregation" => Some(&["episode_rollups:", "episode_claim_snapshot:"]),
+        "clinical_compatibility_reference" => Some(&[
+            "clinical_compatibility_references:",
+            "clinical_compatibility_reference:",
+            "clinical_policy_authority:",
+        ]),
+        "unbundling_comparator" => Some(&[
+            "unbundling_comparator_candidates:",
+            "unbundling_comparator_input:",
+        ]),
+        "scoring_feature_context_materialization" => Some(&[
+            "scoring_feature_contexts:",
+            "scoring_feature_context_claim_snapshot:",
+            "episode_rollups:",
+            "peer_benchmarks:",
+            "clinical_compatibility:",
+            "unbundling_candidates:",
+        ]),
+        "scoring_online_readback" => Some(&[
+            "scoring_readback_reports:",
+            "scoring_readback_inputs:",
+            "scoring_readback_score_requests:",
+            "scoring_readback_score_responses:",
+            "scoring_feature_contexts:",
+            "provider_profile_window_rollups:",
+            "sanctions_sync_reports:",
+            "provider_graph_signal_rollups:",
+            "peer_benchmarks:",
+            "episode_rollups:",
+            "clinical_compatibility:",
+            "unbundling_candidates:",
+        ]),
+        "probability_calibration_evidence" => Some(&[
+            "probability_calibration_reports:",
+            "probability_calibration_input:",
+            "calibration_labels:",
+        ]),
+        _ => None,
+    }
 }
