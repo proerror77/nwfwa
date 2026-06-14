@@ -70,6 +70,7 @@ pub fn build_worker_data_pipeline_readiness_input_template(
                 "cadence": json_string(job, "cadence"),
                 "build_command": json_string(job, "build_command"),
                 "source_input": json_string(job, "source_input"),
+                "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),
                 "depends_on": job
                     .get("depends_on")
@@ -145,6 +146,7 @@ pub fn build_worker_data_pipeline_readiness_report(
                 "job_kind": job_kind,
                 "cadence": json_string(job, "cadence"),
                 "source_input": json_string(job, "source_input"),
+                "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),
                 "artifact_uri": check.and_then(|check| check.artifact_uri.clone()),
                 "customer_approved": check.map(|check| check.customer_approved).unwrap_or(false),
@@ -173,6 +175,7 @@ pub fn build_worker_data_pipeline_readiness_report(
                 "task_kind": "worker_data_pipeline_readiness_review",
                 "customer_scope_id": customer_scope_id,
                 "job_kind": job["job_kind"].clone(),
+                "api_path": job["api_path"].clone(),
                 "required_permission": job["required_permission"].clone(),
                 "blockers": job["blockers"].clone(),
                 "review_queue": "worker_data_pipeline_ops",

@@ -109,6 +109,7 @@ pub fn build_worker_data_pipeline_execution_report(
                 "run_id": run_id,
                 "job_kind": execution["job_kind"].clone(),
                 "execution_status": execution["execution_status"].clone(),
+                "api_path": execution["api_path"].clone(),
                 "required_permission": execution["required_permission"].clone(),
                 "review_queue": "worker_data_pipeline_ops",
                 "required_review": "review missing, failed, or unsubmitted worker data pipeline artifact before downstream scoring use"

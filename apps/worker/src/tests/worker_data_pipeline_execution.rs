@@ -95,6 +95,7 @@ fn builds_worker_data_pipeline_execution_report() {
         .expect("review tasks")
         .iter()
         .any(|task| task["job_kind"] == "provider_profile_window_rollup"
+            && task["api_path"] == "/api/v1/ops/providers/profile-window-rollups"
             && task["required_permission"] == "ops:providers:write"));
     assert!(report["review_tasks"]
         .as_array()
@@ -174,6 +175,7 @@ fn blocks_worker_data_pipeline_job_when_dependency_is_not_completed() {
         .iter()
         .any(|task| task["job_kind"] == "oig_sam_sanctions_sync"
             && task["execution_status"] == "dependency_not_completed"
+            && task["api_path"] == "/api/v1/ops/providers/sanctions-sync-reports"
             && task["required_permission"] == "ops:providers:write"));
 }
 
