@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ops.validate_production_readiness_contract import (
+    MODEL_SERVING_SLO_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
     WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES,
@@ -45,9 +46,7 @@ REQUIRED_SOURCE_TEMPLATE_EVIDENCE_PREFIXES = {
         "legal_hold_policy:",
     },
     "sources/model-serving-slo-source.json": {
-        "model_serving:",
-        "model_artifact:",
-        "probability_calibration_reports:",
+        *MODEL_SERVING_SLO_EVIDENCE_PREFIXES,
     },
     "sources/ocr-vector-analytics-source.json": {
         "ai_evidence_execution:",
@@ -234,6 +233,13 @@ def validate_evidence_templates(artifacts: dict[str, dict]) -> None:
         "scoring readback template must remain blocked",
     )
     validate_scoring_readback_template(scoring_readback)
+    model_serving_slo = artifacts.get("model_serving_slo_report.json")
+    require(
+        model_serving_slo is not None
+        and model_serving_slo.get("artifact_kind") == "model_serving_slo_report",
+        "model serving SLO template must be present",
+    )
+    validate_model_serving_slo_template(model_serving_slo)
 
 
 def validate_source_templates(package_dir: Path) -> None:
@@ -339,6 +345,15 @@ def validate_scoring_readback_template(report: dict) -> None:
         require(
             evidence_refs_include_prefix(evidence_refs, prefix),
             f"scoring readback template evidence_refs missing {prefix}",
+        )
+
+
+def validate_model_serving_slo_template(report: dict) -> None:
+    evidence_refs = report.get("evidence_refs")
+    for prefix in MODEL_SERVING_SLO_EVIDENCE_PREFIXES:
+        require(
+            evidence_refs_include_prefix(evidence_refs, prefix),
+            f"model serving SLO template evidence_refs missing {prefix}",
         )
 
 

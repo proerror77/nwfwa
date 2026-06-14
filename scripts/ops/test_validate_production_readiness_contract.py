@@ -15,6 +15,7 @@ from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
+    validate_model_serving_slo_evidence,
     validate_scoring_readback_evidence,
     validate_worker_data_pipeline_execution_evidence,
 )
@@ -134,6 +135,32 @@ def scoring_readback_report() -> dict:
     }
 
 
+def model_serving_slo_report() -> dict:
+    return {
+        "artifact_kind": "model_serving_slo_report",
+        "status": "passed",
+        "model_key": "baseline_fwa",
+        "model_version": "0.1.0",
+        "latency_slo_ms": 250,
+        "p95_latency_ms": 120,
+        "error_rate_slo": 0.01,
+        "error_rate": 0.001,
+        "checksum_verified": True,
+        "signature_verified": True,
+        "fallback_status": "healthy",
+        "rollback_ready": True,
+        "probability_calibration_status": "calibrated",
+        "calibrated_probability_serving_active": True,
+        "evidence_refs": [
+            "model_serving:s3://customer-prod-artifacts/serving/slo.json",
+            "model_artifact:s3://customer-prod-artifacts/models/baseline.onnx",
+            "probability_calibration_reports:s3://customer-prod-artifacts/calibration/report.json",
+            "probability_calibration_input:s3://customer-prod-artifacts/calibration/input.json",
+            "calibration_labels:s3://customer-prod-artifacts/calibration/labels.json",
+        ],
+    }
+
+
 class ProductionReadinessContractValidationTests(unittest.TestCase):
     def test_worker_execution_requires_source_snapshot_evidence_prefix(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=False)
@@ -181,6 +208,19 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AssertionError, "calibration_labels:"):
             validate_worker_data_pipeline_execution_evidence(report)
+
+    def test_model_serving_slo_requires_probability_calibration_label_lineage(
+        self,
+    ) -> None:
+        report = model_serving_slo_report()
+        report["evidence_refs"] = [
+            reference
+            for reference in report["evidence_refs"]
+            if not reference.startswith("calibration_labels:")
+        ]
+
+        with self.assertRaisesRegex(AssertionError, "calibration_labels:"):
+            validate_model_serving_slo_evidence(report)
 
     def test_worker_execution_requires_scoring_readback_response_lineage(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=True)

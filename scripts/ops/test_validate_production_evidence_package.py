@@ -91,12 +91,30 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             source["evidence_refs"] = [
                 reference
                 for reference in source["evidence_refs"]
-                if not reference.startswith("probability_calibration_reports:")
+                if not reference.startswith("calibration_labels:")
             ]
             _write_json(source_uri, source)
 
             with self.assertRaisesRegex(
-                AssertionError, "probability_calibration_reports:"
+                AssertionError, "calibration_labels:"
+            ):
+                validate_package(package_dir)
+
+    def test_rejects_model_serving_slo_template_missing_calibration_input_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "model_serving_slo_report.json"
+            report = _read_json(report_uri)
+            report["evidence_refs"] = [
+                reference
+                for reference in report["evidence_refs"]
+                if not reference.startswith("probability_calibration_input:")
+            ]
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(
+                AssertionError, "probability_calibration_input:"
             ):
                 validate_package(package_dir)
 

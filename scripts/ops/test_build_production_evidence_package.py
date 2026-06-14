@@ -100,6 +100,14 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn("model_key", model_slo)
             self.assertIn("latency_slo_ms", model_slo)
             self.assertIn("checksum_verified", model_slo)
+            self.assertIn(
+                "probability_calibration_input:local://template/probability-calibration-input.json",
+                model_slo["evidence_refs"],
+            )
+            self.assertIn(
+                "calibration_labels:local://template/calibration-labels.json",
+                model_slo["evidence_refs"],
+            )
             retention = artifacts["retention_legal_hold_report.json"]
             self.assertIn("destruction_workflow", retention)
             self.assertNotIn("destruction_requires_human_approval", retention)

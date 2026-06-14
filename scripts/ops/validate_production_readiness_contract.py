@@ -96,6 +96,14 @@ WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES = (
     "scoring_readback_score_responses:",
 )
 
+MODEL_SERVING_SLO_EVIDENCE_PREFIXES = (
+    "model_serving:",
+    "model_artifact:",
+    "probability_calibration_reports:",
+    "probability_calibration_input:",
+    "calibration_labels:",
+)
+
 WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
     "provider_profile_window_rollup": ("provider_profile_claim_snapshot:",),
     "provider_graph_signal_rollup": ("provider_graph_claim_snapshot:",),
@@ -751,7 +759,7 @@ def validate_model_serving_slo_evidence(report: dict) -> None:
         isinstance(evidence_refs, list) and evidence_refs,
         "model serving SLO evidence must include evidence_refs",
     )
-    for prefix in ("model_serving:", "model_artifact:", "probability_calibration_reports:"):
+    for prefix in MODEL_SERVING_SLO_EVIDENCE_PREFIXES:
         require(
             any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
             f"model serving SLO evidence_refs missing {prefix}",

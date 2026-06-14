@@ -19,6 +19,8 @@ REQUIRED_EVIDENCE_PREFIXES = (
     "model_serving:",
     "model_artifact:",
     "probability_calibration_reports:",
+    "probability_calibration_input:",
+    "calibration_labels:",
 )
 
 

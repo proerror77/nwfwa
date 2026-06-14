@@ -43,6 +43,8 @@ class ModelServingSloReportTests(unittest.TestCase):
         self.assertIn("probability_calibration_status_not_calibrated", report["blockers"])
         self.assertIn("calibrated_probability_serving_active_not_true", report["blockers"])
         self.assertIn("missing_probability_calibration_reports_evidence_ref", report["blockers"])
+        self.assertIn("missing_probability_calibration_input_evidence_ref", report["blockers"])
+        self.assertIn("missing_calibration_labels_evidence_ref", report["blockers"])
         with self.assertRaisesRegex(AssertionError, "p95 latency"):
             validate_model_serving_slo_evidence(report)
 
@@ -81,6 +83,8 @@ def _passing_source() -> dict:
             "model_serving:s3://customer-prod/serving/slo.json",
             "model_artifact:s3://customer-prod/models/baseline.onnx",
             "probability_calibration_reports:s3://customer-prod/calibration/report.json",
+            "probability_calibration_input:s3://customer-prod/calibration/input.json",
+            "calibration_labels:s3://customer-prod/calibration/labels.json",
         ],
     }
 

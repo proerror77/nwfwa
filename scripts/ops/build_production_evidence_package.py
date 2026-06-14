@@ -369,6 +369,13 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                 "rollback_ready": False,
                 "probability_calibration_status": "pending",
                 "calibrated_probability_serving_active": False,
+                "evidence_refs": [
+                    "model_serving:local://template/model-serving-slo.json",
+                    "model_artifact:local://template/model-artifact.json",
+                    "probability_calibration_reports:local://template/probability-calibration-report.json",
+                    "probability_calibration_input:local://template/probability-calibration-input.json",
+                    "calibration_labels:local://template/calibration-labels.json",
+                ],
             },
         )
     if gate_id == "ocr_vector_analytics_execution":
@@ -465,6 +472,8 @@ def source_template(gate_id: str, generated_at: str) -> dict | None:
                 "model_serving:local://template/model-serving-slo.json",
                 "model_artifact:local://template/model-artifact.json",
                 "probability_calibration_reports:local://template/probability-calibration-report.json",
+                "probability_calibration_input:local://template/probability-calibration-input.json",
+                "calibration_labels:local://template/calibration-labels.json",
             ],
         }
     if gate_id == "ocr_vector_analytics_execution":

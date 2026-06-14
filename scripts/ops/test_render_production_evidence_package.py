@@ -131,6 +131,8 @@ def _model_slo_source() -> dict:
             "model_serving:s3://customer-prod/serving/slo.json",
             "model_artifact:s3://customer-prod/models/baseline.onnx",
             "probability_calibration_reports:s3://customer-prod/calibration/report.json",
+            "probability_calibration_input:s3://customer-prod/calibration/input.json",
+            "calibration_labels:s3://customer-prod/calibration/labels.json",
         ],
     }
 

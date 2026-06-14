@@ -202,7 +202,7 @@ As of the P1/P2 remediation commits after this review:
 - The production readiness validator now deep-checks model-serving SLO
   evidence for model identity, p95 latency, error rate, checksum/signature
   verification, fallback health, rollback readiness, active calibrated-
-  probability serving, and calibration evidence refs.
+  probability serving, and calibration report/input/label lineage refs.
 - The production readiness validator now deep-checks customer-data governance
   evidence for approved dataset provenance, label provenance, holdout split,
   shadow-traffic plan, positive validation sample counts, and evidence refs.
@@ -351,7 +351,7 @@ so malformed reports fail before any governed write request is sent.
 | D-3 | PSI threshold actioning now creates monitoring/review artifacts. | Wire action artifacts into customer model-governance operations. |
 | D-4 | Rule hit-rate trending now computes 7-day vs. 90-day drift and emits review artifacts. | Validate thresholds against customer production traffic and rule governance cadence. |
 | D-5 | L3 anomaly scoring is still a heuristic baseline, but anomaly-upgrade readiness now has a worker report contract that checks the confirmed-FWA label threshold and 30-day recall trigger before opening upgrade review evidence. | Replace the online heuristic with IQR/MAD or ensemble scoring only after customer labels/history satisfy the readiness gates and the replacement is validated. |
-| D-6 | Raw sigmoid outputs are explicitly marked as `uncalibrated_raw_sigmoid`, calibration evidence report contracts exist, and model activation gates now require same-version passing probability-calibration evidence. | Fit and activate calibrated probability serving only after customer labels, holdout, and governance approval. |
+| D-6 | Raw sigmoid outputs are explicitly marked as `uncalibrated_raw_sigmoid`, calibration evidence report contracts exist, and model activation and production serving gates now require same-version passing probability-calibration evidence plus input/label lineage. | Fit and activate calibrated probability serving only after customer labels, holdout, and governance approval. |
 
 ## E. Compliance, Security, And HIPAA Gaps
 
