@@ -762,12 +762,13 @@ OCR/vector/analytics execution.
 The worker data-pipeline gate requires the customer
 `worker_data_pipeline_execution_report.json` to pass the contract acceptance
 checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
-zero review tasks, all governed worker job kinds completed, plan, run-status,
-and readiness evidence refs present, and the no-adjudication governance boundary
-preserved. All governed submit jobs must also show `submitted = true`, while
-the expected API path, required permission scope, and non-empty artifact URI
-are present. The artifact-only OIG/SAM source snapshot job must also report a
-non-empty artifact URI.
+zero review tasks, all governed worker job kinds completed, required execution
+URIs present, plan/run-status/readiness evidence refs present, and the
+no-adjudication governance boundary preserved. Every job must show
+`reported_status = succeeded` and no blocked dependencies. All governed submit
+jobs must also show `submitted = true`, while the expected API path, required
+permission scope, and non-empty artifact URI are present. The artifact-only
+OIG/SAM source snapshot job must also report a non-empty artifact URI.
 After the customer scheduler publishes production evidence, validate the worker
 pipeline execution artifact against those checks:
 

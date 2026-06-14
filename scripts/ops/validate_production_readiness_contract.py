@@ -74,10 +74,12 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS = {
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "report_kind_is_worker_data_pipeline_execution_report",
     "readiness_gate_status_ready",
+    "required_execution_uris_and_run_identity_present",
     "scheduler_status_completed",
     "pending_or_failed_job_count_zero",
     "review_task_count_zero",
     "required_job_kinds_completed",
+    "scheduler_reported_jobs_succeeded_without_dependency_blockers",
     "governed_submit_jobs_submitted",
     "source_snapshot_artifact_reported",
     "evidence_refs_include_plan_run_status_and_readiness",
@@ -165,6 +167,17 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         report.get("readiness_gate_status") == "ready",
         "worker data pipeline execution evidence must have readiness_gate_status ready",
     )
+    for field_name in (
+        "plan_uri",
+        "run_status_uri",
+        "readiness_report_uri",
+        "run_id",
+        "execution_date",
+    ):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"worker data pipeline execution evidence must include {field_name}",
+        )
     require(
         report.get("scheduler_status") == "completed",
         "worker data pipeline execution evidence must have scheduler_status completed",
@@ -197,6 +210,15 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         require(
             job.get("execution_status") == "completed",
             f"worker data pipeline job {job_kind} must be completed",
+        )
+        require(
+            job.get("reported_status") == "succeeded",
+            f"worker data pipeline job {job_kind} must have reported_status succeeded",
+        )
+        blocked_dependencies = job.get("blocked_dependencies")
+        require(
+            not blocked_dependencies,
+            f"worker data pipeline job {job_kind} must not have blocked_dependencies",
         )
     for job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
         job = jobs_by_kind[job_kind]

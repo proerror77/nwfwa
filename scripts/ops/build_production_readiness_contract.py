@@ -45,6 +45,10 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
         "description": "Execution evidence references a readiness report and has readiness_gate_status = ready.",
     },
     {
+        "check_id": "required_execution_uris_and_run_identity_present",
+        "description": "Execution evidence includes non-empty plan_uri, run_status_uri, readiness_report_uri, run_id, and execution_date.",
+    },
+    {
         "check_id": "scheduler_status_completed",
         "description": "Customer scheduler report has scheduler_status = completed.",
     },
@@ -59,6 +63,10 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     {
         "check_id": "required_job_kinds_completed",
         "description": "Every required worker data-pipeline job kind is present in job_executions with execution_status = completed.",
+    },
+    {
+        "check_id": "scheduler_reported_jobs_succeeded_without_dependency_blockers",
+        "description": "Every worker data-pipeline job has reported_status = succeeded and no blocked_dependencies.",
     },
     {
         "check_id": "governed_submit_jobs_submitted",
