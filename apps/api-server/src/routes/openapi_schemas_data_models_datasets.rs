@@ -436,6 +436,12 @@ pub(super) fn dataset_schemas() -> Value {
                             },
                             "required_permission": {
                                 "type": ["string", "null"],
+                                "enum": [
+                                    "ops:providers:write",
+                                    "ops:datasets:write",
+                                    "ops:models:review",
+                                    null
+                                ],
                                 "minLength": 1,
                                 "description": "API permission scope required before submitting this job artifact; null for artifact-only jobs."
                             }
@@ -513,6 +519,12 @@ pub(super) fn dataset_schemas() -> Value {
                             },
                             "required_permission": {
                                 "type": ["string", "null"],
+                                "enum": [
+                                    "ops:providers:write",
+                                    "ops:datasets:write",
+                                    "ops:models:review",
+                                    null
+                                ],
                                 "minLength": 1,
                                 "description": "API permission scope required before submitting this job artifact; null for artifact-only jobs."
                             }

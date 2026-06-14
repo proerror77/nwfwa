@@ -794,6 +794,16 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "required_permission must not be blank when supplied",
                 ));
             }
+            if required_permission
+                .as_str()
+                .is_some_and(|value| !is_worker_data_pipeline_permission(value))
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
+                    "required_permission must be a supported worker data pipeline permission scope",
+                ));
+            }
         }
         if execution_status == "dependency_not_completed" {
             let has_blocked_dependencies = execution
@@ -951,6 +961,16 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                     "required_permission must not be blank when supplied",
                 ));
             }
+            if required_permission
+                .as_str()
+                .is_some_and(|value| !is_worker_data_pipeline_permission(value))
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
+                    "required_permission must be a supported worker data pipeline permission scope",
+                ));
+            }
         }
         let Some(readiness_status) = readiness
             .get("readiness_status")
@@ -1023,6 +1043,13 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
         ));
     }
     Ok(())
+}
+
+fn is_worker_data_pipeline_permission(value: &str) -> bool {
+    matches!(
+        value,
+        "ops:providers:write" | "ops:datasets:write" | "ops:models:review"
+    )
 }
 
 fn validate_unit_interval_metric(
