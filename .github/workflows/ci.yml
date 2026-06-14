@@ -196,6 +196,7 @@ jobs:
           ml_pid=$!
           DATABASE_URL="$DATABASE_URL" \
           FWA_API_KEY=dev-secret \
+          FWA_API_KEY_PRINCIPALS="dev-secret|demo-operator|fwa_operator|ops-studio|demo-customer|ops:*,tpa:*;rule-submit-secret|rule-submitter|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review;rule-approve-secret|rule-approver|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review" \
           FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
           cargo run --locked -p api-server >/tmp/fwa-api-server.log 2>&1 &
           api_pid=$!
@@ -220,7 +221,7 @@ jobs:
           raise SystemExit("ml-service did not become healthy")
           PY
 
-          if ! scripts/demo/smoke_demo.py; then
+          if ! FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py; then
             cat /tmp/fwa-ml-service.log
             cat /tmp/fwa-api-server.log
             exit 1
@@ -237,7 +238,7 @@ jobs:
             exit 1
           fi
 
-          if ! scripts/demo/smoke_demo.py --govern-retraining-candidate; then
+          if ! FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py --govern-retraining-candidate; then
             cat /tmp/fwa-ml-service.log
             cat /tmp/fwa-api-server.log
             exit 1

@@ -12,6 +12,8 @@ from decimal import Decimal
 
 BASE_URL = os.environ.get("FWA_API_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 API_KEY = os.environ.get("FWA_API_KEY", "dev-secret")
+RULE_SUBMIT_API_KEY = os.environ.get("FWA_DEMO_RULE_SUBMIT_API_KEY", API_KEY)
+RULE_APPROVE_API_KEY = os.environ.get("FWA_DEMO_RULE_APPROVE_API_KEY", API_KEY)
 SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
 CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
 MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
@@ -61,9 +63,9 @@ STANDARD_RULE_PACK = {
 }
 
 
-def request(method, path, payload=None, retries=1):
+def request(method, path, payload=None, retries=1, api_key=None):
     body = None
-    headers = {"x-api-key": API_KEY}
+    headers = {"x-api-key": api_key or API_KEY}
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
         headers["content-type"] = "application/json"
@@ -561,12 +563,12 @@ def run_rule_backtest_and_publish(score, investigation):
             f"rule_promotion_reviews:{RULE_ID}:v1",
         ]
     }
-    for path, expected_status in [
-        (f"/api/v1/ops/rules/{RULE_ID}/submit", "submitted"),
-        (f"/api/v1/ops/rules/{RULE_ID}/approve", "approved"),
-        (f"/api/v1/ops/rules/{RULE_ID}/publish", "active"),
+    for path, expected_status, api_key in [
+        (f"/api/v1/ops/rules/{RULE_ID}/submit", "submitted", RULE_SUBMIT_API_KEY),
+        (f"/api/v1/ops/rules/{RULE_ID}/approve", "approved", RULE_APPROVE_API_KEY),
+        (f"/api/v1/ops/rules/{RULE_ID}/publish", "active", RULE_APPROVE_API_KEY),
     ]:
-        result = request("POST", path, lifecycle_payload)
+        result = request("POST", path, lifecycle_payload, api_key=api_key)
         assert_true(
             result.get("status") == expected_status,
             f"rule lifecycle {path} did not reach {expected_status}",
