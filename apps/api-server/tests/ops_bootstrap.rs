@@ -8,6 +8,7 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
@@ -97,7 +98,7 @@ async fn score_claim_with_missing_clinical_evidence(app: axum::Router, claim_id:
 
 #[tokio::test]
 async fn backfill_evidence_request_and_label_bootstrap_flow() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     score_claim_with_missing_clinical_evidence(app.clone(), "CLM-BOOTSTRAP-1").await;
 
     let (status, backfill) = json_request(
@@ -218,7 +219,7 @@ async fn backfill_evidence_request_and_label_bootstrap_flow() {
 
 #[tokio::test]
 async fn label_bootstrap_rejects_training_approval_before_evidence_is_received() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     score_claim_with_missing_clinical_evidence(app.clone(), "CLM-BOOTSTRAP-2").await;
 
     let (status, generated) = json_request(
@@ -269,7 +270,7 @@ async fn label_bootstrap_rejects_training_approval_before_evidence_is_received()
 
 #[tokio::test]
 async fn evidence_request_rejects_received_status_without_document_evidence() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     score_claim_with_missing_clinical_evidence(app.clone(), "CLM-BOOTSTRAP-3").await;
 
     let (status, generated) = json_request(

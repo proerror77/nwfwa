@@ -12,6 +12,8 @@ completed without real customer data:
 - inbound claim inbox, normalization, correction templates, and canonical trace;
 - deterministic scoring, FWA rule pack, review modes, rule lifecycle, and
   promotion controls;
+- customer-approved deterministic adjudication-policy boundary for hard-deny,
+  straight-through, pending-evidence, manual-review, and score-only rules;
 - lead, case, investigation, QA, medical review, label, and audit workflows;
 - model registry, evaluation gates, retraining jobs, Rust artifact scoring,
   external training handoff, and scheduled MLOps monitoring-plan contracts;
@@ -20,7 +22,9 @@ completed without real customer data:
 - ClickHouse analytics-scale schema, dashboard queries, export contracts, and
   provider graph snapshots;
 - Kubernetes staging manifests, container packaging, GitHub Environment staging
-  package workflow, and pilot-foundation proof artifacts;
+  package workflow, pilot-foundation proof artifacts, customer-gated production
+  deployment package, production observability manifests, and production
+  readiness evidence contract;
 - Yew Operations Studio demo surface.
 
 The remaining production boundary is not another local module. It is customer
@@ -31,7 +35,13 @@ validation and environment execution:
 - customer-approved production deployment, secrets, retention, observability,
   OCR/vector workers, analytics execution, and network controls;
 - customer-executed live restore, rollback, alert, and operational drills beyond
-  the staging `operational_drill_proof.json` contract.
+  the staging `operational_drill_proof.json` and production readiness evidence
+  contracts.
+
+The June 12 architecture gap review adds an additional distinction: several
+surfaces are implemented as demo, baseline, staging proof, or contract shape but
+are not yet production-complete FWA capabilities. The dated gap ledger is
+`docs/project/architecture-gap-review-2026-06-12.md`.
 
 ## Machine-Checkable Proof
 
@@ -53,16 +63,44 @@ expected code, document, workflow, or proof artifact is missing.
 
 | PRD capability | Current status | Repository evidence | Remaining boundary |
 | --- | --- | --- | --- |
-| Decision boundary | Implemented | `docs/product/fwa-risk-operations-prd.md`, `apps/api-server/src/routes/agent.rs`, `apps/api-server/tests/knowledge_agent.rs` | Customer governance must still approve production adjudication policy. |
-| Inbound claim inbox and canonical trace | Implemented | `apps/api-server/src/routes/inbox.rs`, `apps/api-server/src/routes/claims.rs`, `scripts/demo/tpa_mock_client.py` | Customer-specific raw payload adapters and PII policy remain environment-specific. |
-| Core scoring, rules, and review modes | Implemented | `crates/fwa-scoring`, `crates/fwa-rules`, `apps/api-server/src/routes/ops_rules.rs`, demo seed/smoke | Customer thresholds and production routing impact require promotion evidence. |
+| Decision boundary | Implemented | `docs/product/fwa-risk-operations-prd.md`, `docs/project/ml-algorithm-strategy.md`, `apps/api-server/src/routes/agent.rs`, `apps/api-server/tests/knowledge_agent.rs` | Customer governance must still approve production adjudication policy and automatic denial or straight-through rule authority. |
+| Inbound claim inbox and canonical trace | Implemented | `apps/api-server/src/routes/inbox.rs`, `apps/api-server/src/routes/claims.rs`, `scripts/demo/tpa_mock_client.py`; field-path response masking verified in `caefdc1` | Customer-specific raw payload adapters and environment-approved PII policy remain external. |
+| Core scoring, rules, and review modes | Implemented with baseline and customer-validation boundary | `crates/fwa-scoring`, `crates/fwa-rules`, `apps/api-server/src/routes/ops_rules.rs`, demo seed/smoke, `docs/product/fwa-risk-operations-prd.md`; missing-data reweighting and broader confidence verified in `eccfc06` and `a2e7015`; provider history recency-weighted effective counts verified in `cd3fe54`; clinical compatibility reference-score input path verified in `a63e45f`; clinical compatibility reference worker contract verified in `3aaa58d`; episode utilization scoring inputs verified in `e2b4bf6`; worker artifact-to-scoring context contract verified in `7a4982f`; claims API ingestion of materialized worker contexts verified in `dc70ba2` | Customer-specific approved rule lists, production threshold refs, appeal/override routes, customer-approved ICD-10/CPT or medical-policy reference data, production scheduling/DB write paths for worker artifacts, and live routing-impact evidence are required before production adjudication. |
 | Lead, case, QA, medical, and feedback loop | Implemented | `apps/api-server/src/routes/ops_cases.rs`, `apps/api-server/src/routes/ops_medical.rs`, `apps/api-server/src/routes/pilot_loop.rs` | Real reviewer workflow tools and customer operating procedure remain external. |
-| Model operations and MLOps pipeline | Implemented with customer validation boundary | `apps/api-server/src/routes/ops_models.rs`, `crates/fwa-ml-runtime`, `apps/worker`, `docs/project/ml-pipeline-runbook.md` | Real labels, live shadow traffic, customer holdout, and production drift evidence. |
-| Dataset, feature, and label governance | Implemented with customer validation boundary | `apps/api-server/src/routes/ops_datasets.rs`, `scripts/data/build_public_data_mvp.py`, `docs/project/public-data-mvp.md` | Real customer dataset intake, source data quality, and label provenance. |
-| Knowledge, agent, and AI evidence foundation | Staging proof | `apps/api-server/src/routes/knowledge.rs`, `apps/api-server/src/routes/ops_evidence.rs`, `scripts/ops/build_ai_evidence_foundation.py` | Customer OCR, embedding/vector store, retrieval ranking, masking, and retention execution. |
+| Model operations and MLOps pipeline | Implemented with customer validation boundary | `apps/api-server/src/routes/ops_models.rs`, `crates/fwa-ml-runtime`, `apps/worker`, `docs/project/ml-pipeline-runbook.md`; serving manifest metadata caching, PSI actioning, rule hit-rate trending, sanctions sync contract, provider profile rollups, L3 anomaly upgrade readiness, raw sigmoid calibration-status metadata, and probability calibration evidence reports verified in `1d0fb45`, `b6d56ae`, `b0f00fa`, `d17f3bd`, `429387c`, `d04c3b1`, and `37cbd53` | Real labels, live shadow traffic, customer holdout, production drift evidence, calibrated probability serving activation, and validated statistical anomaly scoring. |
+| Dataset, feature, and label governance | Implemented with customer validation boundary | `apps/api-server/src/routes/ops_datasets.rs`, `scripts/data/build_public_data_mvp.py`, `docs/project/public-data-mvp.md`; Rust feature-set manifests and online scoring `FeatureValue` payloads include `is_proxy` and `data_source` metadata verified in `25a93a1` and `2f80dbe` | Real customer dataset intake, source data quality, label provenance, and customer-approved feature lineage/source mappings. |
+| Knowledge, agent, and AI evidence foundation | Staging proof with partial control-plane contract | `apps/api-server/src/routes/knowledge.rs`, `apps/api-server/src/routes/ops_evidence/mod.rs`, `scripts/ops/build_ai_evidence_foundation.py`; agent registry and investigation grouping contract verified in `fee9ea9`; runtime registry allowlist enforcement verified in `0b8d73a`; agent run cancellation control plane verified in `a7b3835`; deterministic orchestrator/specialist-plan contract verified in `e85d0e5`; crate-level investigation cancellation checkpoints verified in `cbe97a8`; deterministic specialist dispatch/tool mediation contract verified in `51fd3cc`; agent investigation API/output/OpenAPI exposure verified in `2166dc6` | Customer OCR, embedding/vector store, retrieval ranking, masking, retention execution, LLM-backed specialist execution, real external tool-call mediation, and wiring long-running/tool-using agents into the cancellation signal. |
 | Analytics scale | Staging proof | `analytics/clickhouse/schema.sql`, `analytics/clickhouse/dashboard_queries.sql`, `scripts/ops/build_analytics_export.py` | Live scheduler credentials, ClickHouse retention/backup/access policy, dashboard hosting. |
 | Pilot foundation and staging deployment | Staging proof | `infra/k8s/staging`, `.github/workflows/deploy-staging.yml`, `scripts/ops/build_staging_evidence.py`, `scripts/ops/validate_staging_deployment_package.py` | Customer cluster credentials, secrets, allowlists, observability receiver, restore drill. |
+| Production deployment and readiness contract | Implemented as customer-gated contract | `scripts/ops/build_production_deployment_package.py`, `infra/k8s/observability`, `scripts/ops/build_production_readiness_contract.py`; audit-retention dry-run scan contract verified in `3c90fb1` | Live customer cluster apply, real secrets/images/TLS, smoke, alert delivery, restore, rollback, retention archive/destruction execution, and SLO evidence. |
 | Web console operations studio | Implemented | `apps/web-console/src/main.rs`, `apps/web-console/src/styles.css`, `scripts/demo/smoke_web_console.mjs` | Customer UAT and role-specific UX refinements. |
+
+## June 2026 Gap Backlog
+
+| Priority | Backlog item | Coverage status |
+| --- | --- | --- |
+| P0 | Proxy/placeholder labeling for L1 peer benchmark, L5 clinical compatibility, and L3 anomaly baseline | Implemented and verified in `04fbe2c`; labels remain explicit baseline/proxy markers until real peer and clinical compatibility data are connected. |
+| P0 | Routing policy lifecycle permission checks | Implemented and verified in `f352721`. |
+| P0 | Inbox validation/audit serialization failures must fail loudly | Implemented and verified in `de6e4b5`. |
+| P0 | Runtime scorer lock-poison recovery | Implemented and verified in `84741f9`. |
+| P1 | Missing-data-aware score reweighting and revised confidence scoring | Implemented and verified in `eccfc06` and `a2e7015`; `cargo test --locked -p fwa-scoring` passed. |
+| P1 | Worker-owned OIG/SAM sync and provider 30/90/365 profile windows | Implemented as local worker contracts in `b6d56ae` and `b0f00fa`; `cargo test --locked -p worker sanctions`, `cargo test --locked -p worker provider_profile`, and `cargo check --locked -p worker` passed. Live OIG/SAM fetch and DB write paths remain P2/customer-environment work. |
+| P1 | PSI threshold actioning and rule hit-rate runtime trending | Implemented and verified in `d17f3bd`; `cargo test --locked -p worker mlops_monitoring_runtime` and `cargo check --locked -p worker` passed. |
+| P1 | Field-path PII/PHI masking for canonical contexts and evidence responses | Implemented and verified in `caefdc1`; `cargo test --locked -p api-server --test inbox normalization`, `cargo test --locked -p api-server routes::pii`, and `cargo check --locked -p api-server` passed. |
+| P2 | Billing ring, temporal co-billing, referral entropy, peer percentile, and episode aggregation worker rollups | Implemented as local worker/contracts in `99ffa06`, `242859a`, and `0cb2a23`; `cargo test --locked -p worker provider_graph`, `cargo test --locked -p worker peer_benchmark`, `cargo test --locked -p worker episode`, and `cargo check --locked -p worker` passed. Production scheduling, DB write paths, customer claim history, and scheme-specific code comparators remain open. |
+| P2 | Agent registry, investigations entity, PHI field allowlists, and populated `phi_fields_accessed` | Implemented as the deterministic-agent control-plane contract in `fee9ea9` and `0b8d73a`: additive `agent_registry` and `investigations` schema contract, stable investigation ids for agent audit events, exposed agent identity/investigation fields in run logs, non-empty PHI field audit records, and active registry capability/PHI allowlist enforcement before `knowledge.search_similar` execution. Multi-agent runtime orchestration remains P3. |
+| P2 | Raw sigmoid probability calibration visibility | Implemented and verified in `d04c3b1`: Rust artifact and serving-manifest scorers emit `probability_calibration_status = uncalibrated_raw_sigmoid`. Actual probability calibration against customer labels remains open. |
+| P2 | Probability calibration evidence report | Implemented as a worker report contract in `37cbd53`: `build-probability-calibration-report` computes ECE, Brier score, calibration bins, and review-task artifacts from labeled holdout predictions. Fitting/activating a calibrated probability model remains customer-data work. |
+| P2 | Feature proxy/source metadata | Implemented for Rust training/governance manifests and online scoring responses in `25a93a1` and `2f80dbe`: feature-set columns and `FeatureValue` payloads now carry `is_proxy` and `data_source`, with OpenAPI and claims-score response tests covering the API contract. Customer-approved source lineage mappings remain external. |
+| P2 | Clinical compatibility feature input path and reference worker contract | Implemented in `a63e45f` and `3aaa58d`: `fwa-features` accepts `ClinicalCompatibilityFeatureContext`, and the worker can build a governed clinical compatibility reference report with policy authority refs, evidence refs, low-score review tasks, and records marked for `worker.icd_cpt_compatibility_reference:*`. Customer-approved reference data, DB write paths, and production scheduling remain open. |
+| P2 | Unbundling comparator worker contract | Implemented in `16449c8`: `build-unbundling-comparator` joins customer-governed bundled/component code rules with episode procedure-code snapshots and emits evidence-backed medical-review candidates. Customer-approved unbundling rule packs, production scheduling, and DB write paths remain open. |
+| P2 | Episode utilization scoring features | Implemented in `e2b4bf6` and wired through the claims API in `dc70ba2`: `fwa-features` accepts worker-owned member-provider revisit counts, duplicate-claim similarity, procedure-frequency peer percentile, and unbundling candidate counts, and `fwa-scoring` consumes them in L5 with bounded risk contribution. Production scheduling/DB write paths and customer-data validation remain open. |
+| P2 | Worker artifact-to-scoring context materialization | Implemented in `7a4982f` and API-ingested in `dc70ba2`: `build-scoring-feature-contexts` maps episode rollups, peer benchmarks, clinical compatibility records, and unbundling candidates into claim-level `PeerFeatureContext`, `ClinicalCompatibilityFeatureContext`, and `EpisodeUtilizationFeatureContext` payloads; `/api/v1/claims/score` accepts those payloads and persists the resulting `feature_values` trace. Production scheduling, worker artifact DB write paths, and customer-data validation remain open. |
+| P3 | L3 anomaly statistical upgrade readiness | Implemented as a worker report contract in `429387c`: `build-anomaly-upgrade-readiness` checks `confirmed_fwa_label_count >= 500`, flags low 30-day recall, and emits review-task artifacts without changing scoring. Validated IQR/MAD or ensemble replacement remains open. |
+| P3 | Audit retention scan contract | Implemented as a dry-run worker report in `3c90fb1`: `build-audit-retention-scan` computes six-year cutoff archive candidates, destruction-review candidates, legal-hold blocks, and source-record review tasks without deleting records. Customer-environment partitioning, archive storage, legal-hold reconciliation writes, and approved destruction execution remain open. |
+| P3 | Agent run cancellation control plane and execution checkpoints | Implemented in `a7b3835` and `cbe97a8`: `POST /api/v1/ops/agent-runs/{agent_run_id}/cancel` marks queued/running runs as `cancelled`, requires `agent_run:{id}` evidence, rejects terminal-state recancellation, and emits `agent.run.cancelled` governance audit events; `fwa-agent` exposes cancellation signals and deterministic investigation checkpoints. Wiring long-running/tool-using specialist agents into that signal remains open. |
+| P3 | Deterministic specialist-orchestrator and dispatch contract | Implemented in `e85d0e5`, `51fd3cc`, and `2166dc6`: `fwa-agent` now exposes `InvestigationOrchestrator`, deterministic specialist tasks for intake triage/evidence review/network analysis, PHI field scopes, assistive-only boundary assertions, specialist execution records, and mediated tool-call contracts marked `contract_only_not_executed`; `/api/v1/agent/cases/investigate` returns and persists `specialist_executions`, and the OpenAPI contract describes those records. LLM-backed specialist execution and real external tool mediation remain open. |
+| P3 | Six-year audit retention execution and statistical L3 anomaly scorer replacement | Medium-term production hardening. |
 
 ## Practical Reading
 

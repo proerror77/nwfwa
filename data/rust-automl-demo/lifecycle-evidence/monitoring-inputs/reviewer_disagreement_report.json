@@ -1,0 +1,34 @@
+{
+  "artifact_kind": "reviewer_disagreement_review",
+  "artifact_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/rust_serving_artifact.json",
+  "checks": [
+    {
+      "name": "plan_job_present",
+      "status": "passed"
+    },
+    {
+      "name": "output_ref_declared",
+      "status": "passed"
+    },
+    {
+      "name": "no_routing_impact",
+      "status": "passed"
+    }
+  ],
+  "customer_data_required": true,
+  "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules",
+  "input": "qa_reviews_and_investigation_outcomes",
+  "manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate",
+  "output_ref": "model_reviewer_disagreement_reports:<reviewer_disagreement_report_uri>",
+  "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/reviewer_disagreement_report.json",
+  "report_version": 1,
+  "review_sample_count": 128,
+  "reviewer_disagreement_rate": 0.03,
+  "runtime_source": "rust_worker_monitoring_plan_runner",
+  "schedule": {
+    "cron": "0 2 * * *"
+  },
+  "status": "passed"
+}

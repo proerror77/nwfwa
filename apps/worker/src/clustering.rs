@@ -1,0 +1,592 @@
+use anyhow::{bail, Context};
+use std::{collections::BTreeSet, fs, path::Path};
+
+use super::{
+    clustering_data::{
+        read_claim_entity_rows, read_provider_peer_rows, ClaimEntityFeatureRow,
+        ProviderPeerFeatureRow, UnlabeledDatasetManifest,
+    },
+    clustering_math::{
+        anomaly_threshold, assign_provider_clusters, assign_standardized_clusters,
+        cluster_distances, normalize_claim_entity_rows, normalize_provider_rows,
+        provider_graph_factor_ranking, standardized_cluster_distances, standardized_factor_ranking,
+    },
+    clustering_types::*,
+    round4, write_json,
+};
+
+pub fn cluster_provider_peers(
+    manifest_path: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<ProviderPeerClusteringReport> {
+    let manifest_path = Path::new(manifest_path);
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read provider peer manifest {}", manifest_path.display()))?;
+    let manifest: UnlabeledDatasetManifest =
+        serde_json::from_str(&manifest_json).context("parse provider peer manifest")?;
+    if manifest.label_column.is_some() {
+        bail!("provider peer clustering requires an unlabeled manifest");
+    }
+    if !manifest.label_policy.contains("unlabeled") {
+        bail!("provider peer clustering requires an unlabeled label_policy");
+    }
+    let base_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let rows = read_provider_peer_rows(&manifest, base_dir)?;
+    if rows.len() < 2 {
+        bail!("provider peer clustering requires at least two provider rows");
+    }
+
+    let feature_columns = vec![
+        "claim_count".into(),
+        "avg_claim_amount".into(),
+        "high_cost_rate".into(),
+        "peer_z_score".into(),
+        "graph_degree".into(),
+    ];
+    let normalized = normalize_provider_rows(&rows);
+    let cluster_count = rows.len().clamp(1, 3);
+    let cluster_ids = assign_provider_clusters(&normalized, cluster_count);
+    let distances = cluster_distances(&normalized, &cluster_ids, cluster_count);
+    let threshold = anomaly_threshold(&distances);
+    let mut provider_assignments = Vec::new();
+    let mut anomaly_candidates = Vec::new();
+    let mut anomaly_indexes = Vec::new();
+    for (index, row) in rows.iter().enumerate() {
+        let outlier_score = round4(distances[index]);
+        let anomaly_candidate = distances[index] >= threshold;
+        provider_assignments.push(ProviderPeerClusterAssignment {
+            provider_id: row.provider_id.clone(),
+            cohort_key: row.cohort_key.clone(),
+            service_month: row.service_month.clone(),
+            cluster_id: cluster_ids[index],
+            outlier_score,
+            anomaly_candidate,
+        });
+        if anomaly_candidate {
+            anomaly_indexes.push(index);
+            anomaly_candidates.push(ProviderPeerAnomalyCandidate {
+                provider_id: row.provider_id.clone(),
+                cohort_key: row.cohort_key.clone(),
+                service_month: row.service_month.clone(),
+                cluster_id: cluster_ids[index],
+                outlier_score,
+                reason: "Provider-month is far from its peer-cluster centroid; review as an anomaly candidate, not a confirmed FWA label.".into(),
+                evidence_refs: vec![
+                    format!("dataset_manifest:{}", manifest_path.display()),
+                    format!("provider_peer_cluster:{}:{}", manifest.dataset_key, row.provider_id),
+                ],
+            });
+        }
+    }
+    anomaly_candidates.sort_by(|left, right| {
+        right
+            .outlier_score
+            .partial_cmp(&left.outlier_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.provider_id.cmp(&right.provider_id))
+    });
+
+    let review_tasks = anomaly_candidates
+        .iter()
+        .map(|candidate| ProviderPeerReviewTask {
+            task_kind: "provider_peer_anomaly_review".into(),
+            provider_id: candidate.provider_id.clone(),
+            review_queue: "provider_anomaly_candidate_review".into(),
+            required_review: "human_review_required_before_case_creation_or_label_assignment"
+                .into(),
+            decision_options: vec![
+                "dismiss_as_peer_variation".into(),
+                "request_more_evidence".into(),
+                "open_investigation_candidate".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let cluster_summaries =
+        summarize_provider_clusters(&rows, &cluster_ids, &distances, cluster_count);
+    let factor_ranking = standardized_factor_ranking(
+        "provider_peer_unsupervised_factor_ranking",
+        &feature_columns,
+        &normalized,
+        &cluster_ids,
+        cluster_count,
+        &anomaly_indexes,
+    );
+    let report = ProviderPeerClusteringReport {
+        report_kind: "provider_peer_clustering".into(),
+        report_version: 1,
+        dataset_key: manifest.dataset_key,
+        dataset_version: manifest.dataset_version,
+        algorithm: "rust_standardized_kmeans_v1".into(),
+        label_policy: manifest.label_policy,
+        governance_boundary:
+            "unlabeled clustering creates anomaly review candidates only; it must not create confirmed FWA labels or automatic claim disposition"
+                .into(),
+        feature_columns,
+        cluster_count,
+        cluster_summaries,
+        provider_assignments,
+        anomaly_candidates,
+        factor_ranking,
+        review_tasks,
+        evidence_refs: vec![
+            format!("dataset_manifest:{}", manifest_path.display()),
+            format!(
+                "unsupervised_factor_rankings:{}",
+                output_dir
+                    .as_ref()
+                    .join("provider_peer_factor_ranking.json")
+                    .display()
+            ),
+        ],
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create provider peer clustering output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_peer_clustering_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_peer_factor_ranking.json"),
+        &report.factor_ranking,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_anomaly_review_tasks.json"),
+        &report.review_tasks,
+    )?;
+    Ok(report)
+}
+
+pub fn cluster_claim_entities(
+    manifest_path: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<ClaimEntityClusteringReport> {
+    let manifest_path = Path::new(manifest_path);
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read claim entity manifest {}", manifest_path.display()))?;
+    let manifest: UnlabeledDatasetManifest =
+        serde_json::from_str(&manifest_json).context("parse claim entity manifest")?;
+    if manifest.label_column.is_some() {
+        bail!("claim entity clustering requires an unlabeled manifest");
+    }
+    if !manifest.label_policy.contains("unlabeled") {
+        bail!("claim entity clustering requires an unlabeled label_policy");
+    }
+    let base_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let rows = read_claim_entity_rows(&manifest, base_dir)?;
+    if rows.len() < 2 {
+        bail!("claim entity clustering requires at least two claim rows");
+    }
+
+    let feature_columns = vec![
+        "claim_amount".into(),
+        "amount_to_limit_ratio".into(),
+        "peer_percentile".into(),
+        "item_count".into(),
+        "high_cost_item_ratio".into(),
+        "provider_risk_tier".into(),
+        "diagnosis_procedure_mismatch".into(),
+        "member_degree".into(),
+        "provider_degree".into(),
+    ];
+    let normalized = normalize_claim_entity_rows(&rows);
+    let cluster_count = rows.len().clamp(1, 4);
+    let cluster_ids = assign_standardized_clusters(&normalized, 2, cluster_count);
+    let distances = standardized_cluster_distances(&normalized, &cluster_ids, cluster_count);
+    let threshold = anomaly_threshold(&distances);
+    let mut entity_assignments = Vec::new();
+    let mut anomaly_candidates = Vec::new();
+    let mut anomaly_indexes = Vec::new();
+    for (index, row) in rows.iter().enumerate() {
+        let outlier_score = round4(distances[index]);
+        let anomaly_candidate = distances[index] >= threshold;
+        entity_assignments.push(ClaimEntityClusterAssignment {
+            claim_id: row.claim_id.clone(),
+            member_id: row.member_id.clone(),
+            provider_id: row.provider_id.clone(),
+            cluster_id: cluster_ids[index],
+            outlier_score,
+            anomaly_candidate,
+        });
+        if anomaly_candidate {
+            anomaly_indexes.push(index);
+            anomaly_candidates.push(ClaimEntityAnomalyCandidate {
+                claim_id: row.claim_id.clone(),
+                member_id: row.member_id.clone(),
+                provider_id: row.provider_id.clone(),
+                cluster_id: cluster_ids[index],
+                outlier_score,
+                reason: "Claim/member/provider entity context is far from its cluster centroid; review as an anomaly candidate, not a confirmed FWA label.".into(),
+                evidence_refs: vec![
+                    format!("dataset_manifest:{}", manifest_path.display()),
+                    format!("claim_entity_cluster:{}:{}", manifest.dataset_key, row.claim_id),
+                ],
+            });
+        }
+    }
+    anomaly_candidates.sort_by(|left, right| {
+        right
+            .outlier_score
+            .partial_cmp(&left.outlier_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.claim_id.cmp(&right.claim_id))
+    });
+
+    let review_tasks = anomaly_candidates
+        .iter()
+        .map(|candidate| ClaimEntityReviewTask {
+            task_kind: "claim_entity_anomaly_review".into(),
+            claim_id: candidate.claim_id.clone(),
+            member_id: candidate.member_id.clone(),
+            provider_id: candidate.provider_id.clone(),
+            review_queue: "claim_entity_anomaly_candidate_review".into(),
+            required_review:
+                "human_review_required_before_case_creation_label_assignment_or_rule_writeback"
+                    .into(),
+            decision_options: vec![
+                "dismiss_as_entity_variation".into(),
+                "request_more_evidence".into(),
+                "open_investigation_candidate".into(),
+                "prepare_rule_candidate_backtest".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let cluster_summaries =
+        summarize_claim_entity_clusters(&rows, &cluster_ids, &distances, cluster_count);
+    let factor_ranking = standardized_factor_ranking(
+        "claim_entity_unsupervised_factor_ranking",
+        &feature_columns,
+        &normalized,
+        &cluster_ids,
+        cluster_count,
+        &anomaly_indexes,
+    );
+    let report = ClaimEntityClusteringReport {
+        report_kind: "claim_entity_clustering".into(),
+        report_version: 1,
+        dataset_key: manifest.dataset_key,
+        dataset_version: manifest.dataset_version,
+        algorithm: "rust_standardized_entity_kmeans_v1".into(),
+        label_policy: manifest.label_policy,
+        governance_boundary:
+            "unlabeled entity clustering creates anomaly review candidates only; it must not create confirmed FWA labels, automatic claim disposition, or rule-library writeback"
+                .into(),
+        feature_columns,
+        cluster_count,
+        cluster_summaries,
+        entity_assignments,
+        anomaly_candidates,
+        factor_ranking,
+        review_tasks,
+        evidence_refs: vec![
+            format!("dataset_manifest:{}", manifest_path.display()),
+            format!(
+                "unsupervised_factor_rankings:{}",
+                output_dir
+                    .as_ref()
+                    .join("claim_entity_factor_ranking.json")
+                    .display()
+            ),
+        ],
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create claim entity clustering output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("claim_entity_clustering_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir.as_ref().join("claim_entity_factor_ranking.json"),
+        &report.factor_ranking,
+    )?;
+    write_json(
+        output_dir.as_ref().join("claim_entity_review_tasks.json"),
+        &report.review_tasks,
+    )?;
+    Ok(report)
+}
+
+pub fn cluster_provider_graph_communities(
+    manifest_path: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<ProviderGraphCommunityReport> {
+    let manifest_path = Path::new(manifest_path);
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read provider graph manifest {}", manifest_path.display()))?;
+    let manifest: UnlabeledDatasetManifest =
+        serde_json::from_str(&manifest_json).context("parse provider graph manifest")?;
+    if manifest.label_column.is_some() {
+        bail!("provider graph clustering requires an unlabeled manifest");
+    }
+    if !manifest.label_policy.contains("unlabeled") {
+        bail!("provider graph clustering requires an unlabeled label_policy");
+    }
+    let base_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let rows = read_provider_peer_rows(&manifest, base_dir)?;
+    if rows.len() < 2 {
+        bail!("provider graph clustering requires at least two provider rows");
+    }
+
+    let graph_degree_threshold =
+        anomaly_threshold(&rows.iter().map(|row| row.graph_degree).collect::<Vec<_>>());
+    let mut provider_assignments = Vec::new();
+    let mut anomaly_candidates = Vec::new();
+    for row in &rows {
+        let anomaly_candidate =
+            row.graph_degree >= graph_degree_threshold || row.peer_z_score >= 2.0;
+        provider_assignments.push(ProviderGraphCommunityAssignment {
+            provider_id: row.provider_id.clone(),
+            community_id: row.community_id,
+            graph_degree: row.graph_degree,
+            peer_z_score: row.peer_z_score,
+            anomaly_candidate,
+        });
+        if anomaly_candidate {
+            anomaly_candidates.push(ProviderGraphAnomalyCandidate {
+                provider_id: row.provider_id.clone(),
+                community_id: row.community_id,
+                graph_degree: row.graph_degree,
+                peer_z_score: row.peer_z_score,
+                reason: "Provider is unusually central or high-risk inside the provider graph community; review as a graph anomaly candidate, not a confirmed FWA label.".into(),
+                evidence_refs: vec![
+                    format!("dataset_manifest:{}", manifest_path.display()),
+                    format!(
+                        "provider_graph_community:{}:{}",
+                        manifest.dataset_key, row.provider_id
+                    ),
+                ],
+            });
+        }
+    }
+    anomaly_candidates.sort_by(|left, right| {
+        right
+            .graph_degree
+            .partial_cmp(&left.graph_degree)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                right
+                    .peer_z_score
+                    .partial_cmp(&left.peer_z_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.provider_id.cmp(&right.provider_id))
+    });
+    let review_tasks = anomaly_candidates
+        .iter()
+        .map(|candidate| ProviderGraphReviewTask {
+            task_kind: "provider_graph_anomaly_review".into(),
+            provider_id: candidate.provider_id.clone(),
+            community_id: candidate.community_id,
+            review_queue: "provider_graph_anomaly_candidate_review".into(),
+            required_review: "human_review_required_before_case_creation_or_label_assignment"
+                .into(),
+            decision_options: vec![
+                "dismiss_as_network_variation".into(),
+                "request_more_evidence".into(),
+                "open_investigation_candidate".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let community_summaries = summarize_provider_graph_communities(&rows, &provider_assignments);
+    let factor_ranking = provider_graph_factor_ranking(&anomaly_candidates);
+    let report = ProviderGraphCommunityReport {
+        report_kind: "provider_graph_community_clustering".into(),
+        report_version: 1,
+        dataset_key: manifest.dataset_key,
+        dataset_version: manifest.dataset_version,
+        algorithm: "rust_provider_graph_community_v1".into(),
+        label_policy: manifest.label_policy,
+        governance_boundary:
+            "unlabeled graph clustering creates anomaly review candidates only; it must not create confirmed FWA labels or automatic claim disposition"
+                .into(),
+        community_summaries,
+        provider_assignments,
+        anomaly_candidates,
+        factor_ranking,
+        review_tasks,
+        evidence_refs: vec![
+            format!("dataset_manifest:{}", manifest_path.display()),
+            format!(
+                "unsupervised_factor_rankings:{}",
+                output_dir
+                    .as_ref()
+                    .join("provider_graph_factor_ranking.json")
+                    .display()
+            ),
+        ],
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create provider graph clustering output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_graph_community_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_graph_factor_ranking.json"),
+        &report.factor_ranking,
+    )?;
+    write_json(
+        output_dir.as_ref().join("provider_graph_review_tasks.json"),
+        &report.review_tasks,
+    )?;
+    Ok(report)
+}
+
+fn summarize_provider_clusters(
+    rows: &[ProviderPeerFeatureRow],
+    assignments: &[usize],
+    distances: &[f64],
+    cluster_count: usize,
+) -> Vec<ProviderPeerClusterSummary> {
+    (0..cluster_count)
+        .map(|cluster_id| {
+            let indexes = assignments
+                .iter()
+                .enumerate()
+                .filter_map(|(index, assigned)| (*assigned == cluster_id).then_some(index))
+                .collect::<Vec<_>>();
+            let provider_count = indexes.len();
+            let divisor = provider_count.max(1) as f64;
+            ProviderPeerClusterSummary {
+                cluster_id,
+                provider_count,
+                average_outlier_score: round4(
+                    indexes.iter().map(|index| distances[*index]).sum::<f64>() / divisor,
+                ),
+                average_claim_count: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].claim_count)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                average_high_cost_rate: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].high_cost_rate)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+            }
+        })
+        .collect()
+}
+
+fn summarize_claim_entity_clusters(
+    rows: &[ClaimEntityFeatureRow],
+    assignments: &[usize],
+    distances: &[f64],
+    cluster_count: usize,
+) -> Vec<ClaimEntityClusterSummary> {
+    (0..cluster_count)
+        .map(|cluster_id| {
+            let indexes = assignments
+                .iter()
+                .enumerate()
+                .filter_map(|(index, assigned)| (*assigned == cluster_id).then_some(index))
+                .collect::<Vec<_>>();
+            let claim_count = indexes.len();
+            let divisor = claim_count.max(1) as f64;
+            ClaimEntityClusterSummary {
+                cluster_id,
+                claim_count,
+                average_outlier_score: round4(
+                    indexes.iter().map(|index| distances[*index]).sum::<f64>() / divisor,
+                ),
+                average_claim_amount: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].claim_amount)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                average_provider_degree: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].provider_degree)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+            }
+        })
+        .collect()
+}
+
+fn summarize_provider_graph_communities(
+    rows: &[ProviderPeerFeatureRow],
+    assignments: &[ProviderGraphCommunityAssignment],
+) -> Vec<ProviderGraphCommunitySummary> {
+    let mut community_ids = rows
+        .iter()
+        .map(|row| row.community_id)
+        .collect::<BTreeSet<_>>();
+    if community_ids.is_empty() {
+        community_ids.insert(0);
+    }
+    community_ids
+        .into_iter()
+        .map(|community_id| {
+            let indexes = rows
+                .iter()
+                .enumerate()
+                .filter_map(|(index, row)| (row.community_id == community_id).then_some(index))
+                .collect::<Vec<_>>();
+            let provider_count = indexes.len();
+            let divisor = provider_count.max(1) as f64;
+            let anomaly_candidate_count = assignments
+                .iter()
+                .filter(|assignment| {
+                    assignment.community_id == community_id && assignment.anomaly_candidate
+                })
+                .count();
+            ProviderGraphCommunitySummary {
+                community_id,
+                provider_count,
+                average_graph_degree: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].graph_degree)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                average_peer_z_score: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].peer_z_score)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                anomaly_candidate_count,
+            }
+        })
+        .collect()
+}

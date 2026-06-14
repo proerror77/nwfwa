@@ -12,6 +12,14 @@ The planned algorithm direction is appropriate for the current product stage:
 rule-first, explainable-model-first, and governed promotion before any model can
 affect routing.
 
+Automatic claim denial or approval is outside the authority of ML, anomaly
+detection, provider graph signals, similar-case search, or Agent outputs. If the
+product supports automatic denial or straight-through approval in pre-payment
+flows, that decision must come from customer-approved deterministic adjudication
+rules with policy authority, evidence refs, exception checks, audit ids, and an
+appeal or override path. Models can prioritize, route, explain, and trigger
+review; they cannot be the sole denial authority.
+
 The current implementation is not a production machine learning model. It is a
 demo and pilot baseline that exercises the model runtime contract, scoring
 fusion, evidence refs, model registry, retraining job contract, and promotion
@@ -50,10 +58,10 @@ Primary sources:
 
 | Area | Current implementation | Assessment |
 | --- | --- | --- |
-| Python ML service | `apps/ml-service/app/scorer.py` keeps the deterministic baseline fallback and can load a trained `.joblib` artifact through `FWA_MODEL_ARTIFACT_URI`. `apps/ml-service/app/training.py` trains a logistic-regression baseline from a Parquet manifest and writes model, validation, and feature-importance artifacts. | Training/export and HTTP demo compatibility are in place. Python is no longer the only serving route once `FWA_MODEL_ARTIFACT_URI` points the API server to a Rust JSON artifact. |
-| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, local JSON logistic artifact scoring, model identity checks, checksum validation, optional HMAC signature verification, version-lock metadata, explanations, latency, and bounded HTTP model-service calls that bypass host proxy settings. | Production-oriented serving has moved into Rust for the logistic baseline format. Production still needs automated export from training artifacts, service-level SLOs, active failure-rate monitoring, and environment-specific timeout policy. |
+| Python ML service | `apps/ml-service/app/scorer.py` keeps the deterministic baseline fallback and can load a trained `.joblib` artifact through `FWA_MODEL_ARTIFACT_URI`. `apps/ml-service/app/training.py` trains logistic, XGBoost, and LightGBM candidates from a Parquet manifest and writes model, validation, feature-importance, serving-manifest, and ONNX parity artifacts where applicable. | Training/export and HTTP demo compatibility are in place. Python remains a training and fallback surface; the long-term production control plane and serving contract are Rust-governed. |
+| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, local JSON logistic artifact scoring, Rust ONNX serving for `rust_onnx`, `xgboost_onnx`, `lightgbm_onnx`, and `deep_learning_onnx`, model identity checks, checksum validation, optional HMAC signature verification, version-lock metadata, explanations, latency, and bounded HTTP model-service calls that bypass host proxy settings. | Production-oriented serving has moved into Rust for logistic and ONNX artifacts. Production still needs broader real ONNX fixture coverage, service-level SLOs, active failure-rate monitoring, and environment-specific timeout policy. |
 | Feature layer | `crates/fwa-features` emits claim amount ratio, peer-percentile baseline, item count, high-cost item ratio, diagnosis/procedure match, and provider tier/profile features. | Suitable for demo. Production needs rolling provider/member/history, peer cohort, duplicate/similarity, graph, and label-delay features. |
-| Anomaly layer | `crates/fwa-anomaly` uses explainable threshold signals. | Reasonable explainable anomaly baseline. Not yet an unsupervised anomaly model. |
+| Anomaly layer | `crates/fwa-anomaly` uses explainable threshold signals, and `apps/worker` has Rust-native provider-peer, provider graph-community, and claim-entity clustering demo workflows over unlabeled manifests. | Reasonable explainable anomaly baseline plus demo clustering. Production still needs customer-scale unlabeled feature materialization and governance review volume controls. |
 | Risk fusion | `crates/fwa-scoring` combines seven layers with explicit weights and evidence refs. | Good demo and pilot decision-support structure. Weights are policy defaults, not learned coefficients. |
 | Retraining worker | `apps/worker` can keep the deterministic mock candidate output for demo smoke, or call `python -m app.train` when `run-retraining-job` receives `--training-manifest`. | Real candidate registration can now be driven by a local training manifest. Demo fallback remains available. |
 | Model governance | `apps/api-server/src/routes/ops_models.rs` enforces dataset, holdout, out-of-time, split, leakage, explanation, shadow, data quality, label, drift, feedback, and approval gates. | Strong governance skeleton. It still depends on real evaluation evidence being produced later. |
@@ -65,6 +73,8 @@ The demo can claim:
 - end-to-end scoring runs through a model runtime boundary;
 - risk is assembled from explainable rule, anomaly, provider, clinical, model,
   and routing layers;
+- deterministic customer-approved rules are the only valid future authority for
+  automatic denial or straight-through approval;
 - every promoted model must satisfy dataset, feature, metric, split, leakage,
   shadow, drift, label, and approval gates;
 - current model outputs are assistive risk signals and do not adjudicate,
@@ -93,7 +103,31 @@ Required language:
 - call the Python service a "demo scoring boundary" or "heuristic baseline";
 - call sub-probability metadata "baseline risk components" unless calibration
   evidence exists;
-- keep agent and ML outputs assistive-only.
+- keep agent and ML outputs assistive-only;
+- call auto-denial candidates "customer-approved deterministic adjudication
+  rules", not model decisions.
+
+### Stage 0A: Deterministic Adjudication Policy Design
+
+Before adding production automatic denial or straight-through approval, define a
+separate adjudication policy layer outside the ML model:
+
+- action classes: `hard_deny`, `straight_through`, `pending_evidence`,
+  `manual_review`, and `score_only`;
+- output fields: `decision_outcome`, `decision_authority`,
+  `decision_confidence`, `reason_code`, `appeal_or_review_required`, evidence
+  refs, and audit ids;
+- rule metadata: customer approval status, policy or clinical authority refs,
+  applicability scope, exception checks, effective dates, rollback plan, and
+  override route;
+- examples: gender or age contraindication, coverage exclusion, waiting-period
+  violation, expired coverage, duplicate claim identifier, provider
+  ineligibility, and product ineligibility;
+- fallback rule: if the exception check is unresolved or evidence is missing,
+  route to `pending_evidence` or `manual_review` instead of `auto_deny`.
+
+This layer can use model and anomaly outputs as supporting context, but they
+must not determine `auto_deny` by themselves.
 
 ### Stage 1: Pilot Label Collection
 
@@ -115,8 +149,17 @@ Candidate order:
 
 1. Logistic regression with calibration for an interpretable baseline.
 2. Decision tree or shallow tree ensemble for transparent rules-of-thumb.
-3. XGBoost or LightGBM only if it beats rule-only and baseline models under
-   strict validation, and only with feature importance or SHAP artifacts.
+3. XGBoost as the first primary supervised-learning challenger for structured
+   claim-risk scoring, compared against the logistic and rule-only baselines.
+4. LightGBM as the second gradient-boosted-tree candidate when training
+   platform constraints or customer stack preference make it a better fit.
+
+XGBoost or LightGBM candidates must carry feature importance or SHAP-style
+artifacts, threshold evidence tied to review capacity, strict time/group
+validation, ONNX serving artifacts, and probability-parity reports. Their
+high-contribution feature patterns may be sent into Rule Studio as candidate
+rules, but those candidates still require backtest, human review, promotion
+gates, approval, and publication before they become active rules.
 
 Do not make deep learning the default for structured claims scoring. Keep deep
 or LLM models limited to OCR cleanup, document summarization, medical-note
@@ -135,6 +178,16 @@ Every candidate evaluation should record:
 - threshold selection tied to review capacity;
 - rule-only and previous-model comparisons;
 - feature importance or SHAP artifact URI;
+- Auto MLOps feature-search report URI with candidate feature count, selected
+  feature count, feature missingness, label-correlation ranking, and feature
+  PSI watch status;
+- overfitting diagnostics report URI with time/group split ordering, group
+  leakage overlap counts, out-of-time AUC gap, score PSI, feature PSI, and
+  permutation-importance status;
+- AutoML factor-ranking report URI with ranked factors from model importance,
+  permutation importance, label correlation, and feature-PSI penalty;
+- ONNX artifact URI, ONNX parity report URI, and maximum probability delta for
+  XGBoost and LightGBM candidates;
 - shadow-mode comparison against live traffic, QA outcomes, and routing impact;
 - source data quality score, label provenance, pilot or customer validation,
   drift status, and human approval.
@@ -147,8 +200,17 @@ Minimum `metrics_json` fields for promotion-ready model evaluations:
   "time_split_field": "service_date",
   "group_split_fields": ["member_id", "policy_id", "provider_id", "case_family_id"],
   "leakage_check_status": "passed",
+  "out_of_time_validation_status": "passed",
   "shadow_comparison_status": "passed",
   "review_capacity_threshold_status": "passed",
+  "overfitting_diagnostics_status": "passed",
+  "overfitting_diagnostics_report_uri": "s3://.../overfitting_diagnostics_report.json",
+  "automl_feature_search_status": "passed",
+  "automl_feature_search_report_uri": "s3://.../automl_feature_search_report.json",
+  "automl_selected_feature_count": 42,
+  "automl_factor_ranking_status": "passed",
+  "automl_factor_ranking_report_uri": "s3://.../automl_factor_ranking_report.json",
+  "automl_ranked_factor_count": 42,
   "feature_reproducibility_hash": "sha256:<feature-build-hash>",
   "label_provenance_status": "passed",
   "label_reviewer_source": "qa_review",
@@ -167,6 +229,8 @@ Before production impact, replace demo runtime assumptions with:
   score drift, segment drift, calibration drift, and reviewer disagreement;
 - rollback and previous-active-version audit evidence;
 - separate thresholds for pre-payment and post-payment review modes;
+- explicit separation between deterministic adjudication rules and model-driven
+  review routing;
 - clear SLOs for model service availability and fallback behavior.
 
 ## Open Implementation Gaps
@@ -176,6 +240,14 @@ and production-operations gaps rather than missing demo mechanics:
 
 - real customer or pilot labels with provenance, delayed-label handling, and
   reviewer-disagreement measurement;
+- production-grade ONNX fixture coverage, latency SLOs, and monitoring around
+  XGBoost, LightGBM, and deep-learning ONNX serving; the Rust runtime now has an
+  artifact URI plus checksum-bound ONNX session cache, but it still needs
+  customer-scale load and failure-mode evidence;
+- production clustering and anomaly-discovery jobs over customer-scale unlabeled
+  member, claim, provider, and graph features; the Rust worker covers demo
+  provider-peer, provider graph-community, and claim-entity clustering with
+  output treated as review candidates only;
 - production feature store or scheduled feature materialization beyond the
   current manifest-backed offline baseline;
 - calibrated probability outputs with calibration evidence and disjoint
@@ -193,7 +265,12 @@ and production-operations gaps rather than missing demo mechanics:
 
 ## Decision
 
-Keep the current algorithm architecture. Do not replace it with a deep-learning
-first approach. The next correct step is to preserve the demo baseline while
-building the real offline training and evaluation pipeline behind the existing
-governance gates.
+Keep the current algorithm architecture, but move the lifecycle toward a
+Rust-owned Auto MLOps control plane. Logistic regression is the native baseline,
+XGBoost is the primary production challenger, LightGBM is the next GBDT
+candidate, and clustering/anomaly models support provider and claim discovery.
+XGBoost and LightGBM do not need to be reimplemented in Rust; they now enter the
+governed serving contract as ONNX artifacts only after parity tests pass, while
+`.joblib` remains the training artifact or Python fallback. Deep learning
+remains limited to non-structured evidence workflows unless a later
+customer-approved validation package proves otherwise.

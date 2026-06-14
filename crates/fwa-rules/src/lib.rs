@@ -1,4 +1,4 @@
-use fwa_core::RecommendedAction;
+use fwa_core::{RecommendedAction, RuleActionClass};
 use fwa_features::FeatureMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -39,7 +39,44 @@ pub struct RuleAction {
     pub score: u8,
     pub alert_code: String,
     pub recommended_action: RecommendedAction,
+    #[serde(default = "default_rule_action_class")]
+    pub action_class: RuleActionClass,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_evidence: Vec<RequiredEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjudication_policy: Option<AdjudicationPolicy>,
     pub reason: String,
+}
+
+fn default_rule_action_class() -> RuleActionClass {
+    RuleActionClass::ManualReview
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequiredEvidence {
+    pub evidence_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_request_type: Option<String>,
+    #[serde(default = "default_required_evidence_blocking")]
+    pub blocking: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_authority_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exception_check: Option<String>,
+}
+
+fn default_required_evidence_blocking() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdjudicationPolicy {
+    pub customer_approval_ref: String,
+    pub appeal_or_override_route: String,
+    pub effective_date: String,
+    pub rollback_plan_ref: String,
+    pub production_threshold_ref: String,
+    pub routing_impact_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -50,6 +87,11 @@ pub struct RuleMatch {
     pub alert_code: String,
     pub reason: String,
     pub recommended_action: RecommendedAction,
+    pub action_class: RuleActionClass,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_evidence: Vec<RequiredEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjudication_policy: Option<AdjudicationPolicy>,
     #[serde(default)]
     pub evidence_refs: Vec<Value>,
 }
@@ -73,6 +115,9 @@ pub fn evaluate_rules(rules: &[Rule], features: &FeatureMap) -> Result<Vec<RuleM
                 alert_code: rule.action.alert_code.clone(),
                 reason: rule.action.reason.clone(),
                 recommended_action: rule.action.recommended_action,
+                action_class: rule.action.action_class,
+                required_evidence: rule.action.required_evidence.clone(),
+                adjudication_policy: rule.action.adjudication_policy.clone(),
                 evidence_refs: rule_evidence_refs(rule, features),
             });
         }
@@ -109,8 +154,14 @@ fn evaluate_condition(condition: &Condition, features: &FeatureMap) -> Result<bo
 
     match condition.operator.as_str() {
         "<=" => Ok(as_f64(&feature.value) <= as_f64(&condition.value)),
+        "<" => Ok(as_f64(&feature.value) < as_f64(&condition.value)),
         ">=" => Ok(as_f64(&feature.value) >= as_f64(&condition.value)),
+        ">" => Ok(as_f64(&feature.value) > as_f64(&condition.value)),
         "==" => Ok(feature.value == condition.value),
+        "in" => Ok(condition
+            .value
+            .as_array()
+            .is_some_and(|values| values.iter().any(|value| value == &feature.value))),
         other => Err(RuleError::UnsupportedOperator(other.to_string())),
     }
 }
@@ -137,6 +188,8 @@ mod tests {
                 name: "days_since_policy_start".into(),
                 version: 1,
                 value: serde_json::json!(5),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![fwa_features::EvidenceRef {
                     entity_type: "claim".into(),
                     entity_id: "CLM-1".into(),
@@ -160,6 +213,9 @@ mod tests {
                 score: 25,
                 alert_code: "EARLY_CLAIM".into(),
                 recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::ManualReview,
+                required_evidence: vec![],
+                adjudication_policy: None,
                 reason: "保单生效后 7 天内发生理赔".into(),
             },
         }];
@@ -197,11 +253,233 @@ mod tests {
                 score: 10,
                 alert_code: "MISSING".into(),
                 recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::ManualReview,
+                required_evidence: vec![],
+                adjudication_policy: None,
                 reason: "missing".into(),
             },
         }];
 
         let matches = evaluate_rules(&rules, &BTreeMap::new()).unwrap();
         assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn supports_strict_numeric_operators() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_item_count".into(),
+            FeatureValue {
+                name: "claim_item_count".into(),
+                version: 1,
+                value: serde_json::json!(5),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
+                evidence_refs: vec![],
+            },
+        );
+
+        assert!(evaluate_condition(
+            &Condition {
+                field: "claim_item_count".into(),
+                operator: ">".into(),
+                value: serde_json::json!(4),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(evaluate_condition(
+            &Condition {
+                field: "claim_item_count".into(),
+                operator: "<".into(),
+                value: serde_json::json!(6),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(!evaluate_condition(
+            &Condition {
+                field: "claim_item_count".into(),
+                operator: ">".into(),
+                value: serde_json::json!(5),
+            },
+            &features,
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn supports_in_operator() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "provider_region".into(),
+            FeatureValue {
+                name: "provider_region".into(),
+                version: 1,
+                value: serde_json::json!("shanghai"),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
+                evidence_refs: vec![],
+            },
+        );
+
+        assert!(evaluate_condition(
+            &Condition {
+                field: "provider_region".into(),
+                operator: "in".into(),
+                value: serde_json::json!(["beijing", "shanghai"]),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(!evaluate_condition(
+            &Condition {
+                field: "provider_region".into(),
+                operator: "in".into(),
+                value: serde_json::json!(["shenzhen"]),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(!evaluate_condition(
+            &Condition {
+                field: "provider_region".into(),
+                operator: "in".into(),
+                value: serde_json::json!("shanghai"),
+            },
+            &features,
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn defaults_rule_action_class_for_legacy_dsl() {
+        let action: RuleAction = serde_json::from_value(serde_json::json!({
+            "score": 25,
+            "alert_code": "LEGACY",
+            "recommended_action": "ManualReview",
+            "reason": "legacy rule"
+        }))
+        .unwrap();
+
+        assert_eq!(action.action_class, RuleActionClass::ManualReview);
+        assert!(action.required_evidence.is_empty());
+    }
+
+    #[test]
+    fn carries_required_evidence_from_pending_rule() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "dental_xray_missing".into(),
+            FeatureValue {
+                name: "dental_xray_missing".into(),
+                version: 1,
+                value: serde_json::json!(1),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
+                evidence_refs: vec![],
+            },
+        );
+        let rules = vec![Rule {
+            rule_id: "rule_dental_xray_required".into(),
+            version: 1,
+            name: "Dental X-ray required".into(),
+            review_mode: "pre_payment".into(),
+            scheme_family: Some("medically_unnecessary_service".into()),
+            conditions: vec![Condition {
+                field: "dental_xray_missing".into(),
+                operator: "==".into(),
+                value: serde_json::json!(1),
+            }],
+            action: RuleAction {
+                score: 0,
+                alert_code: "DENTAL_XRAY_REQUIRED".into(),
+                recommended_action: RecommendedAction::RequestEvidence,
+                action_class: RuleActionClass::PendingEvidence,
+                required_evidence: vec![RequiredEvidence {
+                    evidence_type: "dental_xray".into(),
+                    evidence_request_type: Some("document_request".into()),
+                    blocking: true,
+                    policy_authority_ref: Some("policy:dental:evidence:v1".into()),
+                    exception_check: Some("xray_waiver_not_present".into()),
+                }],
+                adjudication_policy: None,
+                reason: "牙科治疗需要 X 光佐证".into(),
+            },
+        }];
+
+        let matches = evaluate_rules(&rules, &features).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].action_class, RuleActionClass::PendingEvidence);
+        assert_eq!(matches[0].required_evidence[0].evidence_type, "dental_xray");
+        assert!(matches[0].required_evidence[0].blocking);
+    }
+
+    #[test]
+    fn returns_conflicting_action_class_matches_for_scoring_priority() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "coverage_exception".into(),
+            FeatureValue {
+                name: "coverage_exception".into(),
+                version: 1,
+                value: serde_json::json!("approved"),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
+                evidence_refs: vec![],
+            },
+        );
+
+        let straight_through_rule = Rule {
+            rule_id: "approved_exception_stp".into(),
+            version: 1,
+            name: "Approved exception straight-through".into(),
+            review_mode: "pre_payment".into(),
+            scheme_family: Some("coverage_exception".into()),
+            conditions: vec![Condition {
+                field: "coverage_exception".into(),
+                operator: "==".into(),
+                value: serde_json::json!("approved"),
+            }],
+            action: RuleAction {
+                score: 0,
+                alert_code: "APPROVED_EXCEPTION_STP".into(),
+                recommended_action: RecommendedAction::StandardProcessing,
+                action_class: RuleActionClass::StraightThrough,
+                required_evidence: vec![],
+                adjudication_policy: None,
+                reason: "customer-approved exception can pass without extra review".into(),
+            },
+        };
+        let hard_deny_rule = Rule {
+            rule_id: "coverage_exclusion_hard_deny".into(),
+            version: 1,
+            name: "Coverage exclusion hard deny".into(),
+            review_mode: "pre_payment".into(),
+            scheme_family: Some("coverage_exception".into()),
+            conditions: vec![Condition {
+                field: "coverage_exception".into(),
+                operator: "in".into(),
+                value: serde_json::json!(["approved", "excluded"]),
+            }],
+            action: RuleAction {
+                score: 100,
+                alert_code: "COVERAGE_EXCLUSION_HARD_DENY".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::HardDeny,
+                required_evidence: vec![],
+                adjudication_policy: None,
+                reason: "coverage exclusion needs deterministic adjudication review".into(),
+            },
+        };
+
+        let matches = evaluate_rules(&[straight_through_rule, hard_deny_rule], &features).unwrap();
+
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].action_class, RuleActionClass::StraightThrough);
+        assert_eq!(matches[0].alert_code, "APPROVED_EXCEPTION_STP");
+        assert_eq!(matches[1].action_class, RuleActionClass::HardDeny);
+        assert_eq!(matches[1].alert_code, "COVERAGE_EXCLUSION_HARD_DENY");
     }
 }

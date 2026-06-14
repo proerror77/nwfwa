@@ -1,0 +1,82 @@
+{
+  "artifact_evaluation_refs": [
+    "model_artifact_evaluations:data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/xgboost_model_artifact_evaluation.json",
+    "model_artifact_evaluations:data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/lightgbm_model_artifact_evaluation.json"
+  ],
+  "closure_status": "closed_with_human_governance_gates",
+  "evidence_refs": [
+    "demo_dataset_index:data/rust-automl-demo/index.json",
+    "automl_candidate_ranking:data/rust-automl-demo/lifecycle-evidence/ranking/automl_candidate_ranking.json",
+    "rule_candidate_backtests:data/rust-automl-demo/lifecycle-evidence/rule-candidates/backtest/rule_candidate_backtest_report.json",
+    "provider_peer_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-peer/provider_peer_clustering_report.json",
+    "provider_graph_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-graph/provider_graph_community_report.json",
+    "claim_entity_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/claim-entity/claim_entity_clustering_report.json",
+    "mlops_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
+    "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json",
+    "mlops_monitoring_cycles:data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/mlops_monitoring_cycle_report.json"
+  ],
+  "governance_boundary": "Rust lifecycle closure may open monitoring, review, retraining preparation, and rule-candidate backtest work only; it must not auto-activate models, assign fraud labels, or write back to the rule library",
+  "lifecycle_stages": [
+    {
+      "evidence_refs": [
+        "demo_dataset_index:data/rust-automl-demo/index.json"
+      ],
+      "stage": "demo_dataset_portfolio",
+      "status": "passed",
+      "summary": "1 labeled dataset(s), 2 unlabeled dataset(s)"
+    },
+    {
+      "evidence_refs": [
+        "automl_candidate_ranking:data/rust-automl-demo/lifecycle-evidence/ranking/automl_candidate_ranking.json"
+      ],
+      "stage": "supervised_candidate_ranking",
+      "status": "passed",
+      "summary": "candidate algorithms: lightgbm, xgboost"
+    },
+    {
+      "evidence_refs": [
+        "model_artifact_evaluations:data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/xgboost_model_artifact_evaluation.json",
+        "model_artifact_evaluations:data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/lightgbm_model_artifact_evaluation.json"
+      ],
+      "stage": "onnx_rust_serving_gate",
+      "status": "passed",
+      "summary": "artifact runtime kinds: lightgbm_onnx, xgboost_onnx"
+    },
+    {
+      "evidence_refs": [
+        "rule_candidate_backtests:data/rust-automl-demo/lifecycle-evidence/rule-candidates/backtest/rule_candidate_backtest_report.json"
+      ],
+      "stage": "explainable_rule_backtest_gate",
+      "status": "passed",
+      "summary": "rule candidates are backtested and blocked before rule-library writeback"
+    },
+    {
+      "evidence_refs": [
+        "provider_peer_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-peer/provider_peer_clustering_report.json",
+        "provider_graph_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-graph/provider_graph_community_report.json",
+        "claim_entity_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/claim-entity/claim_entity_clustering_report.json"
+      ],
+      "stage": "unlabeled_clustering_reviews",
+      "status": "passed",
+      "summary": "provider-peer, provider graph-community, and claim/member/provider clustering create review candidates only"
+    },
+    {
+      "evidence_refs": [
+        "mlops_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
+        "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json",
+        "mlops_monitoring_cycles:data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/mlops_monitoring_cycle_report.json"
+      ],
+      "stage": "mlops_monitoring_loop",
+      "status": "passed",
+      "summary": "monitoring status: passed; scheduler: completed_with_pending_external_reports; alert delivery: no_alerts_required; cycle: completed_no_alerts_required"
+    }
+  ],
+  "report_kind": "rust_automl_lifecycle_closure",
+  "report_version": 1,
+  "required_human_gates": [
+    "model_governance_review_before_shadow_or_activation",
+    "human_rule_review_after_backtest_before_rule_library_writeback",
+    "anomaly_review_before_case_creation_or_label_assignment",
+    "mlops_monitoring_review_before_retraining_or_rollback_action"
+  ]
+}

@@ -137,11 +137,186 @@ Approval checks:
 - public research data is not treated as customer/pilot validation evidence;
 - training data usage is compatible with the customer or pilot contract.
 
+## Stage 4.5: Feature Set Materialization
+
+Purpose: bind the exact Rust-visible feature columns and split summaries before
+training so model artifacts, evaluation reports, and promotion gates can refer
+to an immutable feature-set version.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- build-feature-set \
+  --manifest data/training/manifest.json \
+  --output-dir data/training/feature-set \
+  --feature-set-id claims_model_2026_06_02_features_v1
+```
+
+The worker reads the same labeled Parquet manifest used by profiling and
+training, excludes entity keys and the label column, keeps numeric feature
+columns in deterministic order, and writes:
+
+- `feature_set_manifest.json`;
+- `feature_columns.json`;
+- `feature_split_summary.json`.
+
+The manifest includes `feature_reproducibility_hash`, ordered feature columns,
+label column, entity keys, row counts, label counts by split, source manifest
+URI, and evidence refs. This is training and promotion evidence only. It does
+not approve labels, promote models, publish rules, or allow unlabeled anomaly
+outputs to become supervised labels.
+
+The local training service also writes `automl_feature_search_report.json`
+inside the candidate artifact directory. That report ranks candidate numeric
+factors by label correlation, records missingness, variance, and train-vs-OOT
+feature PSI, and selects the training feature list after excluding labels,
+entity keys, the raw time split control field, and structurally unusable fields
+such as zero-variance or high-missingness factors.
+Feature PSI is retained as overfitting evidence for ranking and promotion
+gates, not silently used as a training-time deletion rule.
+
+The same training run writes `overfitting_diagnostics_report.json`. This report
+is the source of the retraining payload's time/group split, leakage,
+out-of-time validation, score PSI, feature PSI, and permutation-importance
+statuses. A failed diagnostic may still produce an artifact for review, but the
+FWA API will reject registration or promotion because the payload status fields
+will no longer be `passed`.
+
+After feature importance and permutation importance are computed, the training
+service also writes `automl_factor_ranking_report.json`. It combines model
+importance, permutation AUC drop, label-correlation signal, and feature PSI into
+a ranked factor list for model review and rule-candidate review. This report is
+required by the retraining output API; raw feature-importance files alone are
+not enough to satisfy the Auto MLOps evidence contract.
+
 ## Public Data MVP Path
 
 When customer training data is not available, use the public-data MVP pack to
 exercise the data and ML engineering loop without claiming production model
 effectiveness.
+
+Rust-generated Auto MLOps demo pack:
+
+```bash
+cargo run --locked -p worker -- build-demo-ml-datasets \
+  --output-dir data/rust-automl-demo \
+  --dataset-version 2026-06-rust-automl-demo
+```
+
+A checked-in demo pack already exists under `data/rust-automl-demo` for local
+verification. Regenerate it with the command above when the worker dataset
+contract changes.
+
+This writes:
+
+- `labeled_claim_risk/manifest.json`: one labeled claim-risk dataset with
+  train, validation, and out-of-time Parquet splits and `confirmed_fwa` as a
+  weak demo label;
+- `unlabeled_shadow_scoring/manifest.json`: unlabeled claim rows for shadow
+  scoring, claim/member/provider entity clustering, score-distribution, and
+  drift exercises;
+- `unlabeled_provider_peer_clustering/manifest.json`: unlabeled provider-month
+  peer features for clustering and anomaly-discovery exercises.
+
+Only the labeled manifest should be passed to supervised training or
+`profile-parquet`. The unlabeled manifests are for scoring, clustering, and
+manual-review candidate discovery; they are not training labels or production
+promotion evidence.
+
+Build a Rust feature-set manifest for the labeled demo dataset before
+supervised training:
+
+```bash
+cargo run --locked -p worker -- build-feature-set \
+  --manifest data/rust-automl-demo/labeled_claim_risk/manifest.json \
+  --output-dir data/rust-automl-demo/labeled_claim_risk/feature-set \
+  --feature-set-id rust_demo_claim_risk_labeled_features_v1
+```
+
+Run the Rust provider-peer clustering demo on the unlabeled provider manifest:
+
+```bash
+cargo run --locked -p worker -- cluster-provider-peers \
+  --manifest data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json \
+  --output-dir data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters
+```
+
+This writes:
+
+- `provider_peer_clustering_report.json`;
+- `provider_anomaly_review_tasks.json`.
+
+The output is an anomaly-candidate workflow only. It must not create confirmed
+FWA labels, supervised-training labels, or automatic claim disposition.
+
+Run the Rust provider graph-community clustering demo on the same unlabeled
+provider manifest:
+
+```bash
+cargo run --locked -p worker -- cluster-provider-graph \
+  --manifest data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json \
+  --output-dir data/rust-automl-demo/unlabeled_provider_peer_clustering/graph-communities
+```
+
+This writes:
+
+- `provider_graph_community_report.json`;
+- `provider_graph_review_tasks.json`.
+
+This is also a review-candidate workflow only. It detects graph/community
+centrality anomalies without assigning labels or opening cases automatically.
+
+Run the Rust claim/member/provider entity clustering demo on the unlabeled
+claim manifest:
+
+```bash
+cargo run --locked -p worker -- cluster-claim-entities \
+  --manifest data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json \
+  --output-dir data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters
+```
+
+This writes:
+
+- `claim_entity_clustering_report.json`;
+- `claim_entity_review_tasks.json`.
+
+The output is also an anomaly-candidate workflow only. It can prepare review or
+rule-candidate backtest work, but it must not write back to the rule library
+until backtesting and human review are complete.
+
+Build the checked-in Rust Auto MLOps golden-path evidence pack:
+
+```bash
+cargo run --locked -p worker -- build-demo-automl-lifecycle-evidence \
+  --demo-root data/rust-automl-demo \
+  --output-dir data/rust-automl-demo/lifecycle-evidence
+```
+
+This writes `demo_lifecycle_evidence_index.json`, validation reports for
+XGBoost and LightGBM, AutoML candidate ranking, ONNX Rust-serving artifact
+evaluation reports, feature-importance evidence, rule-candidate mining and
+backtest reports, provider-peer, provider-graph, and claim-entity clustering
+reports, MLOps monitoring reports, and the final lifecycle closure report. The
+checked-in
+closure report is `data/rust-automl-demo/lifecycle-evidence/closure/rust_automl_lifecycle_closure_report.json`
+and should stay `closed_with_human_governance_gates`.
+
+Verify the checked-in demo pack without regenerating it:
+
+```bash
+cargo run --locked -p worker -- verify-demo-automl-lifecycle \
+  --demo-root data/rust-automl-demo \
+  --evidence-dir data/rust-automl-demo/lifecycle-evidence \
+  --output-dir data/rust-automl-demo/lifecycle-evidence/verification
+```
+
+This writes
+`data/rust-automl-demo/lifecycle-evidence/verification/rust_automl_lifecycle_verification_report.json`
+and exits non-zero if the pack no longer proves the expected lifecycle shape:
+one labeled supervised dataset, at least two unlabeled review-only datasets,
+XGBoost and LightGBM ONNX Rust-serving gates, rule-candidate backtest,
+clustering review tasks, monitoring reports, and the final human-governed
+closure report.
 
 ```bash
 uv run --project apps/ml-service \
@@ -205,16 +380,21 @@ python -m app.train \
   --model-key baseline_fwa \
   --base-model-version 0.1.0 \
   --job-id model_retraining_job_1 \
-  --actor trainer-worker
+  --actor trainer-worker \
+  --algorithm xgboost
 ```
 
 Current implementation:
 
-- logistic regression baseline;
+- logistic regression baseline by default, plus `--algorithm xgboost` and
+  `--algorithm lightgbm` for gradient-boosted-tree supervised-learning
+  candidates;
 - numeric feature columns from the manifest dataset;
-- `.joblib` model artifact;
+- `.joblib` training artifact;
+- `.onnx` serving artifact for XGBoost and LightGBM;
 - `validation.json`;
 - `feature_importance.parquet`;
+- `onnx_parity_report.json` for XGBoost and LightGBM;
 - `serving_manifest.json` with artifact checksum, signature, and version lock;
 - `feature_store_manifest.json` with materialized feature columns, split row
   counts, entity keys, and null-count evidence;
@@ -223,9 +403,18 @@ Current implementation:
 - `fairness_report.json` with segment precision and recall slices;
 - retraining output payload printed to stdout.
 
-The first production candidate should remain interpretable. Gradient-boosted
-trees may be added later only when validation, explanation, and shadow evidence
-are in place.
+The first production supervised-learning comparison should include the logistic
+baseline, an XGBoost candidate, and a LightGBM candidate. Logistic exports both
+a Python `.joblib` artifact and a Rust JSON serving artifact for the API
+server's lightweight runtime. XGBoost and LightGBM export Python `.joblib`
+training artifacts plus governed `.onnx` serving artifacts. Their serving
+manifests use `runtime_kind` values `xgboost_onnx` and `lightgbm_onnx` only
+after the trainer verifies validation-split probability parity with ONNX
+Runtime. Deep-learning models should use `deep_learning_onnx` and the same
+Rust serving-manifest, checksum, feature-order, and parity evidence gates. They
+still remain governed candidates with feature-importance or explanation,
+shadow, drift, fairness, registration, promotion, and human-review gates; ONNX
+export alone does not activate them.
 
 ## Stage 6: Worker-Driven Candidate Registration
 
@@ -250,10 +439,144 @@ Behavior:
 - without `--training-manifest`, the worker keeps the deterministic demo mock
   output path;
 - with `--training-manifest`, the worker calls `python -m app.train`;
+- before posting the trainer output, the worker runs the Rust feature-set
+  builder against the same training manifest, writes
+  `rust_feature_set/feature_set_manifest.json` next to the model artifact, and
+  injects `rust_feature_set_manifest_uri`, `rust_feature_set_status`, and the
+  Rust `feature_reproducibility_hash` into `metrics_json`;
+- if the trainer also returned a feature hash, the worker preserves it as
+  `trainer_feature_reproducibility_hash` while making the Rust feature-set hash
+  the promotion-gate hash;
+- when the trainer returns `serving_manifest_uri`, the worker runs the Rust
+  serving artifact evaluator before API registration, writes
+  `artifact-evaluation/model_artifact_evaluation_report.json`, and injects
+  `model_artifact_evaluation_status`, `model_artifact_evaluation_report_uri`,
+  `rust_serving_status`, `rust_serving_latency_status`, and
+  `rust_serving_p95_latency_ms` into `metrics_json`;
+- for `xgboost_onnx` and `lightgbm_onnx`, the worker also requires the
+  trainer's `onnx_parity_report_uri`, verifies that the parity report passed,
+  and attaches `onnx_parity_gate_status`, `onnx_parity_report_uri`, and
+  `model_onnx_parity_reports:<uri>` evidence before the candidate can pass the
+  Rust serving gate;
 - the worker posts the trainer output to
   `/api/v1/ops/model-retraining-jobs/{job_id}/output`;
 - the API creates a candidate model version and evaluation record if the output
   contract passes validation.
+
+## Stage 6.5: Auto MLOps Candidate Ranking
+
+Purpose: compare candidate validation reports and open human-review work without
+promoting a model automatically.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- rank-automl-candidates \
+  --validation-report data/model-artifacts/baseline_fwa/<logistic-version>/validation.json \
+  --validation-report data/model-artifacts/baseline_fwa/<xgboost-version>/validation.json \
+  --validation-report data/model-artifacts/baseline_fwa/<lightgbm-version>/validation.json \
+  --output-dir data/model-artifacts/baseline_fwa/automl-ranking
+```
+
+The worker writes:
+
+- `automl_candidate_ranking.json`;
+- `automl_review_tasks.json`.
+
+Ranking uses out-of-time AUC, average precision, precision, and recall, then
+subtracts an overfitting penalty from score PSI, max feature PSI, missing
+permutation importance, and missing feature reproducibility hash. Promotion
+gates still dominate. Candidates stay blocked when label provenance,
+time/group split fields, leakage, shadow comparison, serving version lock,
+artifact integrity, Auto MLOps feature-search report evidence, Rust feature-set
+materialization, Rust serving artifact evaluation, fairness, AUC, recall, score
+PSI, max feature PSI, permutation importance, or feature reproducibility
+evidence is missing or failed. The output may recommend a candidate for human
+review; it must not activate a model or publish a rule.
+
+## Stage 6.6: Rust Serving Artifact Evaluation
+
+Purpose: verify that a governed serving manifest can execute through the Rust
+runtime before the candidate enters activation review.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- evaluate-model-artifact \
+  --serving-manifest data/model-artifacts/baseline_fwa/<candidate-version>/serving_manifest.json \
+  --dataset-manifest data/training/manifest.json \
+  --split validation \
+  --output-dir data/model-artifacts/baseline_fwa/<candidate-version>/artifact-evaluation \
+  --expected-probability-column expected_probability \
+  --probability-tolerance 0.0001 \
+  --latency-budget-ms 100 \
+  --max-rows 100
+```
+
+`--expected-probability-column` is optional. When it is present, the report
+requires Rust serving probability parity against that column. When it is absent,
+the report still validates the manifest contract, feature order, checksum,
+optional signature, Rust scorer execution, and P95 latency. The worker writes
+`model_artifact_evaluation_report.json` with `gate_status`, blocking reasons,
+sample scores, probability deltas, latency, and evidence refs. The report is
+activation-review evidence only; it does not activate the model.
+
+`run-retraining-job` calls this evaluator automatically when the trainer output
+includes `serving_manifest_uri`. The standalone command remains useful for
+reruns, tighter parity thresholds, larger sample windows, or evaluating an
+externally supplied artifact before it is registered.
+
+## Stage 6.7: Explainable Rule Candidate Mining
+
+Purpose: turn explainable model evidence into draft Rule Studio candidates
+without writing to the active rule library.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- mine-rule-candidates \
+  --validation-report data/model-artifacts/baseline_fwa/<candidate-version>/validation.json \
+  --feature-importance data/model-artifacts/baseline_fwa/<candidate-version>/feature_importance.parquet \
+  --output-dir data/model-artifacts/baseline_fwa/<candidate-version>/rule-candidates
+```
+
+The worker writes:
+
+- `rule_candidate_mining_plan.json`;
+- `rule_candidate_backtest_requests.json`;
+- `rule_candidate_review_tasks.json`.
+
+The output is intentionally blocked from rule-library writeback. Each candidate
+rule template keeps `threshold_selected_by_backtest` instead of a publishable
+threshold. Before a candidate can enter Rule Studio publication flow, it must
+pass deterministic backtest, false-positive review, human promotion review,
+customer policy or model-governance approval, and shadow or limited rollout
+when impact is high.
+
+## Stage 6.8: Rule Candidate Backtest
+
+Purpose: turn draft rule candidates into auditable backtest evidence before a
+human reviewer decides whether they can move toward Rule Studio publication.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- run-rule-candidate-backtest \
+  --candidate-plan data/model-artifacts/baseline_fwa/<candidate-version>/rule-candidates/rule_candidate_mining_plan.json \
+  --dataset-manifest data/rust-automl-demo/labeled_claim_risk/manifest.json \
+  --output-dir data/model-artifacts/baseline_fwa/<candidate-version>/rule-candidates/backtest
+```
+
+The worker writes:
+
+- `rule_candidate_backtest_report.json`;
+- `rule_candidate_backtest_review_tasks.json`.
+
+The backtest selects a deterministic threshold from the training split and
+reports hit rate, precision, recall, F1, false positives, false negatives, and
+manual-review capacity impact for each dataset split. The report still sets
+`rule_library_writeback_status` to blocked until human review and policy or
+model-governance approval are complete.
 
 ## External Training Platform Boundary
 
@@ -280,10 +603,23 @@ Required boundary:
 - the API remains responsible for candidate registration, promotion gates,
   activation, rollback, and audit events;
 - Rust serving remains independent of the training platform by loading the
-  activated artifact URI through `FWA_MODEL_ARTIFACT_URI`.
+  activated serving manifest through `FWA_MODEL_SERVING_MANIFEST_URI`.
 
 This keeps training portable without forking the data source. The local Python
 trainer is only the compatibility implementation of the same contract.
+
+The model promotion gate treats feature materialization as Rust-governed
+evidence. A generic `feature_store_materialization_status = passed` is not
+enough; the evaluation metrics must also include
+`rust_feature_set_status = passed` and a non-empty
+`rust_feature_set_manifest_uri`.
+
+AutoML ranking also treats Rust serving evaluation as required evidence. A
+candidate can rank for human review only after its metrics include a passing
+`model_artifact_evaluation_status` and `rust_serving_status`; these signals are
+normally produced by `run-retraining-job` when `serving_manifest_uri` is present.
+For XGBoost and LightGBM, ranking also requires a passed ONNX parity status and
+non-empty `onnx_parity_report_uri`.
 
 External handoff command:
 
@@ -294,15 +630,20 @@ cargo run --locked -p worker -- build-training-handoff \
   --model-key baseline_fwa \
   --base-model-version 0.1.0 \
   --job-id model_retraining_job_1 \
-  --actor trainer-worker
+  --actor trainer-worker \
+  --algorithm xgboost
 ```
 
 The command prints a handoff JSON document with `handoff_kind =
 external_training_platform`. It names the same Parquet manifest, expected Rust
-serving artifact, Python training artifact, serving manifest, validation
-report, feature-store manifest, shadow report, drift report, fairness report,
-and retraining output submit path. This is the contract an external training
-platform should execute and return to the API.
+serving artifact, Python training artifact, serving manifest, validation report,
+Rust feature-set manifest, feature-store manifest, shadow report, drift report,
+fairness report, and retraining output submit path. Omit `--algorithm` for the
+default logistic baseline. Use `--algorithm xgboost` or `--algorithm lightgbm`
+when the handoff should point the serving artifact to `model.onnx` and require
+`onnx_parity_report.json` evidence before the Rust serving gate can pass. This
+is the contract an external training platform should execute and return to the
+API.
 
 Scheduled MLOps monitoring plan command:
 
@@ -318,9 +659,240 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
 The output is a `scheduled_mlops_monitoring` plan with five jobs:
 `shadow_traffic_evaluation`, `drift_monitoring`, and
 `segment_fairness_review`, `reviewer_disagreement_review`, and
-`label_delay_review`. It is intentionally a plan document, not a built-in
-scheduler, so customer or platform schedulers can run it without giving the
-application direct control over production ML infrastructure.
+`label_delay_review`. It is intentionally a plan document rather than a
+production scheduler, so customer or platform schedulers can trigger the same
+Rust job without giving the application direct control over production ML
+infrastructure.
+
+For CronJobs or other schedulers that should not parse stdout, run the combined
+Rust command:
+
+```bash
+cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
+  --manifest-uri s3://fwa-datasets/demo_claims_fwa/2026-05-demo/manifest.json \
+  --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --cron "0 2 * * *" \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring \
+  --monitoring-inputs scripts/ops/sample_mlops_monitoring_inputs.json \
+  --artifact-base-uri s3://fwa-models/baseline_fwa/0.2.0/mlops-monitoring
+```
+
+This writes `mlops_monitoring_plan.json`, the runtime report artifacts, and
+`mlops_monitoring_artifact_publication_manifest.json` in one worker invocation.
+The publication manifest records each local artifact, target durable URI,
+checksum, and byte size. The staging Kubernetes CronJob uses this command shape.
+Omit `--monitoring-inputs` for staging proof data; pass it when a customer,
+pilot, or replay window has already produced shadow, drift, fairness,
+reviewer-disagreement, and label-delay measurements.
+
+Execute the scheduled monitoring plan with the Rust runtime report producer:
+
+```bash
+cargo run --locked -p worker -- run-mlops-monitoring-plan \
+  --plan data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring
+```
+
+The worker writes `shadow_report.json`, `drift_report.json`,
+`fairness_report.json`, `reviewer_disagreement_report.json`,
+`label_delay_report.json`, and `index.json`. These reports are monitoring
+evidence only; producing them must not create retraining jobs, activate models,
+rollback models, assign fraud labels, or write rules.
+
+After the scheduled jobs publish their reports, summarize them into the Rust
+Auto MLOps monitoring decision:
+
+```bash
+cargo run --locked -p worker -- build-mlops-monitoring-report \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/artifact-evaluation/model_artifact_evaluation_report.json \
+  --shadow-report data/model-artifacts/baseline_fwa/0.2.0/shadow_report.json \
+  --drift-report data/model-artifacts/baseline_fwa/0.2.0/drift_report.json \
+  --fairness-report data/model-artifacts/baseline_fwa/0.2.0/fairness_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring
+```
+
+The worker writes `mlops_monitoring_report.json` and
+`mlops_monitoring_review_tasks.json`. This report may recommend monitoring,
+review, or retraining preparation, but it must not activate models, publish
+rules, or assign fraud labels.
+
+Submit the report into the governed API audit surface:
+
+```bash
+cargo run --locked -p worker -- submit-mlops-monitoring-report \
+  --api-url http://127.0.0.1:8080 \
+  --api-key "$FWA_API_KEY" \
+  --report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
+  --actor mlops-worker \
+  --notes "Rust monitoring report submitted for human review."
+```
+
+The API records `model.mlops_monitoring.report_submitted` with model-version
+and monitoring-report evidence refs. It returns next actions such as continued
+monitoring or retraining preparation, but it does not create retraining jobs,
+activate models, or rollback models automatically.
+
+Submitted monitoring review tasks are visible in the operator queue:
+
+```bash
+curl -H "x-api-key: $FWA_API_KEY" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-monitoring-review-queue"
+```
+
+Human reviewers close the loop by recording an explicit decision. This records
+`model.mlops_monitoring.review_task_reviewed` only; `prepare_retraining` is a
+review outcome, not an automatic retraining job:
+
+```bash
+curl -X POST \
+  -H "x-api-key: $FWA_API_KEY" \
+  -H "content-type: application/json" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-monitoring-review-tasks/<task_id>/reviews" \
+  -d '{
+    "decision": "prepare_retraining",
+    "reviewer": "model-governance",
+    "notes": "Approved monitoring signal for retraining preparation.",
+    "evidence_refs": [
+      "model_versions:baseline_fwa:0.2.0",
+      "model_monitoring_reports:<report_uri>",
+      "model_monitoring_review_tasks:<task_id>"
+    ]
+  }'
+```
+
+Run the Rust monitoring cycle executor when the plan, artifact evaluation, and
+runtime reports already exist:
+
+```bash
+cargo run --locked -p worker -- run-mlops-monitoring-cycle \
+  --plan data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/xgboost/artifact-evaluation/model_artifact_evaluation_report.json \
+  --shadow-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/shadow_report.json \
+  --drift-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/drift_report.json \
+  --fairness-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/fairness_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/cycle \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --actor mlops-worker \
+  --notes "Rust monitoring cycle submitted for governance audit."
+```
+
+The cycle executor builds `mlops_monitoring_report.json`,
+`mlops_scheduler_execution_report.json`, `mlops_alert_delivery_tasks.json`, and
+`mlops_monitoring_cycle_report.json`, then submits the monitoring and
+alert-router handoff records when API credentials are provided. The shadow,
+drift, and fairness reports may be produced by `run-mlops-monitoring-plan` for
+staging/demo evidence or by customer-side monitoring jobs for live evidence.
+
+Build the Rust scheduler execution and alert-delivery evidence package:
+
+```bash
+cargo run --locked -p worker -- build-mlops-scheduler-execution-report \
+  --plan data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json \
+  --monitoring-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler
+```
+
+The worker writes `mlops_scheduler_execution_report.json` and
+`mlops_alert_delivery_tasks.json`. Alert tasks are queued for the external
+alert router only; they must not create retraining jobs, activate models,
+rollback models, or assign fraud labels.
+
+Submit the scheduler alert-router handoff into API governance audit:
+
+```bash
+cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --scheduler-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --actor mlops-worker \
+  --notes "Rust scheduler alert-router delivery submitted for governance audit."
+```
+
+The API records `model.mlops_alert_delivery.submitted` with model-version and
+scheduler-execution evidence refs. This is a customer alert-router handoff
+record; it does not create retraining jobs, activate models, rollback models,
+or assign fraud labels.
+
+Alert delivery tasks are also exposed as a human-confirmed queue:
+
+```bash
+curl -H "x-api-key: $FWA_API_KEY" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-alert-delivery-queue"
+```
+
+Customer receipt or escalation is recorded through an append-only review event:
+
+```bash
+curl -X POST \
+  -H "x-api-key: $FWA_API_KEY" \
+  -H "content-type: application/json" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-alert-delivery-tasks/<task_id>/reviews" \
+  -d '{
+    "decision": "receipt_confirmed",
+    "reviewer": "alert-router-owner",
+    "notes": "Confirmed customer alert router receipt.",
+    "evidence_refs": [
+      "model_versions:baseline_fwa:0.2.0",
+      "mlops_scheduler_execution_reports:<scheduler_report_uri>",
+      "mlops_alert_delivery_tasks:<task_id>"
+    ]
+  }'
+```
+
+Deliver queued MLOps alerts to a customer receiver webhook:
+
+```bash
+cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook \
+  --scheduler-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --receiver-url "$FWA_ALERT_RECEIVER_URL" \
+  --receiver-id customer-alert-router-v1 \
+  --receiver-token "$FWA_ALERT_RECEIVER_TOKEN" \
+  --receiver-secret "$FWA_ALERT_RECEIVER_SIGNING_SECRET" \
+  --max-attempts 3 \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/alert-receiver
+```
+
+The worker writes `mlops_alert_receiver_payload.json` and
+`mlops_alert_receiver_delivery_report.json`. If no alert tasks are required, it
+records `skipped_no_alerts_required` without calling the receiver. If tasks are
+present, it POSTs a governance-only payload to the receiver and records the HTTP
+status, response excerpt, and retry count. `--receiver-token` adds bearer auth,
+and `--receiver-secret` adds an `x-fwa-signature-sha256` HMAC header. This
+transport must not trigger retraining, activation, rollback, label assignment,
+or rule writeback.
+
+After dataset, candidate-ranking, serving, rule-backtest, clustering, and
+monitoring evidence exists, summarize the full Rust Auto MLOps lifecycle into
+one closure report:
+
+```bash
+cargo run --locked -p worker -- build-automl-lifecycle-closure-report \
+  --demo-index data/rust-automl-demo/index.json \
+  --candidate-ranking data/model-artifacts/baseline_fwa/0.2.0/ranking/automl_candidate_ranking.json \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/xgboost/artifact-evaluation/model_artifact_evaluation_report.json \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/lightgbm/artifact-evaluation/model_artifact_evaluation_report.json \
+  --rule-backtest-report data/model-artifacts/baseline_fwa/0.2.0/rule-candidates/backtest/rule_candidate_backtest_report.json \
+  --provider-clustering-report data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json \
+  --provider-graph-report data/rust-automl-demo/unlabeled_provider_peer_clustering/graph-communities/provider_graph_community_report.json \
+  --claim-entity-clustering-report data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json \
+  --mlops-monitoring-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
+  --mlops-scheduler-execution-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --mlops-monitoring-cycle-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/cycle/mlops_monitoring_cycle_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/lifecycle-closure
+```
+
+The worker writes `rust_automl_lifecycle_closure_report.json`. The closure
+status can only pass when the evidence proves: one labeled demo dataset, at
+least two unlabeled demo datasets, XGBoost and LightGBM candidate ranking,
+XGBoost and LightGBM ONNX Rust-serving artifact gates, rule-candidate backtest
+before rule-library writeback, provider-peer, provider graph-community, and
+claim-entity clustering review tasks, non-blocked MLOps monitoring, and
+scheduler/alert-delivery/cycle execution evidence.
 
 ## Stage 7: Promotion Gates
 
@@ -333,6 +905,7 @@ Promotion-ready evidence must include:
 - out-of-time metrics;
 - time/group split strategy;
 - leakage check;
+- Rust serving artifact evaluation from `evaluate-model-artifact`;
 - review-capacity threshold;
 - explanation artifact;
 - shadow comparison;
@@ -346,6 +919,9 @@ Promotion-ready evidence must include:
 - human approval.
 
 The candidate should remain blocked when any gate is missing.
+The promotion-gates API also returns `artifact_evidence` so human release
+reviewers can inspect the serving manifest, Rust artifact evaluation report,
+Rust serving status, latency status, and P95 latency from the same gate response.
 
 ## Stage 8: Human Promotion Review
 
@@ -362,6 +938,24 @@ Promotion review should answer:
 
 Human approval should be recorded through the model promotion review API. The
 training pipeline must not approve itself by writing approval into metrics.
+
+After human approval is recorded, the worker may perform the activation
+orchestration step. This command still reads version-scoped promotion gates and
+uses the governed activation API; it does not bypass approval, label, leakage,
+drift, feature materialization, serving, or QA gates:
+
+```bash
+cargo run --locked -p worker -- promote-approved-model-version \
+  --api-url http://127.0.0.1:8080 \
+  --api-key "$FWA_API_KEY" \
+  --model-key baseline_fwa \
+  --model-version 0.2.0-candidate
+```
+
+The command sends `model_versions:<model_key>:<model_version>` as activation
+evidence and fails before activation when any promotion gate other than
+`Active version` is blocked. This is the Auto MLOps handoff from human approval
+to governed activation; it is not an automatic approval mechanism.
 
 ## Stage 9: Shadow Or Limited Rollout
 
@@ -387,13 +981,34 @@ Purpose: serve a governed active model version.
 Local artifact-backed serving:
 
 ```bash
-FWA_MODEL_ARTIFACT_URI=data/model-artifacts/baseline_fwa/<version>/model.joblib \
+FWA_MODEL_SERVING_MANIFEST_URI=data/model-artifacts/baseline_fwa/<version>/serving_manifest.json \
+FWA_MODEL_SIGNATURE_KEY=<signing-key> \
+FWA_MODEL_SHADOW_HEURISTIC=true \
+cargo run --locked -p api-server
+```
+
+For the standard local runtime around this serving path, start Docker-backed
+dependencies and the Web Console with `scripts/dev/start_local_runtime.sh`.
+Use manual `cargo run --locked -p api-server` only when overriding model
+artifact environment variables for a specific serving test.
+
+The serving manifest path is preferred because it carries the model identity,
+runtime kind, ordered feature list, threshold, artifact checksum, optional
+signature, version lock, and training-artifact reference in one governed
+contract. `rust_logistic_regression` manifests are served through
+`ServingManifestModelScorer`, which delegates to the Rust artifact scorer after
+manifest validation.
+
+Direct artifact-backed serving remains available for local JSON logistic
+artifacts:
+
+```bash
+FWA_MODEL_ARTIFACT_URI=data/model-artifacts/baseline_fwa/<version>/rust_serving_artifact.json \
 FWA_MODEL_VERSION_LOCK=<version> \
 FWA_MODEL_ARTIFACT_SHA256=sha256:<artifact-digest> \
 FWA_MODEL_ARTIFACT_SIGNATURE=hmac-sha256:<artifact-signature> \
 FWA_MODEL_SIGNATURE_KEY=<signing-key> \
-FWA_MODEL_SHADOW_HEURISTIC=true \
-python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
+cargo run --locked -p api-server
 ```
 
 The service rejects an artifact when `FWA_MODEL_VERSION_LOCK` does not match the
@@ -404,10 +1019,11 @@ verifies it with `FWA_MODEL_SIGNATURE_KEY`. When
 baseline score, score delta, and shadow status without changing the primary
 model score.
 
-For Rust runtime scoring, `FWA_MODEL_ARTIFACT_URI` points to a local JSON
-logistic-regression artifact consumed by the API server's
-`ArtifactModelScorer`. The Python ML service path above continues to use the
-trained `.joblib` artifact. The Rust artifact uses this shape:
+For Rust runtime scoring, `FWA_MODEL_SERVING_MANIFEST_URI` points to a
+`serving_manifest.json` generated by training. `FWA_MODEL_ARTIFACT_URI` is the
+older direct path to a local JSON logistic-regression artifact consumed by the
+API server's `ArtifactModelScorer`. The Python ML service path above continues
+to use the trained `.joblib` artifact. The Rust artifact uses this shape:
 
 ```json
 {
@@ -425,12 +1041,23 @@ trained `.joblib` artifact. The Rust artifact uses this shape:
 }
 ```
 
+For XGBoost and LightGBM, `.joblib` remains a training artifact or Python
+fallback artifact. The trainer now writes `model.onnx` plus
+`onnx_parity_report.json`; the serving manifest points to the `.onnx` artifact
+only when probability parity passes. The Rust runtime validates the ONNX
+manifest, feature order, checksum, optional signature, and version lock, then
+executes the model through ONNX Runtime CPU and reads the positive-class
+probability from the exported probability tensor. This prevents a `.joblib`
+artifact from being accidentally treated as Rust serving evidence.
+
 The active serving selector is:
 
-1. `FWA_MODEL_ARTIFACT_URI` set: API server uses Rust artifact scoring.
-2. `FWA_MODEL_SERVICE_URL=heuristic` or `heuristic://...`: API server uses the
+1. `FWA_MODEL_SERVING_MANIFEST_URI` set: API server uses Rust serving-manifest
+   scoring.
+2. `FWA_MODEL_ARTIFACT_URI` set: API server uses direct Rust artifact scoring.
+3. `FWA_MODEL_SERVICE_URL=heuristic` or `heuristic://...`: API server uses the
    Rust heuristic fallback.
-3. Otherwise: API server uses the Python HTTP compatibility scorer.
+4. Otherwise: API server uses the Python HTTP compatibility scorer.
 
 Production serving should additionally provide:
 
@@ -468,20 +1095,29 @@ The worker can generate the portable scheduled monitoring contract that an
 external orchestrator should execute:
 
 ```bash
-cargo run --locked -p worker -- build-mlops-monitoring-plan \
+cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
   --manifest-uri data/training/manifest.json \
   --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
   --model-key baseline_fwa \
   --model-version 0.2.0 \
-  --cron "0 2 * * *"
+  --cron "0 2 * * *" \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring \
+  --monitoring-inputs scripts/ops/sample_mlops_monitoring_inputs.json \
+  --artifact-base-uri s3://fwa-models/baseline_fwa/0.2.0/mlops-monitoring
 ```
 
-The generated plan contains shadow traffic evaluation, drift monitoring,
-segment fairness review, reviewer disagreement review, and label delay review
-jobs. It uses the same governed Parquet dataset manifest and derives the
-expected report URIs from the active serving artifact location. A production
-scheduler should execute the plan and publish the resulting reports back into
-the model governance evidence set.
+The generated plan and runtime report artifacts cover shadow traffic
+evaluation, drift monitoring, segment fairness review, reviewer disagreement
+review, and label delay review jobs. They use the same governed Parquet dataset
+manifest and derive the expected report URIs from the active serving artifact
+location. The publication manifest records the target durable artifact URIs and
+checksums that a production scheduler should publish back into the model
+governance evidence set. When `--monitoring-inputs` is provided, the worker
+binds the supplied metrics into the report artifacts and marks
+`customer_data_bound = true`; otherwise the generated reports remain staging
+proof artifacts. The worker can then run
+`build-mlops-monitoring-report` over those reports to open review tasks or
+prepare retraining without automatic promotion.
 
 ## Stage 12: Retraining Or Rollback
 

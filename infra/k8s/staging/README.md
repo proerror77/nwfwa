@@ -8,13 +8,17 @@ foundation environment, not a production deployment package.
 - `api-server`: Rust Axum API on port `8080`.
 - `web-console`: Yew/Trunk operator console on port `8081`.
 - `ml-service`: Python FastAPI scorer/training boundary on port `8001`.
+- `ml-training-worker`: sidecar process in the `ml-service` Pod that runs the
+  durable training queue against the shared `ml-training-jobs` PVC.
 - `postgres`: transactional store for claims, audit, governance, labels, and jobs.
 - `object-storage`: S3-compatible MinIO endpoint for staging artifacts.
 - `clickhouse`: derived analytical event store for reporting proof.
 - `database-migrate`: Job that applies `migrations/0001_initial.sql`.
 - `demo-seed`: optional Job that loads deterministic demo data for staging demos.
 - `pilot-readiness-proof`: CronJob that runs the worker readiness gate.
-- `mlops-monitoring-plan`: CronJob that emits the portable MLOps monitoring plan.
+- `mlops-monitoring-runtime`: CronJob that generates the portable MLOps
+  monitoring plan, runtime report artifacts, and artifact publication manifest
+  through the Rust worker.
 - `analytics-export-plan`: CronJob that emits the portable analytics export
   plan for PostgreSQL-to-ClickHouse derived reporting.
 - `ai-evidence-execution-plan`: CronJob that emits the portable OCR, chunking,
@@ -30,12 +34,18 @@ Replace image names and secrets before applying:
 cp infra/k8s/staging/secrets.example.yaml /tmp/nwfwa-staging-secrets.yaml
 $EDITOR /tmp/nwfwa-staging-secrets.yaml
 kubectl apply -f infra/k8s/staging/namespace.yaml
+python3 scripts/ops/validate_staging_secret_file.py \
+  --secret-file /tmp/nwfwa-staging-secrets.yaml
 kubectl apply -n nwfwa-staging -f /tmp/nwfwa-staging-secrets.yaml
+kubectl apply -k infra/k8s/staging --dry-run=server
 kubectl apply -k infra/k8s/staging
 ```
 
 The example secret file is intentionally committed with placeholder values only.
 Do not put customer secrets in this repository.
+The worker CronJobs run with the `nwfwa-worker` ServiceAccount, token
+automounting disabled, bounded deadlines, bounded retries, TTL cleanup, and
+resource requests/limits.
 
 ## Static Validation
 
@@ -46,7 +56,17 @@ python3 scripts/ops/validate_k8s_staging.py
 The validator checks that the staging manifests include the required services,
 readiness probes, database Jobs, CronJobs, object storage, ClickHouse, AI
 evidence execution-plan scheduling, governance ops scheduling, and non-demo
-readiness settings.
+readiness settings. It also checks the worker scheduling hardening and the
+example Secret key contract.
 
 The database Jobs use the `nwfwa-ops` image built from
 `infra/dockerfiles/Dockerfile.ops`, which packages the migration and seed SQL.
+
+## Local K3s Simulation
+
+Use `scripts/ops/build_k3s_simulation_package.py` when you want a local K3s or
+K3d simulation. The generated package rewrites these staging manifests into an
+isolated namespace, injects non-production simulation secrets, replaces
+placeholder images with local image names, and provides `apply.sh` and
+`smoke.sh` for K3s-only execution. Load local images into K3s/K3d first, or
+pass registry image names that the cluster can pull.

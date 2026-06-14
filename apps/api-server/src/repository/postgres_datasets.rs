@@ -1,0 +1,479 @@
+use super::dataset_rows::load_dataset_record;
+use super::*;
+
+pub(super) async fn register_dataset(
+    repository: &PostgresScoringRepository,
+    input: RegisterDatasetInput,
+) -> anyhow::Result<DatasetRecord> {
+    let mut tx = repository.pool.begin().await?;
+    sqlx::query(
+        "INSERT INTO external_data_sources
+             (source_key, display_name, business_domain, owner, description, status)
+             VALUES ($1, $2, $3, $4, $5, 'active')
+             ON CONFLICT (source_key) DO UPDATE
+             SET display_name = EXCLUDED.display_name,
+                 business_domain = EXCLUDED.business_domain,
+                 owner = EXCLUDED.owner,
+                 description = EXCLUDED.description,
+                 updated_at = now()",
+    )
+    .bind(&input.source_key)
+    .bind(&input.display_name)
+    .bind(&input.business_domain)
+    .bind(&input.owner)
+    .bind(&input.description)
+    .execute(&mut *tx)
+    .await?;
+
+    let dataset_row: (String,) = sqlx::query_as(
+        "INSERT INTO external_dataset_versions
+             (source_key, dataset_key, dataset_version, sample_grain, label_column, entity_keys, manifest_uri, schema_uri, profile_uri, storage_format, schema_hash, row_count, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (dataset_key, dataset_version) DO UPDATE
+             SET manifest_uri = EXCLUDED.manifest_uri,
+                 schema_uri = EXCLUDED.schema_uri,
+                 profile_uri = EXCLUDED.profile_uri,
+                 schema_hash = EXCLUDED.schema_hash,
+                 row_count = EXCLUDED.row_count,
+                 status = EXCLUDED.status
+             RETURNING id::text",
+    )
+    .bind(&input.source_key)
+    .bind(&input.dataset_key)
+    .bind(&input.dataset_version)
+    .bind(&input.sample_grain)
+    .bind(&input.label_column)
+    .bind(serde_json::json!(input.entity_keys))
+    .bind(&input.manifest_uri)
+    .bind(&input.schema_uri)
+    .bind(&input.profile_uri)
+    .bind(&input.storage_format)
+    .bind(&input.schema_hash)
+    .bind(input.row_count as i64)
+    .bind(&input.status)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    for split in &input.splits {
+        sqlx::query(
+            "INSERT INTO external_dataset_splits
+                 (dataset_id, split_name, data_uri, row_count, positive_count, negative_count, label_distribution_json)
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (dataset_id, split_name) DO UPDATE
+                 SET data_uri = EXCLUDED.data_uri,
+                     row_count = EXCLUDED.row_count,
+                     positive_count = EXCLUDED.positive_count,
+                     negative_count = EXCLUDED.negative_count,
+                     label_distribution_json = EXCLUDED.label_distribution_json",
+        )
+        .bind(&dataset_row.0)
+        .bind(&split.split_name)
+        .bind(&split.data_uri)
+        .bind(split.row_count as i64)
+        .bind(split.positive_count.map(|value| value as i64))
+        .bind(split.negative_count.map(|value| value as i64))
+        .bind(&split.label_distribution_json)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    for field in &input.fields {
+        sqlx::query(
+            "INSERT INTO external_schema_fields
+                 (dataset_id, field_name, logical_type, nullable, semantic_role, description, profile_json)
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (dataset_id, field_name) DO UPDATE
+                 SET logical_type = EXCLUDED.logical_type,
+                     nullable = EXCLUDED.nullable,
+                     semantic_role = EXCLUDED.semantic_role,
+                     description = EXCLUDED.description,
+                     profile_json = EXCLUDED.profile_json",
+        )
+        .bind(&dataset_row.0)
+        .bind(&field.field_name)
+        .bind(&field.logical_type)
+        .bind(field.nullable)
+        .bind(&field.semantic_role)
+        .bind(&field.description)
+        .bind(&field.profile_json)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    load_dataset_record(&repository.pool, &dataset_row.0)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("registered dataset was not found"))
+}
+
+pub(super) async fn list_datasets(
+    repository: &PostgresScoringRepository,
+) -> anyhow::Result<Vec<DatasetRecord>> {
+    let ids: Vec<(String,)> = sqlx::query_as(
+        "SELECT id::text FROM external_dataset_versions ORDER BY dataset_key, dataset_version",
+    )
+    .fetch_all(&repository.pool)
+    .await?;
+    let mut datasets = Vec::new();
+    for (id,) in ids {
+        if let Some(dataset) = load_dataset_record(&repository.pool, &id).await? {
+            datasets.push(dataset);
+        }
+    }
+    Ok(datasets)
+}
+
+pub(super) async fn get_dataset(
+    repository: &PostgresScoringRepository,
+    dataset_id: &str,
+) -> anyhow::Result<Option<DatasetRecord>> {
+    load_dataset_record(&repository.pool, dataset_id).await
+}
+
+pub(super) async fn add_field_mapping(
+    repository: &PostgresScoringRepository,
+    dataset_id: &str,
+    input: CreateFieldMappingInput,
+) -> anyhow::Result<Option<FieldMappingRecord>> {
+    if load_dataset_record(&repository.pool, dataset_id)
+        .await?
+        .is_none()
+    {
+        return Ok(None);
+    }
+
+    let row: (String,) = sqlx::query_as(
+        "INSERT INTO external_field_mappings
+             (dataset_id, external_field, canonical_target, feature_name, transform_kind, transform_json, status)
+             VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+             RETURNING id::text",
+    )
+    .bind(dataset_id)
+    .bind(&input.external_field)
+    .bind(&input.canonical_target)
+    .bind(&input.feature_name)
+    .bind(&input.transform_kind)
+    .bind(&input.transform_json)
+    .bind(&input.status)
+    .fetch_one(&repository.pool)
+    .await?;
+
+    Ok(Some(FieldMappingRecord {
+        mapping_id: row.0,
+        dataset_id: dataset_id.to_string(),
+        external_field: input.external_field,
+        canonical_target: input.canonical_target,
+        feature_name: input.feature_name,
+        transform_kind: input.transform_kind,
+        transform_json: input.transform_json,
+        status: input.status,
+    }))
+}
+
+pub(super) async fn register_feature_set(
+    repository: &PostgresScoringRepository,
+    input: RegisterFeatureSetInput,
+) -> anyhow::Result<Option<FeatureSetRecord>> {
+    if load_dataset_record(&repository.pool, &input.dataset_id)
+        .await?
+        .is_none()
+    {
+        return Ok(None);
+    }
+    let row: (String,) = sqlx::query_as(
+        "INSERT INTO feature_set_versions
+             (feature_set_key, business_domain, version, dataset_id, features_uri, feature_list_json, row_count, label_column, status)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9)
+             ON CONFLICT (feature_set_key, version) DO UPDATE
+             SET features_uri = EXCLUDED.features_uri,
+                 feature_list_json = EXCLUDED.feature_list_json,
+                 row_count = EXCLUDED.row_count,
+                 status = EXCLUDED.status
+             RETURNING id::text",
+    )
+    .bind(&input.feature_set_key)
+    .bind(&input.business_domain)
+    .bind(&input.version)
+    .bind(&input.dataset_id)
+    .bind(&input.features_uri)
+    .bind(&input.feature_list_json)
+    .bind(input.row_count as i64)
+    .bind(&input.label_column)
+    .bind(&input.status)
+    .fetch_one(&repository.pool)
+    .await?;
+    Ok(Some(FeatureSetRecord {
+        feature_set_id: row.0,
+        business_domain: input.business_domain,
+        feature_set_key: input.feature_set_key,
+        version: input.version,
+        dataset_id: input.dataset_id,
+        features_uri: input.features_uri,
+        feature_list_json: input.feature_list_json,
+        row_count: input.row_count,
+        label_column: input.label_column,
+        status: input.status,
+    }))
+}
+
+pub(super) async fn register_model_dataset(
+    repository: &PostgresScoringRepository,
+    input: RegisterModelDatasetInput,
+) -> anyhow::Result<Option<ModelDatasetRecord>> {
+    let feature_set_known: Option<(String,)> =
+        sqlx::query_as("SELECT id::text FROM feature_set_versions WHERE id = $1::uuid")
+            .bind(&input.feature_set_id)
+            .fetch_optional(&repository.pool)
+            .await?;
+    if feature_set_known.is_none() {
+        return Ok(None);
+    }
+
+    let row: (String,) = sqlx::query_as(
+        "INSERT INTO model_dataset_versions
+             (business_domain, task_type, label_name, feature_set_id, train_uri, validation_uri, test_uri, row_counts_json, label_distribution_json, status)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10)
+             RETURNING id::text",
+    )
+    .bind(&input.business_domain)
+    .bind(&input.task_type)
+    .bind(&input.label_name)
+    .bind(&input.feature_set_id)
+    .bind(&input.train_uri)
+    .bind(&input.validation_uri)
+    .bind(&input.test_uri)
+    .bind(&input.row_counts_json)
+    .bind(&input.label_distribution_json)
+    .bind(&input.status)
+    .fetch_one(&repository.pool)
+    .await?;
+
+    Ok(Some(ModelDatasetRecord {
+        model_dataset_id: row.0,
+        business_domain: input.business_domain,
+        task_type: input.task_type,
+        label_name: input.label_name,
+        feature_set_id: input.feature_set_id,
+        train_uri: input.train_uri,
+        validation_uri: input.validation_uri,
+        test_uri: input.test_uri,
+        row_counts_json: input.row_counts_json,
+        label_distribution_json: input.label_distribution_json,
+        status: input.status,
+    }))
+}
+
+pub(super) async fn get_model_dataset_source_dataset(
+    repository: &PostgresScoringRepository,
+    model_dataset_id: &str,
+) -> anyhow::Result<Option<DatasetRecord>> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT fs.dataset_id::text
+             FROM model_dataset_versions md
+             JOIN feature_set_versions fs ON fs.id = md.feature_set_id
+             WHERE md.id = $1::uuid",
+    )
+    .bind(model_dataset_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    let Some((dataset_id,)) = row else {
+        return Ok(None);
+    };
+    load_dataset_record(&repository.pool, &dataset_id).await
+}
+
+pub(super) async fn register_model_evaluation(
+    repository: &PostgresScoringRepository,
+    input: RegisterModelEvaluationInput,
+) -> anyhow::Result<Option<ModelEvaluationRecord>> {
+    let model_dataset_known: Option<(String,)> =
+        sqlx::query_as("SELECT id::text FROM model_dataset_versions WHERE id = $1::uuid")
+            .bind(&input.model_dataset_id)
+            .fetch_optional(&repository.pool)
+            .await?;
+    if model_dataset_known.is_none() {
+        return Ok(None);
+    }
+
+    sqlx::query(
+        "INSERT INTO model_evaluation_runs
+             (evaluation_run_id, model_key, model_version, model_dataset_id, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, permutation_importance_uri, metrics_json)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+             ON CONFLICT (evaluation_run_id) DO UPDATE
+             SET model_key = EXCLUDED.model_key,
+                 model_version = EXCLUDED.model_version,
+                 model_dataset_id = EXCLUDED.model_dataset_id,
+                 scheme_family = EXCLUDED.scheme_family,
+                 auc = EXCLUDED.auc,
+                 ks = EXCLUDED.ks,
+                 precision_value = EXCLUDED.precision_value,
+                 recall_value = EXCLUDED.recall_value,
+                 f1 = EXCLUDED.f1,
+                 accuracy = EXCLUDED.accuracy,
+                 threshold = EXCLUDED.threshold,
+                 confusion_matrix_json = EXCLUDED.confusion_matrix_json,
+                 feature_importance_uri = EXCLUDED.feature_importance_uri,
+                 permutation_importance_uri = EXCLUDED.permutation_importance_uri,
+                 metrics_json = EXCLUDED.metrics_json",
+    )
+    .bind(&input.evaluation_run_id)
+    .bind(&input.model_key)
+    .bind(&input.model_version)
+    .bind(&input.model_dataset_id)
+    .bind(&input.scheme_family)
+    .bind(input.auc)
+    .bind(input.ks)
+    .bind(input.precision)
+    .bind(input.recall)
+    .bind(input.f1)
+    .bind(input.accuracy)
+    .bind(input.threshold)
+    .bind(&input.confusion_matrix_json)
+    .bind(&input.feature_importance_uri)
+    .bind(&input.permutation_importance_uri)
+    .bind(&input.metrics_json)
+    .execute(&repository.pool)
+    .await?;
+
+    get_model_evaluation(repository, &input.evaluation_run_id).await
+}
+
+pub(super) async fn get_model_evaluation(
+    repository: &PostgresScoringRepository,
+    evaluation_run_id: &str,
+) -> anyhow::Result<Option<ModelEvaluationRecord>> {
+    let row: Option<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Value,
+        Option<String>,
+        Option<String>,
+        Value,
+    )> = sqlx::query_as(
+        "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, permutation_importance_uri, metrics_json
+             FROM model_evaluation_runs
+             WHERE evaluation_run_id = $1",
+    )
+    .bind(evaluation_run_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            evaluation_run_id,
+            model_key,
+            model_version,
+            model_dataset_id,
+            scheme_family,
+            auc,
+            ks,
+            precision,
+            recall,
+            f1,
+            accuracy,
+            threshold,
+            confusion_matrix_json,
+            feature_importance_uri,
+            permutation_importance_uri,
+            metrics_json,
+        )| ModelEvaluationRecord {
+            evaluation_run_id,
+            model_key,
+            model_version,
+            model_dataset_id,
+            scheme_family,
+            auc,
+            ks,
+            precision,
+            recall,
+            f1,
+            accuracy,
+            threshold,
+            confusion_matrix_json,
+            feature_importance_uri,
+            permutation_importance_uri,
+            metrics_json,
+        },
+    ))
+}
+
+pub(super) async fn list_model_evaluations(
+    repository: &PostgresScoringRepository,
+) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
+    let rows: Vec<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
+        Value,
+        Option<String>,
+        Option<String>,
+        Value,
+    )> = sqlx::query_as(
+        "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, permutation_importance_uri, metrics_json
+             FROM model_evaluation_runs
+             ORDER BY evaluation_run_id",
+    )
+    .fetch_all(&repository.pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(
+                evaluation_run_id,
+                model_key,
+                model_version,
+                model_dataset_id,
+                scheme_family,
+                auc,
+                ks,
+                precision,
+                recall,
+                f1,
+                accuracy,
+                threshold,
+                confusion_matrix_json,
+                feature_importance_uri,
+                permutation_importance_uri,
+                metrics_json,
+            )| ModelEvaluationRecord {
+                evaluation_run_id,
+                model_key,
+                model_version,
+                model_dataset_id,
+                scheme_family,
+                auc,
+                ks,
+                precision,
+                recall,
+                f1,
+                accuracy,
+                threshold,
+                confusion_matrix_json,
+                feature_importance_uri,
+                permutation_importance_uri,
+                metrics_json,
+            },
+        )
+        .collect())
+}

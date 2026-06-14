@@ -15,10 +15,15 @@ the technical stack fits together, and what is ready for demo or pilot use.
   requirement, main inputs, outputs, and side effects.
 - [PRD Coverage](prd-coverage.md): PRD capability matrix, repository evidence,
   and customer-data/customer-environment boundaries.
+- [Architecture Gap Review 2026-06-12](architecture-gap-review-2026-06-12.md):
+  dated scoring, worker, agentic, ML, compliance, and scheme-coverage gap
+  ledger that feeds the PRD roadmap.
 - [Data Model](data-model.md): PostgreSQL schema groups, relationships, and
   table responsibilities.
 - [ML Algorithm Strategy](ml-algorithm-strategy.md): researched model plan,
   current baseline boundaries, validation gates, and production ML roadmap.
+- [Rust Auto MLOps Architecture](rust-automl-architecture.md): Rust-owned ML
+  lifecycle, ONNX serving boundary, Auto MLOps loop, and algorithm portfolio.
 - [Public Data MVP Pack](public-data-mvp.md): CMS/OIG public-data boundary,
   manifest generation commands, and production interpretation.
 - [AI Evidence Foundation](ai-evidence-foundation.md): document registry,
@@ -34,6 +39,15 @@ the technical stack fits together, and what is ready for demo or pilot use.
   scheduled export contract, dashboard queries, and production boundary.
 - [Operations Guide](operations-guide.md): local demo, Kubernetes staging,
   verification gates, CI, pilot readiness, and known production boundaries.
+
+For local Docker Desktop development, start with:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+This is the supported hybrid runtime for day-to-day work. Full Docker Compose
+and K3d simulation remain packaging and deployment-shape proofs.
 
 ## Source Of Truth
 

@@ -290,8 +290,8 @@ preserve claim, rule, model, anomaly, document, and similar-case references.
 | GET | `/api/v1/ops/backfills` | List governed historical replay jobs. | Yes | None |
 | POST | `/api/v1/ops/backfills` | Create a historical replay backfill from existing generated leads. | Yes | Records replay job, candidate lead evidence, and audit event. |
 | GET | `/api/v1/ops/backfills/{job_id}/leads` | List candidate leads captured by a backfill job. | Yes | None |
-| GET | `/api/v1/ops/evidence-requests` | List generated clinical evidence requests. | Yes | None |
-| POST | `/api/v1/ops/evidence-requests/generate` | Generate evidence requests from scoring runs with missing clinical evidence. | Yes | Creates evidence request audit events. |
+| GET | `/api/v1/ops/evidence-requests` | List generated evidence requests. | Yes | None |
+| POST | `/api/v1/ops/evidence-requests/generate` | Generate evidence requests from scoring runs with missing clinical evidence; scoring can also create rule-required evidence requests directly. | Yes | Creates evidence request audit events. |
 | POST | `/api/v1/ops/evidence-requests/{request_id}/status` | Update evidence request collection status. | Yes | Appends status audit event and evidence refs. |
 | GET | `/api/v1/ops/label-bootstrap/queue` | List label candidates derived from governed evidence requests. | Yes | None |
 | POST | `/api/v1/ops/label-bootstrap/items/{item_id}/review` | Record human review for a bootstrap label candidate. | Yes | Appends label review audit event and can expose an approved training label. |
@@ -394,6 +394,13 @@ Rule promotion gates treat a stored backtest as usable routing evidence only
 when its own blockers are cleared; underpowered samples, weak precision/recall,
 excess false positives, or review-capacity overflow keep the deterministic
 backtest gate blocked.
+Hard-deny and straight-through rules are treated as customer-approved
+deterministic adjudication rules only when the rule action includes
+`adjudication_policy` metadata plus required evidence with both
+`policy_authority_ref` and `exception_check`. Missing adjudication metadata
+keeps runtime scoring on a manual-review fallback and keeps rule promotion
+blocked with customer approval, appeal/override, production threshold,
+rollback, and routing-impact gates.
 
 Rule lifecycle caveat: `approve` currently writes approved status with evidence
 refs. `rollback` moves an active rule back to approved status; it does not select
@@ -449,23 +456,27 @@ cannot serve as production promotion evidence.
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/ops/models` | List model versions. | Yes | None |
 | GET | `/api/v1/ops/models/{model_key}/performance` | Return model performance and drift summary. | Yes | None |
-| GET | `/api/v1/ops/models/{model_key}/promotion-gates` | Evaluate model promotion readiness. | Yes | None |
+| GET | `/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates` | Evaluate promotion readiness for an explicit candidate version. | Yes | None |
+| GET | `/api/v1/ops/models/{model_key}/promotion-gates` | Evaluate promotion readiness for the current/default model target. Prefer the version-scoped path for candidate review. | Yes | None |
 | GET | `/api/v1/ops/models/{model_key}/retraining-readiness` | Evaluate retraining readiness. | Yes | None |
 | GET | `/api/v1/ops/models/{model_key}/retraining-jobs` | List retraining jobs for a model. | Yes | None |
 | POST | `/api/v1/ops/models/{model_key}/retraining-jobs` | Create retraining job. | Yes | Creates job and audit evidence. |
 | POST | `/api/v1/ops/model-retraining-jobs/{job_id}/status` | Update retraining job status. | Yes | Updates job status and audit evidence. |
 | POST | `/api/v1/ops/model-retraining-jobs/claim-next` | Claim next queued retraining job. | Yes | Assigns job to worker actor. |
 | POST | `/api/v1/ops/model-retraining-jobs/{job_id}/output` | Register validation output for a retraining job. | Yes | Requires validation state, creates candidate model and evaluation evidence. |
-| POST | `/api/v1/ops/models/{model_key}/promotion-reviews` | Submit model promotion review. | Yes | Records human review evidence. |
-| POST | `/api/v1/ops/models/{model_key}/activate` | Activate the latest governed candidate that passes gates. | Yes | Demotes previous active model, activates target, and records audit trail. |
+| POST | `/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-reviews` | Submit human review for an explicit candidate version. | Yes | Records human review evidence against the target version. |
+| POST | `/api/v1/ops/models/{model_key}/promotion-reviews` | Submit review for the current/default model target. Prefer the version-scoped path for candidate review. | Yes | Records human review evidence. |
+| POST | `/api/v1/ops/models/{model_key}/versions/{model_version}/activate` | Activate an explicit governed candidate version that passes gates. | Yes | Demotes previous active model, activates target, and records audit trail. |
+| POST | `/api/v1/ops/models/{model_key}/activate` | Activate the latest governed candidate that passes gates. Prefer the version-scoped path for candidate review. | Yes | Demotes previous active model, activates target, and records audit trail. |
 | POST | `/api/v1/ops/models/{model_key}/rollback` | Roll back active model to recorded previous active version. | Yes | Restores approved previous active model and records audit trail. |
 
 Model APIs govern the demo and pilot model lifecycle. The local ML service now
 produces a production-style baseline bundle with artifact checksum/signature,
 serving manifest, feature materialization manifest, shadow comparison report,
-drift report, and segment fairness report. External scheduler, serving image
-registry, secrets manager, observability dashboards, and customer environment
-deployment remain outside this repository.
+drift report, segment fairness report, and worker-generated Rust serving
+artifact evaluation evidence. External scheduler, serving image registry,
+secrets manager, observability dashboards, and customer environment deployment
+remain outside this repository.
 
 Model rollback audit payloads separate the restored and replaced versions:
 `previous_active_version` is the approved historical version restored to
@@ -474,12 +485,17 @@ back to `approved`.
 
 Governed retraining boundary: retraining jobs model the offline worker contract,
 artifact evidence, validation metrics, MLOps reports, and candidate
-registration. They do not represent automatic production promotion or automatic
-customer-environment deployment.
+registration. When a retraining output includes `serving_manifest_uri`, the API
+requires serving-manifest evidence and stores that URI in the evaluation
+metrics. Retraining output registration still does not represent automatic
+production promotion or automatic customer-environment deployment.
 
 Promotion gates should be read as the policy checklist for activation. They
 cover data quality, label provenance, drift, promotion review evidence, feature
-reproducibility, explanation artifacts, and validation quality.
+reproducibility, explanation artifacts, Rust serving artifact evaluation, and
+validation quality. The response includes `artifact_evidence` with the serving
+manifest URI, model artifact evaluation report URI, Rust serving status, latency
+status, and P95 latency for release-review drill-down.
 
 ## AI Evidence Runtime Metadata
 

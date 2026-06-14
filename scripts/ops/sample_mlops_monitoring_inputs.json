@@ -1,0 +1,42 @@
+{
+  "artifact_kind": "mlops_monitoring_inputs",
+  "input_window": {
+    "window_start": "2026-06-01T00:00:00Z",
+    "window_end": "2026-06-02T00:00:00Z"
+  },
+  "source": "staging_shadow_monitoring_sample",
+  "jobs": {
+    "shadow_traffic_evaluation": {
+      "status": "passed",
+      "comparison_count": 240,
+      "average_abs_probability_delta": 0.02,
+      "max_abs_probability_delta": 0.07
+    },
+    "drift_monitoring": {
+      "status": "watch",
+      "score_psi": 0.14,
+      "max_feature_psi": 0.18
+    },
+    "segment_fairness_review": {
+      "status": "passed",
+      "segments": [
+        {
+          "segment_column": "provider_region",
+          "segment_value": "north"
+        },
+        {
+          "segment_column": "provider_region",
+          "segment_value": "south"
+        }
+      ]
+    },
+    "reviewer_disagreement_review": {
+      "reviewer_disagreement_rate": 0.05,
+      "review_sample_count": 240
+    },
+    "label_delay_review": {
+      "label_delay_p95_days": 9,
+      "delayed_label_count": 2
+    }
+  }
+}

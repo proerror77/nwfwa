@@ -1,0 +1,22 @@
+{
+  "alert_delivery_status": "no_alerts_required",
+  "alert_delivery_task_count": 0,
+  "api_submission_status": "not_requested",
+  "cycle_status": "completed_no_alerts_required",
+  "evidence_refs": [
+    "mlops_monitoring_plans:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_monitoring_plan.json",
+    "model_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/monitoring/mlops_monitoring_report.json",
+    "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/scheduler/mlops_scheduler_execution_report.json"
+  ],
+  "governance_boundary": "monitoring cycle execution may create reports and submit governance handoffs only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules",
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate",
+  "monitoring_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/monitoring/mlops_monitoring_report.json",
+  "monitoring_status": "passed",
+  "plan_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_monitoring_plan.json",
+  "report_kind": "mlops_monitoring_cycle_execution",
+  "report_version": 1,
+  "retraining_recommendation": "monitor",
+  "scheduler_execution_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/scheduler/mlops_scheduler_execution_report.json",
+  "scheduler_status": "completed_with_pending_external_reports"
+}

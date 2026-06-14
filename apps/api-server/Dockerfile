@@ -5,8 +5,9 @@ COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 COPY apps ./apps
 ENV CARGO_INCREMENTAL=0 \
-    CARGO_PROFILE_DEV_DEBUG=0
-RUN cargo build --locked -p api-server
+    CARGO_PROFILE_DEV_DEBUG=0 \
+    CARGO_BUILD_JOBS=1
+RUN cargo build --locked -p api-server --jobs 1
 
 FROM debian:bookworm-slim AS runtime
 

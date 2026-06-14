@@ -1,0 +1,37 @@
+{
+  "business_domain": "health_fwa",
+  "dataset_key": "rust_demo_claim_shadow_unlabeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "description": "Rust-generated unlabeled claims for shadow scoring and drift exercises.",
+  "display_name": "Rust Demo Claim Shadow Scoring Unlabeled",
+  "entity_keys": [
+    "claim_id",
+    "member_id",
+    "policy_id",
+    "provider_id"
+  ],
+  "governance": {
+    "allowed_uses": [
+      "shadow_scoring",
+      "claim_entity_clustering",
+      "drift_monitoring_demo",
+      "score_distribution_demo"
+    ],
+    "blocked_uses": [
+      "supervised_training",
+      "production_promotion_evidence",
+      "confirmed_fwa_labeling"
+    ]
+  },
+  "label_policy": "unlabeled_shadow_scoring_only",
+  "owner": "ml-ops",
+  "sample_grain": "claim",
+  "splits": [
+    {
+      "data_uri": "split=scoring/",
+      "split_name": "scoring"
+    }
+  ],
+  "status": "demo_only",
+  "time_split_field": "service_date"
+}

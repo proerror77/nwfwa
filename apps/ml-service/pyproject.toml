@@ -9,16 +9,21 @@ requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115",
   "joblib>=1.4",
+  "lightgbm>=4.5",
+  "onnxmltools>=1.14",
+  "onnxruntime>=1.20",
   "pandas>=2.2",
   "pyarrow>=16",
   "pydantic>=2",
   "scikit-learn>=1.5",
   "uvicorn>=0.34",
+  "xgboost>=2.1",
 ]
 
 [project.optional-dependencies]
 dev = [
   "httpx>=0.28",
+  "httpx2>=0.1",
   "pytest>=8",
 ]
 

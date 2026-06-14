@@ -15,6 +15,30 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
+        source_system: "tpa-demo".into(),
+        database_url: "postgres://unused".into(),
+        model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    }
+}
+
+fn test_config_with_routing_policy_actors() -> AppConfig {
+    AppConfig {
+        api_key: "legacy-secret".into(),
+        api_key_principals: vec![
+            "routing-read-secret|routing-reader|operations_reviewer|ops-studio|demo-customer|ops:read,audit:read".into(),
+            "routing-write-secret|routing-writer|fwa_operator|ops-studio|demo-customer|ops:routing:write,ops:routing:approve,ops:routing:activate,ops:routing:rollback,audit:read".into(),
+        ],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
@@ -33,7 +57,7 @@ fn test_config() -> AppConfig {
 
 #[tokio::test]
 async fn lists_default_routing_policies_for_governance_visibility() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let response = app
         .oneshot(
@@ -110,7 +134,7 @@ async fn lists_injected_active_routing_policy_versions() {
 
 #[tokio::test]
 async fn saves_draft_routing_policy_candidate_without_affecting_scoring() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = post_json(
         app.clone(),
@@ -297,7 +321,7 @@ async fn saves_draft_routing_policy_candidate_without_affecting_scoring() {
 
 #[tokio::test]
 async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, saved) = post_json(
         app.clone(),
@@ -464,8 +488,90 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
 }
 
 #[tokio::test]
+async fn routing_policy_writes_require_routing_permissions() {
+    let app = build_app(test_config_with_routing_policy_actors()).unwrap();
+
+    let (status, body) = post_json_with_key(
+        app.clone(),
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": "policy-ops",
+          "policy": {
+            "policy_id": "candidate_permission_guard",
+            "version": 1,
+            "review_mode": "pre_payment",
+            "risk_thresholds": {
+              "low_max": 0,
+              "medium_min": 1,
+              "high_min": 40,
+              "critical_min": 90
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 60,
+              "high_confidence_min": 80
+            },
+            "provider_review_threshold": 70
+          }
+        }"#,
+        "routing-read-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:routing:write");
+
+    let (status, saved) = post_json_with_key(
+        app.clone(),
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": "policy-ops",
+          "policy": {
+            "policy_id": "candidate_permission_guard",
+            "version": 1,
+            "review_mode": "pre_payment",
+            "risk_thresholds": {
+              "low_max": 0,
+              "medium_min": 1,
+              "high_min": 40,
+              "critical_min": 90
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 60,
+              "high_confidence_min": 80
+            },
+            "provider_review_threshold": 70
+          }
+        }"#,
+        "routing-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(saved["status"], "draft");
+
+    let (status, body) = post_json_with_key(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_permission_guard/pre_payment/1/submit",
+        r#"{"evidence_refs": ["routing_policies:candidate_permission_guard:v1:pre_payment"]}"#,
+        "routing-read-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["message"], "missing permission: ops:routing:write");
+
+    let (status, submitted) = post_json_with_key(
+        app,
+        "/api/v1/ops/routing-policies/candidate_permission_guard/pre_payment/1/submit",
+        r#"{"evidence_refs": ["routing_policies:candidate_permission_guard:v1:pre_payment"]}"#,
+        "routing-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(submitted["status"], "submitted");
+}
+
+#[tokio::test]
 async fn routing_policy_promotion_gates_block_invalid_thresholds() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, saved) = post_json(
         app.clone(),
@@ -538,7 +644,7 @@ async fn routing_policy_promotion_gates_block_invalid_thresholds() {
 
 #[tokio::test]
 async fn routing_policy_list_requires_api_key() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let response = app
         .oneshot(
@@ -559,13 +665,22 @@ async fn post_json(
     uri: &str,
     body: &'static str,
 ) -> (StatusCode, serde_json::Value) {
+    post_json_with_key(app, uri, body, "dev-secret").await
+}
+
+async fn post_json_with_key(
+    app: axum::Router,
+    uri: &str,
+    body: &'static str,
+    api_key: &'static str,
+) -> (StatusCode, serde_json::Value) {
     let response = app
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri(uri)
                 .header("content-type", "application/json")
-                .header("x-api-key", "dev-secret")
+                .header("x-api-key", api_key)
                 .body(Body::from(body))
                 .unwrap(),
         )

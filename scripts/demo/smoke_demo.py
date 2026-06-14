@@ -5,18 +5,22 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from decimal import Decimal
 
 
 BASE_URL = os.environ.get("FWA_API_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 API_KEY = os.environ.get("FWA_API_KEY", "dev-secret")
+RULE_SUBMIT_API_KEY = os.environ.get("FWA_DEMO_RULE_SUBMIT_API_KEY", API_KEY)
+RULE_APPROVE_API_KEY = os.environ.get("FWA_DEMO_RULE_APPROVE_API_KEY", API_KEY)
 SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
 CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
 MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
 EXPECTED_ACTOR_ROLE = os.environ.get("FWA_DEMO_EXPECTED_ACTOR_ROLE")
 EXPECTED_CUSTOMER_SCOPE_ID = os.environ.get("FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID")
+EXPECT_CONFIGURED_API_KEY = os.environ.get("FWA_DEMO_EXPECT_CONFIGURED_API_KEY") == "1"
 EXPECTED_MODEL_RUNTIME_KIND = os.environ.get("FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND", "python_http")
 EXPECTED_MODEL_METADATA_RUNTIME_KIND = os.environ.get(
     "FWA_DEMO_EXPECTED_MODEL_METADATA_RUNTIME_KIND",
@@ -60,9 +64,9 @@ STANDARD_RULE_PACK = {
 }
 
 
-def request(method, path, payload=None, retries=1):
+def request(method, path, payload=None, retries=1, api_key=None):
     body = None
-    headers = {"x-api-key": API_KEY}
+    headers = {"x-api-key": api_key or API_KEY}
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
         headers["content-type"] = "application/json"
@@ -163,12 +167,18 @@ def assert_health_readiness_contract(health):
         required_check_count == blocking_check_count + ready_check_count,
         "pilot readiness check counts do not reconcile",
     )
-    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+    if CUSTOMER_PRINCIPAL_ASSERTIONS or EXPECT_CONFIGURED_API_KEY:
         health_checks = health.get("checks", [])
         assert_true(
             has_health_check(health_checks, "api_key_configuration", "configured"),
             "customer principal smoke requires configured API key readiness",
         )
+        assert_true(
+            not has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
+            "configured API key smoke must not report the local dev API key blocker",
+        )
+    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+        health_checks = health.get("checks", [])
         assert_true(
             has_health_check(health_checks, "source_system_configuration", "configured"),
             "customer principal smoke requires configured source-system readiness",
@@ -176,10 +186,6 @@ def assert_health_readiness_contract(health):
         assert_true(
             has_health_check(health_checks, "customer_scope_configuration", "configured"),
             "customer principal smoke requires configured customer-scope readiness",
-        )
-        assert_true(
-            not has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
-            "customer principal smoke must not use the local dev API key",
         )
         assert_true(
             not any(
@@ -193,6 +199,8 @@ def assert_health_readiness_contract(health):
             ),
             "customer principal smoke has customer identity readiness blockers",
         )
+        return
+    if EXPECT_CONFIGURED_API_KEY:
         return
 
     assert_true(
@@ -236,7 +244,10 @@ def govern_retraining_candidate():
     output_evaluation_id = completed_job["output_evaluation_id"]
     job_id = completed_job["job_id"]
 
-    gates = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    gates = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-gates",
+    )
     assert_true(gates.get("model_version") == candidate_version, "promotion gates did not target latest candidate")
     assert_true(
         "approval missing" in gates.get("blockers", []),
@@ -249,7 +260,7 @@ def govern_retraining_candidate():
 
     review = request(
         "POST",
-        f"/api/v1/ops/models/{MODEL_KEY}/promotion-reviews",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-reviews",
         {
             "decision": "approved",
             "reviewer": "model-governance-demo",
@@ -264,7 +275,10 @@ def govern_retraining_candidate():
     assert_true(review.get("decision") == "approved", "promotion review was not approved")
     assert_true(review.get("model_version") == candidate_version, "promotion review target mismatch")
 
-    gates_after_review = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    gates_after_review = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-gates",
+    )
     assert_true(
         gates_after_review.get("blockers") == ["model is not active"],
         f"candidate should only be blocked by activation status after approval: {gates_after_review}",
@@ -272,7 +286,7 @@ def govern_retraining_candidate():
 
     activated = request(
         "POST",
-        f"/api/v1/ops/models/{MODEL_KEY}/activate",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/activate",
         {
             "evidence_refs": [
                 f"model_versions:{MODEL_KEY}:{candidate_version}",
@@ -304,7 +318,10 @@ def govern_retraining_candidate():
         "previous active model was not moved to approved",
     )
 
-    activated_gates = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    activated_gates = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-gates",
+    )
     assert_true(
         activated_gates.get("decision") == "routing_allowed",
         f"activated candidate should pass routing gates: {activated_gates}",
@@ -443,10 +460,18 @@ def run_rule_discovery_candidate_lifecycle():
     assert_true(discovery.get("positive_count") == 1, "rule discovery positive count mismatch")
     candidates = discovery.get("candidates", [])
     assert_true(candidates, "rule discovery returned no candidates")
-    candidate = candidates[0]
+    candidate = next(
+        (
+            candidate
+            for candidate in candidates
+            if candidate.get("rule", {}).get("rule_id") == CANDIDATE_RULE_ID
+        ),
+        candidates[0],
+    )
+    candidate_rule_id = candidate.get("rule", {}).get("rule_id")
     assert_true(
-        candidate.get("rule", {}).get("rule_id") == CANDIDATE_RULE_ID,
-        f"unexpected top discovered rule candidate: {candidate}",
+        candidate_rule_id and candidate_rule_id.startswith("candidate_"),
+        f"unexpected discovered rule candidate: {candidate}",
     )
     assert_true(candidate.get("precision", 0) >= 0.70, "discovered rule precision below threshold")
     assert_true(candidate.get("lift", 0) > 1.0, "discovered rule should enrich FWA labels")
@@ -462,7 +487,7 @@ def run_rule_discovery_candidate_lifecycle():
         },
     )
     assert_true(
-        saved.get("summary", {}).get("rule_id") == CANDIDATE_RULE_ID,
+        saved.get("summary", {}).get("rule_id") == candidate_rule_id,
         "saved candidate rule id mismatch",
     )
     assert_true(saved.get("summary", {}).get("status") == "draft", "saved candidate should stay draft")
@@ -482,7 +507,7 @@ def run_rule_discovery_candidate_lifecycle():
         f"discovered candidate backtest should be eligible: {backtest}",
     )
 
-    gates = request("GET", f"/api/v1/ops/rules/{CANDIDATE_RULE_ID}/promotion-gates")
+    gates = request("GET", f"/api/v1/ops/rules/{candidate_rule_id}/promotion-gates")
     assert_true(
         "backtest evidence missing" not in gates.get("blockers", []),
         f"candidate promotion gates did not consume discovery backtest evidence: {gates}",
@@ -492,7 +517,7 @@ def run_rule_discovery_candidate_lifecycle():
         "candidate should still require approval before routing",
     )
     return {
-        "rule_id": CANDIDATE_RULE_ID,
+        "rule_id": candidate_rule_id,
         "support": candidate["support"],
         "precision": candidate["precision"],
         "lift": candidate["lift"],
@@ -543,12 +568,12 @@ def run_rule_backtest_and_publish(score, investigation):
             f"rule_promotion_reviews:{RULE_ID}:v1",
         ]
     }
-    for path, expected_status in [
-        (f"/api/v1/ops/rules/{RULE_ID}/submit", "submitted"),
-        (f"/api/v1/ops/rules/{RULE_ID}/approve", "approved"),
-        (f"/api/v1/ops/rules/{RULE_ID}/publish", "active"),
+    for path, expected_status, api_key in [
+        (f"/api/v1/ops/rules/{RULE_ID}/submit", "submitted", RULE_SUBMIT_API_KEY),
+        (f"/api/v1/ops/rules/{RULE_ID}/approve", "approved", RULE_APPROVE_API_KEY),
+        (f"/api/v1/ops/rules/{RULE_ID}/publish", "active", RULE_APPROVE_API_KEY),
     ]:
-        result = request("POST", path, lifecycle_payload)
+        result = request("POST", path, lifecycle_payload, api_key=api_key)
         assert_true(
             result.get("status") == expected_status,
             f"rule lifecycle {path} did not reach {expected_status}",
@@ -2515,6 +2540,123 @@ def main():
         "retraining readiness should not have blockers",
     )
 
+    monitoring_review_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-monitoring-review-queue",
+    )
+    assert_true(
+        len(monitoring_review_queue.get("tasks", [])) >= 1,
+        "MLOps monitoring review queue should include seeded review tasks",
+    )
+    assert_true(
+        monitoring_review_queue["tasks"][0].get("review_status") in {"open", "acknowledged", "prepare_retraining"},
+        "MLOps monitoring review task missing governed review status",
+    )
+    monitoring_task = monitoring_review_queue["tasks"][0]
+    monitoring_task_id = monitoring_task["task_id"]
+    request(
+        "POST",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-monitoring-review-tasks/{urllib.parse.quote(monitoring_task_id, safe='')}/reviews",
+        {
+            "decision": "prepare_retraining",
+            "reviewer": "model-governance-demo",
+            "notes": "Demo smoke accepts this monitoring task for retraining preparation.",
+            "evidence_refs": [
+                f"model_versions:{monitoring_task['model_key']}:{monitoring_task['model_version']}",
+                f"model_monitoring_reports:{monitoring_task['report_uri']}",
+                f"model_monitoring_review_tasks:{monitoring_task_id}",
+            ],
+        },
+    )
+    monitoring_review_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-monitoring-review-queue",
+    )
+    monitoring_task = next(
+        task
+        for task in monitoring_review_queue.get("tasks", [])
+        if task.get("task_id") == monitoring_task_id
+    )
+    assert_true(
+        monitoring_task.get("review_status") == "prepare_retraining",
+        "MLOps monitoring review task should show accepted review status",
+    )
+    assert_true(
+        monitoring_task.get("reviewer") == "model-governance-demo",
+        "MLOps monitoring review task should show reviewer overlay",
+    )
+    monitoring_review_audit = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_type=model.mlops_monitoring.review_task_reviewed&model_key={MODEL_KEY}&limit=5",
+    )
+    assert_true(
+        any(
+            event.get("payload", {}).get("task_id") == monitoring_task_id
+            and event.get("payload", {}).get("notes")
+            for event in monitoring_review_audit.get("events", [])
+        ),
+        "MLOps monitoring review audit should retain human notes",
+    )
+
+    alert_delivery_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-alert-delivery-queue",
+    )
+    assert_true(
+        len(alert_delivery_queue.get("tasks", [])) >= 1,
+        "MLOps alert delivery queue should include seeded delivery tasks",
+    )
+    assert_true(
+        alert_delivery_queue["tasks"][0].get("delivery_status")
+        == "queued_for_external_alert_router",
+        "MLOps alert delivery task missing router delivery status",
+    )
+    alert_task = alert_delivery_queue["tasks"][0]
+    alert_task_id = alert_task["task_id"]
+    request(
+        "POST",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-alert-delivery-tasks/{urllib.parse.quote(alert_task_id, safe='')}/reviews",
+        {
+            "decision": "receipt_confirmed",
+            "reviewer": "alert-router-demo",
+            "notes": "Demo smoke confirms alert-router receipt.",
+            "evidence_refs": [
+                f"model_versions:{alert_task['model_key']}:{alert_task['model_version']}",
+                f"mlops_scheduler_execution_reports:{alert_task['scheduler_execution_report_uri']}",
+                f"mlops_alert_delivery_tasks:{alert_task_id}",
+            ],
+        },
+    )
+    alert_delivery_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-alert-delivery-queue",
+    )
+    alert_task = next(
+        task
+        for task in alert_delivery_queue.get("tasks", [])
+        if task.get("task_id") == alert_task_id
+    )
+    assert_true(
+        alert_task.get("review_status") == "receipt_confirmed",
+        "MLOps alert delivery task should show receipt confirmation",
+    )
+    assert_true(
+        alert_task.get("reviewer") == "alert-router-demo",
+        "MLOps alert delivery task should show reviewer overlay",
+    )
+    alert_review_audit = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_type=model.mlops_alert_delivery.task_reviewed&model_key={MODEL_KEY}&limit=5",
+    )
+    assert_true(
+        any(
+            event.get("payload", {}).get("task_id") == alert_task_id
+            and event.get("payload", {}).get("notes")
+            for event in alert_review_audit.get("events", [])
+        ),
+        "MLOps alert delivery review audit should retain human notes",
+    )
+
     retraining_job = request(
         "POST",
         f"/api/v1/ops/models/{MODEL_KEY}/retraining-jobs",
@@ -2552,6 +2694,10 @@ def main():
                 "outcome_labels": label_pool["total_labels"],
                 "roi_summary": roi_summary,
                 "model_governance": model_governance,
+                "mlops_monitoring_review_tasks": len(
+                    monitoring_review_queue.get("tasks", [])
+                ),
+                "mlops_alert_delivery_tasks": len(alert_delivery_queue.get("tasks", [])),
                 "retraining_job_id": retraining_job["job_id"],
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,

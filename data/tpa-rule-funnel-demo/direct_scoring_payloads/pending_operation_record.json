@@ -1,0 +1,40 @@
+{
+  "claim": {
+    "claim_amount": "15000.00",
+    "currency": "CNY",
+    "diagnosis_code": "Z00",
+    "external_claim_id": "CLM-DEMO-SURG-001",
+    "service_date": "2026-01-15"
+  },
+  "documents": [],
+  "items": [
+    {
+      "description": "Complex operation",
+      "item_code": "SURG-100",
+      "item_type": "surgery",
+      "quantity": 1,
+      "total_amount": "15000.00",
+      "unit_amount": "15000.00"
+    }
+  ],
+  "member": {
+    "external_member_id": "MBR-CLM-DEMO-SURG-001",
+    "gender": "U"
+  },
+  "policy": {
+    "coverage_end_date": "2026-12-31",
+    "coverage_limit": "30000.00",
+    "coverage_start_date": "2026-01-01",
+    "currency": "CNY",
+    "external_policy_id": "POL-CLM-DEMO-SURG-001",
+    "product_code": "DEMO-HEALTH"
+  },
+  "provider": {
+    "external_provider_id": "PRV-CLM-DEMO-SURG-001",
+    "name": "Demo Provider",
+    "provider_type": "clinic",
+    "region": "SH",
+    "risk_tier": "Low"
+  },
+  "source_system": "tpa-demo"
+}

@@ -20,6 +20,7 @@ erDiagram
     scoring_runs ||--o{ audit_events : audits
     scoring_runs ||--o{ fwa_leads : generates
     rules ||--o{ rule_versions : versions
+    rules ||--o{ rule_condition_library : extracts
     rule_versions ||--o{ rule_runs : evaluates
     model_versions ||--o{ model_scores : scores
     fwa_leads ||--o{ investigation_cases : opens
@@ -63,6 +64,7 @@ These tables represent the minimum stored claim universe for local demo scoring.
 | --- | --- |
 | `rules` | Rule identity, owner, lifecycle, scope, and metadata. |
 | `rule_versions` | Versioned rule definitions and expression metadata. |
+| `rule_condition_library` | Searchable condition entries extracted from governed rule versions and mined rule candidates. |
 | `model_versions` | Model version registry and deployment status. |
 | `routing_policies` | Review routing policy candidates and active versions. |
 
@@ -207,6 +209,7 @@ identifiers are also unique:
 Composite uniqueness protects versioned governance records:
 
 - `rule_versions(rule_id, version)`
+- `rule_condition_library(source_rule_key, source_rule_version, condition_index)`
 - `model_versions(model_key, version)`
 - `routing_policies(policy_key, version, review_mode)`
 - `external_dataset_versions(dataset_key, dataset_version)`

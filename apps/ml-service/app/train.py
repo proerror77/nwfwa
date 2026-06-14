@@ -15,6 +15,11 @@ def main() -> None:
     parser.add_argument("--base-model-version", required=True)
     parser.add_argument("--job-id", required=True)
     parser.add_argument("--actor", required=True)
+    parser.add_argument(
+        "--algorithm",
+        choices=["logistic_regression", "xgboost", "lightgbm", "deep_learning"],
+        help="Training algorithm. Defaults to manifest.algorithm or logistic_regression.",
+    )
     args = parser.parse_args()
 
     payload = train_from_manifest(
@@ -24,6 +29,7 @@ def main() -> None:
         base_model_version=args.base_model_version,
         job_id=args.job_id,
         actor=args.actor,
+        algorithm=args.algorithm,
     )
     print(json.dumps(payload, sort_keys=True))
 

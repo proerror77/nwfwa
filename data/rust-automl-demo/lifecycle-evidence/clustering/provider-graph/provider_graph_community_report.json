@@ -1,0 +1,164 @@
+{
+  "report_kind": "provider_graph_community_clustering",
+  "report_version": 1,
+  "dataset_key": "rust_demo_provider_peer_unlabeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "algorithm": "rust_provider_graph_community_v1",
+  "label_policy": "unlabeled_clustering_discovery_only",
+  "governance_boundary": "unlabeled graph clustering creates anomaly review candidates only; it must not create confirmed FWA labels or automatic claim disposition",
+  "community_summaries": [
+    {
+      "community_id": 1,
+      "provider_count": 3,
+      "average_graph_degree": 4.0,
+      "average_peer_z_score": -0.1,
+      "anomaly_candidate_count": 0
+    },
+    {
+      "community_id": 2,
+      "provider_count": 1,
+      "average_graph_degree": 9.0,
+      "average_peer_z_score": 2.2,
+      "anomaly_candidate_count": 1
+    },
+    {
+      "community_id": 3,
+      "provider_count": 2,
+      "average_graph_degree": 13.5,
+      "average_peer_z_score": 2.9,
+      "anomaly_candidate_count": 2
+    }
+  ],
+  "provider_assignments": [
+    {
+      "provider_id": "PRV-201",
+      "community_id": 1,
+      "graph_degree": 3.0,
+      "peer_z_score": -0.4,
+      "anomaly_candidate": false
+    },
+    {
+      "provider_id": "PRV-202",
+      "community_id": 3,
+      "graph_degree": 12.0,
+      "peer_z_score": 2.7,
+      "anomaly_candidate": true
+    },
+    {
+      "provider_id": "PRV-203",
+      "community_id": 1,
+      "graph_degree": 4.0,
+      "peer_z_score": -0.1,
+      "anomaly_candidate": false
+    },
+    {
+      "provider_id": "PRV-204",
+      "community_id": 2,
+      "graph_degree": 9.0,
+      "peer_z_score": 2.2,
+      "anomaly_candidate": true
+    },
+    {
+      "provider_id": "PRV-205",
+      "community_id": 1,
+      "graph_degree": 5.0,
+      "peer_z_score": 0.2,
+      "anomaly_candidate": false
+    },
+    {
+      "provider_id": "PRV-206",
+      "community_id": 3,
+      "graph_degree": 15.0,
+      "peer_z_score": 3.1,
+      "anomaly_candidate": true
+    }
+  ],
+  "anomaly_candidates": [
+    {
+      "provider_id": "PRV-206",
+      "community_id": 3,
+      "graph_degree": 15.0,
+      "peer_z_score": 3.1,
+      "reason": "Provider is unusually central or high-risk inside the provider graph community; review as a graph anomaly candidate, not a confirmed FWA label.",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-206"
+      ]
+    },
+    {
+      "provider_id": "PRV-202",
+      "community_id": 3,
+      "graph_degree": 12.0,
+      "peer_z_score": 2.7,
+      "reason": "Provider is unusually central or high-risk inside the provider graph community; review as a graph anomaly candidate, not a confirmed FWA label.",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-202"
+      ]
+    },
+    {
+      "provider_id": "PRV-204",
+      "community_id": 2,
+      "graph_degree": 9.0,
+      "peer_z_score": 2.2,
+      "reason": "Provider is unusually central or high-risk inside the provider graph community; review as a graph anomaly candidate, not a confirmed FWA label.",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-204"
+      ]
+    }
+  ],
+  "review_tasks": [
+    {
+      "task_kind": "provider_graph_anomaly_review",
+      "provider_id": "PRV-206",
+      "community_id": 3,
+      "review_queue": "provider_graph_anomaly_candidate_review",
+      "required_review": "human_review_required_before_case_creation_or_label_assignment",
+      "decision_options": [
+        "dismiss_as_network_variation",
+        "request_more_evidence",
+        "open_investigation_candidate"
+      ],
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-206"
+      ]
+    },
+    {
+      "task_kind": "provider_graph_anomaly_review",
+      "provider_id": "PRV-202",
+      "community_id": 3,
+      "review_queue": "provider_graph_anomaly_candidate_review",
+      "required_review": "human_review_required_before_case_creation_or_label_assignment",
+      "decision_options": [
+        "dismiss_as_network_variation",
+        "request_more_evidence",
+        "open_investigation_candidate"
+      ],
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-202"
+      ]
+    },
+    {
+      "task_kind": "provider_graph_anomaly_review",
+      "provider_id": "PRV-204",
+      "community_id": 2,
+      "review_queue": "provider_graph_anomaly_candidate_review",
+      "required_review": "human_review_required_before_case_creation_or_label_assignment",
+      "decision_options": [
+        "dismiss_as_network_variation",
+        "request_more_evidence",
+        "open_investigation_candidate"
+      ],
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-204"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json"
+  ]
+}

@@ -8,6 +8,7 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
@@ -46,7 +47,7 @@ async fn json_request(
 
 #[tokio::test]
 async fn returns_provider_risk_summary_from_scoring_profiles() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -146,7 +147,7 @@ async fn returns_provider_risk_summary_from_scoring_profiles() {
 
 #[tokio::test]
 async fn returns_provider_graph_risk_summary_from_relationships() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -234,4 +235,255 @@ async fn returns_provider_graph_risk_summary_from_relationships() {
         .unwrap()
         .iter()
         .any(|evidence| evidence == "relationship_edges:PRV-PROVIDER-GRAPH-SUMMARY-1"));
+}
+
+#[tokio::test]
+async fn records_unsupervised_anomaly_candidate_review_without_auto_actions() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
+        r#"{
+          "candidate_kind": "provider_peer_anomaly",
+          "candidate_id": "provider_peer:PRV-042:2026-05",
+          "source_report_uri": "data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json",
+          "decision": "accepted_for_review",
+          "reviewer": "anomaly-reviewer",
+          "notes": "Unsupervised provider peer outlier accepted for investigation review only.",
+          "evidence_refs": [
+            "anomaly_clustering_reports:data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json",
+            "provider_peer_anomaly:PRV-042:2026-05"
+          ],
+          "candidate_payload": {
+            "provider_id": "PRV-042",
+            "outlier_score": 0.93,
+            "reason": "peer z-score and high-cost rate exceed cohort threshold"
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["decision"], "accepted_for_review");
+    assert_eq!(body["accepted_for_review"], true);
+    assert_eq!(body["active_rule_writeback"], false);
+    assert_eq!(body["model_activation"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert!(body["governance_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("must not activate models"));
+
+    let (status, audit) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_type=anomaly.candidate.reviewed&limit=1",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        audit["events"][0]["event_type"],
+        "anomaly.candidate.reviewed"
+    );
+    assert_eq!(
+        audit["events"][0]["payload"]["candidate_kind"],
+        "provider_peer_anomaly"
+    );
+    assert_eq!(
+        audit["events"][0]["payload"]["active_rule_writeback"],
+        false
+    );
+    assert_eq!(audit["events"][0]["payload"]["model_activation"], false);
+    assert_eq!(audit["events"][0]["payload"]["label_assignment"], false);
+    assert!(audit["events"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference
+            == "anomaly_clustering_reports:data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json"));
+}
+
+#[tokio::test]
+async fn submits_anomaly_clustering_report_and_derives_review_queue() {
+    let app = build_app(test_config()).unwrap();
+    let source_report_uri =
+        "data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json";
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/providers/anomaly-clustering-reports",
+        &format!(
+            r#"{{
+          "actor": "mlops-worker",
+          "notes": "Worker submitted unsupervised provider peer anomalies for human review only.",
+          "source_report_uri": "{source_report_uri}",
+          "report_kind": "provider_peer_clustering",
+          "dataset_key": "rust_demo_provider_peer_unlabeled",
+          "dataset_version": "2026-06-clustering-demo",
+          "label_policy": "unlabeled_clustering_discovery_only",
+          "governance_boundary": "unlabeled clustering creates anomaly review candidates only",
+          "review_tasks": [
+            {{
+              "candidate_kind": "provider_peer_anomaly",
+              "candidate_id": "provider_peer:PRV-042:2026-05",
+              "task_kind": "provider_peer_anomaly_review",
+              "review_queue": "provider_anomaly_candidate_review",
+              "required_review": "human_review_required_before_case_creation_or_label_assignment",
+              "decision_options": ["dismiss_as_peer_variation", "request_more_evidence", "open_investigation_candidate"],
+              "evidence_refs": [
+                "anomaly_clustering_reports:{source_report_uri}",
+                "provider_peer_anomaly:PRV-042:2026-05"
+              ],
+              "candidate_payload": {{
+                "provider_id": "PRV-042",
+                "service_month": "2026-05",
+                "outlier_score": 0.93,
+                "reason": "provider is far from peer centroid"
+              }}
+            }}
+          ],
+          "evidence_refs": [
+            "anomaly_clustering_reports:{source_report_uri}"
+          ]
+        }}"#
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["accepted_for_review_queue"], true);
+    assert_eq!(body["active_rule_writeback"], false);
+    assert_eq!(body["model_activation"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["case_creation"], false);
+    assert_eq!(
+        body["audit_event_type"],
+        "provider.anomaly_clustering.report_submitted"
+    );
+
+    let (status, queue) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/providers/anomaly-review-queue",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(queue["tasks"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        queue["tasks"][0]["candidate_id"],
+        "provider_peer:PRV-042:2026-05"
+    );
+    assert_eq!(queue["tasks"][0]["review_status"], "pending_human_review");
+    assert_eq!(queue["tasks"][0]["source_report_uri"], source_report_uri);
+    assert_eq!(
+        queue["tasks"][0]["candidate_payload"]["reason"],
+        "provider is far from peer centroid"
+    );
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
+        &format!(
+            r#"{{
+          "candidate_kind": "provider_peer_anomaly",
+          "candidate_id": "provider_peer:PRV-042:2026-05",
+          "source_report_uri": "{source_report_uri}",
+          "decision": "request_more_evidence",
+          "reviewer": "anomaly-reviewer",
+          "notes": "Keep in review queue until the clustering explanation is stronger.",
+          "evidence_refs": [
+            "anomaly_clustering_reports:{source_report_uri}",
+            "provider_peer_anomaly:PRV-042:2026-05"
+          ]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, queue) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/providers/anomaly-review-queue",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(queue["tasks"][0]["review_status"], "reviewed");
+    assert_eq!(queue["tasks"][0]["decision"], "request_more_evidence");
+    assert_eq!(queue["tasks"][0]["reviewer"], "anomaly-reviewer");
+}
+
+#[tokio::test]
+async fn anomaly_clustering_report_submission_requires_report_evidence() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/providers/anomaly-clustering-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Missing clustering report evidence.",
+          "source_report_uri": "data/rust-automl-demo/clusters/claim_entity_clustering_report.json",
+          "report_kind": "claim_entity_clustering",
+          "dataset_key": "rust_demo_claim_entity_unlabeled",
+          "dataset_version": "2026-06-clustering-demo",
+          "label_policy": "unlabeled_clustering_discovery_only",
+          "governance_boundary": "unlabeled clustering creates anomaly review candidates only",
+          "review_tasks": [
+            {
+              "candidate_kind": "claim_entity_anomaly",
+              "candidate_id": "claim_entity:CLM-099",
+              "task_kind": "claim_entity_anomaly_review",
+              "review_queue": "claim_entity_anomaly_candidate_review",
+              "required_review": "human_review_required_before_case_creation_label_assignment_or_rule_writeback",
+              "evidence_refs": ["claim_entity_anomaly:CLM-099"]
+            }
+          ],
+          "evidence_refs": ["claim_entity_anomaly:CLM-099"]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_ANOMALY_CLUSTERING_REPORT_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("anomaly_clustering_reports:"));
+}
+
+#[tokio::test]
+async fn anomaly_candidate_review_requires_clustering_report_evidence() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
+        r#"{
+          "candidate_kind": "claim_entity_anomaly",
+          "candidate_id": "claim_entity:CLM-099",
+          "source_report_uri": "data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json",
+          "decision": "rejected",
+          "reviewer": "anomaly-reviewer",
+          "notes": "Rejected because the explanation is too weak.",
+          "evidence_refs": ["claim_entity_anomaly:CLM-099"]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_ANOMALY_CANDIDATE_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("anomaly_clustering_reports:"));
 }

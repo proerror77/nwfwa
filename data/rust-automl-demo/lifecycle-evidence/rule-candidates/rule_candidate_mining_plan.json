@@ -1,0 +1,255 @@
+{
+  "plan_kind": "explainable_model_rule_candidate_mining",
+  "plan_version": 1,
+  "source_model_key": "baseline_fwa",
+  "source_candidate_model_version": "0.2.0-xgboost-candidate",
+  "source_algorithm": "xgboost",
+  "promotion_boundary": "candidate rules are drafts only; backtest and human review are required before rule library writeback",
+  "candidate_rules": [
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+      "source_feature": "amount_to_limit_ratio",
+      "source_importance": 0.39,
+      "source_importance_kind": "feature_importance",
+      "draft_rule_template": {
+        "action": {
+          "action_class": "score_only_or_manual_review_after_approval",
+          "reason": "Explainable model pattern candidate; not publishable before deterministic backtest and human approval.",
+          "recommended_action": "manual_review",
+          "required_evidence": [],
+          "score": "selected_by_backtest"
+        },
+        "conditions": [
+          {
+            "field": "amount_to_limit_ratio",
+            "operator": "threshold_selected_by_backtest",
+            "value": {
+              "threshold_source": "run_rule_candidate_backtest_required"
+            }
+          }
+        ],
+        "name": "Model pattern: amount_to_limit_ratio",
+        "review_mode": "both",
+        "rule_id": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+        "scheme_family": "model_explanation_pattern",
+        "version": 0
+      },
+      "gate_status": "blocked_until_backtest_and_human_review",
+      "required_before_rule_library_writeback": [
+        "deterministic_backtest",
+        "false_positive_review",
+        "human_rule_promotion_review",
+        "customer_policy_or_model_governance_approval",
+        "shadow_or_limited_rollout_if_high_impact"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+      "source_feature": "peer_percentile",
+      "source_importance": 0.28,
+      "source_importance_kind": "feature_importance",
+      "draft_rule_template": {
+        "action": {
+          "action_class": "score_only_or_manual_review_after_approval",
+          "reason": "Explainable model pattern candidate; not publishable before deterministic backtest and human approval.",
+          "recommended_action": "manual_review",
+          "required_evidence": [],
+          "score": "selected_by_backtest"
+        },
+        "conditions": [
+          {
+            "field": "peer_percentile",
+            "operator": "threshold_selected_by_backtest",
+            "value": {
+              "threshold_source": "run_rule_candidate_backtest_required"
+            }
+          }
+        ],
+        "name": "Model pattern: peer_percentile",
+        "review_mode": "both",
+        "rule_id": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+        "scheme_family": "model_explanation_pattern",
+        "version": 0
+      },
+      "gate_status": "blocked_until_backtest_and_human_review",
+      "required_before_rule_library_writeback": [
+        "deterministic_backtest",
+        "false_positive_review",
+        "human_rule_promotion_review",
+        "customer_policy_or_model_governance_approval",
+        "shadow_or_limited_rollout_if_high_impact"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+      "source_feature": "high_cost_item_ratio",
+      "source_importance": 0.2,
+      "source_importance_kind": "feature_importance",
+      "draft_rule_template": {
+        "action": {
+          "action_class": "score_only_or_manual_review_after_approval",
+          "reason": "Explainable model pattern candidate; not publishable before deterministic backtest and human approval.",
+          "recommended_action": "manual_review",
+          "required_evidence": [],
+          "score": "selected_by_backtest"
+        },
+        "conditions": [
+          {
+            "field": "high_cost_item_ratio",
+            "operator": "threshold_selected_by_backtest",
+            "value": {
+              "threshold_source": "run_rule_candidate_backtest_required"
+            }
+          }
+        ],
+        "name": "Model pattern: high_cost_item_ratio",
+        "review_mode": "both",
+        "rule_id": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+        "scheme_family": "model_explanation_pattern",
+        "version": 0
+      },
+      "gate_status": "blocked_until_backtest_and_human_review",
+      "required_before_rule_library_writeback": [
+        "deterministic_backtest",
+        "false_positive_review",
+        "human_rule_promotion_review",
+        "customer_policy_or_model_governance_approval",
+        "shadow_or_limited_rollout_if_high_impact"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    }
+  ],
+  "backtest_requests": [
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+      "backtest_kind": "deterministic_rule_candidate_backtest",
+      "required_dataset_splits": [
+        "train",
+        "validation",
+        "out_of_time"
+      ],
+      "minimum_evidence": [
+        "hit_rate_by_split",
+        "precision_recall_by_split",
+        "false_positive_review",
+        "rule_only_baseline_comparison",
+        "manual_review_capacity_impact"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+      "backtest_kind": "deterministic_rule_candidate_backtest",
+      "required_dataset_splits": [
+        "train",
+        "validation",
+        "out_of_time"
+      ],
+      "minimum_evidence": [
+        "hit_rate_by_split",
+        "precision_recall_by_split",
+        "false_positive_review",
+        "rule_only_baseline_comparison",
+        "manual_review_capacity_impact"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+      "backtest_kind": "deterministic_rule_candidate_backtest",
+      "required_dataset_splits": [
+        "train",
+        "validation",
+        "out_of_time"
+      ],
+      "minimum_evidence": [
+        "hit_rate_by_split",
+        "precision_recall_by_split",
+        "false_positive_review",
+        "rule_only_baseline_comparison",
+        "manual_review_capacity_impact"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    }
+  ],
+  "review_tasks": [
+    {
+      "task_kind": "rule_candidate_human_review",
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+      "review_queue": "rule_studio_candidate_review",
+      "required_review": "human_approval_required_before_rule_library_writeback",
+      "decision_options": [
+        "reject",
+        "request_backtest_changes",
+        "approve_draft_for_backtest"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "task_kind": "rule_candidate_human_review",
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+      "review_queue": "rule_studio_candidate_review",
+      "required_review": "human_approval_required_before_rule_library_writeback",
+      "decision_options": [
+        "reject",
+        "request_backtest_changes",
+        "approve_draft_for_backtest"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "task_kind": "rule_candidate_human_review",
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+      "review_queue": "rule_studio_candidate_review",
+      "required_review": "human_approval_required_before_rule_library_writeback",
+      "decision_options": [
+        "reject",
+        "request_backtest_changes",
+        "approve_draft_for_backtest"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+    "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet"
+  ]
+}

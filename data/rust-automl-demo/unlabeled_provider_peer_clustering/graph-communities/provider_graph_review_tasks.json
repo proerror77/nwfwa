@@ -1,0 +1,50 @@
+[
+  {
+    "task_kind": "provider_graph_anomaly_review",
+    "provider_id": "PRV-206",
+    "community_id": 3,
+    "review_queue": "provider_graph_anomaly_candidate_review",
+    "required_review": "human_review_required_before_case_creation_or_label_assignment",
+    "decision_options": [
+      "dismiss_as_network_variation",
+      "request_more_evidence",
+      "open_investigation_candidate"
+    ],
+    "evidence_refs": [
+      "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+      "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-206"
+    ]
+  },
+  {
+    "task_kind": "provider_graph_anomaly_review",
+    "provider_id": "PRV-202",
+    "community_id": 3,
+    "review_queue": "provider_graph_anomaly_candidate_review",
+    "required_review": "human_review_required_before_case_creation_or_label_assignment",
+    "decision_options": [
+      "dismiss_as_network_variation",
+      "request_more_evidence",
+      "open_investigation_candidate"
+    ],
+    "evidence_refs": [
+      "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+      "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-202"
+    ]
+  },
+  {
+    "task_kind": "provider_graph_anomaly_review",
+    "provider_id": "PRV-204",
+    "community_id": 2,
+    "review_queue": "provider_graph_anomaly_candidate_review",
+    "required_review": "human_review_required_before_case_creation_or_label_assignment",
+    "decision_options": [
+      "dismiss_as_network_variation",
+      "request_more_evidence",
+      "open_investigation_candidate"
+    ],
+    "evidence_refs": [
+      "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+      "provider_graph_community:rust_demo_provider_peer_unlabeled:PRV-204"
+    ]
+  }
+]

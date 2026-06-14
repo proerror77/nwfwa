@@ -14,6 +14,7 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
@@ -333,7 +334,7 @@ async fn audit_samples_are_scoped_to_authenticated_customer() {
 
 #[tokio::test]
 async fn creates_audit_sample_from_ranked_leads() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     score_high_risk_claim(app.clone(), "CLM-SAMPLE-1", "9000").await;
     score_high_risk_claim(app.clone(), "CLM-SAMPLE-2", "8200").await;
@@ -505,7 +506,7 @@ async fn creates_audit_sample_from_ranked_leads() {
 
 #[tokio::test]
 async fn stratified_sample_spans_operational_strata() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     score_high_risk_claim_with_context(
         app.clone(),
@@ -604,7 +605,7 @@ async fn stratified_sample_spans_operational_strata() {
 
 #[tokio::test]
 async fn stratified_sample_filters_by_operational_strata_criteria() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     score_high_risk_claim_with_context(
         app.clone(),
@@ -668,7 +669,7 @@ async fn stratified_sample_filters_by_operational_strata_criteria() {
 
 #[tokio::test]
 async fn random_control_samples_scoring_population_for_baseline_measurement() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     score_high_risk_claim(app.clone(), "CLM-CONTROL-HIGH", "9900").await;
     let low_risk = score_claim_for_sampling(
@@ -736,7 +737,7 @@ async fn random_control_samples_scoring_population_for_baseline_measurement() {
 
 #[tokio::test]
 async fn post_payment_audit_samples_only_post_payment_leads() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     score_high_risk_claim_with_review_mode(
         app.clone(),
@@ -799,7 +800,7 @@ async fn post_payment_audit_samples_only_post_payment_leads() {
 
 #[tokio::test]
 async fn qa_calibration_rotates_away_from_reviewer_repeat_leads() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     score_high_risk_claim(app.clone(), "CLM-QA-CAL-HIGH", "9900").await;
     score_high_risk_claim(app.clone(), "CLM-QA-CAL-LOWER", "8000").await;

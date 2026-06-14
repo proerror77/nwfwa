@@ -58,6 +58,12 @@ ml-service
   -> explanation artifacts
 ```
 
+For local Docker Desktop development, the supported launcher is
+`scripts/dev/start_local_runtime.sh`: Docker Compose owns PostgreSQL,
+`ml-service`, object storage, and ClickHouse, while host tmux sessions run the
+Rust API and Web Console. Full Docker Compose and K3d remain packaging and
+deployment-shape proofs rather than the fastest daily development path.
+
 Process responsibilities:
 
 - `api-server`: synchronous TPA APIs, Operations Studio APIs, auth boundary,
@@ -69,6 +75,21 @@ Process responsibilities:
   explanation work. Rust remains the long-term production inference gateway.
 - `web-console`: operator workflow, governance review, evidence inspection,
   and pilot operations.
+
+Capacity boundary:
+
+- The current `api-server` path is suitable for local demo and bounded pilot
+  smoke traffic. It applies configurable request/body and Postgres pool limits
+  to protect the process, but `/api/v1/inbox/claims/normalize` and
+  `/api/v1/claims/score` still execute synchronous validation, scoring, and
+  audit persistence.
+- Million-request bursts must use an intake-first architecture: authenticate,
+  validate the envelope, persist or enqueue the raw event quickly, and let
+  workers normalize, score, route, write webhooks, and update rollups under
+  backpressure.
+- Dashboard, Leads/Cases, and webhook views must read bounded pages or
+  materialized rollups before customer-scale load. They should not scan audit
+  payloads or return unbounded worklists in a high-volume deployment.
 
 ## Data Plane
 

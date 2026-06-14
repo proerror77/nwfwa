@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{
         AgentApprovalRecord, AgentContextSnapshotRecord, AgentPolicyCheckRecord,
@@ -8,19 +9,18 @@ use crate::{
     },
     routes::pii,
 };
-use axum::{
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use fwa_agent::{
-    DeterministicInvestigator, EvidenceSufficiency, InvestigationRequest, SimilarCaseInput,
+    DeterministicInvestigator, EvidenceSufficiency, InvestigationOrchestrator,
+    InvestigationRequest, NoopInvestigationCancellation, SimilarCaseInput,
 };
-use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
+
+const AGENT_KIND_DETERMINISTIC_INVESTIGATOR: &str = "deterministic_investigator";
+const AGENT_VERSION_DETERMINISTIC_INVESTIGATOR: u32 = 1;
+const TOOL_KNOWLEDGE_SEARCH_SIMILAR: &str = "knowledge.search_similar";
 
 #[derive(Debug, Deserialize)]
 pub struct AgentInvestigationRequest {
@@ -51,14 +51,14 @@ pub struct AgentInvestigationResponse {
     pub evidence_sufficiency: EvidenceSufficiency,
     pub evidence_refs: Vec<String>,
     pub evidence_refs_by_type: fwa_agent::EvidenceReferenceBuckets,
+    pub specialist_executions: Vec<fwa_agent::SpecialistAgentExecution>,
 }
 
 pub async fn investigate_case(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_agent_investigation_request(&request)?;
     let masked_claim_ref = mask_agent_claim_ref(&request.claim_id);
     let scheme_family = request
@@ -79,14 +79,38 @@ pub async fn investigate_case(
     let agent_policy_id = state.config.agent_policy_id.clone();
     let tool_call_id = format!("tool_call_{}", masked_claim_ref);
     let tool_result_id = format!("tool_result_{}", masked_claim_ref);
+    let registry = state
+        .repository
+        .active_agent_registry(
+            AGENT_KIND_DETERMINISTIC_INVESTIGATOR,
+            AGENT_VERSION_DETERMINISTIC_INVESTIGATOR,
+        )
+        .await
+        .map_err(internal_error("AGENT_REGISTRY_LOOKUP_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::FORBIDDEN,
+                "AGENT_IDENTITY_NOT_ACTIVE",
+                "agent identity is not active",
+            )
+        })?;
+    let phi_fields_accessed = agent_investigation_phi_fields();
+    enforce_agent_registry_policy(
+        &registry,
+        TOOL_KNOWLEDGE_SEARCH_SIMILAR,
+        &phi_fields_accessed,
+    )?;
     let policy_check = AgentPolicyCheckRecord {
         policy_check_id: format!("policy_check_{}", masked_claim_ref),
         agent_run_id: format!("agent_{}", masked_claim_ref),
         tool_call_id: tool_call_id.clone(),
-        tool_name: "knowledge.search_similar".into(),
+        tool_name: TOOL_KNOWLEDGE_SEARCH_SIMILAR.into(),
         policy_name: agent_policy_id.clone(),
         decision: "allowed".into(),
-        reason: "Tool is allowlisted for read-only similar-case evidence retrieval.".into(),
+        reason: format!(
+            "Tool is allowlisted by active agent registry identity {}.",
+            registry.agent_identity_id
+        ),
         evidence_refs: vec![
             format!("policy:{agent_policy_id}"),
             format!("knowledge_query:{}", masked_claim_ref),
@@ -153,27 +177,38 @@ pub async fn investigate_case(
         &context_json["canonical_claim_context_trace"]["source_refs"],
     ));
 
-    let package = DeterministicInvestigator.investigate(InvestigationRequest {
+    let investigation_request = InvestigationRequest {
         claim_id: masked_claim_ref,
         risk_score: request.risk_score,
         rag: request.rag,
         scheme_family,
         top_reasons: governed_top_reasons,
         similar_cases,
-    });
-    let output_json = serde_json::to_value(&package).map_err(|error| {
-        ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "AGENT_ENCODE_FAILED",
-            error.to_string(),
+    };
+    let specialist_executions = DeterministicInvestigator
+        .dispatch_specialists_with_cancellation(
+            &investigation_request,
+            &NoopInvestigationCancellation,
         )
-    })?;
+        .map_err(|error| {
+            ApiError::internal("AGENT_SPECIALIST_DISPATCH_FAILED", format!("{error:?}"))
+        })?;
+    let package = DeterministicInvestigator.orchestrate(investigation_request);
+    let mut output_json = serde_json::to_value(&package)
+        .map_err(|error| ApiError::internal("AGENT_ENCODE_FAILED", error))?;
+    if let Value::Object(payload) = &mut output_json {
+        payload.insert(
+            "specialist_executions".into(),
+            serde_json::to_value(&specialist_executions)
+                .map_err(|error| ApiError::internal("AGENT_ENCODE_FAILED", error))?,
+        );
+    }
     let evidence_refs = package
         .evidence_refs
         .iter()
         .map(|reference| Value::String(reference.clone()))
         .collect::<Vec<_>>();
-    let steps = package
+    let mut steps = package
         .findings
         .iter()
         .map(|finding| {
@@ -184,6 +219,15 @@ pub async fn investigate_case(
             })
         })
         .collect::<Vec<_>>();
+    steps.extend(specialist_executions.iter().map(|execution| {
+        serde_json::json!({
+            "step_name": "specialist_execution",
+            "agent_kind": execution.agent_kind,
+            "status": execution.status,
+            "decision_boundary": execution.decision_boundary,
+            "evidence_refs": execution.evidence_refs,
+        })
+    }));
     let audit_policy_check_id = policy_check.policy_check_id.clone();
     let audit_tool_call_id = tool_call_id.clone();
     let mut audit_payload = output_json.clone();
@@ -203,7 +247,15 @@ pub async fn investigate_case(
         payload.insert("tool_call_id".into(), Value::String(audit_tool_call_id));
         payload.insert(
             "tool_name".into(),
-            Value::String("knowledge.search_similar".into()),
+            Value::String(TOOL_KNOWLEDGE_SEARCH_SIMILAR.into()),
+        );
+        payload.insert(
+            "agent_identity_id".into(),
+            Value::String(registry.agent_identity_id.clone()),
+        );
+        payload.insert(
+            "phi_fields_accessed".into(),
+            serde_json::json!(phi_fields_accessed),
         );
     }
     let mut audit_evidence_refs = evidence_refs.clone();
@@ -235,7 +287,7 @@ pub async fn investigate_case(
             }],
             tool_calls: vec![AgentToolCallRecord {
                 tool_call_id: tool_call_id.clone(),
-                tool_name: "knowledge.search_similar".into(),
+                tool_name: TOOL_KNOWLEDGE_SEARCH_SIMILAR.into(),
                 status: "succeeded".into(),
                 input_json: tool_input,
                 evidence_refs: query_evidence_refs,
@@ -243,7 +295,7 @@ pub async fn investigate_case(
             tool_results: vec![AgentToolResultRecord {
                 tool_result_id,
                 tool_call_id,
-                tool_name: "knowledge.search_similar".into(),
+                tool_name: TOOL_KNOWLEDGE_SEARCH_SIMILAR.into(),
                 status: "succeeded".into(),
                 output_json: serde_json::json!({
                     "result_count": package.similar_cases.len(),
@@ -298,6 +350,7 @@ pub async fn investigate_case(
         evidence_sufficiency: package.evidence_sufficiency,
         evidence_refs: package.evidence_refs,
         evidence_refs_by_type: package.evidence_refs_by_type,
+        specialist_executions,
     }))
 }
 
@@ -360,6 +413,54 @@ fn validate_agent_investigation_request(
         ));
     }
     Ok(())
+}
+
+fn enforce_agent_registry_policy(
+    registry: &crate::repository::AgentRegistryRecord,
+    tool_name: &str,
+    phi_fields_accessed: &[String],
+) -> Result<(), ApiError> {
+    if registry.status != "active" {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "AGENT_IDENTITY_NOT_ACTIVE",
+            "agent identity is not active",
+        ));
+    }
+    if !registry
+        .capability_scope
+        .iter()
+        .any(|capability| capability == tool_name)
+    {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "AGENT_TOOL_NOT_ALLOWED",
+            "agent identity is not allowed to use the requested tool",
+        ));
+    }
+    if let Some(field) = phi_fields_accessed.iter().find(|field| {
+        !registry
+            .phi_fields_allowed
+            .iter()
+            .any(|allowed| allowed == *field)
+    }) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "AGENT_PHI_FIELD_NOT_ALLOWED",
+            format!("agent identity is not allowed to access PHI field {field}"),
+        ));
+    }
+    Ok(())
+}
+
+fn agent_investigation_phi_fields() -> Vec<String> {
+    vec![
+        "claim_id".into(),
+        "risk_score".into(),
+        "rag".into(),
+        "diagnosis_code".into(),
+        "provider_region".into(),
+    ]
 }
 
 async fn latest_canonical_claim_context_trace(
@@ -478,21 +579,8 @@ fn stable_fnv1a64(scope: &str, value: &str) -> u64 {
     hash
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
-}
-
 fn internal_error(
     code: &'static str,
 ) -> impl Fn(anyhow::Error) -> ApiError + Clone + Send + Sync + 'static {
-    move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+    move |error| ApiError::internal(code, error)
 }

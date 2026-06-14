@@ -9,6 +9,7 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
@@ -149,7 +150,7 @@ async fn tpa_contract_docs_and_mock_client_match_openapi() {
 }
 
 async fn openapi_schema() -> serde_json::Value {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
     let request = Request::builder()
         .method("GET")
         .uri("/api/openapi.json")

@@ -1,0 +1,50 @@
+{
+  "business_domain": "health_fwa",
+  "dataset_key": "rust_demo_claim_risk_labeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "description": "Rust-generated demo dataset for supervised model training, backtesting, and promotion-gate exercises.",
+  "display_name": "Rust Demo Claim Risk Labeled",
+  "entity_keys": [
+    "claim_id",
+    "member_id",
+    "policy_id",
+    "provider_id"
+  ],
+  "governance": {
+    "allowed_uses": [
+      "pipeline_validation",
+      "backtest_contract_validation",
+      "human_review_workflow_demo"
+    ],
+    "blocked_uses": [
+      "production_auto_deny",
+      "customer_validation_claim",
+      "production_roi_claim"
+    ]
+  },
+  "group_split_fields": [
+    "member_id",
+    "policy_id",
+    "provider_id"
+  ],
+  "label_column": "confirmed_fwa",
+  "label_policy": "weak_rust_demo_label_not_production_evidence",
+  "owner": "ml-ops",
+  "sample_grain": "claim",
+  "splits": [
+    {
+      "data_uri": "split=train/",
+      "split_name": "train"
+    },
+    {
+      "data_uri": "split=validation/",
+      "split_name": "validation"
+    },
+    {
+      "data_uri": "split=out_of_time/",
+      "split_name": "out_of_time"
+    }
+  ],
+  "status": "demo_only",
+  "time_split_field": "service_date"
+}

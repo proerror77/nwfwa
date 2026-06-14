@@ -12,12 +12,52 @@ rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
 ```
 
+Use the supported hybrid local runtime for day-to-day development on Docker
+Desktop. Docker runs the backing services, while the Rust API and Trunk dev
+server run on the host in tmux sessions:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+Use API key:
+
+```text
+aiclaim-demo-key
+```
+
+The launcher starts `postgres`, `ml-service`, object storage, and ClickHouse
+with Docker Compose, applies migrations plus deterministic demo seed data,
+builds the host `api-server` with `cargo build --locked -p api-server`, starts
+`api-server` in tmux session `nwfwa-api`, starts the Web Console in tmux
+session `nwfwa-web`, then verifies ML, API, Web, and authenticated dashboard
+health. Runtime logs are written under `artifacts/local-runtime/`.
+
+Stop the local runtime:
+
+```bash
+scripts/dev/stop_local_runtime.sh
+```
+
 Start the full local demo stack when you want the same containerized API and
 Web Console boundary used by the pilot packaging proof:
 
 ```bash
 docker compose -f infra/docker-compose.yml up --build
 ```
+
+The full Docker path is still the packaging proof, but local Docker Desktop may
+need more memory for the Rust API image build. If `api-server` fails during
+container build with `SIGKILL`, `ResourceExhausted`, or `cannot allocate
+memory`, either increase Docker Desktop memory to roughly 12-16 GB, use
+prebuilt images, or use `scripts/dev/start_local_runtime.sh` for local
+development.
 
 Open:
 
@@ -137,11 +177,14 @@ python -m app.train \
 
 The command prints the retraining output payload expected by
 `POST /api/v1/ops/model-retraining-jobs/{job_id}/output`. To serve the resulting
-artifact locally, start the ML service with `FWA_MODEL_ARTIFACT_URI` pointing to
-the generated `model.joblib`. The training command also writes a serving
-manifest, artifact checksum/signature, feature-store materialization manifest,
-shadow comparison report, drift report, and segment fairness report next to the
-model artifact.
+logistic fallback artifact locally, start the ML service with
+`FWA_MODEL_ARTIFACT_URI` pointing to the generated `model.joblib`. The training
+command also writes a serving manifest, artifact checksum/signature,
+feature-store materialization manifest, shadow comparison report, drift report,
+and segment fairness report next to the model artifact. For XGBoost and
+LightGBM, the payload's `artifact_uri` points to `model.onnx`; `model.joblib`
+is retained as `training_artifact_uri`, and `onnx_parity_report.json` records
+the Python-versus-ONNX probability parity gate.
 
 Public-data MVP manifest:
 
@@ -186,12 +229,17 @@ FWA_MODEL_SHADOW_HEURISTIC=true \
 python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
 ```
 
-Rust runtime artifact scoring is available for local JSON logistic-regression
-artifacts. Configure the API server with `FWA_MODEL_ARTIFACT_URI` plus the same
-optional checksum, signature, and version lock variables. When this is set,
-`/api/v1/health` reports `model_scorer.runtime_kind = rust_artifact` and the
-scoring response model metadata includes artifact integrity, signature, and
-serving version lock status.
+Rust runtime artifact scoring is available for governed serving manifests.
+Configure the API server with `FWA_MODEL_SERVING_MANIFEST_URI` and, when the
+manifest includes `artifact_signature`, `FWA_MODEL_SIGNATURE_KEY`. When this is
+set, `/api/v1/health` reports
+`model_scorer.runtime_kind = rust_serving_manifest`, and the scoring response
+model metadata includes manifest status, artifact integrity, signature, feature
+order, and serving version lock status.
+
+Direct `FWA_MODEL_ARTIFACT_URI` scoring remains available for local JSON
+logistic-regression artifacts. Use it only when you intentionally bypass the
+serving manifest contract.
 
 Minimal Rust artifact shape:
 
@@ -209,6 +257,31 @@ Minimal Rust artifact shape:
   }
 }
 ```
+
+GBDT serving manifest shape:
+
+```json
+{
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate-job-1",
+  "runtime_kind": "xgboost_onnx",
+  "artifact_uri": "data/model-artifacts/baseline_fwa/0.2.0-xgboost-candidate-job-1/model.onnx",
+  "artifact_sha256": "sha256:<onnx-digest>",
+  "artifact_signature": "hmac-sha256:<artifact-signature>",
+  "version_lock": "0.2.0-xgboost-candidate-job-1",
+  "feature_columns": ["claim_amount_to_limit_ratio", "provider_profile_score"],
+  "threshold": 0.5,
+  "training_artifact_uri": "data/model-artifacts/baseline_fwa/0.2.0-xgboost-candidate-job-1/model.joblib"
+}
+```
+
+When `runtime_kind` is `xgboost_onnx`, `lightgbm_onnx`,
+`deep_learning_onnx`, or `rust_onnx`, the Rust serving-manifest scorer loads
+`artifact_uri` with ONNX Runtime CPU after validating the manifest identity,
+ordered features, checksum, optional signature, and version lock. The scoring
+metadata records the ONNX input/output names and `fraud_probability`. The
+`.joblib` file remains the training artifact and must not be configured as the
+Rust serving artifact.
 
 Worker-driven training registration:
 
@@ -235,6 +308,80 @@ cargo run --locked -p worker -- build-training-handoff \
   --actor trainer-worker
 ```
 
+The handoff contract now includes feature-importance output plus the downstream
+rule-candidate workflow contract. `run-retraining-job` uses that package to mine
+explainable rule candidates, run deterministic rule-candidate backtests, attach
+review-task evidence, and then register the provider output into FWA. The worker
+does not activate the model or write active rules; accepted rule candidates still
+require completed blocker-free backtest evidence and are saved only as draft
+candidates for human governance review before rule-library writeback.
+
+Independent training service handoff:
+
+```bash
+python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
+
+python scripts/demo/mlops_training_handoff.py \
+  --ml-service-url http://127.0.0.1:8001 \
+  --manifest data/training/manifest.json \
+  --artifact-base-uri data/model-artifacts \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor external-training-platform \
+  --write-provider-output artifacts/mlops/provider-output.json
+```
+
+The script calls the independent ML service `POST /training-jobs`, which stores
+the job in the SQLite-backed training queue, returns a queued job record, runs
+training in the service background task runner, and writes
+`artifact_registry.json` beside the model artifacts. The script polls
+`GET /training-jobs/{job_id}` until the job is completed, validates
+`provider_output`, and can save it for review. Set `FWA_TRAINING_JOB_DB` when
+the default `data/ml-service/training_jobs.sqlite3` location should be changed.
+Set `FWA_ARTIFACT_REGISTRY_URI` to the environment's registry root, for example
+`s3://nwfwa-staging-artifacts/ml-service`, so deployment manifests carry the
+intended durable registry boundary even when local tests use filesystem
+artifacts.
+For worker-style execution, `POST /training-jobs/claim-next` leases the next
+queued or expired job to a worker, `POST /training-jobs/{job_id}/run` executes a
+claimed job with worker ownership checks, and
+`GET /training-jobs/{job_id}/artifacts` returns the completed artifact registry.
+Operators can also use `GET /artifact-registries` to list completed registries
+or `GET /artifact-registries/{model_key}/{candidate_model_version}` to inspect a
+single immutable training artifact package.
+Workers can extend long-running ownership with
+`POST /training-jobs/{job_id}/renew-lease`. Failed jobs wait until
+`next_attempt_at` before another worker can claim them; exhausted jobs keep
+`dead_letter_at` and can be manually requeued with
+`POST /training-jobs/{job_id}/retry`.
+`GET /training-jobs/metrics` reports queue depth, ready jobs, delayed retries,
+expired leases, dead-letter counts, and registered workers. Workers can publish
+heartbeats with `POST /training-workers/heartbeat`, and operators can inspect
+them with `GET /training-workers`. Prometheus-compatible scraping is available
+at `GET /metrics`; Kubernetes staging annotates the ML service Pod to scrape
+that endpoint.
+For a separate training worker process, run:
+
+```bash
+python -m app.training_worker \
+  --db data/ml-service/training_jobs.sqlite3 \
+  --worker-id ml-training-worker-1 \
+  --lease-seconds 900
+```
+
+Use `--once` in CI or smoke checks when the worker should process at most one
+available job and exit.
+Docker Compose runs the same worker as `ml-training-worker` with a shared
+`fwa_ml_training_jobs` volume. The Kubernetes staging manifest runs it as an
+`ml-service` sidecar with a shared `ml-training-jobs` PVC; move the queue to
+PostgreSQL or Redis before scaling workers across pods.
+Add `--register --api-url "$FWA_API_BASE_URL" --api-key "$FWA_API_KEY"` only
+when the completed output should be posted to
+`/api/v1/ops/model-retraining-jobs/{job_id}/output`. This keeps FWA on the
+consumer side of the contract: it records completed model artifacts and mined
+rule drafts, while the training platform owns training execution.
+
 Scheduled MLOps monitoring plan:
 
 ```bash
@@ -249,17 +396,103 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
 The generated plan covers shadow traffic evaluation, score and feature drift,
 segment fairness review, reviewer disagreement review, and label delay review.
 
-Run the local staging MLOps monitoring-plan simulator:
+Run the local staging scheduled MLOps monitoring command:
 
 ```bash
-python3 scripts/ops/run_mlops_monitoring_plan.py \
-  --plan scripts/ops/sample_mlops_monitoring_plan.json \
-  --output-dir artifacts/mlops-monitoring
+cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
+  --manifest-uri s3://nwfwa-staging-artifacts/datasets/public-mvp/manifest.json \
+  --artifact-uri s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version staging \
+  --cron "0 2 * * *" \
+  --output-dir artifacts/mlops-monitoring \
+  --monitoring-inputs scripts/ops/sample_mlops_monitoring_inputs.json \
+  --artifact-base-uri s3://nwfwa-staging-artifacts/mlops-monitoring/baseline_fwa/staging
 ```
 
-The simulator writes shadow, drift, segment fairness, reviewer disagreement, and
-label delay report artifacts. These are staging proof artifacts only; they are
-not live customer shadow or drift evidence.
+The Rust worker writes `mlops_monitoring_plan.json`, shadow, drift, segment
+fairness, reviewer disagreement, label delay report artifacts, and
+`mlops_monitoring_artifact_publication_manifest.json`. These are staging proof
+artifacts only unless `--monitoring-inputs` points to a customer or pilot
+monitoring window. Use `scripts/ops/run_mlops_monitoring_plan.py --plan ...`
+only when replaying an already materialized plan file.
+
+Run the Rust MLOps monitoring cycle executor after the runtime reports exist.
+The artifact-evaluation report comes from `evaluate-model-artifact`; the
+shadow, drift, and fairness reports can come from the staging simulator or the
+customer environment:
+
+```bash
+cargo run --locked -p worker -- run-mlops-monitoring-cycle \
+  --plan scripts/ops/sample_mlops_monitoring_plan.json \
+  --artifact-evaluation-report artifacts/model-artifact-evaluation/model_artifact_evaluation_report.json \
+  --shadow-report artifacts/mlops-monitoring/shadow_report.json \
+  --drift-report artifacts/mlops-monitoring/drift_report.json \
+  --fairness-report artifacts/mlops-monitoring/fairness_report.json \
+  --output-dir artifacts/mlops-monitoring/cycle
+```
+
+Add `--api-url`, `--api-key`, `--actor`, and `--notes` to the same command when
+the cycle should submit monitoring and alert-router handoff evidence into the
+API governance audit. This is still a governed handoff; it does not execute
+retraining, activation, rollback, label assignment, or rule writeback.
+
+After the Rust monitoring report and scheduler execution report exist, submit
+the alert-router handoff into governance audit:
+
+```bash
+cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --scheduler-report artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --actor mlops-worker \
+  --notes "MLOps scheduler alert-router handoff submitted."
+```
+
+This records delivery handoff evidence only. It does not replace the customer
+alert receiver, create retraining jobs, activate models, rollback models, or
+assign fraud labels.
+
+Run the Alertmanager adapter when Kubernetes Alertmanager should submit native
+webhooks into the same governed FWA API handoff:
+
+```bash
+cargo run --locked -p worker -- serve-mlops-alert-router \
+  --bind-addr 0.0.0.0:8080 \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --alertmanager-webhook-token "$FWA_MLOPS_ALERT_ROUTER_TOKEN" \
+  --model-key baseline_fwa \
+  --model-version "$APPROVED_MODEL_VERSION" \
+  --scheduler-report-uri "$APPROVED_MLOPS_SCHEDULER_REPORT_URI"
+```
+
+The adapter exposes `/health` and `POST /alertmanager/webhook`. It converts
+Alertmanager firing alerts into `mlops_alert_delivery` tasks and submits them
+to `/api/v1/ops/models/{model_key}/mlops-alert-deliveries` with `x-api-key`.
+The webhook requires `Authorization: Bearer $FWA_MLOPS_ALERT_ROUTER_TOKEN`.
+It does not send alerts to the external customer receiver by itself; customer
+receipt is still proven through the alert-receiver delivery report and
+readiness evidence.
+
+Send queued MLOps alert tasks to a customer receiver webhook:
+
+```bash
+cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook \
+  --scheduler-report artifacts/mlops-monitoring/cycle/scheduler/mlops_scheduler_execution_report.json \
+  --receiver-url "$FWA_ALERT_RECEIVER_URL" \
+  --receiver-id customer-alert-router-v1 \
+  --receiver-token "$FWA_ALERT_RECEIVER_TOKEN" \
+  --receiver-secret "$FWA_ALERT_RECEIVER_SIGNING_SECRET" \
+  --max-attempts 3 \
+  --output-dir artifacts/mlops-monitoring/alert-receiver
+```
+
+This command performs the outbound POST only when alert tasks exist. It writes
+delivery evidence and keeps the receiver payload governance-only. The worker can
+attach bearer auth, HMAC signature, and bounded retry evidence; the customer
+receiver still owns downstream notification policy, escalation, and
+acknowledgement.
 
 Analytics-scale export proof:
 
@@ -366,6 +599,9 @@ Kustomize:
 
 ```bash
 python3 scripts/ops/validate_k8s_staging.py
+python3 scripts/ops/validate_staging_secret_file.py \
+  --secret-file infra/k8s/staging/secrets.example.yaml \
+  --allow-placeholders
 kubectl kustomize infra/k8s/staging
 ```
 
@@ -377,7 +613,12 @@ The directory includes API, web console, ML service, PostgreSQL,
 S3-compatible object storage, ClickHouse, database migration and seed Jobs, and
 worker CronJobs for pilot readiness, MLOps monitoring-plan generation, AI
 evidence execution-plan generation, analytics export-plan generation, and
-governance ops plan generation.
+governance ops plan generation. Worker CronJobs use the `nwfwa-worker`
+ServiceAccount with service-account token automount disabled, explicit
+deadlines, bounded retries, TTL cleanup, and resource requests/limits. The
+`ml-service` deployment uses a `Recreate` strategy because the SQLite training
+queue is backed by a ReadWriteOnce PVC; do not scale it horizontally until the
+queue is migrated to PostgreSQL or Redis.
 
 Build a GitHub Environment gated staging deployment package:
 
@@ -396,7 +637,53 @@ The package includes copied staging manifests, `deployment_manifest.json`,
 `.github/workflows/deploy-staging.yml` builds the same package behind the
 `staging` GitHub Environment and uploads it as an artifact. It does not apply to
 a cluster automatically; `apply.sh` requires a customer-approved Kubernetes
-context and `NWFWA_STAGING_SECRET_FILE`.
+context and `NWFWA_STAGING_SECRET_FILE`. The apply script validates the Secret
+YAML for required keys and placeholder removal, runs server-side dry-runs for
+the Secret and kustomization, then checks deployments and staging CronJobs.
+
+### Local K3s Simulation
+
+For a local K3s or K3d cluster, build a simulation package instead of applying
+the customer-gated staging package directly:
+
+```bash
+python3 scripts/ops/build_k3s_simulation_package.py \
+  --output-dir artifacts/k3s-simulation \
+  --namespace nwfwa-k3s-sim \
+  --api-image nwfwa-api-server:local \
+  --web-console-image nwfwa-web-console:local \
+  --ml-service-image nwfwa-ml-service:local \
+  --worker-image nwfwa-worker:local \
+  --ops-image nwfwa-ops:local
+python3 scripts/ops/validate_k3s_simulation_package.py \
+  --package-dir artifacts/k3s-simulation
+```
+
+The generated package copies the staging manifests, rewrites them into an
+isolated namespace, replaces placeholder images with local images, generates a
+non-production simulation Secret, and includes `apply.sh` plus `smoke.sh`.
+`apply.sh` refuses to run unless the current Kubernetes context looks like K3s
+or K3d. Before applying, load the local images into the K3s/K3d image store or
+pass image names from a registry that the cluster can pull. After applying,
+`smoke.sh` port-forwards the ML service and checks `/health`, Prometheus
+`/metrics`, and `/artifact-registries`.
+
+To run the complete local Kubernetes-style loop from Docker images to rollout
+and smoke checks, use the runner:
+
+```bash
+scripts/ops/run_k3d_simulation.sh
+```
+
+The runner creates or reuses the `nwfwa-sim` K3d cluster, builds local API,
+web console, ML service, worker, and ops images, imports them into K3d,
+generates the simulation package, applies it, waits for rollouts, verifies
+CronJobs, and runs the smoke script. For Docker Desktop Kubernetes instead of
+K3d, use the current-context mode:
+
+```bash
+scripts/ops/run_k3d_simulation.sh --runtime current-context
+```
 
 Validate container packaging before building images:
 
@@ -410,6 +697,67 @@ or deploy to a cluster.
 The local API server and Web Console images are optimized for demo build
 latency and use locked debug builds; the worker image remains a release build
 because it is used as a compact operational runtime.
+
+### Production Deployment Contract
+
+Generate a customer-gated production deployment package:
+
+```bash
+python3 scripts/ops/build_production_deployment_package.py \
+  --output-dir artifacts/production-deployment \
+  --api-image ghcr.io/customer/nwfwa-api-server:approved \
+  --web-console-image ghcr.io/customer/nwfwa-web-console:approved \
+  --ml-service-image ghcr.io/customer/nwfwa-ml-service:approved \
+  --worker-image ghcr.io/customer/nwfwa-worker:approved \
+  --ops-image ghcr.io/customer/nwfwa-ops:approved \
+  --mlops-alert-model-version "$APPROVED_MODEL_VERSION" \
+  --mlops-scheduler-report-uri "$APPROVED_MLOPS_SCHEDULER_REPORT_URI" \
+  --host fwa.customer.example
+python3 scripts/ops/validate_production_deployment_package.py \
+  --package-dir artifacts/production-deployment
+```
+
+The package rewrites the staging deployment shape into `nwfwa-production`,
+adds Ingress, HPA, PDB, and NetworkPolicy manifests, embeds
+`tools/validate_production_secret_file.py`, and includes `apply.sh` plus
+`rollback.md`. `apply.sh` requires `NWFWA_PRODUCTION_KUBE_CONTEXT` and
+`NWFWA_PRODUCTION_SECRET_FILE`, refuses to run on any other current Kubernetes
+context, validates the customer-provided Secret YAML, runs server-side dry-runs,
+applies the production kustomization, and waits for core rollouts. It still
+requires a customer-approved Kubernetes context, real images, real TLS, real
+secrets, and live rollout evidence before any production claim.
+
+Validate the production observability manifests:
+
+```bash
+python3 scripts/ops/validate_observability_manifests.py
+kubectl kustomize infra/k8s/observability
+```
+
+`infra/k8s/observability` defines a Prometheus and Alertmanager deployment for
+the production namespace contract. Prometheus scrapes annotated pods and
+includes MLOps queue/worker/backlog rules. Alertmanager sends native webhooks
+to `mlops-alert-router.nwfwa-production`, the worker-hosted adapter deployed by
+the production package. The adapter requires a shared Bearer token, injects FWA
+API auth, and converts the Alertmanager payload into the governed MLOps alert
+delivery request. Provision the same token as `FWA_MLOPS_ALERT_ROUTER_TOKEN` in
+the production Secret and as `mlops-alert-router-webhook-token` in the
+observability namespace. Live alert receipt must still be proven with a
+customer receiver and delivery report.
+
+Generate the production readiness evidence contract:
+
+```bash
+python3 scripts/ops/build_production_readiness_contract.py \
+  --output-dir artifacts/production-readiness
+python3 scripts/ops/validate_production_readiness_contract.py \
+  --contract-dir artifacts/production-readiness
+```
+
+The readiness contract is intentionally blocked until live environment evidence
+is attached for deployment apply, smoke, observability, secrets/access,
+backup/restore, rollback, alert delivery, retention/legal hold, customer data
+governance, model serving SLO, and OCR/vector/analytics execution.
 
 Generate local pilot foundation evidence without customer data:
 
@@ -558,7 +906,9 @@ Writeback contract fields:
 
 ## Production Boundaries
 
-The repository is not yet a production deployment package.
+The repository now contains a customer-gated production deployment package
+builder, production observability manifests, and a production readiness evidence
+contract. These artifacts do not prove live production readiness by themselves.
 
 Not complete yet:
 
@@ -567,7 +917,8 @@ Not complete yet:
 - production key rotation automation
 - production object storage wiring
 - production OCR, embedding, vector-search, and retrieval workers
-- production observability stack
+- live production observability stack apply, scrape proof, dashboarding, and
+  alert-receipt evidence
 - production ClickHouse retention, backup, and access policy
 - production alert routing
 - customer-executed backup and restore drills
@@ -584,7 +935,7 @@ Not complete yet:
 - customer holdout validation process
 - production observability dashboards for long-running drift and fairness review
 - production observability dashboards for retrieval audit and agent workspace artifacts
-- full rollback runbook for customer environments
+- customer-approved rollback drill evidence for the selected environment
 
 ## Troubleshooting
 

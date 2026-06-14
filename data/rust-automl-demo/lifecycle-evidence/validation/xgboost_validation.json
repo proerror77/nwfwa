@@ -1,0 +1,35 @@
+{
+  "algorithm": "xgboost",
+  "candidate_model_version": "0.2.0-xgboost-candidate",
+  "dataset_key": "rust_demo_claim_risk_labeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "metrics_json": {
+    "algorithm": "xgboost",
+    "algorithm_family": "gradient_boosted_tree",
+    "artifact_integrity_status": "passed",
+    "feature_store_materialization_status": "passed",
+    "label_provenance_status": "passed",
+    "leakage_check_status": "passed",
+    "model_artifact_evaluation_status": "passed",
+    "onnx_parity_gate_status": "passed",
+    "onnx_parity_report_uri": "data/rust-automl-demo/lifecycle-evidence/onnx-parity/0.2.0-xgboost-candidate_onnx_parity_report.json",
+    "onnx_parity_status": "passed",
+    "out_of_time_auc": 0.84,
+    "out_of_time_average_precision": 0.8099999999999999,
+    "out_of_time_precision": 0.8,
+    "out_of_time_recall": 0.76,
+    "runtime_kind": "xgboost_onnx",
+    "rust_feature_set_manifest_uri": "data/rust-automl-demo/labeled_claim_risk/feature-set/feature_set_manifest.json",
+    "rust_feature_set_status": "passed",
+    "segment_fairness_status": "passed",
+    "serving_version_lock_status": "passed",
+    "shadow_comparison_status": "passed",
+    "time_group_split_status": "passed"
+  },
+  "model_key": "baseline_fwa",
+  "validation_metrics": {
+    "auc": 0.86,
+    "precision": 0.8,
+    "recall": 0.76
+  }
+}

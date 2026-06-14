@@ -22,6 +22,16 @@ impl ApiError {
             message: message.into(),
         }
     }
+
+    pub fn internal(code: impl Into<String>, error: impl std::fmt::Display) -> Self {
+        let code = code.into();
+        tracing::error!(code = %code, error = %error, "internal API error");
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            code,
+            "internal server error",
+        )
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -34,5 +44,19 @@ impl IntoResponse for ApiError {
             }),
         )
             .into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal_error_hides_underlying_details() {
+        let error = ApiError::internal("QUERY_FAILED", "sqlx connect timeout");
+
+        assert_eq!(error.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(error.code, "QUERY_FAILED");
+        assert_eq!(error.message, "internal server error");
     }
 }

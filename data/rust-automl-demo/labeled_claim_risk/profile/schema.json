@@ -1,0 +1,93 @@
+{
+  "dataset_key": "rust_demo_claim_risk_labeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "business_domain": "health_fwa",
+  "sample_grain": "claim",
+  "label_column": "confirmed_fwa",
+  "entity_keys": [
+    "claim_id",
+    "member_id",
+    "policy_id",
+    "provider_id"
+  ],
+  "fields": [
+    {
+      "field_name": "amount_to_limit_ratio",
+      "logical_type": "Float64",
+      "nullable": false,
+      "semantic_role": "feature"
+    },
+    {
+      "field_name": "claim_amount",
+      "logical_type": "Float64",
+      "nullable": false,
+      "semantic_role": "feature"
+    },
+    {
+      "field_name": "claim_id",
+      "logical_type": "Utf8",
+      "nullable": false,
+      "semantic_role": "key"
+    },
+    {
+      "field_name": "confirmed_fwa",
+      "logical_type": "Int8",
+      "nullable": false,
+      "semantic_role": "label"
+    },
+    {
+      "field_name": "diagnosis_procedure_mismatch",
+      "logical_type": "Int8",
+      "nullable": false,
+      "semantic_role": "feature"
+    },
+    {
+      "field_name": "high_cost_item_ratio",
+      "logical_type": "Float64",
+      "nullable": false,
+      "semantic_role": "feature"
+    },
+    {
+      "field_name": "item_count",
+      "logical_type": "Int32",
+      "nullable": false,
+      "semantic_role": "feature"
+    },
+    {
+      "field_name": "member_id",
+      "logical_type": "Utf8",
+      "nullable": false,
+      "semantic_role": "key"
+    },
+    {
+      "field_name": "peer_percentile",
+      "logical_type": "Float64",
+      "nullable": false,
+      "semantic_role": "feature"
+    },
+    {
+      "field_name": "policy_id",
+      "logical_type": "Utf8",
+      "nullable": false,
+      "semantic_role": "key"
+    },
+    {
+      "field_name": "provider_id",
+      "logical_type": "Utf8",
+      "nullable": false,
+      "semantic_role": "key"
+    },
+    {
+      "field_name": "provider_risk_tier",
+      "logical_type": "Int32",
+      "nullable": false,
+      "semantic_role": "feature"
+    },
+    {
+      "field_name": "service_date",
+      "logical_type": "Utf8",
+      "nullable": false,
+      "semantic_role": "feature"
+    }
+  ]
+}

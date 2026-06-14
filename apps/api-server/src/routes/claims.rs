@@ -1,228 +1,124 @@
+use super::claims_agent::{build_agent_investigation_prefill, build_agent_prefill_evidence_refs};
+use super::claims_canonical::{canonical_score_input, demo_context, duplicate_payload_fields};
+use super::claims_evidence::{
+    apply_clinical_evidence_features, apply_provider_profile_features,
+    apply_provider_relationship_features, expand_dynamic_required_evidence,
+    persist_rule_evidence_request, RuleEvidenceRequestInput,
+};
+use super::claims_lookup::{
+    active_routing_policy, cached_active_rules, cached_active_scoring_model, normalize_review_mode,
+    review_mode_applies, similar_case_score, similar_case_tags,
+};
+use super::claims_validation::{
+    validate_score_request_contract, validate_source_system_matches_actor,
+};
 use crate::{
     app::AppState,
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
-    repository::{
-        ModelVersionRecord, PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery,
-        SimilarCaseRecord,
-    },
+    repository::{PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery},
 };
-use axum::{extract::State, http::HeaderMap, Json};
-use chrono::NaiveDate;
+use axum::{extract::State, Json};
 use fwa_anomaly::detect_anomaly;
 use fwa_audit::ActorContext;
-use fwa_auth::authenticate_api_key;
-use fwa_clinical::{
-    assess_clinical_evidence, ClinicalDocumentEvidence, ClinicalEvidenceAssessment,
-};
+use fwa_clinical::{assess_clinical_evidence, ClinicalDocumentEvidence};
 use fwa_core::*;
-use fwa_features::{calculate_features, EvidenceRef, FeatureMap, FeatureValue};
-use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest};
+use fwa_features::{
+    calculate_features_with_operational_contexts, ClinicalCompatibilityFeatureContext,
+    EpisodeUtilizationFeatureContext, PeerFeatureContext, ProviderProfileFeatureContext,
+};
+use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
 use fwa_provider::{
-    assess_provider_profile, assess_provider_relationship_graph, ProviderProfileAssessment,
-    ProviderProfileInput, ProviderProfileWindow, ProviderRelationshipGraphAssessment,
+    assess_provider_profile, assess_provider_relationship_graph, ProviderProfileInput,
     ProviderRelationshipGraphInput,
 };
-use fwa_rules::{evaluate_rules, RuleMatch};
-use fwa_scoring::DetectionLayerScore;
-use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use fwa_rules::evaluate_rules;
 
-const SCORING_MODEL_KEY: &str = "baseline_fwa";
+pub use super::claims_types::*;
 
-#[derive(Debug, Deserialize)]
-pub struct ScoreClaimRequest {
-    pub source_system: String,
-    pub review_mode: Option<String>,
-    pub claim_id: Option<String>,
-    pub claim: Option<FullClaimPayload>,
-    pub items: Option<Vec<ClaimItemPayload>>,
-    pub member: Option<MemberPayload>,
-    pub policy: Option<PolicyPayload>,
-    pub provider: Option<ProviderPayload>,
-    pub documents: Option<Vec<DocumentPayload>>,
-    pub provider_profile: Option<ProviderProfilePayload>,
-    pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
-    pub canonical_claim_context: Option<serde_json::Value>,
-    pub inbox_run_id: Option<String>,
-    pub inbox_idempotency_key: Option<String>,
+fn peer_feature_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Result<Option<PeerFeatureContext>, ApiError> {
+    let direct_percentile = request.claim_amount_peer_percentile.or_else(|| {
+        request
+            .claim
+            .as_ref()
+            .and_then(|claim| claim.claim_amount_peer_percentile)
+    });
+    let materialized_percentile = scoring_feature_context_from_request(request)
+        .and_then(|context| context.peer_context.as_ref())
+        .and_then(|context| context.claim_amount_peer_percentile);
+    if let (Some(direct), Some(materialized)) = (direct_percentile, materialized_percentile) {
+        if direct != materialized {
+            return Err(ApiError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "AMBIGUOUS_SCORE_REQUEST",
+                "claim_amount_peer_percentile must match scoring_feature_context.peer_context.claim_amount_peer_percentile when both are supplied",
+            ));
+        }
+    }
+    let claim_amount_peer_percentile = materialized_percentile.or(direct_percentile);
+    if claim_amount_peer_percentile.is_some() {
+        Ok(Some(PeerFeatureContext {
+            claim_amount_peer_percentile,
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct FullClaimPayload {
-    pub external_claim_id: String,
-    pub claim_amount: Decimal,
-    pub currency: String,
-    pub service_date: Option<NaiveDate>,
-    pub diagnosis_code: Option<String>,
-    pub items: Option<Vec<ClaimItemPayload>>,
-    pub member: Option<MemberPayload>,
-    pub policy: Option<PolicyPayload>,
-    pub provider: Option<ProviderPayload>,
-    pub documents: Option<Vec<DocumentPayload>>,
-    pub provider_profile: Option<ProviderProfilePayload>,
-    pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
+fn clinical_compatibility_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Option<ClinicalCompatibilityFeatureContext> {
+    scoring_feature_context_from_request(request)
+        .and_then(|context| context.clinical_compatibility_context.as_ref())
+        .and_then(|context| {
+            context.diagnosis_procedure_match_score.map(|score| {
+                ClinicalCompatibilityFeatureContext {
+                    diagnosis_procedure_match_score: Some(score),
+                    data_source: context.data_source.clone(),
+                }
+            })
+        })
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ClaimItemPayload {
-    pub item_code: String,
-    pub item_type: String,
-    pub description: String,
-    pub quantity: u32,
-    pub unit_amount: Decimal,
-    pub total_amount: Decimal,
-    pub currency: Option<String>,
+fn episode_utilization_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Option<EpisodeUtilizationFeatureContext> {
+    scoring_feature_context_from_request(request)
+        .and_then(|context| context.episode_utilization_context.as_ref())
+        .map(|context| EpisodeUtilizationFeatureContext {
+            member_provider_claim_count_30d: context.member_provider_claim_count_30d,
+            duplicate_claim_similarity_score: context.duplicate_claim_similarity_score,
+            procedure_frequency_peer_percentile: context.procedure_frequency_peer_percentile,
+            unbundling_candidate_count: context.unbundling_candidate_count,
+            data_source: context.data_source.clone(),
+        })
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct MemberPayload {
-    pub external_member_id: String,
-    pub dob: Option<NaiveDate>,
-    pub gender: Option<String>,
+fn scoring_feature_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Option<&ScoringFeatureContextPayload> {
+    request
+        .scoring_feature_context
+        .as_ref()
+        .or_else(|| request.claim.as_ref()?.scoring_feature_context.as_ref())
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct PolicyPayload {
-    pub external_policy_id: String,
-    pub product_code: Option<String>,
-    pub coverage_start_date: NaiveDate,
-    pub coverage_end_date: NaiveDate,
-    pub coverage_limit: Decimal,
-    pub currency: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProviderPayload {
-    pub external_provider_id: String,
-    pub name: String,
-    pub provider_type: String,
-    pub region: String,
-    pub risk_tier: Option<ProviderRiskTier>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct DocumentPayload {
-    pub external_document_id: String,
-    pub document_type: String,
-    pub linked_item_codes: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProviderProfilePayload {
-    pub specialty: Option<String>,
-    pub network_status: Option<String>,
-    pub windows: Vec<ProviderProfileWindowPayload>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProviderProfileWindowPayload {
-    pub window_days: u16,
-    pub claim_count: u32,
-    pub total_claim_amount: Decimal,
-    pub high_cost_item_ratio: f64,
-    pub diagnosis_procedure_mismatch_rate: f64,
-    pub peer_amount_percentile: u8,
-    pub peer_frequency_percentile: u8,
-    pub review_failure_count: u32,
-    pub confirmed_fwa_count: u32,
-    pub false_positive_count: u32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProviderRelationshipGraphPayload {
-    pub high_risk_neighbor_ratio: f64,
-    pub provider_patient_overlap_score: f64,
-    pub referral_concentration_score: Option<f64>,
-    pub connected_confirmed_fwa_count: u32,
-    pub network_component_risk_score: Option<u8>,
-    pub evidence_refs: Option<Vec<String>>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ScoreClaimResponse {
-    pub run_id: String,
-    pub audit_id: String,
-    pub claim_id: String,
-    pub review_mode: String,
-    pub risk_score: u8,
-    pub rag: RiskLevel,
-    pub risk_level: String,
-    pub recommended_action: RecommendedAction,
-    pub confidence_score: u8,
-    pub confidence: String,
-    pub routing_reason: String,
-    pub routing_policy: fwa_scoring::RoutingPolicy,
-    pub scores: ScoreBreakdown,
-    pub model_score: ModelScore,
-    pub alerts: Vec<AlertResponse>,
-    pub top_reasons: Vec<String>,
-    pub layers: Vec<DetectionLayerScore>,
-    pub clinical_evidence: ClinicalEvidenceAssessment,
-    pub provider_profile: ProviderProfileAssessment,
-    pub provider_relationships: ProviderRelationshipGraphAssessment,
-    pub similar_cases: Vec<SimilarCaseRecord>,
-    pub feature_values: Vec<FeatureValue>,
-    pub evidence_refs: Vec<serde_json::Value>,
-    pub agent_investigation_prefill: AgentInvestigationPrefill,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AgentInvestigationPrefill {
-    pub claim_id: String,
-    pub risk_score: u8,
-    pub rag: String,
-    pub scheme_family: Option<String>,
-    pub top_reasons: Vec<String>,
-    pub similar_case_query: AgentInvestigationSimilarCaseQuery,
-    pub evidence_refs: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AgentInvestigationSimilarCaseQuery {
-    pub claim_id: String,
-    pub diagnosis_code: String,
-    pub provider_region: String,
-    pub tags: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ScoreBreakdown {
-    pub peer_deviation_score: u8,
-    pub rule_score: u8,
-    pub anomaly_score: u8,
-    pub ml_score: u8,
-    pub medical_reasonableness_score: u8,
-    pub provider_network_score: u8,
-    pub similar_case_score: u8,
-    pub final_score: u8,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AlertResponse {
-    pub alert_code: String,
-    pub severity: String,
-    pub reason: String,
-    pub rule_id: String,
-    pub rule_version: u32,
+fn scoring_feature_context_evidence_refs(request: &ScoreClaimRequest) -> Vec<serde_json::Value> {
+    scoring_feature_context_from_request(request)
+        .and_then(|context| context.evidence_refs.as_ref())
+        .into_iter()
+        .flat_map(|refs| refs.iter())
+        .map(|reference| serde_json::Value::String(reference.clone()))
+        .collect()
 }
 
 pub async fn score_claim(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<ScoreClaimRequest>,
 ) -> Result<Json<ScoreClaimResponse>, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                axum::http::StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
     if !principal.has_permission("tpa:claims:score") {
         return Err(ApiError::new(
             axum::http::StatusCode::FORBIDDEN,
@@ -355,7 +251,11 @@ pub async fn score_claim(
             Some(canonical.trace),
         )
     } else {
-        let mut payload = request.claim.clone().expect("validated claim payload");
+        let mut payload = request.claim.clone().ok_or_else(|| ApiError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "INVALID_SCORE_REQUEST",
+            "claim payload is required when no claim_id, canonical_claim_context, or inbox locator is provided",
+        ))?;
         let duplicate_fields = duplicate_payload_fields(&request, &payload);
         if !duplicate_fields.is_empty() {
             return Err(ApiError::new(
@@ -378,6 +278,9 @@ pub async fn score_claim(
         payload.provider_relationships = payload
             .provider_relationships
             .or_else(|| request.provider_relationships.clone());
+        payload.scoring_feature_context = payload
+            .scoring_feature_context
+            .or_else(|| request.scoring_feature_context.clone());
         let clinical_documents = payload
             .documents
             .clone()
@@ -412,11 +315,23 @@ pub async fn score_claim(
         )
     };
 
+    let peer_feature_context = peer_feature_context_from_request(&request)?;
+    let clinical_compatibility_context = clinical_compatibility_context_from_request(&request);
+    let episode_utilization_context = episode_utilization_context_from_request(&request);
     let run_id = ScoringRunId::new();
-    let mut features = calculate_features(&context);
-    let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
     let provider_profile =
         assess_provider_profile(&context.provider, provider_profile_input.as_ref());
+    let provider_profile_feature_context = ProviderProfileFeatureContext {
+        risk_score: Some(provider_profile.risk_score),
+    };
+    let mut features = calculate_features_with_operational_contexts(
+        &context,
+        peer_feature_context.as_ref(),
+        Some(&provider_profile_feature_context),
+        clinical_compatibility_context.as_ref(),
+        episode_utilization_context.as_ref(),
+    );
+    let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
     let provider_relationships = assess_provider_relationship_graph(
         &context.provider,
         provider_relationships_input.as_ref(),
@@ -433,6 +348,7 @@ pub async fn score_claim(
         })
         .collect::<Vec<_>>();
     evidence_refs.extend(request_evidence_refs);
+    evidence_refs.extend(scoring_feature_context_evidence_refs(&request));
     evidence_refs.extend(
         clinical_evidence
             .evidence_refs
@@ -451,29 +367,41 @@ pub async fn score_claim(
             .iter()
             .map(|evidence| serde_json::json!(evidence)),
     );
-    let rules = state
-        .repository
-        .list_active_rules()
-        .await
-        .map_err(internal_error("RULE_LOAD_FAILED"))?;
+    let (rules_result, active_model_result) = tokio::join!(
+        cached_active_rules(&state),
+        cached_active_scoring_model(&state, &review_mode)
+    );
+    let rules = rules_result.map_err(internal_error("RULE_LOAD_FAILED"))?;
+    let active_model = active_model_result?;
     let rules = rules
         .into_iter()
         .filter(|rule| review_mode_applies(&rule.review_mode, &review_mode))
         .collect::<Vec<_>>();
-    let rule_matches =
+    let mut rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
+    expand_dynamic_required_evidence(&mut rule_matches, &clinical_evidence);
     let anomaly_score = detect_anomaly(&features);
     let similar_case_tags = similar_case_tags(&features, &rule_matches);
-    let similar_cases = state
-        .repository
-        .search_similar_cases(SimilarCaseQuery {
-            claim_id: Some(context.claim.external_claim_id.clone()),
-            diagnosis_code: context.claim.diagnosis_code.clone(),
-            provider_region: context.provider.region.clone(),
-            tags: similar_case_tags.clone(),
-        })
-        .await
-        .map_err(internal_error("SIMILAR_CASE_SEARCH_FAILED"))?;
+    let similar_case_query = SimilarCaseQuery {
+        claim_id: Some(context.claim.external_claim_id.clone()),
+        diagnosis_code: context.claim.diagnosis_code.clone(),
+        provider_region: context.provider.region.clone(),
+        tags: similar_case_tags.clone(),
+    };
+    let model_score_request = ModelScoreRequest {
+        run_id: run_id.clone(),
+        claim_id: context.claim.id.clone(),
+        model_key: active_model.model_key.clone(),
+        model_version: active_model.version.clone(),
+        endpoint_url: active_model.endpoint_url.clone(),
+        features: features.clone(),
+    };
+    let (similar_cases_result, model_score_result) = tokio::join!(
+        state.repository.search_similar_cases(similar_case_query),
+        state.scorer.score(model_score_request)
+    );
+    let similar_cases =
+        similar_cases_result.map_err(internal_error("SIMILAR_CASE_SEARCH_FAILED"))?;
     let similar_case_score = similar_case_score(&similar_cases);
     evidence_refs.extend(
         similar_cases
@@ -482,19 +410,7 @@ pub async fn score_claim(
             .cloned()
             .map(serde_json::Value::String),
     );
-    let active_model = active_scoring_model(&state, &review_mode).await?;
-    let model_score = match state
-        .scorer
-        .score(ModelScoreRequest {
-            run_id: run_id.clone(),
-            claim_id: context.claim.id.clone(),
-            model_key: active_model.model_key.clone(),
-            model_version: active_model.version.clone(),
-            endpoint_url: active_model.endpoint_url.clone(),
-            features: features.clone(),
-        })
-        .await
-    {
+    let model_score = match model_score_result {
         Ok(score) => score,
         Err(error) => {
             let error_message = error.to_string();
@@ -543,6 +459,7 @@ pub async fn score_claim(
             reason: rule_match.reason.clone(),
             rule_id: rule_match.rule_id.clone(),
             rule_version: rule_match.rule_version,
+            required_evidence: rule_match.required_evidence.clone(),
         })
         .collect();
     let scores = ScoreBreakdown {
@@ -579,6 +496,11 @@ pub async fn score_claim(
         "rag": format!("{:?}", decision.rag),
         "risk_level": &decision.risk_level,
         "recommended_action": format!("{:?}", decision.recommended_action),
+        "decision_outcome": &decision.decision_outcome,
+        "decision_authority": &decision.decision_authority,
+        "decision_confidence": &decision.decision_confidence,
+        "appeal_or_review_required": decision.appeal_or_review_required,
+        "reason_code": &decision.reason_code,
         "confidence_score": decision.confidence_score,
         "confidence": &decision.confidence,
         "routing_reason": &decision.routing_reason,
@@ -636,6 +558,39 @@ pub async fn score_claim(
         })
         .await
         .map_err(internal_error("SCORING_PERSISTENCE_FAILED"))?;
+    persist_rule_evidence_request(RuleEvidenceRequestInput {
+        state: &state,
+        run_id: &run_id,
+        audit_id: &audit_id,
+        context: &context,
+        actor: &actor,
+        source_system: &request.source_system,
+        alerts: &alerts,
+        evidence_refs: &evidence_refs,
+    })
+    .await?;
+
+    tracing::info!(
+        run_id = %run_id,
+        audit_id = %audit_id,
+        source_system = %request.source_system,
+        review_mode = %review_mode,
+        risk_score = decision.risk_score.value(),
+        risk_level = %decision.risk_level,
+        rag = ?decision.rag,
+        decision_outcome = ?decision.decision_outcome,
+        decision_authority = ?decision.decision_authority,
+        decision_confidence = ?decision.decision_confidence,
+        routing_policy_id = %decision.routing_policy.policy_id,
+        routing_policy_version = decision.routing_policy.version,
+        rule_match_count = rule_matches.len(),
+        alert_count = alerts.len(),
+        similar_case_count = similar_cases.len(),
+        evidence_ref_count = evidence_refs.len(),
+        model_key = %model_score.model_key,
+        model_version = %model_score.model_version,
+        "scoring run completed"
+    );
 
     Ok(Json(ScoreClaimResponse {
         run_id: run_id.to_string(),
@@ -646,6 +601,11 @@ pub async fn score_claim(
         rag: decision.rag,
         risk_level: decision.risk_level,
         recommended_action: decision.recommended_action,
+        decision_outcome: decision.decision_outcome,
+        decision_authority: decision.decision_authority,
+        decision_confidence: decision.decision_confidence,
+        appeal_or_review_required: decision.appeal_or_review_required,
+        reason_code: decision.reason_code,
         confidence_score: decision.confidence_score,
         confidence: decision.confidence,
         routing_reason: decision.routing_reason,
@@ -663,134 +623,6 @@ pub async fn score_claim(
         evidence_refs,
         agent_investigation_prefill,
     }))
-}
-
-fn build_agent_investigation_prefill(
-    context: &ClaimContext,
-    decision: &fwa_scoring::ScoringDecision,
-    similar_case_tags: &[String],
-    similar_cases: &[SimilarCaseRecord],
-    evidence_refs: Vec<String>,
-) -> AgentInvestigationPrefill {
-    AgentInvestigationPrefill {
-        claim_id: context.claim.external_claim_id.clone(),
-        risk_score: decision.risk_score.value(),
-        rag: agent_rag_label(decision.rag),
-        scheme_family: similar_cases.first().map(|case| case.scheme_family.clone()),
-        top_reasons: agent_top_reasons(decision),
-        similar_case_query: AgentInvestigationSimilarCaseQuery {
-            claim_id: context.claim.external_claim_id.clone(),
-            diagnosis_code: context.claim.diagnosis_code.clone(),
-            provider_region: context.provider.region.clone(),
-            tags: agent_similar_case_tags(similar_case_tags),
-        },
-        evidence_refs,
-    }
-}
-
-fn build_agent_prefill_evidence_refs(
-    similar_cases: &[SimilarCaseRecord],
-    model_score: &ModelScore,
-    alerts: &[AlertResponse],
-    run_id: &ScoringRunId,
-    audit_id: &AuditEventId,
-) -> Vec<String> {
-    let mut evidence_refs = vec![
-        format!("scoring_runs:{run_id}"),
-        format!("audit_events:{audit_id}"),
-        format!(
-            "model_versions:{}:{}",
-            model_score.model_key, model_score.model_version
-        ),
-    ];
-    evidence_refs.extend(
-        alerts
-            .iter()
-            .map(|alert| format!("rule_runs:{}", alert.alert_code)),
-    );
-    evidence_refs.extend(
-        similar_cases
-            .iter()
-            .flat_map(|case| case.provenance_refs.iter().chain(case.evidence_refs.iter()))
-            .cloned(),
-    );
-    evidence_refs.sort();
-    evidence_refs.dedup();
-    evidence_refs
-}
-
-fn agent_rag_label(rag: RiskLevel) -> String {
-    match rag {
-        RiskLevel::Green => "GREEN",
-        RiskLevel::Amber => "AMBER",
-        RiskLevel::Red => "RED",
-    }
-    .into()
-}
-
-fn agent_top_reasons(decision: &fwa_scoring::ScoringDecision) -> Vec<String> {
-    if decision.top_reasons.is_empty() {
-        vec![decision.routing_reason.clone()]
-    } else {
-        decision.top_reasons.clone()
-    }
-}
-
-fn agent_similar_case_tags(tags: &[String]) -> Vec<String> {
-    if tags.is_empty() {
-        vec!["runtime_scoring".into()]
-    } else {
-        tags.to_vec()
-    }
-}
-
-fn validate_score_request_contract(request: &ScoreClaimRequest) -> Result<(), ApiError> {
-    require_nonblank(&request.source_system, "source_system")?;
-    if let Some(claim_id) = &request.claim_id {
-        require_nonblank(claim_id, "claim_id")?;
-    }
-    if let Some(inbox_run_id) = &request.inbox_run_id {
-        require_nonblank(inbox_run_id, "inbox_run_id")?;
-    }
-    if let Some(inbox_idempotency_key) = &request.inbox_idempotency_key {
-        require_nonblank(inbox_idempotency_key, "inbox_idempotency_key")?;
-    }
-    if request.inbox_run_id.is_some() && request.inbox_idempotency_key.is_some() {
-        return Err(ApiError::new(
-            axum::http::StatusCode::BAD_REQUEST,
-            "AMBIGUOUS_SCORE_REQUEST",
-            "only one inbox handoff locator is allowed",
-        ));
-    }
-    if let Some(claim) = &request.claim {
-        validate_full_claim_payload(claim)?;
-    }
-    if let Some(items) = &request.items {
-        for item in items {
-            validate_claim_item_payload(item)?;
-        }
-    }
-    if let Some(member) = &request.member {
-        validate_member_payload(member)?;
-    }
-    if let Some(policy) = &request.policy {
-        validate_policy_payload(policy)?;
-    }
-    if let Some(provider) = &request.provider {
-        validate_provider_payload(provider)?;
-    }
-    if let Some(documents) = &request.documents {
-        for document in documents {
-            validate_document_payload(document)?;
-        }
-    }
-    if let Some(provider_profile) = &request.provider_profile {
-        validate_provider_profile_payload(provider_profile)?;
-    }
-    if let Some(provider_relationships) = &request.provider_relationships {
-        validate_provider_relationship_graph_payload(provider_relationships)?;
-    }
-    Ok(())
 }
 
 async fn load_scoring_ready_inbox_run(
@@ -838,731 +670,6 @@ async fn load_scoring_ready_inbox_run(
     Ok(inbox_run)
 }
 
-fn validate_source_system_matches_actor(
-    request: &ScoreClaimRequest,
-    actor: &ActorContext,
-) -> Result<(), ApiError> {
-    if request.source_system == actor.source_system {
-        Ok(())
-    } else {
-        Err(ApiError::new(
-            axum::http::StatusCode::BAD_REQUEST,
-            "SOURCE_SYSTEM_MISMATCH",
-            "source_system must match authenticated API key source system",
-        ))
-    }
-}
-
-fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiError> {
-    require_nonblank(&payload.external_claim_id, "claim.external_claim_id")?;
-    require_positive_decimal(payload.claim_amount, "claim.claim_amount")?;
-    require_nonblank(&payload.currency, "claim.currency")?;
-    if let Some(diagnosis_code) = &payload.diagnosis_code {
-        require_nonblank(diagnosis_code, "claim.diagnosis_code")?;
-    }
-    if let Some(items) = &payload.items {
-        for item in items {
-            validate_claim_item_payload(item)?;
-        }
-    }
-    if let Some(member) = &payload.member {
-        validate_member_payload(member)?;
-    }
-    if let Some(policy) = &payload.policy {
-        validate_policy_payload(policy)?;
-    }
-    if let Some(provider) = &payload.provider {
-        validate_provider_payload(provider)?;
-    }
-    if let Some(documents) = &payload.documents {
-        for document in documents {
-            validate_document_payload(document)?;
-        }
-    }
-    if let Some(provider_profile) = &payload.provider_profile {
-        validate_provider_profile_payload(provider_profile)?;
-    }
-    if let Some(provider_relationships) = &payload.provider_relationships {
-        validate_provider_relationship_graph_payload(provider_relationships)?;
-    }
-    Ok(())
-}
-
-fn validate_claim_item_payload(payload: &ClaimItemPayload) -> Result<(), ApiError> {
-    require_nonblank(&payload.item_code, "item.item_code")?;
-    require_nonblank(&payload.item_type, "item.item_type")?;
-    require_nonblank(&payload.description, "item.description")?;
-    if payload.quantity == 0 {
-        return invalid_score_field("item.quantity");
-    }
-    require_nonnegative_decimal(payload.unit_amount, "item.unit_amount")?;
-    require_nonnegative_decimal(payload.total_amount, "item.total_amount")?;
-    if let Some(currency) = &payload.currency {
-        require_nonblank(currency, "item.currency")?;
-    }
-    Ok(())
-}
-
-fn validate_member_payload(payload: &MemberPayload) -> Result<(), ApiError> {
-    require_nonblank(&payload.external_member_id, "member.external_member_id")
-}
-
-fn validate_policy_payload(payload: &PolicyPayload) -> Result<(), ApiError> {
-    require_nonblank(&payload.external_policy_id, "policy.external_policy_id")?;
-    if let Some(product_code) = &payload.product_code {
-        require_nonblank(product_code, "policy.product_code")?;
-    }
-    if payload.coverage_end_date < payload.coverage_start_date {
-        return invalid_score_field("policy.coverage_end_date");
-    }
-    require_positive_decimal(payload.coverage_limit, "policy.coverage_limit")?;
-    if let Some(currency) = &payload.currency {
-        require_nonblank(currency, "policy.currency")?;
-    }
-    Ok(())
-}
-
-fn validate_provider_payload(payload: &ProviderPayload) -> Result<(), ApiError> {
-    require_nonblank(
-        &payload.external_provider_id,
-        "provider.external_provider_id",
-    )?;
-    require_nonblank(&payload.name, "provider.name")?;
-    require_nonblank(&payload.provider_type, "provider.provider_type")?;
-    require_nonblank(&payload.region, "provider.region")
-}
-
-fn validate_document_payload(payload: &DocumentPayload) -> Result<(), ApiError> {
-    require_nonblank(
-        &payload.external_document_id,
-        "document.external_document_id",
-    )?;
-    require_nonblank(&payload.document_type, "document.document_type")?;
-    if let Some(linked_item_codes) = &payload.linked_item_codes {
-        for item_code in linked_item_codes {
-            require_nonblank(item_code, "document.linked_item_codes")?;
-        }
-    }
-    Ok(())
-}
-
-fn validate_provider_profile_payload(payload: &ProviderProfilePayload) -> Result<(), ApiError> {
-    if let Some(specialty) = &payload.specialty {
-        require_nonblank(specialty, "provider_profile.specialty")?;
-    }
-    if let Some(network_status) = &payload.network_status {
-        require_nonblank(network_status, "provider_profile.network_status")?;
-    }
-    if payload.windows.is_empty() {
-        return invalid_score_field("provider_profile.windows");
-    }
-    for window in &payload.windows {
-        validate_provider_profile_window_payload(window)?;
-    }
-    Ok(())
-}
-
-fn validate_provider_profile_window_payload(
-    payload: &ProviderProfileWindowPayload,
-) -> Result<(), ApiError> {
-    if !matches!(payload.window_days, 30 | 90 | 180) {
-        return invalid_score_field("provider_profile.windows.window_days");
-    }
-    require_nonnegative_decimal(
-        payload.total_claim_amount,
-        "provider_profile.windows.total_claim_amount",
-    )?;
-    require_unit_interval(
-        payload.high_cost_item_ratio,
-        "provider_profile.windows.high_cost_item_ratio",
-    )?;
-    require_unit_interval(
-        payload.diagnosis_procedure_mismatch_rate,
-        "provider_profile.windows.diagnosis_procedure_mismatch_rate",
-    )?;
-    require_percentile(
-        payload.peer_amount_percentile,
-        "provider_profile.windows.peer_amount_percentile",
-    )?;
-    require_percentile(
-        payload.peer_frequency_percentile,
-        "provider_profile.windows.peer_frequency_percentile",
-    )
-}
-
-fn validate_provider_relationship_graph_payload(
-    payload: &ProviderRelationshipGraphPayload,
-) -> Result<(), ApiError> {
-    require_unit_interval(
-        payload.high_risk_neighbor_ratio,
-        "provider_relationships.high_risk_neighbor_ratio",
-    )?;
-    require_unit_interval(
-        payload.provider_patient_overlap_score,
-        "provider_relationships.provider_patient_overlap_score",
-    )?;
-    if let Some(referral_concentration_score) = payload.referral_concentration_score {
-        require_unit_interval(
-            referral_concentration_score,
-            "provider_relationships.referral_concentration_score",
-        )?;
-    }
-    if let Some(network_component_risk_score) = payload.network_component_risk_score {
-        require_percentile(
-            network_component_risk_score,
-            "provider_relationships.network_component_risk_score",
-        )?;
-    }
-    if let Some(evidence_refs) = &payload.evidence_refs {
-        for evidence_ref in evidence_refs {
-            require_nonblank(evidence_ref, "provider_relationships.evidence_refs")?;
-        }
-    }
-    Ok(())
-}
-
-fn require_unit_interval(value: f64, field: &'static str) -> Result<(), ApiError> {
-    if (0.0..=1.0).contains(&value) {
-        Ok(())
-    } else {
-        invalid_score_field(field)
-    }
-}
-
-fn require_percentile(value: u8, field: &'static str) -> Result<(), ApiError> {
-    if value <= 100 {
-        Ok(())
-    } else {
-        invalid_score_field(field)
-    }
-}
-
-fn require_positive_decimal(value: Decimal, field: &'static str) -> Result<(), ApiError> {
-    if value > Decimal::ZERO {
-        Ok(())
-    } else {
-        invalid_score_field(field)
-    }
-}
-
-fn require_nonnegative_decimal(value: Decimal, field: &'static str) -> Result<(), ApiError> {
-    if value >= Decimal::ZERO {
-        Ok(())
-    } else {
-        invalid_score_field(field)
-    }
-}
-
-fn require_nonblank(value: &str, field: &'static str) -> Result<(), ApiError> {
-    if value.trim().is_empty() {
-        invalid_score_field(field)
-    } else {
-        Ok(())
-    }
-}
-
-fn invalid_score_field(field: &'static str) -> Result<(), ApiError> {
-    Err(ApiError::new(
-        axum::http::StatusCode::BAD_REQUEST,
-        "INVALID_SCORE_REQUEST",
-        format!("{field} is invalid"),
-    ))
-}
-
-async fn active_scoring_model(
-    state: &AppState,
-    review_mode: &str,
-) -> Result<ModelVersionRecord, ApiError> {
-    state
-        .repository
-        .list_models()
-        .await
-        .map_err(internal_error("MODEL_LIST_FAILED"))?
-        .into_iter()
-        .find(|model| {
-            model.model_key == SCORING_MODEL_KEY
-                && model.status == "active"
-                && model_review_mode_applies(&model.review_mode, review_mode)
-        })
-        .ok_or_else(|| {
-            ApiError::new(
-                axum::http::StatusCode::CONFLICT,
-                "ACTIVE_MODEL_NOT_FOUND",
-                format!("no active scoring model is available for review_mode {review_mode}"),
-            )
-        })
-}
-
-async fn active_routing_policy(
-    state: &AppState,
-    review_mode: &str,
-) -> Result<fwa_scoring::RoutingPolicy, ApiError> {
-    Ok(state
-        .repository
-        .active_routing_policy(review_mode)
-        .await
-        .map_err(internal_error("ROUTING_POLICY_LOAD_FAILED"))?
-        .unwrap_or_else(|| fwa_scoring::default_routing_policy(review_mode)))
-}
-
-fn model_review_mode_applies(model_review_mode: &str, review_mode: &str) -> bool {
-    review_mode_applies(model_review_mode, review_mode)
-}
-
-fn review_mode_applies(configured_review_mode: &str, requested_review_mode: &str) -> bool {
-    configured_review_mode == "both" || configured_review_mode == requested_review_mode
-}
-
-fn normalize_review_mode(value: Option<&str>) -> Result<String, ApiError> {
-    let review_mode = value.unwrap_or("pre_payment");
-    match review_mode {
-        "pre_payment" | "post_payment" => Ok(review_mode.to_string()),
-        _ => Err(ApiError::new(
-            axum::http::StatusCode::BAD_REQUEST,
-            "INVALID_REVIEW_MODE",
-            "review_mode must be one of: pre_payment, post_payment",
-        )),
-    }
-}
-
-fn similar_case_score(similar_cases: &[SimilarCaseRecord]) -> u8 {
-    similar_cases
-        .iter()
-        .map(|case| (case.similarity_score * 100.0).round().clamp(0.0, 100.0) as u8)
-        .max()
-        .unwrap_or(0)
-}
-
-fn similar_case_tags(features: &FeatureMap, rule_matches: &[RuleMatch]) -> Vec<String> {
-    let mut tags = std::collections::BTreeSet::new();
-    if numeric_feature(features, "days_since_policy_start").unwrap_or(f64::MAX) <= 7.0 {
-        tags.insert("early_claim".to_string());
-    }
-    if numeric_feature(features, "claim_amount_peer_percentile").unwrap_or(0.0) >= 95.0
-        || numeric_feature(features, "claim_amount_to_limit_ratio").unwrap_or(0.0) >= 0.8
-    {
-        tags.insert("high_amount".to_string());
-    }
-    if numeric_feature(features, "diagnosis_procedure_match_score").unwrap_or(1.0) < 0.5 {
-        tags.insert("medical_mismatch".to_string());
-    }
-    if numeric_feature(features, "provider_profile_score").unwrap_or(0.0) >= 70.0
-        || numeric_feature(features, "provider_graph_risk_score").unwrap_or(0.0) >= 70.0
-    {
-        tags.insert("provider_pattern".to_string());
-    }
-    if numeric_feature(features, "high_cost_item_ratio").unwrap_or(0.0) >= 0.6 {
-        tags.insert("high_cost_item".to_string());
-    }
-    for rule_match in rule_matches {
-        let alert_code = rule_match.alert_code.to_ascii_lowercase();
-        if alert_code.contains("early") {
-            tags.insert("early_claim".to_string());
-        }
-        if alert_code.contains("amount") || alert_code.contains("high") {
-            tags.insert("high_amount".to_string());
-        }
-        if alert_code.contains("medical") || alert_code.contains("diagnosis") {
-            tags.insert("medical_mismatch".to_string());
-        }
-        if alert_code.contains("provider") {
-            tags.insert("provider_pattern".to_string());
-        }
-    }
-    tags.into_iter().collect()
-}
-
-fn numeric_feature(features: &FeatureMap, name: &str) -> Option<f64> {
-    features.get(name).and_then(|feature| {
-        feature
-            .value
-            .as_f64()
-            .or_else(|| feature.value.as_i64().map(|value| value as f64))
-    })
-}
-
-fn duplicate_payload_fields(
-    request: &ScoreClaimRequest,
-    payload: &FullClaimPayload,
-) -> Vec<&'static str> {
-    let mut fields = Vec::new();
-    if payload.items.is_some() && request.items.is_some() {
-        fields.push("items");
-    }
-    if payload.member.is_some() && request.member.is_some() {
-        fields.push("member");
-    }
-    if payload.policy.is_some() && request.policy.is_some() {
-        fields.push("policy");
-    }
-    if payload.provider.is_some() && request.provider.is_some() {
-        fields.push("provider");
-    }
-    if payload.documents.is_some() && request.documents.is_some() {
-        fields.push("documents");
-    }
-    if payload.provider_profile.is_some() && request.provider_profile.is_some() {
-        fields.push("provider_profile");
-    }
-    if payload.provider_relationships.is_some() && request.provider_relationships.is_some() {
-        fields.push("provider_relationships");
-    }
-    fields
-}
-
-struct CanonicalScoreInput {
-    context: ClaimContext,
-    clinical_documents: Vec<ClinicalDocumentEvidence>,
-    evidence_refs: Vec<serde_json::Value>,
-    trace: serde_json::Value,
-}
-
-fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInput, ApiError> {
-    let claim_header = object_field(value, "claim_header")?;
-    let member_policy = object_field(value, "member_policy_snapshot")?;
-    let provider_snapshot = object_field(value, "provider_snapshot")?;
-    let bill_lines = value
-        .get("itemized_bill_lines")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let documents = value
-        .get("document_evidence")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-
-    let external_claim_id = required_json_string(claim_header, "external_claim_id")?;
-    let claim_amount = required_json_decimal(claim_header, "total_amount")?;
-    let currency = optional_json_string(claim_header, "currency").unwrap_or_else(|| "CNY".into());
-    let service_date = optional_json_date(claim_header, "service_date")?;
-    let diagnosis_code = optional_json_string(claim_header, "diagnosis_code")
-        .or_else(|| first_bill_line_diagnosis_code(&bill_lines))
-        .or_else(|| first_document_diagnosis(&documents))
-        .unwrap_or_else(|| "UNKNOWN".into());
-
-    let member_payload = MemberPayload {
-        external_member_id: optional_json_string(member_policy, "masked_member_id")
-            .or_else(|| optional_json_string(member_policy, "masked_certificate_id"))
-            .unwrap_or_else(|| "MBR-INBOX".into()),
-        dob: optional_json_date(member_policy, "member_birth_date")?,
-        gender: optional_json_string(member_policy, "member_gender"),
-    };
-    let coverage_start_date = required_json_date(member_policy, "coverage_start_date")?;
-    let coverage_end_date = required_json_date(member_policy, "coverage_end_date")?;
-    let policy_payload = PolicyPayload {
-        external_policy_id: optional_json_string(member_policy, "policy_id")
-            .unwrap_or_else(|| "POL-INBOX".into()),
-        product_code: optional_json_string(member_policy, "product_code"),
-        coverage_start_date,
-        coverage_end_date,
-        coverage_limit: required_json_decimal(member_policy, "coverage_limit")?,
-        currency: Some(currency.clone()),
-    };
-    let provider_payload = ProviderPayload {
-        external_provider_id: optional_json_string(provider_snapshot, "provider_id")
-            .or_else(|| optional_json_string(provider_snapshot, "provider_code"))
-            .unwrap_or_else(|| "PRV-INBOX".into()),
-        name: optional_json_string(provider_snapshot, "name")
-            .unwrap_or_else(|| "Inbox Provider".into()),
-        provider_type: optional_json_string(provider_snapshot, "provider_type")
-            .or_else(|| optional_json_string(provider_snapshot, "type"))
-            .unwrap_or_else(|| "provider".into()),
-        region: optional_json_string(provider_snapshot, "region")
-            .or_else(|| optional_json_string(provider_snapshot, "city"))
-            .or_else(|| optional_json_string(provider_snapshot, "province"))
-            .unwrap_or_else(|| "UNKNOWN".into()),
-        risk_tier: optional_json_string(provider_snapshot, "risk_tier")
-            .and_then(|value| provider_risk_tier_from_str(&value)),
-    };
-
-    let items = bill_lines
-        .iter()
-        .enumerate()
-        .map(|(index, line)| canonical_bill_line_item(line, index, &currency))
-        .collect::<Result<Vec<_>, _>>()?;
-    let clinical_documents = documents
-        .iter()
-        .enumerate()
-        .map(canonical_document_evidence)
-        .collect::<Vec<_>>();
-    let mut evidence_refs = canonical_evidence_refs(&bill_lines);
-    evidence_refs.extend(canonical_document_refs(&documents));
-    evidence_refs.sort_by_key(|value| value.to_string());
-    evidence_refs.dedup();
-    let trace = canonical_claim_context_trace(&bill_lines, &documents);
-
-    Ok(CanonicalScoreInput {
-        context: demo_context(FullClaimPayload {
-            external_claim_id,
-            claim_amount,
-            currency,
-            service_date,
-            diagnosis_code: Some(diagnosis_code),
-            items: Some(items),
-            member: Some(member_payload),
-            policy: Some(policy_payload),
-            provider: Some(provider_payload),
-            documents: None,
-            provider_profile: None,
-            provider_relationships: None,
-        }),
-        clinical_documents,
-        evidence_refs,
-        trace,
-    })
-}
-
-fn object_field<'a>(
-    value: &'a serde_json::Value,
-    field: &'static str,
-) -> Result<&'a serde_json::Map<String, serde_json::Value>, ApiError> {
-    value
-        .get(field)
-        .and_then(serde_json::Value::as_object)
-        .ok_or_else(|| invalid_canonical_field(field))
-}
-
-fn required_json_string(
-    value: &serde_json::Map<String, serde_json::Value>,
-    field: &'static str,
-) -> Result<String, ApiError> {
-    optional_json_string(value, field).ok_or_else(|| invalid_canonical_field(field))
-}
-
-fn optional_json_string(
-    value: &serde_json::Map<String, serde_json::Value>,
-    field: &'static str,
-) -> Option<String> {
-    value
-        .get(field)
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn required_json_decimal(
-    value: &serde_json::Map<String, serde_json::Value>,
-    field: &'static str,
-) -> Result<Decimal, ApiError> {
-    let decimal = value
-        .get(field)
-        .and_then(decimal_from_json)
-        .ok_or_else(|| invalid_canonical_field(field))?;
-    if decimal > Decimal::ZERO {
-        Ok(decimal)
-    } else {
-        Err(invalid_canonical_field(field))
-    }
-}
-
-fn optional_json_decimal(
-    value: &serde_json::Map<String, serde_json::Value>,
-    field: &'static str,
-) -> Option<Decimal> {
-    value.get(field).and_then(decimal_from_json)
-}
-
-fn decimal_from_json(value: &serde_json::Value) -> Option<Decimal> {
-    match value {
-        serde_json::Value::String(value) => Decimal::from_str(value).ok(),
-        serde_json::Value::Number(value) => Decimal::from_str(&value.to_string()).ok(),
-        _ => None,
-    }
-}
-
-fn required_json_date(
-    value: &serde_json::Map<String, serde_json::Value>,
-    field: &'static str,
-) -> Result<NaiveDate, ApiError> {
-    optional_json_date(value, field)?.ok_or_else(|| invalid_canonical_field(field))
-}
-
-fn optional_json_date(
-    value: &serde_json::Map<String, serde_json::Value>,
-    field: &'static str,
-) -> Result<Option<NaiveDate>, ApiError> {
-    optional_json_string(value, field)
-        .map(|value| {
-            NaiveDate::parse_from_str(&value, "%Y-%m-%d")
-                .map_err(|_| invalid_canonical_field(field))
-        })
-        .transpose()
-}
-
-fn canonical_bill_line_item(
-    line: &serde_json::Value,
-    index: usize,
-    currency: &str,
-) -> Result<ClaimItemPayload, ApiError> {
-    let object = line
-        .as_object()
-        .ok_or_else(|| invalid_canonical_field("itemized_bill_lines"))?;
-    let total_amount = optional_json_decimal(object, "amount").unwrap_or(Decimal::ZERO);
-    Ok(ClaimItemPayload {
-        item_code: optional_json_string(object, "item_code")
-            .or_else(|| optional_json_string(object, "source_path"))
-            .unwrap_or_else(|| format!("inbox-line-{index}")),
-        item_type: optional_json_string(object, "fee_category")
-            .or_else(|| optional_json_string(object, "medical_category"))
-            .unwrap_or_else(|| "claim_item".into()),
-        description: optional_json_string(object, "item_name")
-            .or_else(|| optional_json_string(object, "fee_category"))
-            .unwrap_or_else(|| "Inbox claim item".into()),
-        quantity: 1,
-        unit_amount: total_amount,
-        total_amount,
-        currency: Some(currency.to_string()),
-    })
-}
-
-fn canonical_document_evidence(
-    (index, document): (usize, &serde_json::Value),
-) -> ClinicalDocumentEvidence {
-    let object = document.as_object();
-    ClinicalDocumentEvidence {
-        document_id: object
-            .and_then(|object| optional_json_string(object, "document_id"))
-            .unwrap_or_else(|| format!("inbox-document-{index}")),
-        document_type: object
-            .and_then(|object| {
-                optional_json_string(object, "document_type")
-                    .or_else(|| optional_json_string(object, "medical_record_type"))
-            })
-            .unwrap_or_else(|| "medical_record".into()),
-        linked_item_codes: object
-            .and_then(|object| object.get("linked_item_codes"))
-            .and_then(serde_json::Value::as_array)
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(serde_json::Value::as_str)
-                    .map(ToOwned::to_owned)
-                    .collect()
-            })
-            .unwrap_or_default(),
-    }
-}
-
-fn first_bill_line_diagnosis_code(bill_lines: &[serde_json::Value]) -> Option<String> {
-    bill_lines.iter().find_map(|line| {
-        line.get("diagnosis_list")
-            .and_then(serde_json::Value::as_array)
-            .and_then(|diagnoses| diagnoses.first())
-            .and_then(|diagnosis| {
-                diagnosis
-                    .get("code")
-                    .and_then(serde_json::Value::as_str)
-                    .or_else(|| diagnosis.get("name").and_then(serde_json::Value::as_str))
-            })
-            .map(ToOwned::to_owned)
-    })
-}
-
-fn first_document_diagnosis(documents: &[serde_json::Value]) -> Option<String> {
-    documents
-        .iter()
-        .find_map(|document| {
-            document
-                .get("diagnosis")
-                .and_then(serde_json::Value::as_str)
-        })
-        .map(ToOwned::to_owned)
-}
-
-fn canonical_evidence_refs(bill_lines: &[serde_json::Value]) -> Vec<serde_json::Value> {
-    bill_lines
-        .iter()
-        .flat_map(|line| {
-            let source_path = line
-                .get("source_path")
-                .and_then(serde_json::Value::as_str)
-                .map(|value| serde_json::Value::String(value.to_string()));
-            let evidence_refs = line
-                .get("evidence_refs")
-                .and_then(serde_json::Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|value| {
-                    value
-                        .as_str()
-                        .map(|value| serde_json::Value::String(value.to_string()))
-                });
-            source_path
-                .into_iter()
-                .chain(evidence_refs)
-                .collect::<Vec<_>>()
-        })
-        .collect()
-}
-
-fn canonical_document_refs(documents: &[serde_json::Value]) -> Vec<serde_json::Value> {
-    documents
-        .iter()
-        .flat_map(|document| {
-            document
-                .get("source_refs")
-                .and_then(serde_json::Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|value| {
-                    value
-                        .as_str()
-                        .map(|value| serde_json::Value::String(value.to_string()))
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect()
-}
-
-fn canonical_claim_context_trace(
-    bill_lines: &[serde_json::Value],
-    documents: &[serde_json::Value],
-) -> serde_json::Value {
-    let mut evidence_refs = bill_lines
-        .iter()
-        .flat_map(|line| {
-            line.get("evidence_refs")
-                .and_then(serde_json::Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(serde_json::Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    evidence_refs.sort();
-    evidence_refs.dedup();
-
-    let mut source_refs = bill_lines
-        .iter()
-        .filter_map(|line| {
-            line.get("source_path")
-                .and_then(serde_json::Value::as_str)
-                .map(ToOwned::to_owned)
-        })
-        .chain(documents.iter().flat_map(|document| {
-            document
-                .get("source_refs")
-                .and_then(serde_json::Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(serde_json::Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect::<Vec<_>>()
-        }))
-        .collect::<Vec<_>>();
-    source_refs.sort();
-    source_refs.dedup();
-
-    serde_json::json!({
-        "input_mode": "canonical_claim_context",
-        "evidence_refs": evidence_refs,
-        "source_refs": source_refs
-    })
-}
-
 fn inbox_claim_context_trace(
     mut trace: serde_json::Value,
     inbox_run: &crate::repository::PersistedInboxClaimRun,
@@ -1596,204 +703,8 @@ fn json_string_values(value: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
-fn provider_risk_tier_from_str(value: &str) -> Option<ProviderRiskTier> {
-    match value {
-        "Low" | "low" => Some(ProviderRiskTier::Low),
-        "Medium" | "medium" => Some(ProviderRiskTier::Medium),
-        "High" | "high" => Some(ProviderRiskTier::High),
-        _ => None,
-    }
-}
-
-fn invalid_canonical_field(field: &'static str) -> ApiError {
-    ApiError::new(
-        axum::http::StatusCode::BAD_REQUEST,
-        "INVALID_SCORE_REQUEST",
-        format!("canonical_claim_context.{field} is invalid"),
-    )
-}
-
-impl From<DocumentPayload> for ClinicalDocumentEvidence {
-    fn from(value: DocumentPayload) -> Self {
-        Self {
-            document_id: value.external_document_id,
-            document_type: value.document_type,
-            linked_item_codes: value.linked_item_codes.unwrap_or_default(),
-        }
-    }
-}
-
-impl From<ProviderProfilePayload> for ProviderProfileInput {
-    fn from(value: ProviderProfilePayload) -> Self {
-        Self {
-            specialty: value.specialty,
-            network_status: value.network_status,
-            windows: value
-                .windows
-                .into_iter()
-                .map(ProviderProfileWindow::from)
-                .collect(),
-        }
-    }
-}
-
-impl From<ProviderProfileWindowPayload> for ProviderProfileWindow {
-    fn from(value: ProviderProfileWindowPayload) -> Self {
-        Self {
-            window_days: value.window_days,
-            claim_count: value.claim_count,
-            total_claim_amount: value.total_claim_amount,
-            high_cost_item_ratio: value.high_cost_item_ratio,
-            diagnosis_procedure_mismatch_rate: value.diagnosis_procedure_mismatch_rate,
-            peer_amount_percentile: value.peer_amount_percentile,
-            peer_frequency_percentile: value.peer_frequency_percentile,
-            review_failure_count: value.review_failure_count,
-            confirmed_fwa_count: value.confirmed_fwa_count,
-            false_positive_count: value.false_positive_count,
-        }
-    }
-}
-
-impl From<ProviderRelationshipGraphPayload> for ProviderRelationshipGraphInput {
-    fn from(value: ProviderRelationshipGraphPayload) -> Self {
-        Self {
-            high_risk_neighbor_ratio: value.high_risk_neighbor_ratio,
-            provider_patient_overlap_score: value.provider_patient_overlap_score,
-            referral_concentration_score: value.referral_concentration_score,
-            connected_confirmed_fwa_count: value.connected_confirmed_fwa_count,
-            network_component_risk_score: value.network_component_risk_score,
-            evidence_refs: value.evidence_refs.unwrap_or_default(),
-        }
-    }
-}
-
-fn apply_clinical_evidence_features(
-    features: &mut fwa_features::FeatureMap,
-    context: &ClaimContext,
-    clinical_evidence: &ClinicalEvidenceAssessment,
-) {
-    let evidence_ref = EvidenceRef {
-        entity_type: "claim".into(),
-        entity_id: context.claim.external_claim_id.clone(),
-        field: "clinical_evidence".into(),
-    };
-    for (name, value) in [
-        (
-            "clinical_missing_evidence_count",
-            clinical_evidence.missing_evidence.len() as i64,
-        ),
-        (
-            "clinical_item_finding_count",
-            clinical_evidence.item_findings.len() as i64,
-        ),
-        (
-            "clinical_review_required",
-            if clinical_evidence.review_required {
-                1
-            } else {
-                0
-            },
-        ),
-    ] {
-        features.insert(
-            name.into(),
-            FeatureValue {
-                name: name.into(),
-                version: 1,
-                value: serde_json::json!(value),
-                evidence_refs: vec![evidence_ref.clone()],
-            },
-        );
-    }
-}
-
-fn apply_provider_profile_features(
-    features: &mut fwa_features::FeatureMap,
-    context: &ClaimContext,
-    provider_profile: &ProviderProfileAssessment,
-) {
-    features.insert(
-        "provider_profile_score".into(),
-        FeatureValue {
-            name: "provider_profile_score".into(),
-            version: 1,
-            value: serde_json::json!(provider_profile.risk_score),
-            evidence_refs: vec![EvidenceRef {
-                entity_type: "provider".into(),
-                entity_id: context.provider.external_provider_id.clone(),
-                field: "provider_profile_score".into(),
-            }],
-        },
-    );
-    features.insert(
-        "provider_peer_amount_percentile".into(),
-        FeatureValue {
-            name: "provider_peer_amount_percentile".into(),
-            version: 1,
-            value: serde_json::json!(provider_profile
-                .window_findings
-                .iter()
-                .filter_map(|finding| {
-                    finding.outlier_flags.iter().find_map(|flag| {
-                        flag.strip_prefix("peer_amount_p")
-                            .and_then(|value| value.parse::<u8>().ok())
-                    })
-                })
-                .max()
-                .unwrap_or(0)),
-            evidence_refs: vec![EvidenceRef {
-                entity_type: "provider".into(),
-                entity_id: context.provider.external_provider_id.clone(),
-                field: "peer_amount_percentile".into(),
-            }],
-        },
-    );
-}
-
-fn apply_provider_relationship_features(
-    features: &mut fwa_features::FeatureMap,
-    context: &ClaimContext,
-    provider_relationships: &ProviderRelationshipGraphAssessment,
-) {
-    features.insert(
-        "provider_graph_risk_score".into(),
-        FeatureValue {
-            name: "provider_graph_risk_score".into(),
-            version: 1,
-            value: serde_json::json!(provider_relationships.risk_score),
-            evidence_refs: vec![EvidenceRef {
-                entity_type: "provider".into(),
-                entity_id: context.provider.external_provider_id.clone(),
-                field: "provider_graph_risk_score".into(),
-            }],
-        },
-    );
-    features.insert(
-        "provider_high_risk_neighbor_signal".into(),
-        FeatureValue {
-            name: "provider_high_risk_neighbor_signal".into(),
-            version: 1,
-            value: serde_json::json!(provider_relationships
-                .findings
-                .iter()
-                .any(|finding| finding.signal == "high_risk_neighbor_ratio")),
-            evidence_refs: vec![EvidenceRef {
-                entity_type: "provider".into(),
-                entity_id: context.provider.external_provider_id.clone(),
-                field: "high_risk_neighbor_ratio".into(),
-            }],
-        },
-    );
-}
-
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
-    move |error| {
-        ApiError::new(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            code,
-            error.to_string(),
-        )
-    }
+    move |error| ApiError::internal(code, error)
 }
 
 fn model_runtime_error(error: ModelRuntimeError) -> ApiError {
@@ -1803,11 +714,14 @@ fn model_runtime_error(error: ModelRuntimeError) -> ApiError {
             "MODEL_SERVICE_UNAVAILABLE",
             "model service unavailable",
         ),
-        ModelRuntimeError::InvalidResponse(message) => ApiError::new(
-            axum::http::StatusCode::BAD_GATEWAY,
-            "MODEL_RESPONSE_INVALID",
-            message,
-        ),
+        ModelRuntimeError::InvalidResponse(message) => {
+            tracing::error!(error = %message, "model response invalid");
+            ApiError::new(
+                axum::http::StatusCode::BAD_GATEWAY,
+                "MODEL_RESPONSE_INVALID",
+                "model response invalid",
+            )
+        }
     }
 }
 
@@ -1846,94 +760,4 @@ async fn persist_failed_audit(input: FailedAuditInput<'_>) -> anyhow::Result<()>
             evidence_refs: input.evidence_refs,
         })
         .await
-}
-
-fn demo_context(payload: FullClaimPayload) -> ClaimContext {
-    let claim_currency = payload.currency.clone();
-    let member_payload = payload.member.clone().unwrap_or(MemberPayload {
-        external_member_id: "MBR-DEMO".into(),
-        dob: None,
-        gender: None,
-    });
-    let policy_payload = payload.policy.clone().unwrap_or(PolicyPayload {
-        external_policy_id: "POL-DEMO".into(),
-        product_code: Some("MED".into()),
-        coverage_start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
-        coverage_end_date: NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
-        coverage_limit: Decimal::new(10000, 0),
-        currency: Some(payload.currency.clone()),
-    });
-    let provider_payload = payload.provider.clone().unwrap_or(ProviderPayload {
-        external_provider_id: "PRV-DEMO".into(),
-        name: "Demo Hospital".into(),
-        provider_type: "hospital".into(),
-        region: "SH".into(),
-        risk_tier: Some(ProviderRiskTier::Medium),
-    });
-    let member_id = MemberId::from_external(member_payload.external_member_id.clone());
-    let policy_id = PolicyId::from_external(policy_payload.external_policy_id.clone());
-    let provider_id = ProviderId::from_external(provider_payload.external_provider_id.clone());
-    let service_date = payload
-        .service_date
-        .unwrap_or_else(|| NaiveDate::from_ymd_opt(2026, 1, 6).unwrap());
-    let items = payload
-        .items
-        .unwrap_or_default()
-        .into_iter()
-        .map(|item| {
-            let currency = item.currency.unwrap_or_else(|| payload.currency.clone());
-            ClaimItem {
-                item_code: item.item_code,
-                item_type: item.item_type,
-                description: item.description,
-                quantity: item.quantity,
-                unit_amount: Money::new(item.unit_amount, currency.clone()),
-                total_amount: Money::new(item.total_amount, currency),
-            }
-        })
-        .collect();
-
-    ClaimContext {
-        claim: Claim {
-            id: ClaimId::from_external(payload.external_claim_id.clone()),
-            external_claim_id: payload.external_claim_id,
-            member_id: member_id.clone(),
-            policy_id: policy_id.clone(),
-            provider_id: provider_id.clone(),
-            diagnosis_code: payload.diagnosis_code.unwrap_or_else(|| "J10".into()),
-            service_date,
-            amount: Money::new(payload.claim_amount, payload.currency),
-        },
-        items,
-        member: Member {
-            id: member_id.clone(),
-            external_member_id: member_payload.external_member_id,
-            dob: member_payload.dob,
-            gender: member_payload.gender,
-        },
-        policy: Policy {
-            id: policy_id,
-            external_policy_id: policy_payload.external_policy_id,
-            member_id,
-            product_code: policy_payload.product_code.unwrap_or_else(|| "MED".into()),
-            coverage_start_date: policy_payload.coverage_start_date,
-            coverage_end_date: policy_payload.coverage_end_date,
-            coverage_limit: Money::new(
-                policy_payload.coverage_limit,
-                policy_payload
-                    .currency
-                    .unwrap_or_else(|| claim_currency.clone()),
-            ),
-        },
-        provider: Provider {
-            id: provider_id,
-            external_provider_id: provider_payload.external_provider_id,
-            name: provider_payload.name,
-            provider_type: provider_payload.provider_type,
-            region: provider_payload.region,
-            risk_tier: provider_payload
-                .risk_tier
-                .unwrap_or(ProviderRiskTier::Medium),
-        },
-    }
 }

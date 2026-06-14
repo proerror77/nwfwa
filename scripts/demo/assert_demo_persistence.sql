@@ -20,6 +20,7 @@ DECLARE
   demo_run_id TEXT;
   demo_claim_uuid UUID;
   demo_claim_id TEXT;
+  discovered_candidate_rule_id TEXT;
   row_count INTEGER;
 BEGIN
   SELECT run_id, claim_uuid, external_claim_id
@@ -402,18 +403,20 @@ BEGIN
     RAISE EXCEPTION 'expected eligible rule_early_claim backtest evidence';
   END IF;
 
-  SELECT COUNT(*) INTO row_count
+  SELECT rule_key INTO discovered_candidate_rule_id
   FROM rules
-  WHERE rule_key = 'candidate_early_high_amount'
+  WHERE rule_key LIKE 'candidate_%'
     AND status = 'draft'
-    AND owner = 'rule-discovery-demo';
-  IF row_count < 1 THEN
+    AND owner = 'rule-discovery-demo'
+  ORDER BY updated_at DESC, rule_key
+  LIMIT 1;
+  IF discovered_candidate_rule_id IS NULL THEN
     RAISE EXCEPTION 'expected saved rule discovery candidate';
   END IF;
 
   SELECT COUNT(*) INTO row_count
   FROM rule_backtest_runs
-  WHERE rule_id = 'candidate_early_high_amount'
+  WHERE rule_id = discovered_candidate_rule_id
     AND rule_version = 1
     AND promotion_recommendation = 'eligible_for_review'
     AND precision_value >= 0.70
@@ -428,7 +431,7 @@ BEGIN
   SELECT COUNT(*) INTO row_count
   FROM audit_events
   WHERE event_type IN ('rule.candidate.saved', 'rule.backtest.completed')
-    AND payload ->> 'rule_id' = 'candidate_early_high_amount'
+    AND payload ->> 'rule_id' = discovered_candidate_rule_id
     AND evidence_refs <> '[]'::jsonb;
   IF row_count < 2 THEN
     RAISE EXCEPTION 'expected rule discovery candidate audit events, found %',

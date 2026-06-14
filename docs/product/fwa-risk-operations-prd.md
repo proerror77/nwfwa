@@ -1,6 +1,7 @@
 # FWA Risk And Operations Platform PRD
 
 Date: 2026-05-27
+Last updated: 2026-06-13
 
 Status: living product blueprint
 
@@ -16,13 +17,77 @@ operator control before autonomous decisioning.
 
 ## Decision Boundary
 
-The platform is assistive. It can recommend review actions, surface suspicious
-patterns, and prepare evidence packages, but it must not automatically deny,
-approve, or accuse a claim without a customer-controlled adjudication process.
+The platform is assistive by default. It can recommend review actions, surface
+suspicious patterns, and prepare evidence packages, but it must not
+automatically deny, approve, or accuse a claim without a customer-controlled
+adjudication process.
+
+Pre-payment integrations may support customer-approved deterministic
+adjudication rules. Those rules are not ML decisions. They are explicit policy,
+eligibility, coverage, or clinical-compatibility checks that the customer has
+approved for straight-through processing. Any automatic denial or automatic
+approval must include rule id, rule version, customer policy authority, input
+field evidence, exception-check outcome, audit id, and appeal or reviewer
+override path. ML scores, anomaly scores, provider graph signals, similar-case
+signals, and Agent outputs must never be the sole authority for automatic
+denial or automatic approval.
 
 The product language must distinguish fraud, waste, abuse, improper payment,
 documentation issue, and medical necessity issue. A high score, anomaly, or
 rule hit is a lead, not a confirmed fraud finding.
+
+### Decision Routing Outcomes
+
+Real-time claim scoring should route each claim into one of the following
+outcomes:
+
+- `straight_through`: low-risk or explicitly eligible claim can continue normal
+  processing under the customer's policy;
+- `auto_deny`: a customer-approved deterministic rule establishes ineligibility,
+  exclusion, contradiction, or invalid coverage with no unresolved exception;
+- `pending_evidence`: required documents or clinical evidence are missing, so
+  payment is paused until the evidence request is resolved;
+- `manual_review`: rules, model signals, anomaly signals, provider signals, or
+  clinical uncertainty require human review;
+- `qa_sample`: low or medium risk claims are sampled for quality assurance,
+  calibration, or missed-risk measurement;
+- `post_payment_audit`: post-payment mode routes claims to audit, recovery
+  review, or provider review instead of pre-payment hold or denial.
+
+The scoring response should expose both the business outcome and the authority
+behind it:
+
+- `decision_outcome`;
+- `decision_authority`: `customer_policy_rule`, `clinical_policy_rule`,
+  `risk_routing_policy`, `human_reviewer`, or `qa_policy`;
+- `decision_confidence`: `deterministic`, `high`, `medium`, or `low`;
+- `reason_code`;
+- `appeal_or_review_required`;
+- evidence refs and audit ids.
+
+### Rule Action Classes
+
+Rules are not all equivalent. The rule library must classify each production
+rule by action class:
+
+- `hard_deny`: deterministic policy, eligibility, coverage, or clinical
+  contradiction rules that can deny only after customer approval and exception
+  checks;
+- `straight_through`: deterministic eligibility or low-risk rules that can allow
+  normal processing only under customer policy;
+- `pending_evidence`: evidence sufficiency rules that request documents such as
+  X-ray images, prescriptions, medication details, lab reports, or medical
+  records;
+- `manual_review`: suspicious or clinically uncertain rules that require human
+  review;
+- `score_only`: rules that contribute risk, prioritization, or monitoring
+  signals but cannot adjudicate.
+
+Examples of hard-deny candidates include gender or age contraindications,
+coverage exclusion, policy waiting-period violation, expired coverage, duplicate
+claim identifiers, and provider or product ineligibility. Each candidate must
+carry exception logic; if an exception cannot be resolved deterministically, the
+outcome must be `pending_evidence` or `manual_review`, not `auto_deny`.
 
 ## Input Box And Canonical Evidence Trace
 
@@ -120,7 +185,31 @@ Required signals:
 - duplicate or repeated service patterns;
 - diagnosis-procedure mismatch rate;
 - review failure, confirmed FWA, and false-positive history;
-- sudden volume increase for new or previously low-activity providers.
+- sudden volume increase for new or previously low-activity providers;
+- OIG exclusion list and SAM.gov debarment status; these signals must be
+  refreshed at minimum daily and evaluated before claim scoring begins; claims
+  from an excluded or debarred provider must be flagged regardless of
+  claim-level risk score;
+- peer percentile signals must derive from statistical distributions computed
+  over actual peer claim populations segmented by specialty, region, and service
+  type; synthetic proxies such as amount-to-limit ratios must not substitute for
+  real peer percentiles in any production scoring layer; peer benchmarks must be
+  recomputed at minimum monthly with p25, p50, p75, p90, and p99 quantiles
+  stored per segment;
+- billing ring membership score: provider sets sharing elevated patient overlap
+  within rolling 30-day windows, flagged when pairwise patient-overlap ratio
+  exceeds a configurable threshold;
+- temporal co-billing frequency: rate at which the provider and a secondary
+  provider both appear in the same member's claims within a 7-day window, used
+  to detect coordinated billing patterns without requiring multi-hop graph
+  inference;
+- referral concentration entropy: Shannon entropy of the provider's
+  referral-source distribution; low entropy flags concentrated referral chains
+  as a higher-risk signal than raw referral volume alone;
+- multi-window risk scores must use a weighted combination that gives higher
+  weight to shorter windows for near-term surveillance while using longer windows
+  as background context; the maximum of all window scores must not be the sole
+  aggregation method.
 
 ### FWA Rule Pack
 
@@ -140,7 +229,10 @@ Required rule families:
 - suspicious provider-member or referral concentration.
 
 Each rule must keep version, owner, lifecycle status, applicability scope,
-backtest result, estimated saving, false-positive history, and evidence refs.
+action class, backtest result, estimated saving, false-positive history, and
+evidence refs. Hard-deny and straight-through rules must also keep customer
+approval status, policy or clinical authority refs, exception-check logic,
+effective dates, rollback plan, and appeal or override route.
 
 ### Investigation Case Management
 
@@ -173,6 +265,11 @@ Required labels:
 - documentation_issue;
 - medical_necessity_issue;
 - policy_exclusion;
+- ineligible_service;
+- clinical_contraindication;
+- auto_deny_upheld;
+- auto_deny_overturned;
+- pending_evidence_resolved;
 - amount_prevented;
 - amount_recovered;
 - lead_disposition;
@@ -190,7 +287,19 @@ Required feature groups:
 - policy-level coverage, waiting-period, and limit features;
 - time-window features over 7/30/90/180 days;
 - network concentration features for provider-member and provider-agent
-  relationships.
+  relationships;
+- episode-level aggregation features spanning all claims for a member-provider
+  pair within 30, 90, and 365-day windows, covering total episode cost, episode
+  DRG mix deviation from peer episodes, and episode-level diagnosis-procedure
+  coherence; episode-level features complement claim-level features and are
+  required for unbundling and utilization-pattern detection;
+- ICD-10 and CPT unbundling detection features: presence of component codes
+  alongside bundled-code comparators within the same episode window,
+  supplemented by fee-detail line count and service-category concentration;
+- peer percentile production requirement: all peer deviation features must derive
+  from statistical distributions over actual peer claim populations; ratio-to-limit
+  proxies are acceptable as labeled temporary baselines only and must be clearly
+  marked in the feature registry until replaced by real peer data.
 
 ### Outcome, Drift, And ROI Monitoring
 
@@ -207,7 +316,15 @@ Required monitoring:
 - avoided future exposure;
 - deterrence or provider behavior-change indicators;
 - review cost;
-- rule-level and model-level saving attribution.
+- rule-level and model-level saving attribution;
+- feature distribution drift using Population Stability Index (PSI) computed
+  monthly over key scoring features; PSI above 0.25 on any tier-1 feature must
+  generate a review task for the model or rule that uses it;
+- rule hit rate trending: a 7-day rolling hit rate and a 90-day rolling hit rate
+  must be maintained per production rule; when the 7-day rate falls below 50
+  percent of the 90-day baseline without a seasonal explanation, the platform
+  must open a drift review task and may automatically trigger a shadow rerun
+  with relaxed thresholds to detect potential provider evasion.
 
 ## Integration Roadmap
 
@@ -591,6 +708,59 @@ Staged infrastructure roadmap:
   network isolation, OpenTelemetry dashboards, alerting, disaster recovery, and
   release/rollback runbooks.
 
+### Agentic Investigation Control Plane
+
+Agentic workflows that access PHI or produce investigation outputs must be
+governed by a five-layer control plane. This applies to any agent that reads
+claim data, member data, provider data, or evidence packages, regardless of
+whether the agent uses an LLM or a deterministic algorithm.
+
+Required control layers:
+
+1. Identity and persona registry: every agent deployment must be registered with
+   a unique identity, version, defined capability scope, and enumerated PHI field
+   access list before it can run in any environment.
+
+2. Orchestration and cross-domain mediation: an investigation orchestrator manages
+   the lifecycle state machine and coordinates specialist agents; only the
+   orchestrator holds the full investigation context; specialist agents receive
+   only the data their registered scope requires.
+
+3. PHI-bounded context and memory: agents must access only the PHI fields
+   declared in their registry entry; field-level access must be enforced at tool
+   invocation time and must not depend on agent self-reporting.
+
+4. Runtime policy enforcement with kill-switch: every agent action must be
+   validated against the platform policy engine before execution; a kill-switch
+   mechanism must be able to halt any running agent without data loss.
+
+5. Lifecycle management and decommissioning: agent versions must be registered,
+   monitored for output quality drift, and decommissioned with an auditable
+   deprovisioning record.
+
+Agent audit event schema must include at minimum: agent identity and version,
+investigation identifier, action type, timestamp, actor context, PHI fields
+accessed by field name without values, tool calls with input and output digests,
+decision rationale, confidence score, and whether human review was triggered.
+Audit records must be append-only with a cryptographic hash chain linking
+consecutive records for the same investigation. Audit records must be retained
+for at least six years to satisfy HIPAA retention requirements. No standardized
+schema for agentic AI audit artifacts exists as of this document's last update;
+the platform must define and own its schema until regulatory standards are
+finalized by NIST or CMS.
+
+Agent run identifiers must use collision-resistant sortable identifiers such as
+ULID or UUID v7 so that audit records across multiple runs for the same claim
+remain uniquely traceable. Format strings derived from claim identifiers alone
+must not be used as agent run identifiers.
+
+Agent decision boundary must be hardcoded to assistive-only for all versions
+until a customer-approved deterministic escalation path with explicit rule
+authority is in place. Agents may generate investigation packages, checklist
+items, evidence summaries, and disposition recommendations, but the final
+adjudication decision must remain with a human reviewer or a customer-approved
+deterministic rule with published approval status.
+
 The system should support agent-native operation by giving agents parity with
 operator-readable capabilities through approved tools, while reserving
 high-impact writes for human approval. This keeps the architecture compatible
@@ -736,6 +906,8 @@ Model promotion requires:
 - holdout and out-of-time metrics;
 - threshold selection tied to review capacity;
 - explanation artifact such as feature importance or SHAP-style analysis;
+- Rust serving artifact evaluation, including manifest contract, feature order,
+  checksum/signature, probability parity when available, and latency budget;
 - shadow-mode comparison against rules, previous model, and QA outcomes;
 - approval before the model affects recommended actions.
 
@@ -758,10 +930,45 @@ MVP should use:
 Production model candidates should start with interpretable or inspectable
 structured models:
 
-- logistic regression for calibrated baselines;
+- logistic regression for calibrated baselines and rule-only comparison;
 - decision trees for transparent rules-of-thumb;
-- gradient-boosted trees, such as XGBoost or LightGBM, only with feature
-  importance, SHAP-style explanation, and strict validation gates.
+- gradient-boosted trees, such as XGBoost or LightGBM, as the primary
+  supervised-learning candidates for structured claim-risk scoring, provided
+  they carry feature importance or SHAP-style explanation and pass strict
+  validation gates.
+
+Unsupervised ensemble scoring is a required complement to supervised ML and is
+particularly valuable early in a deployment when labeled data is scarce.
+Billing-pattern anomaly scoring using statistical methods such as IQR and
+MAD-based deviation, DRG peer-group frequency comparison, and code-diversity
+metrics does not require fraud labels and produces significantly higher precision
+than random targeting when evaluated against confirmed enforcement records.
+Unsupervised ensemble outputs must feed the L3 Unsupervised Anomaly scoring
+layer as a first-class signal, replacing heuristic threshold implementations once
+sufficient historical claim data is available. Unsupervised scores must carry
+evidence refs identifying the statistical signal that contributed to the anomaly
+and must not be presented as fraud conclusions.
+
+Explainable supervised model outputs should also feed Rule Studio. High-value
+feature contributions, tree paths, or SHAP-style patterns may become candidate
+rules, but they must pass deterministic backtest, human promotion review, rule
+promotion gates, approval, and publication before entering the active rule
+library.
+
+The ML lifecycle should be Rust-owned even when the optimizer is not written in
+Rust. Rust should control dataset contracts, feature versions, training job
+orchestration, model registration, evaluation, backtest, shadow monitoring,
+human review, activation, rollback, and audit. XGBoost, LightGBM, and deep
+models may enter production serving through ONNX when feature-order and
+prediction-parity tests pass; otherwise they remain governed candidates or use a
+controlled fallback scorer until the Rust serving boundary is proven.
+
+Auto MLOps should operate as an evidence and recommendation loop, not an
+autonomous model operator. It may schedule monitoring, rank candidates, prepare
+retraining proposals, open review tasks, and package rule-candidate evidence. It
+must not activate a model, rollback a model, publish a rule, assign a fraud
+label, or write extracted patterns into the active rule library without the
+required backtest, human review, and approval gates.
 
 Large language models or deep models may support OCR cleanup, document summary,
 medical-note extraction, clustering, and investigation drafting. They must not
@@ -779,10 +986,17 @@ Training becomes useful after enough customer or pilot data has stable labels:
 2. Split by time and by leakage-sensitive groups such as member, policy,
    provider, and case family.
 3. Train offline only; do not let the trained model influence decisions.
-4. Record model dataset version, feature-set version, metrics, threshold, and
-   feature importance artifact.
-5. Run shadow mode against live traffic and compare against rules and human QA.
-6. Promote only when holdout, out-of-time, and pilot review metrics pass.
+4. Train a logistic baseline plus at least one gradient-boosted tree candidate
+   once stable labels exist.
+5. Record model dataset version, feature-set version, algorithm family,
+   metrics, threshold, and feature importance or SHAP-style artifact.
+6. Validate serving artifacts, including ONNX or Rust-native parity where
+   applicable.
+7. Send explainable model patterns into Rule Studio as candidate rules when
+   they can be expressed as deterministic, auditable rule DSL.
+8. Run shadow mode against live traffic and compare against rules and human QA.
+9. Promote only when holdout, out-of-time, pilot review, and serving-parity
+   metrics pass.
 
 Overfitting controls are product requirements, not optional data-science notes:
 
@@ -900,6 +1114,78 @@ Reference anchors:
 - NVIDIA write-up on the IEEE-CIS winning fraud-detection solution:
   https://developer.nvidia.com/blog/leveraging-machine-learning-to-detect-fraud-tips-to-developing-a-winning-kaggle-solution/
 
+## June 2026 Architecture Gap Roadmap
+
+The June 12 architecture review is recorded in
+`docs/project/architecture-gap-review-2026-06-12.md`. The items below convert
+that review into PRD-level requirements. This section describes product and
+architecture intent; repository completion status remains in
+`docs/project/prd-coverage.md`.
+
+Immediate correctness and compliance requirements:
+
+- Any scoring layer that uses a proxy, baseline, or placeholder implementation
+  must label that status in code comments, feature metadata, and operator-facing
+  evidence where it affects interpretation.
+- L1 peer benchmark scoring must not treat amount-to-limit ratio as a real peer
+  percentile in production. If peer data is missing, the scoring layer must
+  either downweight the signal or exclude it from final-score normalization.
+- L5 diagnosis/procedure compatibility must identify heuristic outputs as
+  placeholder clinical signals until a governed ICD-10/CPT or policy-reference
+  comparator is available.
+- Routing policy lifecycle writes must require fine-grained permissions for
+  submit, approve, activate, rollback, and other high-impact transitions.
+- Inbox validation and audit serialization failures must fail loudly or emit
+  critical audit events; they must not silently persist empty arrays or
+  misleading successful records.
+- Runtime scorer shared-state failures, including poisoned locks around model
+  sessions, must recover with logging and alerting where safe instead of
+  permanently failing all future scoring requests.
+
+Current-month architecture requirements:
+
+- Scoring aggregation must distinguish missing data from a real zero score and
+  renormalize layer weights across the available evidence-bearing layers.
+- Confidence scoring must use multiple evidence families, including clinical,
+  provider, and graph signals, rather than depending only on rule/anomaly/model
+  agreement.
+- Provider graph contracts must include billing ring membership, temporal
+  co-billing frequency, and referral concentration entropy, with worker-owned
+  rollups for those values.
+- Worker commands must own daily OIG/SAM sanctions refresh, provider
+  30/90/365-day profile windows, PSI actioning, and 7-day/90-day rule hit-rate
+  trending.
+- Canonical claim context and evidence responses must apply field-path PHI/PII
+  masking before leaving the API boundary.
+
+Next-quarter foundation requirements:
+
+- Worker pipelines must add billing-ring detection, temporal co-billing,
+  referral entropy, monthly peer percentile benchmarks, and episode-level
+  member-provider aggregation.
+- Feature records must carry proxy/source metadata so reviewers can distinguish
+  real peer distributions, customer data, public data, synthetic data, and
+  fallback estimates.
+- The agentic control plane must add a runtime `agent_registry`, stable
+  `investigations` entity, enforced PHI field allowlists, populated
+  `phi_fields_accessed` audit records, and cancellation/kill-switch semantics.
+- The Rust ML runtime should cache parsed serving manifests and label raw
+  sigmoid outputs as uncalibrated until calibration evidence exists.
+- The L3 anomaly layer must define a measurable upgrade gate for replacing
+  heuristic baselines with IQR, MAD, or unsupervised ensemble methods.
+
+Medium-term requirements:
+
+- Audit retention must move from documentation to executable policy with
+  retention evidence, archival workflow, and customer-environment proof.
+- Agentic investigation should evolve from one deterministic investigator into
+  an orchestrated set of specialist agents, while preserving assistive-only
+  decision boundaries and human approval gates.
+- Scheme coverage must expand beyond provider outliers into duplicate billing,
+  unbundling, excessive utilization, lab, telehealth, genetic testing,
+  pharmacy/opioid, DME/home health, and China-market-specific organized fraud
+  patterns using episode, policy, and peer-distribution features.
+
 ## Non-Goals
 
 - No MVP semantic layer or ontology system.
@@ -936,3 +1222,21 @@ Reference anchors:
   exposure, review cost, and estimated impact.
 - Kaggle-inspired work remains an offline research input until validated on
   customer or pilot data.
+- Peer percentile signals in the L1 Peer Benchmark layer are derived from actual
+  peer distribution data segmented by specialty and region; ratio-to-limit proxy
+  values must not be used as peer percentile substitutes in production scoring.
+- Provider graph signals include OIG exclusion status, billing ring membership
+  score, temporal co-billing frequency, and referral concentration entropy;
+  these signals are refreshed at minimum nightly.
+- Feature distribution PSI is computed monthly for tier-1 scoring features; PSI
+  violations above 0.25 generate actionable review tasks.
+- Rule hit rate trending is maintained with 7-day and 90-day baselines per
+  production rule; rates significantly below baseline trigger drift review tasks.
+- Agent audit events include agent identity, version, investigation identifier,
+  PHI fields accessed by name, tool call records, decision rationale, and
+  human-review flag; the audit store is append-only with a cryptographic hash
+  chain.
+- The L3 Unsupervised Anomaly layer uses statistical IQR, MAD, or
+  billing-pattern ensemble methods rather than fixed heuristic thresholds once
+  sufficient historical claim data is available; heuristic thresholds are
+  acceptable as labeled baselines only.

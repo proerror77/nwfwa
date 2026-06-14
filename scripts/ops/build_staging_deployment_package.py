@@ -61,12 +61,55 @@ set -euo pipefail
 namespace="${NWFWA_STAGING_NAMESPACE:-nwfwa-staging}"
 secret_file="${NWFWA_STAGING_SECRET_FILE:?set NWFWA_STAGING_SECRET_FILE to the customer-approved Secret YAML}"
 
+python3 - "$secret_file" <<'PY'
+from pathlib import Path
+import sys
+
+required = {
+    "FWA_API_KEY",
+    "FWA_API_KEY_PRINCIPALS",
+    "FWA_MODEL_SIGNATURE_KEY",
+    "FWA_ALERT_RECEIVER_TOKEN",
+    "FWA_ALERT_RECEIVER_SIGNING_SECRET",
+    "DATABASE_URL",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DB",
+    "MINIO_ROOT_USER",
+    "MINIO_ROOT_PASSWORD",
+}
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+if "kind: Secret" not in text or "name: nwfwa-staging-secrets" not in text:
+    raise SystemExit("secret file must define Secret nwfwa-staging-secrets")
+keys = set()
+in_string_data = False
+for line in text.splitlines():
+    stripped = line.strip()
+    if stripped == "stringData:":
+        in_string_data = True
+        continue
+    if in_string_data and line and not line.startswith((" ", "\\t")):
+        break
+    if in_string_data and ":" in stripped:
+        keys.add(stripped.split(":", 1)[0])
+missing = sorted(required - keys)
+if missing:
+    raise SystemExit("secret file missing keys: " + ", ".join(missing))
+lowered = text.lower()
+for marker in ("replace-with-", "changeme", "dev-secret"):
+    if marker in lowered:
+        raise SystemExit("secret file still contains placeholder marker: " + marker)
+PY
+
 kubectl apply -f k8s/staging/namespace.yaml
+kubectl apply -n "$namespace" -f "$secret_file" --dry-run=server
+kubectl apply -k k8s/staging --dry-run=server
 kubectl apply -n "$namespace" -f "$secret_file"
 kubectl apply -k k8s/staging
 kubectl -n "$namespace" rollout status deployment/api-server
 kubectl -n "$namespace" rollout status deployment/web-console
 kubectl -n "$namespace" rollout status deployment/ml-service
+kubectl -n "$namespace" get cronjob governance-ops-plan ai-evidence-execution-plan analytics-export-plan pilot-readiness-proof mlops-monitoring-runtime
 """
     write_text(output_dir / "apply.sh", apply_script)
     (output_dir / "apply.sh").chmod(0o755)
@@ -102,6 +145,7 @@ Never delete retained evidence or object-storage artifacts without the
         "validation_commands": [
             "python3 scripts/ops/validate_k8s_staging.py",
             "python3 scripts/ops/validate_container_packaging.py",
+            "python3 scripts/ops/validate_staging_secret_file.py --secret-file infra/k8s/staging/secrets.example.yaml --allow-placeholders",
             "python3 scripts/ops/validate_staging_deployment_package.py --package-dir artifacts/staging-deployment",
             "bash scripts/ci/check_repo.sh",
         ],

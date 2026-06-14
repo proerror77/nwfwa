@@ -18,12 +18,14 @@ REQUIRED_PACKAGE_PATHS = {
     "k8s/staging/web-console.yaml",
     "k8s/staging/ml-service.yaml",
     "k8s/staging/worker-cronjobs.yaml",
+    "k8s/staging/worker-serviceaccount.yaml",
     "k8s/staging/secrets.example.yaml",
 }
 
 REQUIRED_VALIDATION_COMMANDS = {
     "python3 scripts/ops/validate_k8s_staging.py",
     "python3 scripts/ops/validate_container_packaging.py",
+    "python3 scripts/ops/validate_staging_secret_file.py --secret-file infra/k8s/staging/secrets.example.yaml --allow-placeholders",
     "python3 scripts/ops/validate_staging_deployment_package.py --package-dir artifacts/staging-deployment",
     "bash scripts/ci/check_repo.sh",
 }
@@ -88,12 +90,17 @@ def validate_apply_script(package_dir: Path) -> None:
     text = path.read_text(encoding="utf-8")
     for snippet in [
         "NWFWA_STAGING_SECRET_FILE:?",
+        "secret file must define Secret nwfwa-staging-secrets",
+        "secret file still contains placeholder marker",
         "kubectl apply -f k8s/staging/namespace.yaml",
+        "kubectl apply -n \"$namespace\" -f \"$secret_file\" --dry-run=server",
+        "kubectl apply -k k8s/staging --dry-run=server",
         "kubectl apply -n \"$namespace\" -f \"$secret_file\"",
         "kubectl apply -k k8s/staging",
         "rollout status deployment/api-server",
         "rollout status deployment/web-console",
         "rollout status deployment/ml-service",
+        "get cronjob governance-ops-plan",
     ]:
         require(snippet in text, f"apply.sh missing snippet: {snippet}")
 

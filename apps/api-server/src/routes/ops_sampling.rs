@@ -1,15 +1,12 @@
 use crate::{
     app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{AuditSampleRecord, CreateAuditSampleInput, PersistedAuditEvent},
 };
-use axum::{
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use fwa_audit::ActorContext;
-use fwa_auth::{authenticate_api_key, validate_api_key, AuthenticatedPrincipal};
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::AuditEventId;
 use serde::Serialize;
 
@@ -20,9 +17,8 @@ pub struct AuditSampleListResponse {
 
 pub async fn list_audit_samples(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<AuditSampleListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let samples = state
         .repository
         .list_audit_samples(Some(&actor.customer_scope_id))
@@ -33,10 +29,10 @@ pub async fn list_audit_samples(
 
 pub async fn create_audit_sample(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(mut request): Json<CreateAuditSampleInput>,
 ) -> Result<Json<AuditSampleRecord>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:audit-samples:create")?;
+    let actor = require_permission(principal, "ops:audit-samples:create")?;
     if !matches!(
         request.sample_mode.as_str(),
         "risk_ranked" | "random_control" | "stratified" | "post_payment_audit" | "qa_calibration"
@@ -126,38 +122,6 @@ async fn record_audit_sample_created(
         .await
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
-}
-
-fn authorize_permission(
-    state: &AppState,
-    headers: &HeaderMap,
-    permission: &str,
-) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
-    require_permission(principal, permission)
-}
-
 fn require_permission(
     principal: AuthenticatedPrincipal,
     permission: &str,
@@ -173,7 +137,7 @@ fn require_permission(
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
-    move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+    move |error| ApiError::internal(code, error)
 }
 
 #[cfg(test)]

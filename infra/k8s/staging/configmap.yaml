@@ -8,6 +8,8 @@ metadata:
 data:
   FWA_SOURCE_SYSTEM: staging-tpa
   FWA_MODEL_SERVICE_URL: http://ml-service:8001
+  FWA_TRAINING_JOB_DB: /app/data/ml-service/training_jobs.sqlite3
+  FWA_ARTIFACT_REGISTRY_URI: s3://nwfwa-staging-artifacts/ml-service
   FWA_OBJECT_STORAGE_URI: s3://nwfwa-staging-artifacts
   FWA_ANALYTICS_CLICKHOUSE_URL: http://clickhouse:8123
   FWA_CUSTOMER_SCOPE_ID: staging-customer

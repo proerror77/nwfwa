@@ -1,0 +1,48 @@
+{
+  "data_contract": {
+    "manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
+    "source": "same_parquet_dataset_manifest"
+  },
+  "jobs": [
+    {
+      "input": "live_routing_and_qa_outcomes",
+      "job_kind": "shadow_traffic_evaluation",
+      "output_ref": "model_shadow_reports:<shadow_report_uri>",
+      "shadow_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/shadow_report.json"
+    },
+    {
+      "drift_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/drift_report.json",
+      "input": "scoring_features_and_scores",
+      "job_kind": "drift_monitoring",
+      "output_ref": "model_drift_reports:<drift_report_uri>"
+    },
+    {
+      "fairness_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/fairness_report.json",
+      "input": "customer_approved_segments",
+      "job_kind": "segment_fairness_review",
+      "output_ref": "model_fairness_reports:<fairness_report_uri>"
+    },
+    {
+      "input": "qa_reviews_and_investigation_outcomes",
+      "job_kind": "reviewer_disagreement_review",
+      "output_ref": "model_reviewer_disagreement_reports:<reviewer_disagreement_report_uri>",
+      "reviewer_disagreement_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/reviewer_disagreement_report.json"
+    },
+    {
+      "input": "scoring_runs_and_outcome_label_timestamps",
+      "job_kind": "label_delay_review",
+      "label_delay_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/label_delay_report.json",
+      "output_ref": "model_label_delay_reports:<label_delay_report_uri>"
+    }
+  ],
+  "model": {
+    "artifact_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/rust_serving_artifact.json",
+    "model_key": "baseline_fwa",
+    "model_version": "0.2.0-xgboost-candidate"
+  },
+  "plan_kind": "scheduled_mlops_monitoring",
+  "plan_version": 2,
+  "schedule": {
+    "cron": "0 2 * * *"
+  }
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "amount_to_limit_ratio",
+    "logical_type": "Float64",
+    "nullable": false,
+    "source": "parquet_manifest_column"
+  },
+  {
+    "name": "claim_amount",
+    "logical_type": "Float64",
+    "nullable": false,
+    "source": "parquet_manifest_column"
+  },
+  {
+    "name": "diagnosis_procedure_mismatch",
+    "logical_type": "Int8",
+    "nullable": false,
+    "source": "parquet_manifest_column"
+  },
+  {
+    "name": "high_cost_item_ratio",
+    "logical_type": "Float64",
+    "nullable": false,
+    "source": "parquet_manifest_column"
+  },
+  {
+    "name": "item_count",
+    "logical_type": "Int32",
+    "nullable": false,
+    "source": "parquet_manifest_column"
+  },
+  {
+    "name": "peer_percentile",
+    "logical_type": "Float64",
+    "nullable": false,
+    "source": "parquet_manifest_column"
+  },
+  {
+    "name": "provider_risk_tier",
+    "logical_type": "Int32",
+    "nullable": false,
+    "source": "parquet_manifest_column"
+  }
+]

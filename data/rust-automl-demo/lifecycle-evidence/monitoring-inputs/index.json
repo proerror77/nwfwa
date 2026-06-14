@@ -1,0 +1,20 @@
+{
+  "artifact_kind": "rust_mlops_monitoring_runtime_reports",
+  "artifact_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/rust_serving_artifact.json",
+  "artifacts": {
+    "drift_monitoring": "drift_report.json",
+    "label_delay_review": "label_delay_report.json",
+    "reviewer_disagreement_review": "reviewer_disagreement_report.json",
+    "segment_fairness_review": "fairness_report.json",
+    "shadow_traffic_evaluation": "shadow_report.json"
+  },
+  "customer_data_required": true,
+  "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules",
+  "manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate",
+  "plan_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_monitoring_plan.json",
+  "report_version": 1,
+  "runtime_source": "rust_worker_monitoring_plan_runner",
+  "status": "completed"
+}

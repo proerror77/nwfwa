@@ -117,9 +117,16 @@ CREATE TABLE IF NOT EXISTS rules (
   name TEXT NOT NULL,
   status TEXT NOT NULL,
   owner TEXT NOT NULL,
+  submitted_by_actor_id TEXT,
+  hit_rate_7d FLOAT,
+  hit_rate_90d FLOAT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE rules ADD COLUMN IF NOT EXISTS submitted_by_actor_id TEXT;
+ALTER TABLE rules ADD COLUMN IF NOT EXISTS hit_rate_7d FLOAT;
+ALTER TABLE rules ADD COLUMN IF NOT EXISTS hit_rate_90d FLOAT;
 
 CREATE TABLE IF NOT EXISTS rule_versions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -133,6 +140,25 @@ CREATE TABLE IF NOT EXISTS rule_versions (
   published_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(rule_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS rule_condition_library (
+  condition_key TEXT PRIMARY KEY,
+  source_rule_id UUID NOT NULL REFERENCES rules(id),
+  source_rule_key TEXT NOT NULL,
+  source_rule_version INTEGER NOT NULL,
+  condition_index INTEGER NOT NULL,
+  field_name TEXT NOT NULL,
+  operator TEXT NOT NULL,
+  value JSONB NOT NULL,
+  review_mode TEXT NOT NULL,
+  scheme_family TEXT NOT NULL,
+  status TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(source_rule_key, source_rule_version, condition_index)
 );
 
 CREATE TABLE IF NOT EXISTS model_versions (
@@ -393,6 +419,71 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at TIMESTAMPTZ
 );
+
+CREATE TABLE IF NOT EXISTS agent_registry (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_identity_id TEXT NOT NULL UNIQUE,
+  agent_kind TEXT NOT NULL,
+  agent_version INTEGER NOT NULL,
+  capability_scope JSONB NOT NULL DEFAULT '[]'::jsonb,
+  phi_fields_allowed JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status TEXT NOT NULL,
+  registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deprovisioned_at TIMESTAMPTZ,
+  UNIQUE (agent_kind, agent_version)
+);
+
+CREATE TABLE IF NOT EXISTS investigations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  investigation_id TEXT NOT NULL UNIQUE,
+  claim_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  orchestrator_version TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS investigations_claim_id_idx
+  ON investigations(claim_id);
+
+INSERT INTO agent_registry
+  (agent_identity_id, agent_kind, agent_version, capability_scope, phi_fields_allowed, status)
+VALUES
+  (
+    'agent_identity:deterministic_investigator:v1',
+    'deterministic_investigator',
+    1,
+    '["knowledge.search_similar", "agent.investigation.package"]'::jsonb,
+    '["claim_id", "risk_score", "rag", "diagnosis_code", "provider_region"]'::jsonb,
+    'active'
+  )
+ON CONFLICT (agent_identity_id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS agent_audit_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  audit_event_id TEXT NOT NULL UNIQUE,
+  investigation_id TEXT NOT NULL,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  agent_kind TEXT NOT NULL,
+  agent_version INTEGER NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_role TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  input_digest TEXT NOT NULL,
+  decision_boundary TEXT NOT NULL,
+  findings_count INTEGER NOT NULL,
+  evidence_sufficiency TEXT NOT NULL,
+  tool_call_count INTEGER NOT NULL,
+  human_review_required BOOLEAN NOT NULL,
+  phi_fields_accessed JSONB NOT NULL DEFAULT '[]'::jsonb,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  previous_event_hash TEXT,
+  event_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS agent_audit_events_run_idx
+  ON agent_audit_events(agent_run_id, created_at);
 
 CREATE TABLE IF NOT EXISTS agent_steps (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -703,12 +794,15 @@ CREATE TABLE IF NOT EXISTS model_evaluation_runs (
   threshold NUMERIC,
   confusion_matrix_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   feature_importance_uri TEXT,
+  permutation_importance_uri TEXT,
   metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 ALTER TABLE model_evaluation_runs
   ADD COLUMN IF NOT EXISTS scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim';
+ALTER TABLE model_evaluation_runs
+  ADD COLUMN IF NOT EXISTS permutation_importance_uri TEXT;
 
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -782,6 +876,23 @@ CREATE TABLE IF NOT EXISTS rule_backtest_runs (
   false_positive_rate DOUBLE PRECISION NOT NULL,
   estimated_saving TEXT NOT NULL,
   promotion_recommendation TEXT NOT NULL,
+  blockers JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS rule_shadow_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  rule_id TEXT NOT NULL,
+  rule_version INTEGER NOT NULL,
+  report_uri TEXT NOT NULL,
+  decision TEXT NOT NULL CHECK (decision IN ('shadow_passed', 'shadow_blocked')),
+  reviewer TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  reviewed_count INTEGER NOT NULL,
+  matched_count INTEGER NOT NULL,
+  false_positive_count INTEGER NOT NULL,
+  false_positive_rate DOUBLE PRECISION NOT NULL,
   blockers JSONB NOT NULL DEFAULT '[]'::jsonb,
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

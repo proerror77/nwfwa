@@ -44,6 +44,28 @@ cargo test --locked --workspace
 toolchain through `dtolnay/rust-toolchain@stable`. CI disables incremental
 compilation and dev/test debug info for faster cold runner validation.
 
+## Local Runtime
+
+The supported Docker Desktop development path is the hybrid runtime launcher:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+Docker Compose runs PostgreSQL, the ML service, object storage, and ClickHouse.
+The host runs the Rust `api-server` and Trunk Web Console in tmux sessions so
+local Rust compilation does not have to happen inside a memory-constrained
+Docker build. Stop it with:
+
+```bash
+scripts/dev/stop_local_runtime.sh
+```
+
+The full Docker Compose stack remains available for packaging proof. If
+`api-server` fails during image build with `SIGKILL`, `ResourceExhausted`, or
+`cannot allocate memory`, increase Docker Desktop memory to roughly 12-16 GB,
+use prebuilt images, or use the hybrid launcher for local development.
+
 ## API Server
 
 The API server uses:
@@ -70,14 +92,22 @@ The API server uses:
 | pandas | `apps/ml-service` | Parquet training dataset loading |
 | pyarrow | `apps/ml-service` | Parquet training and feature-importance artifacts |
 | scikit-learn | `apps/ml-service` | Logistic-regression baseline training and inference |
+| XGBoost | `apps/ml-service` | Primary gradient-boosted-tree supervised candidate |
+| LightGBM | `apps/ml-service` | Secondary gradient-boosted-tree supervised candidate |
+| ONNXMLTools | `apps/ml-service` | XGBoost and LightGBM conversion to ONNX serving artifacts |
+| ONNX Runtime | `apps/ml-service` | Trainer-side Python-versus-ONNX probability parity checks |
 | joblib | `apps/ml-service` | Model artifact serialization |
 | Pydantic 2 | `apps/ml-service` | Request and response validation |
 | Uvicorn | `apps/ml-service` | ASGI server |
 | Pytest | `apps/ml-service` | ML service tests |
 | HTTPX | `apps/ml-service` dev tests | FastAPI endpoint testing |
 
-The ML service is the demo scoring boundary. It is not a complete training
-platform. The Docker image uses `python:3.12-slim`.
+The ML service is the demo scoring boundary and local training-platform
+compatibility path. Its training-job API uses a SQLite-backed durable queue and
+artifact registry manifest for repo-local orchestration, and
+`python -m app.training_worker` can run the queue from a separate worker
+process; it is not a distributed enterprise scheduler. The Docker image uses
+`python:3.12-slim`.
 
 ## Frontend
 
@@ -112,6 +142,10 @@ Then start the Yew web console:
 cd apps/web-console
 NO_COLOR=false trunk serve
 ```
+
+When the full local runtime is needed, prefer `scripts/dev/start_local_runtime.sh`
+because it also starts the API and Docker-backed dependencies with the demo
+principal configuration.
 
 Direct Rust/WASM checks are:
 
@@ -217,6 +251,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_MODEL_ARTIFACT_SHA256` | unset | Optional artifact checksum |
 | `FWA_MODEL_ARTIFACT_SIGNATURE` | unset | Optional HMAC artifact signature |
 | `FWA_MODEL_SIGNATURE_KEY` | unset | HMAC signature verification key |
+| `FWA_TRAINING_JOB_DB` | `data/ml-service/training_jobs.sqlite3` | ML service durable training job queue |
 | `FWA_API_BASE_URL` | `http://127.0.0.1:8080` | Smoke and worker API base |
 | `FWA_SOURCE_SYSTEM` | `tpa-demo` | Demo source system |
 | `FWA_OBJECT_STORAGE_URI` | `local://demo-artifacts` | Local artifact storage URI |
@@ -233,10 +268,10 @@ Prefer locked commands when documenting reproducible verification.
 
 ## Current Non-Goals
 
-- Production Kubernetes deployment package.
 - Production secrets management.
 - Production object storage wiring beyond staging proof manifests.
-- Production observability stack.
+- Live production Kubernetes apply and smoke evidence.
+- Live production observability apply, dashboarding, and alert-receipt evidence.
 - Production ClickHouse retention, backup, and access policy.
 - Production OCR, embedding, vector-search, and retrieval workers.
 - GPU inference runtime.

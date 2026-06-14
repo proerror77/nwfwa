@@ -15,6 +15,8 @@ CI runs on:
 Current checks:
 
 - repository health check through `scripts/ci/check_repo.sh`
+- local runtime launcher presence and shell syntax for
+  `scripts/dev/start_local_runtime.sh` and `scripts/dev/stop_local_runtime.sh`
 - `staging-proof`: Kubernetes manifest validation, container packaging checks,
   staging deployment package validation, staging evidence artifacts,
   operational drill proof validation, and MLOps monitoring-plan simulation
@@ -101,3 +103,8 @@ Environment workflow packages them for a customer-approved staging cluster.
 Production deployment remains intentionally unconfigured until image registry,
 managed secrets, network controls, observability, and customer environment
 ownership are selected.
+
+Local Docker Desktop development is separate from deployment packaging. Use
+`scripts/dev/start_local_runtime.sh` for the supported hybrid local runtime;
+use full Docker Compose or K3d simulation when validating packaging or
+Kubernetes-style scheduling.

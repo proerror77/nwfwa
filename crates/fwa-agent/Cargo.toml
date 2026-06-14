@@ -8,3 +8,4 @@ publish.workspace = true
 fwa-core = { path = "../fwa-core" }
 serde.workspace = true
 serde_json.workspace = true
+ulid.workspace = true

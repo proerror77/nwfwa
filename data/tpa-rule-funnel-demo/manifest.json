@@ -1,0 +1,101 @@
+{
+  "artifact_kind": "tpa_rule_funnel_demo_dataset",
+  "cases": [
+    {
+      "case_id": "straight_through_low_risk",
+      "direct_scoring_payload": "direct_scoring_payloads/straight_through_low_risk.json",
+      "expected": {
+        "business_assertion": "complete documentation, no blocking rules, and enough model confidence for straight-through routing",
+        "decision_outcome": "straight_through",
+        "required_evidence": []
+      },
+      "inbox_payload": "inbox_payloads/straight_through_low_risk.json",
+      "purpose": "资料完整且算法层置信度足够，预期可直接通过"
+    },
+    {
+      "case_id": "pending_dental_xray",
+      "direct_scoring_payload": "direct_scoring_payloads/pending_dental_xray.json",
+      "expected": {
+        "business_assertion": "dental treatment needs X-ray and medical-record support",
+        "decision_outcome": "pending_evidence",
+        "required_evidence": [
+          "dental_xray",
+          "medical_record"
+        ]
+      },
+      "inbox_payload": "inbox_payloads/pending_dental_xray.json",
+      "purpose": "牙科植牙缺 X 光片，规则应进入补件"
+    },
+    {
+      "case_id": "pending_prescription_detail",
+      "direct_scoring_payload": "direct_scoring_payloads/pending_prescription_detail.json",
+      "expected": {
+        "business_assertion": "pharmacy claim needs medication order and prescription detail",
+        "decision_outcome": "pending_evidence",
+        "required_evidence": [
+          "medication_order",
+          "prescription_detail"
+        ]
+      },
+      "inbox_payload": "inbox_payloads/pending_prescription_detail.json",
+      "purpose": "药品缺处方/药单明细，规则应进入补件"
+    },
+    {
+      "case_id": "pending_operation_record",
+      "direct_scoring_payload": "direct_scoring_payloads/pending_operation_record.json",
+      "expected": {
+        "business_assertion": "surgery claim needs operation record before adjudication",
+        "decision_outcome": "pending_evidence",
+        "required_evidence": [
+          "operation_record",
+          "medical_record",
+          "invoice"
+        ]
+      },
+      "inbox_payload": "inbox_payloads/pending_operation_record.json",
+      "purpose": "手术缺手术记录，规则应进入补件"
+    },
+    {
+      "case_id": "manual_review_provider_pattern",
+      "direct_scoring_payload": "direct_scoring_payloads/manual_review_provider_pattern.json",
+      "expected": {
+        "business_assertion": "provider risk routes review but does not auto-deny",
+        "decision_outcome": "manual_review",
+        "required_evidence": []
+      },
+      "inbox_payload": "inbox_payloads/manual_review_provider_pattern.json",
+      "purpose": "Provider / graph risk 高，但不是确定性拒赔，只能人工复核"
+    },
+    {
+      "case_id": "manual_review_high_amount",
+      "direct_scoring_payload": "direct_scoring_payloads/manual_review_high_amount.json",
+      "expected": {
+        "business_assertion": "high amount rules should review, not request unrelated documents",
+        "decision_outcome": "manual_review",
+        "required_evidence": []
+      },
+      "inbox_payload": "inbox_payloads/manual_review_high_amount.json",
+      "purpose": "高额度/接近保额但资料不缺，进入人工审核而不是补件"
+    },
+    {
+      "case_id": "inbox_missing_coverage_limit",
+      "direct_scoring_payload": "direct_scoring_payloads/inbox_missing_coverage_limit.json",
+      "expected": {
+        "business_assertion": "basic TPA field blockers are fixed before scoring",
+        "normalize_scoring_ready": false,
+        "validation_field_path": "reportCase.policyList[0].coverageLimit"
+      },
+      "inbox_payload": "inbox_payloads/inbox_missing_coverage_limit.json",
+      "purpose": "TPA 原始包缺保额，normalize 应 scoring_ready=false"
+    }
+  ],
+  "dataset_key": "tpa_rule_funnel_demo",
+  "dataset_version": "2026-06-rule-funnel-demo",
+  "generated_at": "2026-06-04",
+  "label_policy": "business_expected_outcomes_for_demo_validation_not_production_labels",
+  "public_data_boundary": {
+    "cms_synpuf": "field-shape reference only; synthetic public-use claims data has limited inferential value",
+    "kaggle_provider_fraud": "weak provider-level label source only; not claim-level production truth"
+  },
+  "source_system": "tpa-demo"
+}

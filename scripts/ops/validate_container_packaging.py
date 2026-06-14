@@ -33,6 +33,12 @@ REQUIRED_FILES = {
         "COPY crates ./crates",
         "CMD [\"worker\", \"health\"]",
     ],
+    "apps/ml-service/Dockerfile": [
+        "FROM python:3.12-slim",
+        "apt-get install -y --no-install-recommends libgomp1",
+        "pip install --no-cache-dir .",
+        "CMD [\"uvicorn\", \"app.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8001\"]",
+    ],
     "apps/web-console/Dockerfile": [
         "FROM rust:1.96-bookworm AS builder",
         "rustup target add wasm32-unknown-unknown",
@@ -67,6 +73,16 @@ REQUIRED_FILES = {
         "COPY migrations ./migrations",
         "COPY scripts/demo/seed_demo.sql ./scripts/demo/seed_demo.sql",
         "COPY scripts/demo/assert_demo_persistence.sql ./scripts/demo/assert_demo_persistence.sql",
+    ],
+    "scripts/ops/run_k3d_simulation.sh": [
+        "k3d cluster create",
+        "k3d image import",
+        "--runtime current-context",
+        "build_k3s_simulation_package.py",
+        "validate_k3s_simulation_package.py",
+        "NWFWA_K3S_ALLOW_NON_K3S",
+        "./apply.sh",
+        "./smoke.sh",
     ],
     "infra/k8s/staging/database-jobs.yaml": [
         "name: database-migrate",

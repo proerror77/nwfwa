@@ -1,16 +1,15 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent},
     routes::pii,
 };
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
-use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -75,10 +74,9 @@ pub struct MedicalReviewQueueItem {
 
 pub async fn medical_review_queue(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Query(query): Query<MedicalReviewQueueQuery>,
 ) -> Result<Json<MedicalReviewQueueResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_audit_events(AuditEventListFilter {
@@ -109,10 +107,9 @@ pub async fn medical_review_queue(
 
 pub async fn submit_medical_review_result(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(mut request): Json<SubmitMedicalReviewResultRequest>,
 ) -> Result<Json<MedicalReviewResultResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_medical_review_result(&request)?;
     merge_canonical_evidence_refs_for_medical_review(
         &state,
@@ -435,19 +432,6 @@ fn medical_review_status(decision: &str) -> &'static str {
     }
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
-}
-
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
-    move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+    move |error| ApiError::internal(code, error)
 }

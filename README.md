@@ -10,7 +10,11 @@ tracing into one pilot-oriented platform.
 The platform is assistive only. It can surface suspicious patterns, explain risk
 signals, route cases, and prepare evidence packages. It must not automatically
 deny claims, approve claims, or accuse fraud without a customer-controlled
-adjudication process.
+adjudication process. Pre-payment automatic denial or straight-through approval
+is allowed only for customer-approved deterministic policy, eligibility,
+coverage, or clinical-compatibility rules; ML, anomaly, provider graph,
+similar-case, and Agent outputs remain review-routing signals, not sole
+adjudication authority.
 
 ## What This Repository Contains
 
@@ -65,8 +69,12 @@ governance, Rust artifact serving, external training handoff, MLOps monitoring
 plans, AI evidence metadata, ClickHouse analytics proof, staging manifests, and
 GitHub Environment packaging. Remaining production work is customer-side
 execution and validation: real customer labels, customer holdout validation,
-live shadow traffic, customer-approved secrets, observability, retention,
-OCR/vector workers, analytics execution, and operational drills.
+live shadow traffic, customer-approved secrets, live observability, retention,
+OCR/vector workers, analytics execution, and operational drills. The repo now
+also generates a customer-gated production deployment package, Kubernetes
+observability manifests, and a production readiness evidence contract; those
+artifacts define what must be applied and proven, but they are not live
+customer-environment evidence by themselves.
 The public-data MVP pack can validate the data and ML engineering loop before
 customer data is available, but it does not replace customer production
 validation.
@@ -76,6 +84,13 @@ the pilot foundation deployment shape for API, web console, ML service,
 PostgreSQL, S3-compatible object storage, ClickHouse, and worker CronJobs. They
 are staging manifests with placeholder images and secrets, not a production
 package.
+Production package generation lives in
+`scripts/ops/build_production_deployment_package.py`. It rewrites the staging
+shape into a customer-gated `nwfwa-production` package with Ingress, HPA, PDB,
+NetworkPolicy, the MLOps alert-router adapter, rollback notes, and an embedded
+production Secret validator.
+`scripts/ops/build_production_readiness_contract.py` defines the live evidence
+artifacts still required before production readiness can be claimed.
 Container packaging is defined for API server, worker, web console, and the
 database ops image. GitHub Environment based staging deployment is now
 configured as a package-only workflow; it builds and uploads a deployment
@@ -118,9 +133,12 @@ workflow.
 - `pilot foundation pending`: object storage, backup and restore, retention,
   legal hold, customer scoping, key rotation, allowlists, and observability need
   environment-specific setup before customer data is used.
-- `future`: production training, production deployment, SSO/RBAC,
-  customer-managed OCR/vector/retrieval execution, customer-managed analytics
-  execution, and long-running drift operations.
+- `production contract`: production package, observability manifests, and
+  required evidence contract exist, but live customer-environment proof is not
+  present.
+- `future`: production training, SSO/RBAC, customer-managed OCR/vector/retrieval
+  execution, customer-managed analytics execution, and long-running drift
+  operations.
 
 ## Architecture
 
@@ -168,7 +186,9 @@ It includes:
 - QA Review
 - Governance
 
-Use API key `dev-secret` for the local demo.
+Use API key `aiclaim-demo-key` for the business-facing TPA demo. The lower-level
+developer default remains `dev-secret` when no customer principal environment is
+configured.
 
 ### ML Runtime And Service
 
@@ -254,8 +274,10 @@ is part of the scoring, routing, rule, model, and threshold governance boundary.
 Pre-payment flows optimize review precision and payment control. Post-payment
 flows can favor recovery, audit sampling, model evaluation, and ROI analysis.
 
-Recommended actions are review guidance. They do not approve, deny, or adjudicate
-claims.
+Recommended actions are review guidance unless a customer-approved deterministic
+adjudication rule explicitly produces an auditable `auto_deny` or
+`straight_through` outcome. ML, anomaly, provider graph, similar-case, and Agent
+signals cannot approve, deny, or adjudicate claims by themselves.
 
 ### Claim Scoring
 
@@ -276,6 +298,11 @@ Rule Studio supports rule listing, detail inspection, deterministic backtests,
 candidate discovery, promotion gates, promotion reviews, approval, publication,
 and rollback. Rules carry scheme scope, lifecycle metadata, evidence refs, and
 performance signals.
+Hard-deny and straight-through rules require customer-approved adjudication
+metadata, policy authority refs, exception checks, appeal/override routing,
+production thresholds, rollback refs, and routing-impact evidence before they
+can act as deterministic adjudication rules. If that metadata is missing, runtime
+scoring falls back to manual review instead of auto-denial or review bypass.
 
 ### Model Operations
 
@@ -346,12 +373,35 @@ customer adjudication state.
 
 ### Start The Full Local Demo Stack
 
+For day-to-day local development on Docker Desktop, use the supported hybrid
+runtime launcher:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+It starts PostgreSQL, the ML service, object storage, and ClickHouse with
+Docker Compose, applies migrations and deterministic seed data, then runs the
+host `api-server` and Web Console in tmux sessions `nwfwa-api` and
+`nwfwa-web`. Stop it with:
+
+```bash
+scripts/dev/stop_local_runtime.sh
+```
+
+Use API key `aiclaim-demo-key` and open `http://127.0.0.1:5173`.
+
 To run the API server, Web Console, ML service, PostgreSQL, seed job, and MinIO
 through Docker Compose:
 
 ```bash
 docker compose -f infra/docker-compose.yml up --build
 ```
+
+The full Docker path remains the packaging proof. On local Docker Desktop it
+may need roughly 12-16 GB memory for the Rust API image build; if the container
+build fails with `SIGKILL`, `ResourceExhausted`, or `cannot allocate memory`,
+use `scripts/dev/start_local_runtime.sh` or prebuilt images.
 
 Open:
 
@@ -363,7 +413,26 @@ The web console proxies `/api/` to the containerized API server. The compose
 stack runs migrations and deterministic demo seed data through the
 `migrate-seed` one-shot service before the API server starts.
 
-### Start PostgreSQL And ML Service Only
+### Run A Kubernetes-Style Local Simulation
+
+To validate deployment and scheduling semantics instead of only container
+startup, run the local Kubernetes simulation:
+
+```bash
+scripts/ops/run_k3d_simulation.sh
+```
+
+This builds the local images, creates or reuses the `nwfwa-sim` K3d cluster,
+imports images, applies the generated K3s simulation package, waits for
+Deployments and StatefulSets, verifies CronJobs, and runs smoke checks against
+the ML service. If you want to use Docker Desktop Kubernetes instead of K3d,
+run:
+
+```bash
+scripts/ops/run_k3d_simulation.sh --runtime current-context
+```
+
+### Manual Host Runtime
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres ml-service
@@ -388,7 +457,9 @@ The seed includes:
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
-FWA_API_KEY=dev-secret \
+FWA_API_KEY=legacy-customer-secret \
+FWA_API_KEY_PRINCIPALS="aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*" \
+FWA_SOURCE_SYSTEM="AiClaim Core" \
 FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
 cargo run --locked -p api-server
 ```
@@ -411,9 +482,9 @@ Open `http://127.0.0.1:5173`.
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/claims/score \
   -H 'content-type: application/json' \
-  -H 'x-api-key: dev-secret' \
+  -H 'x-api-key: aiclaim-demo-key' \
   -d '{
-    "source_system": "tpa-demo",
+    "source_system": "AiClaim Core",
     "claim_id": "CLM-0287"
   }' | jq
 ```
@@ -435,6 +506,22 @@ The smoke script verifies scoring, lead generation, lead triage, case updates,
 medical review, similar-case search, agent packages, investigation writeback,
 QA writeback, API call records, claim audit history, labels, and dashboard
 rollups.
+
+For a focused business demo of a real-time TPA packet becoming a confirmed
+prevented-payment outcome:
+
+```bash
+python3 scripts/demo/tpa_realtime_fwa_demo.py \
+  --base-url http://127.0.0.1:8080 \
+  --api-key aiclaim-demo-key
+```
+
+The default output is a customer-facing story that walks through the TPA packet,
+intake run, scoring run, generated lead, opened case, investigation writeback,
+Dashboard value before/after, and UI hash links for Intake, Leads & Cases, and
+Dashboard. Use `--format json` when you need the machine-readable artifact. If
+the API was started with a different `FWA_SOURCE_SYSTEM`, pass
+`--source-system "<value>"` so the demo payload matches the runtime.
 
 See [docs/engineering/demo-runbook.md](docs/engineering/demo-runbook.md) for the
 full demo script.
@@ -466,6 +553,19 @@ pytest
 ```
 
 ### Public Data MVP Pack
+
+Rust-owned demo datasets for the Auto MLOps loop:
+
+```bash
+cargo run --locked -p worker -- build-demo-ml-datasets \
+  --output-dir data/rust-automl-demo \
+  --dataset-version 2026-06-rust-automl-demo
+```
+
+This writes one labeled claim-risk dataset plus unlabeled shadow-scoring and
+provider-peer-clustering datasets. The labeled manifest can be profiled and used
+for training-handoff checks. The unlabeled manifests are for shadow scoring,
+drift, clustering, and anomaly-discovery demos only.
 
 ```bash
 uv run --project apps/ml-service \
@@ -565,7 +665,9 @@ Common local settings:
 | Variable | Default for local demo | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/fwa` | API database connection |
-| `FWA_API_KEY` | `dev-secret` | API key accepted by local server |
+| `FWA_API_KEY` | `dev-secret` | Legacy single-key fallback when no principal map is configured |
+| `FWA_API_KEY_PRINCIPALS` | unset | Customer/API-principal map; use `aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*` for the TPA demo |
+| `FWA_SOURCE_SYSTEM` | `tpa-demo` | Source-system fallback; use `AiClaim Core` for the TPA demo |
 | `FWA_MODEL_SERVICE_URL` | `http://127.0.0.1:8001` | Configured ML scorer endpoint |
 | `FWA_MODEL_ARTIFACT_URI` | unset | Optional Rust JSON artifact scorer path; overrides `FWA_MODEL_SERVICE_URL` |
 | `FWA_MODEL_VERSION_LOCK` | unset | Optional active model version lock for artifact serving |
@@ -615,9 +717,10 @@ See [AGENTS.md](AGENTS.md) for project-local agent working instructions.
 - AI evidence metadata exists for documents, chunks, OCR, redaction, embedding,
   retrieval audit, and agent workspace artifacts; production OCR/vector workers
   and retrieval ranking still need environment decisions.
-- Production deployment, observability, secrets management, object storage,
-  customer data onboarding, and model training operations still need environment
-  decisions.
+- Production package and observability manifests exist as customer-gated
+  artifacts; secrets management, object storage, customer data onboarding,
+  live drills, and model training operations still need environment decisions
+  and evidence.
 
 ## License
 

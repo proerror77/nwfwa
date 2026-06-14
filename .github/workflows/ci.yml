@@ -34,15 +34,31 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/build_prd_coverage.py scripts/ops/run_mlops_monitoring_plan.py
+      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/build_prd_coverage.py scripts/ops/run_mlops_monitoring_plan.py
       - run: python3 scripts/ops/validate_k8s_staging.py
       - run: python3 scripts/ops/validate_container_packaging.py
       - run: python3 scripts/ops/validate_analytics_scale.py
       - run: python3 scripts/ops/validate_ai_evidence_foundation.py
+      - run: python3 scripts/ops/validate_observability_manifests.py
       - run: python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof
       - run: python3 scripts/ops/validate_operational_drill_proof.py --proof-dir /tmp/nwfwa-staging-proof
       - run: python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment --commit-sha "$GITHUB_SHA"
       - run: python3 scripts/ops/validate_staging_deployment_package.py --package-dir /tmp/nwfwa-staging-deployment
+      - run: |
+          python3 scripts/ops/build_production_deployment_package.py \
+            --output-dir /tmp/nwfwa-production-deployment \
+            --commit-sha "$GITHUB_SHA" \
+            --api-image ghcr.io/nwfwa/api-server:ci \
+            --web-console-image ghcr.io/nwfwa/web-console:ci \
+            --ml-service-image ghcr.io/nwfwa/ml-service:ci \
+            --worker-image ghcr.io/nwfwa/worker:ci \
+            --ops-image ghcr.io/nwfwa/ops:ci \
+            --mlops-alert-model-version ci-production \
+            --mlops-scheduler-report-uri s3://nwfwa-production-artifacts/mlops/scheduler/ci_mlops_scheduler_execution_report.json \
+            --host fwa.example.com
+      - run: python3 scripts/ops/validate_production_deployment_package.py --package-dir /tmp/nwfwa-production-deployment
+      - run: python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwfwa-production-readiness
+      - run: python3 scripts/ops/validate_production_readiness_contract.py --contract-dir /tmp/nwfwa-production-readiness
       - run: python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export
       - run: python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation
       - run: python3 scripts/ops/build_prd_coverage.py --output-dir /tmp/nwfwa-prd-coverage
@@ -59,6 +75,11 @@ jobs:
           test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
           test -f /tmp/nwfwa-staging-deployment/apply.sh
           test -f /tmp/nwfwa-staging-deployment/rollback.md
+          test -f /tmp/nwfwa-production-deployment/deployment_manifest.json
+          test -x /tmp/nwfwa-production-deployment/apply.sh
+          test -x /tmp/nwfwa-production-deployment/tools/validate_production_secret_file.py
+          test -f /tmp/nwfwa-production-readiness/production_readiness_contract.json
+          test -f /tmp/nwfwa-production-readiness/index.json
           test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
           test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
           test -f /tmp/nwfwa-analytics-export/schema.sql
@@ -175,6 +196,7 @@ jobs:
           ml_pid=$!
           DATABASE_URL="$DATABASE_URL" \
           FWA_API_KEY=dev-secret \
+          FWA_API_KEY_PRINCIPALS="dev-secret|demo-operator|fwa_operator|tpa-demo|demo-customer|ops:*,tpa:*;rule-submit-secret|rule-submitter|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review;rule-approve-secret|rule-approver|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review" \
           FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
           cargo run --locked -p api-server >/tmp/fwa-api-server.log 2>&1 &
           api_pid=$!
@@ -199,7 +221,7 @@ jobs:
           raise SystemExit("ml-service did not become healthy")
           PY
 
-          if ! scripts/demo/smoke_demo.py; then
+          if ! FWA_DEMO_EXPECT_CONFIGURED_API_KEY=1 FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py; then
             cat /tmp/fwa-ml-service.log
             cat /tmp/fwa-api-server.log
             exit 1
@@ -216,7 +238,7 @@ jobs:
             exit 1
           fi
 
-          if ! scripts/demo/smoke_demo.py --govern-retraining-candidate; then
+          if ! FWA_DEMO_EXPECT_CONFIGURED_API_KEY=1 FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py --govern-retraining-candidate; then
             cat /tmp/fwa-ml-service.log
             cat /tmp/fwa-api-server.log
             exit 1

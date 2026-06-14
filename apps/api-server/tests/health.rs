@@ -8,6 +8,7 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "tpa-demo".into(),
         database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
         model_service_url: "http://127.0.0.1:8001".into(),
@@ -27,6 +28,7 @@ fn test_config() -> AppConfig {
 fn customer_pilot_config() -> AppConfig {
     AppConfig {
         api_key: "customer-pilot-secret".into(),
+        api_key_principals: vec![],
         source_system: "customer-claims-system".into(),
         database_url: "postgres://customer-db.internal:5432/fwa".into(),
         model_service_url: "https://models.customer.internal".into(),
@@ -63,7 +65,7 @@ fn blocking_check<'a>(body: &'a serde_json::Value, name: &str) -> &'a serde_json
 
 #[tokio::test]
 async fn health_returns_service_metadata_and_checks() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let response = app
         .oneshot(
@@ -274,7 +276,7 @@ async fn health_returns_service_metadata_and_checks() {
 
 #[tokio::test]
 async fn health_reports_pilot_readiness_ready_when_all_pilot_configuration_is_set() {
-    let app = build_app(customer_pilot_config());
+    let app = build_app(customer_pilot_config()).unwrap();
 
     let response = app
         .oneshot(
@@ -333,7 +335,7 @@ async fn health_reports_pilot_readiness_ready_when_all_pilot_configuration_is_se
 async fn health_reports_explicit_heuristic_model_scorer_mode() {
     let mut config = test_config();
     config.model_service_url = "heuristic://local".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -375,7 +377,7 @@ async fn health_reports_explicit_heuristic_model_scorer_mode() {
 async fn health_reports_configured_api_key_without_exposing_value() {
     let mut config = test_config();
     config.api_key = "customer-pilot-secret".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -409,7 +411,7 @@ async fn health_reports_configured_api_key_without_exposing_value() {
 async fn health_reports_configured_source_system_without_exposing_value() {
     let mut config = test_config();
     config.source_system = "customer-claims-system".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -443,7 +445,7 @@ async fn health_reports_configured_source_system_without_exposing_value() {
 async fn health_reports_configured_database_without_exposing_value() {
     let mut config = test_config();
     config.database_url = "postgres://customer-db.internal:5432/fwa".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -477,7 +479,7 @@ async fn health_reports_configured_database_without_exposing_value() {
 async fn health_reports_configured_model_service_without_exposing_value() {
     let mut config = test_config();
     config.model_service_url = "https://models.customer.internal".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -511,7 +513,7 @@ async fn health_reports_configured_model_service_without_exposing_value() {
 async fn health_reports_configured_object_storage_without_exposing_value() {
     let mut config = test_config();
     config.object_storage_uri = "s3://customer-fwa-artifacts".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -545,7 +547,7 @@ async fn health_reports_configured_object_storage_without_exposing_value() {
 async fn health_reports_configured_customer_scope_without_exposing_value() {
     let mut config = test_config();
     config.customer_scope_id = "customer-alpha-prod".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -579,7 +581,7 @@ async fn health_reports_configured_customer_scope_without_exposing_value() {
 async fn health_reports_configured_retention_policy_without_exposing_value() {
     let mut config = test_config();
     config.retention_policy_id = "customer-alpha-retention-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -613,7 +615,7 @@ async fn health_reports_configured_retention_policy_without_exposing_value() {
 async fn health_reports_configured_backup_restore_without_exposing_value() {
     let mut config = test_config();
     config.backup_restore_plan_id = "customer-alpha-backup-restore-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -649,7 +651,7 @@ async fn health_reports_configured_backup_restore_without_exposing_value() {
 async fn health_reports_configured_pii_masking_without_exposing_value() {
     let mut config = test_config();
     config.pii_masking_policy_id = "customer-alpha-pii-masking-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -683,7 +685,7 @@ async fn health_reports_configured_pii_masking_without_exposing_value() {
 async fn health_reports_configured_key_rotation_without_exposing_value() {
     let mut config = test_config();
     config.key_rotation_policy_id = "customer-alpha-key-rotation-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -717,7 +719,7 @@ async fn health_reports_configured_key_rotation_without_exposing_value() {
 async fn health_reports_configured_network_allowlist_without_exposing_value() {
     let mut config = test_config();
     config.network_allowlist_id = "customer-alpha-network-allowlist-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -753,7 +755,7 @@ async fn health_reports_configured_network_allowlist_without_exposing_value() {
 async fn health_reports_configured_alert_routing_without_exposing_value() {
     let mut config = test_config();
     config.alert_routing_policy_id = "customer-alpha-alert-routing-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -787,7 +789,7 @@ async fn health_reports_configured_alert_routing_without_exposing_value() {
 async fn health_reports_configured_observability_exporter_without_exposing_value() {
     let mut config = test_config();
     config.observability_exporter_endpoint = "https://otel.customer-alpha.example".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(
@@ -823,7 +825,7 @@ async fn health_reports_configured_observability_exporter_without_exposing_value
 async fn health_reports_configured_agent_policy_without_exposing_value() {
     let mut config = test_config();
     config.agent_policy_id = "customer-alpha-agent-policy-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let response = app
         .oneshot(

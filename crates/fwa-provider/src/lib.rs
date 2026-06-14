@@ -20,6 +20,8 @@ pub struct ProviderProfileWindow {
 pub struct ProviderProfileInput {
     pub specialty: Option<String>,
     pub network_status: Option<String>,
+    pub oig_excluded: Option<bool>,
+    pub sam_debarred: Option<bool>,
     pub windows: Vec<ProviderProfileWindow>,
 }
 
@@ -44,6 +46,8 @@ pub struct ProviderProfileAssessment {
     pub review_failure_count: u32,
     pub confirmed_fwa_count: u32,
     pub false_positive_count: u32,
+    pub oig_excluded: bool,
+    pub sam_debarred: bool,
     pub outlier_flags: Vec<String>,
     pub window_findings: Vec<ProviderProfileWindowFinding>,
     pub evidence_refs: Vec<String>,
@@ -54,6 +58,10 @@ pub struct ProviderRelationshipGraphInput {
     pub high_risk_neighbor_ratio: f64,
     pub provider_patient_overlap_score: f64,
     pub referral_concentration_score: Option<f64>,
+    pub referral_concentration_entropy: Option<f64>,
+    pub temporal_co_billing_score: Option<f64>,
+    pub temporal_co_billing_frequency_7d: Option<f64>,
+    pub billing_ring_membership: Option<bool>,
     pub connected_confirmed_fwa_count: u32,
     pub network_component_risk_score: Option<u8>,
     pub evidence_refs: Vec<String>,
@@ -79,6 +87,11 @@ pub struct ProviderRelationshipGraphAssessment {
     pub evidence_refs: Vec<String>,
 }
 
+/// Assesses provider-level risk from upstream profile rollups.
+///
+/// Sanctions status is not part of `Provider`; callers that know OIG/SAM status must pass a
+/// `ProviderProfileInput` even when no rollup windows are available. A sanctions-only profile with
+/// `windows: []` is valid and forces `provider_sanctions_review`.
 pub fn assess_provider_profile(
     provider: &Provider,
     profile: Option<&ProviderProfileInput>,
@@ -100,6 +113,8 @@ pub fn assess_provider_profile(
             review_failure_count: 0,
             confirmed_fwa_count: 0,
             false_positive_count: 0,
+            oig_excluded: false,
+            sam_debarred: false,
             outlier_flags: Vec::new(),
             window_findings: Vec::new(),
             evidence_refs: vec![format!("providers:{}", provider.external_provider_id)],
@@ -111,46 +126,55 @@ pub fn assess_provider_profile(
         .iter()
         .map(|window| assess_window(&provider.external_provider_id, window))
         .collect::<Vec<_>>();
-    let risk_score = window_findings
-        .iter()
-        .map(|finding| finding.risk_score)
-        .max()
+    let risk_score = weighted_profile_risk_score(&window_findings)
         .unwrap_or_else(|| tier_score(provider.risk_tier));
-    let outlier_flags = window_findings
+    let mut outlier_flags = window_findings
         .iter()
         .flat_map(|finding| finding.outlier_flags.iter().cloned())
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let evidence_refs = window_findings
+    let mut evidence_refs = window_findings
         .iter()
         .map(|finding| finding.evidence_ref.clone())
         .collect::<Vec<_>>();
-    let review_failure_count = profile
-        .windows
-        .iter()
-        .map(|window| window.review_failure_count)
-        .max()
-        .unwrap_or(0);
-    let confirmed_fwa_count = profile
-        .windows
-        .iter()
-        .map(|window| window.confirmed_fwa_count)
-        .max()
-        .unwrap_or(0);
-    let false_positive_count = profile
-        .windows
-        .iter()
-        .map(|window| window.false_positive_count)
-        .max()
-        .unwrap_or(0);
+    let oig_excluded = profile.oig_excluded.unwrap_or(false);
+    let sam_debarred = profile.sam_debarred.unwrap_or(false);
+    if oig_excluded {
+        outlier_flags.push("oig_excluded".into());
+        evidence_refs.push(format!(
+            "provider_sanctions:{}:oig",
+            provider.external_provider_id
+        ));
+    }
+    if sam_debarred {
+        outlier_flags.push("sam_debarred".into());
+        evidence_refs.push(format!(
+            "provider_sanctions:{}:sam",
+            provider.external_provider_id
+        ));
+    }
+    outlier_flags.sort();
+    outlier_flags.dedup();
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    let sanctions_hit = oig_excluded || sam_debarred;
+    let risk_score = if sanctions_hit { 100 } else { risk_score };
+    let review_failure_count =
+        weighted_window_count(&profile.windows, |window| window.review_failure_count);
+    let confirmed_fwa_count =
+        weighted_window_count(&profile.windows, |window| window.confirmed_fwa_count);
+    let false_positive_count =
+        weighted_window_count(&profile.windows, |window| window.false_positive_count);
 
     ProviderProfileAssessment {
         provider_id: provider.external_provider_id.clone(),
         risk_score,
         risk_tier: risk_tier(risk_score).into(),
         review_required: risk_score >= 70,
-        review_route: if risk_score >= 70 {
+        review_route: if sanctions_hit {
+            "provider_sanctions_review".into()
+        } else if risk_score >= 70 {
             "provider_review".into()
         } else {
             "none".into()
@@ -160,6 +184,8 @@ pub fn assess_provider_profile(
         review_failure_count,
         confirmed_fwa_count,
         false_positive_count,
+        oig_excluded,
+        sam_debarred,
         outlier_flags,
         window_findings,
         evidence_refs,
@@ -223,13 +249,50 @@ pub fn assess_provider_relationship_graph(
         ));
     }
 
-    if graph.referral_concentration_score.unwrap_or(0.0) >= 0.70 {
+    let referral_concentration = graph
+        .referral_concentration_entropy
+        .map(|entropy| 1.0 - entropy.clamp(0.0, 1.0))
+        .or(graph.referral_concentration_score)
+        .unwrap_or(0.0);
+    if referral_concentration >= 0.70 {
         score += 20;
         findings.push(graph_finding(
             provider_id,
-            "referral_concentration_score",
+            if graph.referral_concentration_entropy.is_some() {
+                "referral_concentration_entropy"
+            } else {
+                "referral_concentration_score"
+            },
             20,
             "转诊或关联服务路径集中度偏高",
+        ));
+    }
+
+    let temporal_co_billing = graph
+        .temporal_co_billing_frequency_7d
+        .or(graph.temporal_co_billing_score)
+        .unwrap_or(0.0);
+    if temporal_co_billing >= 0.50 {
+        score += 25;
+        findings.push(graph_finding(
+            provider_id,
+            if graph.temporal_co_billing_frequency_7d.is_some() {
+                "temporal_co_billing_frequency_7d"
+            } else {
+                "temporal_co_billing_score"
+            },
+            25,
+            "Provider 在同一 Member 短窗口内共现出账频率偏高",
+        ));
+    }
+
+    if graph.billing_ring_membership.unwrap_or(false) {
+        score += 40;
+        findings.push(graph_finding(
+            provider_id,
+            "billing_ring_membership",
+            40,
+            "Provider 命中疑似账单环路成员关系",
         ));
     }
 
@@ -325,6 +388,47 @@ fn assess_window(
     }
 }
 
+fn weighted_profile_risk_score(findings: &[ProviderProfileWindowFinding]) -> Option<u8> {
+    let mut weighted = 0.0_f64;
+    let mut total_weight = 0.0_f64;
+    for finding in findings {
+        let weight = profile_window_weight(finding.window_days);
+        weighted += finding.risk_score as f64 * weight;
+        total_weight += weight;
+    }
+    if total_weight == 0.0 {
+        None
+    } else {
+        Some((weighted / total_weight).round().clamp(0.0, 100.0) as u8)
+    }
+}
+
+fn weighted_window_count(
+    windows: &[ProviderProfileWindow],
+    count: impl Fn(&ProviderProfileWindow) -> u32,
+) -> u32 {
+    let mut weighted = 0.0_f64;
+    let mut total_weight = 0.0_f64;
+    for window in windows {
+        let weight = profile_window_weight(window.window_days);
+        weighted += count(window) as f64 * weight;
+        total_weight += weight;
+    }
+    if total_weight == 0.0 {
+        0
+    } else {
+        (weighted / total_weight).round().max(0.0) as u32
+    }
+}
+
+fn profile_window_weight(window_days: u16) -> f64 {
+    match window_days {
+        0..=30 => 0.50,
+        31..=90 => 0.35,
+        _ => 0.15,
+    }
+}
+
 fn tier_score(tier: ProviderRiskTier) -> u8 {
     match tier {
         ProviderRiskTier::Low => 10,
@@ -373,6 +477,8 @@ mod tests {
         let profile = ProviderProfileInput {
             specialty: Some("imaging".into()),
             network_status: Some("in_network".into()),
+            oig_excluded: None,
+            sam_debarred: None,
             windows: vec![ProviderProfileWindow {
                 window_days: 90,
                 claim_count: 126,
@@ -402,6 +508,175 @@ mod tests {
     }
 
     #[test]
+    fn combines_profile_windows_with_recency_weights() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-1"),
+            external_provider_id: "PRV-1".into(),
+            name: "Demo Hospital".into(),
+            provider_type: "hospital".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Medium,
+        };
+        let high_recent_window = ProviderProfileWindow {
+            window_days: 30,
+            claim_count: 20,
+            total_claim_amount: Decimal::new(120000, 0),
+            high_cost_item_ratio: 0.72,
+            diagnosis_procedure_mismatch_rate: 0.38,
+            peer_amount_percentile: 97,
+            peer_frequency_percentile: 96,
+            review_failure_count: 3,
+            confirmed_fwa_count: 4,
+            false_positive_count: 1,
+        };
+        let quiet_window = |window_days| ProviderProfileWindow {
+            window_days,
+            claim_count: 60,
+            total_claim_amount: Decimal::new(180000, 0),
+            high_cost_item_ratio: 0.10,
+            diagnosis_procedure_mismatch_rate: 0.02,
+            peer_amount_percentile: 45,
+            peer_frequency_percentile: 50,
+            review_failure_count: 0,
+            confirmed_fwa_count: 0,
+            false_positive_count: 0,
+        };
+        let profile = ProviderProfileInput {
+            specialty: Some("imaging".into()),
+            network_status: Some("in_network".into()),
+            oig_excluded: None,
+            sam_debarred: None,
+            windows: vec![high_recent_window, quiet_window(90), quiet_window(365)],
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.risk_score, 50);
+        assert_eq!(assessment.risk_tier, "medium");
+        assert!(!assessment.review_required);
+        assert_eq!(assessment.review_failure_count, 2);
+        assert_eq!(assessment.confirmed_fwa_count, 2);
+        assert_eq!(assessment.false_positive_count, 1);
+    }
+
+    #[test]
+    fn provider_history_counts_are_recency_weighted() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-OLD-HISTORY"),
+            external_provider_id: "PRV-OLD-HISTORY".into(),
+            name: "Demo Clinic".into(),
+            provider_type: "clinic".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Medium,
+        };
+        let quiet_window = |window_days, confirmed_fwa_count| ProviderProfileWindow {
+            window_days,
+            claim_count: 40,
+            total_claim_amount: Decimal::new(100000, 0),
+            high_cost_item_ratio: 0.10,
+            diagnosis_procedure_mismatch_rate: 0.02,
+            peer_amount_percentile: 45,
+            peer_frequency_percentile: 50,
+            review_failure_count: confirmed_fwa_count,
+            confirmed_fwa_count,
+            false_positive_count: confirmed_fwa_count,
+        };
+        let profile = ProviderProfileInput {
+            specialty: Some("primary_care".into()),
+            network_status: Some("in_network".into()),
+            oig_excluded: None,
+            sam_debarred: None,
+            windows: vec![
+                quiet_window(30, 0),
+                quiet_window(90, 1),
+                quiet_window(365, 10),
+            ],
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.review_failure_count, 2);
+        assert_eq!(assessment.confirmed_fwa_count, 2);
+        assert_eq!(assessment.false_positive_count, 2);
+    }
+
+    #[test]
+    fn sanctions_status_forces_provider_profile_review() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-1"),
+            external_provider_id: "PRV-1".into(),
+            name: "Demo Hospital".into(),
+            provider_type: "hospital".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Low,
+        };
+        let profile = ProviderProfileInput {
+            specialty: Some("imaging".into()),
+            network_status: Some("in_network".into()),
+            oig_excluded: Some(true),
+            sam_debarred: Some(true),
+            windows: vec![ProviderProfileWindow {
+                window_days: 90,
+                claim_count: 2,
+                total_claim_amount: Decimal::new(2000, 0),
+                high_cost_item_ratio: 0.10,
+                diagnosis_procedure_mismatch_rate: 0.0,
+                peer_amount_percentile: 40,
+                peer_frequency_percentile: 35,
+                review_failure_count: 0,
+                confirmed_fwa_count: 0,
+                false_positive_count: 0,
+            }],
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.risk_score, 100);
+        assert_eq!(assessment.risk_tier, "high");
+        assert!(assessment.review_required);
+        assert_eq!(assessment.review_route, "provider_sanctions_review");
+        assert!(assessment.oig_excluded);
+        assert!(assessment.sam_debarred);
+        assert!(assessment.outlier_flags.contains(&"oig_excluded".into()));
+        assert!(assessment.outlier_flags.contains(&"sam_debarred".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_sanctions:PRV-1:oig".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_sanctions:PRV-1:sam".into()));
+    }
+
+    #[test]
+    fn sanctions_status_forces_review_without_profile_windows() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-1"),
+            external_provider_id: "PRV-1".into(),
+            name: "Demo Hospital".into(),
+            provider_type: "hospital".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Low,
+        };
+        let profile = ProviderProfileInput {
+            specialty: None,
+            network_status: None,
+            oig_excluded: Some(true),
+            sam_debarred: None,
+            windows: Vec::new(),
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.risk_score, 100);
+        assert_eq!(assessment.risk_tier, "high");
+        assert!(assessment.review_required);
+        assert_eq!(assessment.review_route, "provider_sanctions_review");
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_sanctions:PRV-1:oig".into()));
+    }
+
+    #[test]
     fn detects_relationship_graph_risk_from_network_signals() {
         let provider = Provider {
             id: ProviderId::from_external("PRV-1"),
@@ -415,6 +690,10 @@ mod tests {
             high_risk_neighbor_ratio: 0.34,
             provider_patient_overlap_score: 0.68,
             referral_concentration_score: Some(0.72),
+            referral_concentration_entropy: None,
+            temporal_co_billing_score: Some(0.75),
+            temporal_co_billing_frequency_7d: None,
+            billing_ring_membership: None,
             connected_confirmed_fwa_count: 2,
             network_component_risk_score: Some(82),
             evidence_refs: vec!["relationship_edges:PRV-1".into()],
@@ -437,5 +716,43 @@ mod tests {
         assert!(assessment
             .evidence_refs
             .contains(&"provider_graph:PRV-1:network_component_risk_score".into()));
+    }
+
+    #[test]
+    fn detects_billing_ring_and_entropy_graph_risk() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-RING"),
+            external_provider_id: "PRV-RING".into(),
+            name: "Demo Clinic".into(),
+            provider_type: "clinic".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Low,
+        };
+        let graph = ProviderRelationshipGraphInput {
+            high_risk_neighbor_ratio: 0.05,
+            provider_patient_overlap_score: 0.20,
+            referral_concentration_score: None,
+            referral_concentration_entropy: Some(0.20),
+            temporal_co_billing_score: None,
+            temporal_co_billing_frequency_7d: Some(0.55),
+            billing_ring_membership: Some(true),
+            connected_confirmed_fwa_count: 0,
+            network_component_risk_score: None,
+            evidence_refs: vec!["provider_graph_rollups:PRV-RING".into()],
+        };
+
+        let assessment = assess_provider_relationship_graph(&provider, Some(&graph));
+
+        assert!(assessment.risk_score >= 85);
+        assert!(assessment.review_required);
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_graph:PRV-RING:billing_ring_membership".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_graph:PRV-RING:temporal_co_billing_frequency_7d".into()));
+        assert!(assessment
+            .evidence_refs
+            .contains(&"provider_graph:PRV-RING:referral_concentration_entropy".into()));
     }
 }

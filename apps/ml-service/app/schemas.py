@@ -9,6 +9,32 @@ class ScoreRequest(BaseModel):
     features: dict[str, object]
 
 
+class TrainRequest(BaseModel):
+    manifest_path: str
+    artifact_base_uri: str
+    model_key: str
+    base_model_version: str
+    job_id: str
+    actor: str
+    algorithm: str | None = None
+    max_attempts: int = Field(default=2, ge=1, le=5)
+    retry_delay_seconds: int = Field(default=60, ge=0, le=3600)
+
+
+class ClaimTrainingJobRequest(BaseModel):
+    worker_id: str
+    lease_seconds: int = Field(default=900, ge=30, le=86400)
+
+
+class TrainingWorkerHeartbeatRequest(BaseModel):
+    worker_id: str
+    status: str = "idle"
+    current_job_id: str | None = None
+    processed_jobs: int = Field(default=0, ge=0)
+    idle_polls: int = Field(default=0, ge=0)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
 class ModelExplanation(BaseModel):
     feature: str
     direction: str

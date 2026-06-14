@@ -1,7 +1,9 @@
 use api_server::{
     app::{build_app, build_app_with_parts},
     config::AppConfig,
-    repository::InMemoryScoringRepository,
+    repository::{
+        AgentRegistryRecord, InMemoryScoringRepository, PersistedAgentRun, PersistedAuditEvent,
+    },
 };
 use axum::{
     body::{to_bytes, Body},
@@ -11,9 +13,15 @@ use fwa_ml_runtime::HeuristicModelScorer;
 use std::sync::Arc;
 use tower::ServiceExt;
 
+#[path = "knowledge_agent/approvals.rs"]
+mod approvals;
+#[path = "knowledge_agent/knowledge_cases.rs"]
+mod knowledge_cases;
+
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
@@ -53,642 +61,6 @@ async fn json_request(
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     (status, String::from_utf8(body.to_vec()).unwrap())
-}
-
-#[tokio::test]
-async fn lists_knowledge_cases() {
-    let app = build_app(test_config());
-
-    let (status, body) = json_request(app, "GET", "/api/v1/ops/knowledge/cases", "{}").await;
-
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["cases"][0]["case_id"], "KC-1001");
-    assert_eq!(body["cases"][0]["fwa_type"], "Abuse");
-    assert_eq!(
-        body["cases"][0]["scheme_family"],
-        "diagnosis_procedure_mismatch"
-    );
-    assert!(!body["cases"][0]["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .is_empty());
-}
-
-#[tokio::test]
-async fn searches_similar_knowledge_cases_with_evidence() {
-    let app = build_app(test_config());
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/knowledge/search-similar",
-        r#"{
-          "claim_id": "CLM-BLANK-QUERY",
-          "diagnosis_code": " ",
-          "provider_region": "Shanghai",
-          "tags": ["early_claim"]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_SIMILAR_CASE_QUERY");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/knowledge/search-similar",
-        r#"{
-          "claim_id": "CLM-BLANK-TAGS",
-          "diagnosis_code": "J10",
-          "provider_region": "Shanghai",
-          "tags": [" "]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_SIMILAR_CASE_QUERY");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/knowledge/search-similar",
-        r#"{
-          "claim_id": "CLM-BLANK-TAG",
-          "diagnosis_code": "J10",
-          "provider_region": "Shanghai",
-          "tags": ["early_claim", " "]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_SIMILAR_CASE_QUERY");
-
-    let (status, body) = json_request(
-        app,
-        "POST",
-        "/api/v1/knowledge/search-similar",
-        r#"{
-          "claim_id": "CLM-0287",
-          "diagnosis_code": "J10",
-          "provider_region": "Shanghai",
-          "tags": ["early_claim", "high_amount"]
-        }"#,
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["results"][0]["case_id"], "KC-1001");
-    assert_eq!(
-        body["results"][0]["scheme_family"],
-        "diagnosis_procedure_mismatch"
-    );
-    assert!(body["results"][0]["similarity_score"].as_f64().unwrap() > 0.0);
-    assert!(!body["results"][0]["matched_signals"]
-        .as_array()
-        .unwrap()
-        .is_empty());
-    assert!(!body["results"][0]["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .is_empty());
-    assert_eq!(
-        body["results"][0]["retrieval_method"],
-        "structured_signal_overlap"
-    );
-    assert!(body["results"][0]["provenance_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
-}
-
-#[tokio::test]
-async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
-    let app = build_app(test_config());
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-MISSING-EVIDENCE",
-          "title": "Missing evidence case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste.",
-          "tags": ["lab_overuse"],
-          "evidence_refs": [" "],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-PII-SUMMARY",
-          "title": "PII summary case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed pattern after contacting alice@example.com.",
-          "outcome": "Confirmed waste.",
-          "tags": ["lab_overuse"],
-          "evidence_refs": ["investigation_results:INV-KB-1"],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_KNOWLEDGE_CASE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-PII-TAG",
-          "title": "PII tag case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste.",
-          "tags": ["phone:13800138000"],
-          "evidence_refs": ["investigation_results:INV-KB-1"],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_KNOWLEDGE_CASE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-PII-EVIDENCE",
-          "title": "PII evidence case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste.",
-          "tags": ["lab_overuse"],
-          "evidence_refs": ["investigation_results:INV-KB-1", "id:11010519491231002X"],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_KNOWLEDGE_CASE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-WEAK-EVIDENCE",
-          "title": "Weak evidence case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste.",
-          "tags": ["lab_overuse"],
-          "evidence_refs": ["claims:CLM-KB-1", "knowledge_cases:KC-WEAK-EVIDENCE"],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
-    assert!(body["message"]
-        .as_str()
-        .unwrap()
-        .contains("investigation_results or qa_reviews"));
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-BLANK-TAG",
-          "title": "Blank tag case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste.",
-          "tags": ["lab_overuse", " "],
-          "evidence_refs": ["investigation_results:INV-KB-1"],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-BLANK-EVIDENCE-REF",
-          "title": "Blank evidence ref case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste.",
-          "tags": ["lab_overuse"],
-          "evidence_refs": ["investigation_results:INV-KB-1", " "],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-MISSING-SUMMARY",
-          "title": "Missing summary case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": " ",
-          "outcome": "Confirmed waste.",
-          "tags": ["lab_overuse"],
-          "evidence_refs": ["investigation_results:INV-KB-1"],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-PUBLISHED-1",
-          "title": "Published provider lab overuse case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste; provider education and post-payment audit opened.",
-          "tags": ["lab_overuse", "provider_pattern"],
-          "evidence_refs": ["investigation_results:INV-KB-1", "qa_reviews:QA-KB-1"],
-          "source_claim_id": "CLM-KB-1"
-        }"#,
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["case"]["case_id"], "KC-PUBLISHED-1");
-    assert_eq!(body["case"]["scheme_family"], "laboratory_testing_abuse");
-    assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
-
-    let (status, body) =
-        json_request(app.clone(), "GET", "/api/v1/ops/knowledge/cases", "{}").await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(body["cases"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|case| case["case_id"] == "KC-PUBLISHED-1"));
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/knowledge/search-similar",
-        r#"{
-          "claim_id": "CLM-KB-SEARCH",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "tags": ["lab_overuse"]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["results"][0]["case_id"], "KC-PUBLISHED-1");
-    assert_eq!(
-        body["results"][0]["scheme_family"],
-        "laboratory_testing_abuse"
-    );
-
-    let (status, body) = json_request(app, "GET", "/api/v1/audit/claims/CLM-KB-1", "{}").await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let publish_event = body["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|event| event["event_type"] == "knowledge.case.published")
-        .expect("knowledge case publish should be audited");
-    assert_eq!(
-        publish_event["payload"]["scheme_family"],
-        "laboratory_testing_abuse"
-    );
-    assert_eq!(
-        publish_event["payload"]["customer_scope_id"],
-        "demo-customer"
-    );
-}
-
-#[tokio::test]
-async fn publish_knowledge_case_preserves_canonical_evidence_refs_from_scoring_audit() {
-    let app = build_app(test_config());
-
-    let (status, _body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/claims/score",
-        r#"{
-          "source_system": "tpa-demo",
-          "canonical_claim_context": {
-            "claim_header": {
-              "external_claim_id": "CLM-KB-CANONICAL",
-              "total_amount": 9100,
-              "currency": "CNY",
-              "service_date": "2026-01-06"
-            },
-            "member_policy_snapshot": {
-              "masked_member_id": "masked-member-kb",
-              "masked_certificate_id": "masked-cert-kb",
-              "member_birth_date": "1988-03-12",
-              "member_gender": "F",
-              "policy_id": "POL-KB-CANONICAL",
-              "product_code": "MED",
-              "coverage_start_date": "2026-01-01",
-              "coverage_end_date": "2026-12-31",
-              "coverage_limit": 10000
-            },
-            "provider_snapshot": {
-              "provider_id": "PRV-KB-CANONICAL",
-              "name": "Knowledge Trace Hospital",
-              "provider_type": "hospital",
-              "region": "Guangzhou",
-              "risk_tier": "High"
-            },
-            "itemized_bill_lines": [
-              {
-                "item_name": "Repeated lab panel",
-                "fee_category": "lab",
-                "amount": 9100,
-                "diagnosis_list": [
-                  { "code": "E11", "name": "Type 2 diabetes mellitus" }
-                ],
-                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
-                "evidence_refs": ["invoice:INV-KB-CANONICAL:fee_detail:LINE-1"]
-              }
-            ],
-            "document_evidence": [
-              {
-                "document_id": "MR-KB-CANONICAL-1",
-                "medical_record_type": "outpatient_record",
-                "source_refs": ["medical_record:MR-KB-CANONICAL-1"]
-              }
-            ]
-          }
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-CANONICAL-EVIDENCE",
-          "title": "Published canonical trace case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste; provider education opened.",
-          "tags": ["lab_overuse", "provider_pattern"],
-          "evidence_refs": ["investigation_results:INV-KB-CANONICAL"],
-          "source_claim_id": "CLM-KB-CANONICAL"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(body["case"]["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!(
-            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
-        )));
-
-    let (status, body) =
-        json_request(app.clone(), "GET", "/api/v1/ops/knowledge/cases", "{}").await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let published_case = body["cases"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|case| case["case_id"] == "KC-CANONICAL-EVIDENCE")
-        .expect("published knowledge case should be listed");
-    assert!(published_case["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!(
-            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
-        )));
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/knowledge/search-similar",
-        r#"{
-          "claim_id": "CLM-KB-CANONICAL-SEARCH",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "tags": ["lab_overuse"]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let published_result = body["results"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|case| case["case_id"] == "KC-CANONICAL-EVIDENCE")
-        .expect("published knowledge case should be searchable");
-    assert!(published_result["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!(
-            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
-        )));
-
-    let (status, body) =
-        json_request(app, "GET", "/api/v1/audit/claims/CLM-KB-CANONICAL", "{}").await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let publish_event = body["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|event| event["event_type"] == "knowledge.case.published")
-        .expect("knowledge case publish should be audited");
-    assert!(publish_event["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!(
-            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
-        )));
-}
-
-#[tokio::test]
-async fn publish_knowledge_case_does_not_merge_cross_customer_canonical_evidence_refs() {
-    let repository = InMemoryScoringRepository::shared();
-    let alpha_app = build_app_with_parts(
-        scoped_config("customer-alpha"),
-        Arc::new(HeuristicModelScorer),
-        repository.clone(),
-    );
-    let beta_app = build_app_with_parts(
-        scoped_config("customer-beta"),
-        Arc::new(HeuristicModelScorer),
-        repository,
-    );
-
-    let (status, _body) = json_request(
-        alpha_app,
-        "POST",
-        "/api/v1/claims/score",
-        r#"{
-          "source_system": "tpa-demo",
-          "canonical_claim_context": {
-            "claim_header": {
-              "external_claim_id": "CLM-KB-CROSS-SCOPE",
-              "total_amount": 9300,
-              "currency": "CNY",
-              "service_date": "2026-01-06"
-            },
-            "member_policy_snapshot": {
-              "masked_member_id": "masked-member-alpha",
-              "masked_certificate_id": "masked-cert-alpha",
-              "member_birth_date": "1988-03-12",
-              "member_gender": "F",
-              "policy_id": "POL-KB-CROSS-SCOPE",
-              "product_code": "MED",
-              "coverage_start_date": "2026-01-01",
-              "coverage_end_date": "2026-12-31",
-              "coverage_limit": 10000
-            },
-            "provider_snapshot": {
-              "provider_id": "PRV-KB-CROSS-SCOPE",
-              "name": "Cross Scope Hospital",
-              "provider_type": "hospital",
-              "region": "Guangzhou",
-              "risk_tier": "High"
-            },
-            "itemized_bill_lines": [
-              {
-                "item_name": "Alpha-only invoice line",
-                "fee_category": "lab",
-                "amount": 9300,
-                "diagnosis_list": [
-                  { "code": "E11", "name": "Type 2 diabetes mellitus" }
-                ],
-                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
-                "evidence_refs": ["invoice:ALPHA-ONLY:fee_detail:LINE-1"]
-              }
-            ],
-            "document_evidence": [
-              {
-                "document_id": "MR-ALPHA-ONLY",
-                "medical_record_type": "outpatient_record",
-                "source_refs": ["medical_record:MR-ALPHA-ONLY"]
-              }
-            ]
-          }
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-
-    let (status, body) = json_request(
-        beta_app,
-        "POST",
-        "/api/v1/ops/knowledge/cases",
-        r#"{
-          "case_id": "KC-CROSS-SCOPE",
-          "title": "Published beta scope case",
-          "fwa_type": "Waste",
-          "scheme_family": "lab_overuse",
-          "diagnosis_code": "E11",
-          "provider_region": "Guangzhou",
-          "provider_type": "lab",
-          "summary": "Confirmed repeated lab testing overuse pattern.",
-          "outcome": "Confirmed waste; provider education opened.",
-          "tags": ["lab_overuse", "provider_pattern"],
-          "evidence_refs": ["investigation_results:INV-BETA-SCOPE"],
-          "source_claim_id": "CLM-KB-CROSS-SCOPE"
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(!body["case"]["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!("invoice:ALPHA-ONLY:fee_detail:LINE-1")));
 }
 
 #[tokio::test]
@@ -756,8 +128,124 @@ async fn agent_run_logs_and_approvals_are_scoped_to_authenticated_customer() {
 }
 
 #[tokio::test]
+async fn cancels_running_agent_run_and_records_governance_audit_event() {
+    let repository = InMemoryScoringRepository::shared();
+    repository
+        .save_agent_run(PersistedAgentRun {
+            agent_run_id: "agent_cancel_running_1".into(),
+            claim_id: "CLM-AGENT-CANCEL".into(),
+            status: "running".into(),
+            decision_boundary: "assistive_only".into(),
+            output_json: serde_json::json!({
+                "risk_summary": "Agent run is still collecting evidence.",
+                "findings": [],
+                "evidence_sufficiency": "insufficient"
+            }),
+            evidence_refs: vec![serde_json::json!("agent_run:agent_cancel_running_1")],
+            steps: vec![],
+            context_snapshots: vec![],
+            policy_checks: vec![],
+            tool_calls: vec![],
+            tool_results: vec![],
+            approvals: vec![],
+        })
+        .await
+        .unwrap();
+    repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: "audit_agent_cancel_scope".into(),
+            run_id: "seed_agent_cancel_scope".into(),
+            claim_id: "CLM-AGENT-CANCEL".into(),
+            source_system: "tpa-demo".into(),
+            actor_id: "seed".into(),
+            actor_role: "test".into(),
+            event_type: "agent.run.seeded".into(),
+            event_status: "succeeded".into(),
+            summary: "Seed running agent run for cancellation scope.".into(),
+            payload: serde_json::json!({
+                "customer_scope_id": "demo-customer",
+                "claim_id": "CLM-AGENT-CANCEL"
+            }),
+            evidence_refs: vec![serde_json::json!("agent_run:agent_cancel_running_1")],
+        })
+        .await
+        .unwrap();
+    let app = build_app_with_parts(test_config(), Arc::new(HeuristicModelScorer), repository);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
+          "reason": "Policy kill-switch triggered during evidence collection.",
+          "evidence_refs": ["agent_run:agent_cancel_running_1", "policy:manual-kill-switch"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["run"]["agent_run_id"], "agent_cancel_running_1");
+    assert_eq!(body["run"]["status"], "cancelled");
+    assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
+
+    let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?event_group=governance&event_type=agent.run.cancelled&actor_id=ops-lead&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let events = body["events"].as_array().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0]["payload"]["agent_run_id"],
+        "agent_cancel_running_1"
+    );
+    assert_eq!(events[0]["payload"]["previous_status"], "running");
+    assert_eq!(events[0]["payload"]["status"], "cancelled");
+    assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
+    assert!(events[0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
+          "reason": "Second cancellation should not be accepted.",
+          "evidence_refs": ["agent_run:agent_cancel_running_1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "AGENT_RUN_NOT_CANCELLABLE");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
+          "reason": "Missing required run evidence.",
+          "evidence_refs": ["policy:manual-kill-switch"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_AGENT_CANCEL_RUN_EVIDENCE");
+}
+
+#[tokio::test]
 async fn investigates_case_as_assistive_agent_with_evidence_refs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -1009,11 +497,88 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+    let specialist_executions = body["specialist_executions"].as_array().unwrap();
+    assert!(specialist_executions.len() >= 2);
+    assert!(specialist_executions
+        .iter()
+        .all(|execution| execution["decision_boundary"] == "assistive_only"));
+    let evidence_review = specialist_executions
+        .iter()
+        .find(|execution| execution["agent_kind"] == "evidence_review")
+        .expect("evidence review specialist should be dispatched");
+    let mediated_tool_call = evidence_review["tool_calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|call| call["tool_name"] == "knowledge.search_similar")
+        .expect("specialist should declare governed similar-case search");
+    assert_eq!(
+        mediated_tool_call["execution_mode"],
+        "contract_only_not_executed"
+    );
+    assert_eq!(mediated_tool_call["decision_boundary"], "assistive_only");
+}
+
+#[tokio::test]
+async fn rejects_agent_investigation_when_registry_identity_is_not_active() {
+    let repository = InMemoryScoringRepository::shared();
+    repository
+        .save_agent_registry(AgentRegistryRecord {
+            agent_identity_id: "agent_identity:deterministic_investigator:v1".into(),
+            agent_kind: "deterministic_investigator".into(),
+            agent_version: 1,
+            capability_scope: vec![
+                "knowledge.search_similar".into(),
+                "agent.investigation.package".into(),
+            ],
+            phi_fields_allowed: vec![
+                "claim_id".into(),
+                "risk_score".into(),
+                "rag".into(),
+                "diagnosis_code".into(),
+                "provider_region".into(),
+            ],
+            status: "deprovisioned".into(),
+        })
+        .await
+        .unwrap();
+    let app = build_app_with_parts(
+        test_config(),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-REGISTRY-DENY",
+          "risk_score": 92,
+          "rag": "RED",
+          "top_reasons": ["Agent identity has been deprovisioned"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "AGENT_IDENTITY_NOT_ACTIVE");
+    assert!(repository
+        .list_agent_runs(Some("demo-customer"))
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
 async fn downgrades_unconfirmed_fraud_language_in_agent_outputs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -1060,7 +625,7 @@ async fn downgrades_unconfirmed_fraud_language_in_agent_outputs() {
 
 #[tokio::test]
 async fn redacts_pii_from_agent_free_text_outputs_and_logs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -1110,7 +675,7 @@ async fn redacts_pii_from_agent_free_text_outputs_and_logs() {
 
 #[tokio::test]
 async fn redacts_structured_pii_tags_from_agent_context_and_logs() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -1154,7 +719,7 @@ async fn redacts_structured_pii_tags_from_agent_context_and_logs() {
 
 #[tokio::test]
 async fn lists_agent_run_logs_for_governance_review() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -1224,6 +789,11 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert!(!context_snapshot["source_refs"]
         .to_string()
         .contains("CLM-AGENT-LOGS"));
+    assert!(run["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|step| step["step_name"] == "specialist_execution"));
     let tool_call = run["tool_calls"]
         .as_array()
         .unwrap()
@@ -1231,6 +801,11 @@ async fn lists_agent_run_logs_for_governance_review() {
         .find(|call| call["tool_name"] == "knowledge.search_similar")
         .expect("similar-case search tool call should be audited");
     assert_eq!(tool_call["status"], "succeeded");
+    assert!(run["tool_calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|call| call["status"] != "contract_only_not_executed"));
     assert!(!tool_call["input_json"].as_object().unwrap().is_empty());
     assert!(!tool_call["input_json"]
         .to_string()
@@ -1272,6 +847,11 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert!(!approval["evidence_refs"].as_array().unwrap().is_empty());
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
     assert!(run["output_json"]["evidence_sufficiency"].is_object());
+    assert!(run["output_json"]["specialist_executions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|execution| execution["agent_kind"] == "evidence_review"));
     assert!(!run["output_json"].to_string().contains("CLM-AGENT-LOGS"));
 }
 
@@ -1279,7 +859,7 @@ async fn lists_agent_run_logs_for_governance_review() {
 async fn agent_policy_check_uses_configured_policy_id_for_governance_trace() {
     let mut config = test_config();
     config.agent_policy_id = "customer-alpha-agent-policy-v1".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -1332,7 +912,7 @@ async fn agent_policy_check_uses_configured_policy_id_for_governance_trace() {
 async fn agent_investigation_audit_payload_traces_governance_controls() {
     let mut config = test_config();
     config.agent_policy_id = "customer-beta-agent-policy-v2".into();
-    let app = build_app(config);
+    let app = build_app(config).unwrap();
 
     let (status, body) = json_request(
         app.clone(),
@@ -1379,6 +959,11 @@ async fn agent_investigation_audit_payload_traces_governance_controls() {
     );
     assert_eq!(event["payload"]["customer_scope_id"], "demo-customer");
     assert_eq!(event["payload"]["tool_name"], "knowledge.search_similar");
+    assert!(event["payload"]["specialist_executions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|execution| execution["decision_boundary"] == "assistive_only"));
     assert!(event["payload"]["policy_check_id"]
         .as_str()
         .unwrap()
@@ -1395,7 +980,7 @@ async fn agent_investigation_audit_payload_traces_governance_controls() {
 
 #[tokio::test]
 async fn agent_context_uses_canonical_trace_from_prior_scoring_audit() {
-    let app = build_app(test_config());
+    let app = build_app(test_config()).unwrap();
 
     let (status, _) = json_request(
         app.clone(),
@@ -1510,402 +1095,4 @@ async fn agent_context_uses_canonical_trace_from_prior_scoring_audit() {
             .contains(&serde_json::json!("invoice:INV-AGENT:fee_detail:LINE-1")),
         "agent context should carry canonical evidence refs for investigation grounding"
     );
-}
-
-#[tokio::test]
-async fn submits_agent_approval_decision_for_governance_review() {
-    let app = build_app(test_config());
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/agent/cases/investigate",
-        r#"{
-          "claim_id": "CLM-AGENT-APPROVAL",
-          "risk_score": 94,
-          "rag": "RED",
-          "top_reasons": ["Agent 建议升级人工审核"],
-          "similar_case_query": {
-            "diagnosis_code": "J10",
-            "provider_region": "Shanghai",
-            "tags": ["provider_outlier"]
-          }
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        &format!(
-            r#"{{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
-        }}"#,
-        ),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["approval"]["agent_run_id"], agent_run_id);
-    assert_eq!(body["approval"]["decision"], "approved");
-    assert_eq!(body["approval"]["approver"], "qa-lead");
-    let approval_evidence_refs = body["approval"]["evidence_refs"].clone();
-    assert!(body["approval"]["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!(format!("agent_run:{agent_run_id}"))));
-    assert!(body["approval"]["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!("policy:demo-agent-policy")));
-    assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
-
-    let (status, body) = json_request(app.clone(), "GET", "/api/v1/ops/agent-runs", "{}").await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let run = body["runs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|run| run["agent_run_id"] == agent_run_id)
-        .expect("agent run should be listed after approval");
-    let approval = run["approvals"]
-        .as_array()
-        .unwrap()
-        .first()
-        .expect("submitted approval should be included in agent governance logs");
-    assert_eq!(approval["decision"], "approved");
-    assert_eq!(approval["approver"], "qa-lead");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        &format!(
-            r#"{{
-          "decision": "rejected",
-          "approver": "qa-lead",
-          "reason": "Attempt to change a completed approval decision.",
-          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
-        }}"#,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CONFLICT);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "AGENT_APPROVAL_NOT_PENDING");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "GET",
-        "/api/v1/ops/audit-events?event_group=governance&event_type=agent.approval.decided&actor_id=qa-lead&limit=10",
-        "{}",
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let events = body["events"].as_array().unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0]["event_type"], "agent.approval.decided");
-    assert_eq!(events[0]["payload"]["agent_run_id"], agent_run_id);
-    assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
-    assert_eq!(events[0]["payload"]["agent_policy_id"], "demo-agent-policy");
-    assert_eq!(
-        events[0]["payload"]["evidence_refs"],
-        approval_evidence_refs
-    );
-    assert!(events[0]["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!("policy:demo-agent-policy")));
-
-    let (status, body) = json_request(
-        app.clone(),
-        "GET",
-        &format!("/api/v1/ops/audit-events?agent_run_id={agent_run_id}&limit=10"),
-        "{}",
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let events = body["events"].as_array().unwrap();
-    assert_eq!(events.len(), 2);
-    assert!(events.iter().any(
-        |event| event["event_type"] == "agent.investigation.completed"
-            && event["payload"]["agent_run_id"] == agent_run_id
-    ));
-    assert!(events
-        .iter()
-        .any(|event| event["event_type"] == "agent.approval.decided"
-            && event["payload"]["agent_run_id"] == agent_run_id));
-
-    let (status, body) = json_request(
-        app.clone(),
-        "GET",
-        "/api/v1/audit/claims/CLM-AGENT-APPROVAL",
-        "{}",
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let claim_events = body["events"].as_array().unwrap();
-    assert!(claim_events.iter().any(|event| event["event_type"]
-        == "agent.investigation.completed"
-        && event["payload"]["agent_run_id"] == agent_run_id));
-    assert!(claim_events
-        .iter()
-        .any(|event| event["event_type"] == "agent.approval.decided"
-            && event["payload"]["agent_run_id"] == agent_run_id));
-
-    let (status, body) = json_request(
-        app,
-        "GET",
-        "/api/v1/ops/audit-events?agent_run_id=missing-agent-run&limit=10",
-        "{}",
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(body["events"].as_array().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
-    let app = build_app(test_config());
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/agent/cases/investigate",
-        r#"{
-          "claim_id": "CLM-AGENT-APPROVAL-GUARD",
-          "risk_score": 91,
-          "rag": "RED",
-          "top_reasons": ["Agent 建议必须经过有证据的人审"],
-          "similar_case_query": {
-            "diagnosis_code": "J10",
-            "provider_region": "Shanghai",
-            "tags": ["provider_outlier"]
-          }
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": []
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_EVIDENCE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_approval:manual_review_required"]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_RUN_EVIDENCE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_approval:manual_review_required", " "]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_EVIDENCE");
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
-          "decision": "approved",
-          "approver": " ",
-          "reason": " ",
-          "evidence_refs": ["agent_approval:manual_review_required"]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "MISSING_AGENT_APPROVER");
-
-    let (status, body) = json_request(
-        app,
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": " ",
-          "evidence_refs": ["agent_approval:manual_review_required"]
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_REASON");
-}
-
-#[tokio::test]
-async fn rejects_agent_approval_with_pii_in_reason_or_evidence_refs() {
-    let app = build_app(test_config());
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/agent/cases/investigate",
-        r#"{
-          "claim_id": "CLM-AGENT-APPROVAL-PII",
-          "risk_score": 91,
-          "rag": "RED",
-          "top_reasons": ["Agent approval must remain PII controlled"],
-          "similar_case_query": {
-            "diagnosis_code": "J10",
-            "provider_region": "Shanghai",
-            "tags": ["provider_outlier"]
-          }
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        &format!(
-            r#"{{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": "Reviewer copied member email alice@example.com into approval reason.",
-          "evidence_refs": ["agent_run:{agent_run_id}"]
-        }}"#
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_AGENT_APPROVAL");
-
-    let (status, body) = json_request(
-        app,
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        &format!(
-            r#"{{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_run:{agent_run_id}", "phone:13800138000"]
-        }}"#
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_AGENT_APPROVAL");
-}
-
-#[tokio::test]
-async fn lists_agent_approval_alert_until_decision_is_recorded() {
-    let app = build_app(test_config());
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/agent/cases/investigate",
-        r#"{
-          "claim_id": "CLM-AGENT-APPROVAL-ALERT",
-          "risk_score": 93,
-          "rag": "RED",
-          "top_reasons": ["Agent output requires human approval before action"],
-          "similar_case_query": {
-            "diagnosis_code": "J10",
-            "provider_region": "Shanghai",
-            "tags": ["provider_outlier"]
-          }
-        }"#,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
-
-    let (status, body) = json_request(app.clone(), "GET", "/api/v1/ops/alerts", "{}").await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let alert = body["alerts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|alert| alert["alert_type"] == "agent_approval_pending")
-        .expect("pending agent approval should create an operations alert");
-    assert_eq!(alert["claim_id"], "CLM-AGENT-APPROVAL-ALERT");
-    assert!(alert["evidence_refs"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!(format!("agent_run:{agent_run_id}"))));
-
-    let (status, _) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        &format!(
-            r#"{{
-          "decision": "approved",
-          "approver": "qa-lead",
-          "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
-        }}"#,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-
-    let (status, body) = json_request(app, "GET", "/api/v1/ops/alerts", "{}").await;
-    assert_eq!(status, StatusCode::OK);
-    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(!body["alerts"].as_array().unwrap().iter().any(|alert| {
-        alert["alert_type"] == "agent_approval_pending"
-            && alert["claim_id"] == "CLM-AGENT-APPROVAL-ALERT"
-    }));
 }

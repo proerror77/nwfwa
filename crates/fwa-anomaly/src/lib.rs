@@ -15,6 +15,9 @@ pub struct AnomalyScore {
     pub explanations: Vec<AnomalyExplanation>,
 }
 
+// BASELINE: heuristic thresholds; replace with IQR/MAD or unsupervised ensemble
+// scoring after accumulated labels/history are sufficient, initially defined as
+// >=500 confirmed_fwa labels or 30-day recall below 0.70 in monitoring.
 pub fn detect_anomaly(features: &FeatureMap) -> AnomalyScore {
     let mut score = 0_u16;
     let mut explanations = Vec::new();
@@ -91,6 +94,8 @@ mod tests {
                 name: "claim_amount_peer_percentile".into(),
                 version: 1,
                 value: serde_json::json!(95),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );
@@ -100,6 +105,8 @@ mod tests {
                 name: "high_cost_item_ratio".into(),
                 version: 1,
                 value: serde_json::json!(1.0),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );
@@ -109,6 +116,8 @@ mod tests {
                 name: "diagnosis_procedure_match_score".into(),
                 version: 1,
                 value: serde_json::json!(0.35),
+                is_proxy: true,
+                data_source: "test_fixture".into(),
                 evidence_refs: vec![],
             },
         );

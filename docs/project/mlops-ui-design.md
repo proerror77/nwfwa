@@ -264,9 +264,9 @@ Allowed actions:
 
 Relevant APIs:
 
-- `GET /api/v1/ops/models/{model_key}/promotion-gates`;
-- `POST /api/v1/ops/models/{model_key}/promotion-reviews`;
-- `POST /api/v1/ops/models/{model_key}/activate`;
+- `GET /api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates`;
+- `POST /api/v1/ops/models/{model_key}/versions/{model_version}/promotion-reviews`;
+- `POST /api/v1/ops/models/{model_key}/versions/{model_version}/activate`;
 - `POST /api/v1/ops/models/{model_key}/rollback`.
 
 Activation button rules:
@@ -307,12 +307,16 @@ Operational states:
 Relevant commands and artifacts:
 
 - `cargo run --locked -p worker -- build-mlops-monitoring-plan`;
-- `python3 scripts/ops/run_mlops_monitoring_plan.py`;
+- `cargo run --locked -p worker -- run-scheduled-mlops-monitoring`;
+- `cargo run --locked -p worker -- run-mlops-monitoring-plan`;
 - `shadow_report.json`;
 - `drift_report.json`;
 - `fairness_report.json`;
 - reviewer-disagreement report;
 - label-delay report.
+- `mlops_monitoring_artifact_publication_manifest.json`.
+- `scripts/ops/sample_mlops_monitoring_inputs.json` as the local binding
+  example for customer or pilot monitoring metrics.
 
 Monitoring should trigger retraining readiness or rollback review. It should not
 promote or replace a model automatically.

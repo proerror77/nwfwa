@@ -11,6 +11,7 @@ test = false
 
 [dependencies]
 anyhow.workspace = true
+arrow-array = "53"
 async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true
@@ -25,14 +26,16 @@ fwa-ml-runtime = { path = "../../crates/fwa-ml-runtime" }
 fwa-provider = { path = "../../crates/fwa-provider" }
 fwa-rules = { path = "../../crates/fwa-rules" }
 fwa-scoring = { path = "../../crates/fwa-scoring" }
+parquet = { version = "53", features = ["arrow"] }
 rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
+tower = { version = "0.5", features = ["limit", "util"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-tower = { version = "0.5", features = ["util"] }
+testcontainers = "0.27"

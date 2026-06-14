@@ -1,0 +1,79 @@
+{
+  "claim": {
+    "claim_amount": "4000.00",
+    "currency": "CNY",
+    "diagnosis_code": "Z00",
+    "external_claim_id": "CLM-DEMO-PROVIDER-001",
+    "service_date": "2026-01-15"
+  },
+  "documents": [
+    {
+      "document_type": "medical_record",
+      "external_document_id": "DOC-MR-CLM-DEMO-PROVIDER-001",
+      "linked_item_codes": []
+    },
+    {
+      "document_type": "invoice",
+      "external_document_id": "DOC-INV-CLM-DEMO-PROVIDER-001",
+      "linked_item_codes": []
+    }
+  ],
+  "items": [
+    {
+      "description": "Routine outpatient consultation",
+      "item_code": "CONS-200",
+      "item_type": "consultation",
+      "quantity": 1,
+      "total_amount": "4000.00",
+      "unit_amount": "4000.00"
+    }
+  ],
+  "member": {
+    "external_member_id": "MBR-CLM-DEMO-PROVIDER-001",
+    "gender": "U"
+  },
+  "policy": {
+    "coverage_end_date": "2026-12-31",
+    "coverage_limit": "20000.00",
+    "coverage_start_date": "2026-01-01",
+    "currency": "CNY",
+    "external_policy_id": "POL-CLM-DEMO-PROVIDER-001",
+    "product_code": "DEMO-HEALTH"
+  },
+  "provider": {
+    "external_provider_id": "PRV-CLM-DEMO-PROVIDER-001",
+    "name": "Demo Provider",
+    "provider_type": "clinic",
+    "region": "SH",
+    "risk_tier": "High"
+  },
+  "provider_profile": {
+    "network_status": "in_network",
+    "specialty": "general_clinic",
+    "windows": [
+      {
+        "claim_count": 48,
+        "confirmed_fwa_count": 1,
+        "diagnosis_procedure_mismatch_rate": 0.34,
+        "false_positive_count": 0,
+        "high_cost_item_ratio": 0.68,
+        "peer_amount_percentile": 99,
+        "peer_frequency_percentile": 97,
+        "review_failure_count": 6,
+        "total_claim_amount": "320000.00",
+        "window_days": 90
+      }
+    ]
+  },
+  "provider_relationships": {
+    "connected_confirmed_fwa_count": 2,
+    "evidence_refs": [
+      "provider_graph:PRV-DEMO-PROVIDER-001"
+    ],
+    "high_risk_neighbor_ratio": 0.36,
+    "network_component_risk_score": 88,
+    "provider_patient_overlap_score": 0.72,
+    "referral_concentration_score": 0.76
+  },
+  "source_system": "tpa-demo"
+}

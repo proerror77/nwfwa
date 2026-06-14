@@ -1,0 +1,59 @@
+{
+  "alert_delivery_status": "no_alerts_required",
+  "alert_delivery_task_count": 0,
+  "alert_delivery_tasks": [],
+  "evidence_refs": [
+    "mlops_monitoring_plans:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_monitoring_plan.json",
+    "model_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
+    "model_versions:baseline_fwa:0.2.0-xgboost-candidate"
+  ],
+  "governance_boundary": "scheduler execution evidence may queue alert delivery and review work only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels",
+  "job_executions": [
+    {
+      "execution_status": "reported_in_monitoring_summary",
+      "job_kind": "shadow_traffic_evaluation",
+      "output_ref": "model_shadow_reports:<shadow_report_uri>",
+      "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/shadow_report.json",
+      "routing_impact": "none"
+    },
+    {
+      "execution_status": "reported_in_monitoring_summary",
+      "job_kind": "drift_monitoring",
+      "output_ref": "model_drift_reports:<drift_report_uri>",
+      "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/drift_report.json",
+      "routing_impact": "none"
+    },
+    {
+      "execution_status": "reported_in_monitoring_summary",
+      "job_kind": "segment_fairness_review",
+      "output_ref": "model_fairness_reports:<fairness_report_uri>",
+      "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/fairness_report.json",
+      "routing_impact": "none"
+    },
+    {
+      "execution_status": "scheduled_pending_external_report",
+      "job_kind": "reviewer_disagreement_review",
+      "output_ref": "model_reviewer_disagreement_reports:<reviewer_disagreement_report_uri>",
+      "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/reviewer_disagreement_report.json",
+      "routing_impact": "none"
+    },
+    {
+      "execution_status": "scheduled_pending_external_report",
+      "job_kind": "label_delay_review",
+      "output_ref": "model_label_delay_reports:<label_delay_report_uri>",
+      "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/label_delay_report.json",
+      "routing_impact": "none"
+    }
+  ],
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate",
+  "monitoring_report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
+  "pending_external_report_count": 2,
+  "plan_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_monitoring_plan.json",
+  "report_kind": "mlops_scheduler_execution_report",
+  "report_version": 1,
+  "schedule": {
+    "cron": "0 2 * * *"
+  },
+  "scheduler_status": "completed_with_pending_external_reports"
+}

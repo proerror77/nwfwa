@@ -1,0 +1,67 @@
+use api_server::{app::build_app, config::AppConfig};
+use axum::{
+    body::{to_bytes, Body},
+    http::{Request, StatusCode},
+};
+use tower::ServiceExt;
+
+pub(super) fn test_config() -> AppConfig {
+    AppConfig {
+        api_key: "dev-secret".into(),
+        api_key_principals: vec![],
+        source_system: "tpa-demo".into(),
+        database_url: "postgres://unused".into(),
+        model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    }
+}
+
+pub(super) fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
+}
+
+pub(super) async fn json_request(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+) -> (StatusCode, serde_json::Value) {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
+    (status, body)
+}
+
+pub(super) async fn unauthenticated_request(method: &str, uri: &str, body: &str) -> StatusCode {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let response = build_app(test_config())
+        .unwrap()
+        .oneshot(request)
+        .await
+        .unwrap();
+    response.status()
+}

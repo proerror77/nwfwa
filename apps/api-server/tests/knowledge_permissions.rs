@@ -8,6 +8,13 @@ use tower::ServiceExt;
 fn test_config() -> AppConfig {
     AppConfig {
         api_key: "dev-secret".into(),
+        api_key_principals: vec![
+            "claims-key|claims-service|tpa_system|customer-tpa|customer-alpha|tpa:claims:score"
+                .into(),
+            "knowledge-key|tpa-panel|tpa_system|customer-tpa|customer-alpha|tpa:knowledge:read"
+                .into(),
+            "wildcard-key|pilot-ops|fwa_operator|customer-tpa|customer-alpha|tpa:*".into(),
+        ],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
@@ -39,7 +46,11 @@ async fn search_similar_with_key(api_key: &str) -> (StatusCode, serde_json::Valu
             }"#,
         ))
         .unwrap();
-    let response = build_app(test_config()).oneshot(request).await.unwrap();
+    let response = build_app(test_config())
+        .unwrap()
+        .oneshot(request)
+        .await
+        .unwrap();
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
@@ -48,17 +59,6 @@ async fn search_similar_with_key(api_key: &str) -> (StatusCode, serde_json::Valu
 
 #[tokio::test]
 async fn similar_case_search_requires_tpa_knowledge_read_permission() {
-    let previous_principals = std::env::var_os("FWA_API_KEY_PRINCIPALS");
-    std::env::set_var(
-        "FWA_API_KEY_PRINCIPALS",
-        [
-            "claims-key|claims-service|tpa_system|customer-tpa|customer-alpha|tpa:claims:score",
-            "knowledge-key|tpa-panel|tpa_system|customer-tpa|customer-alpha|tpa:knowledge:read",
-            "wildcard-key|pilot-ops|fwa_operator|customer-tpa|customer-alpha|tpa:*",
-        ]
-        .join(";"),
-    );
-
     let (status, body) = search_similar_with_key("claims-key").await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body["code"], "FORBIDDEN");
@@ -71,10 +71,4 @@ async fn similar_case_search_requires_tpa_knowledge_read_permission() {
     let (status, body) = search_similar_with_key("wildcard-key").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["results"][0]["case_id"], "KC-1001");
-
-    if let Some(previous_principals) = previous_principals {
-        std::env::set_var("FWA_API_KEY_PRINCIPALS", previous_principals);
-    } else {
-        std::env::remove_var("FWA_API_KEY_PRINCIPALS");
-    }
 }

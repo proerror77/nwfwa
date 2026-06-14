@@ -1,0 +1,8 @@
+{
+  "boundary": "Use this dataset to demo TPA normalization, rule-driven pending evidence, review routing, and ML candidate plumbing. Do not use it as production model evidence.",
+  "cms_synpuf_url": "https://www.cms.gov/data-research/statistics-trends-and-reports/medicare-claims-synthetic-public-use-files",
+  "repo_public_data_builders": [
+    "scripts/data/build_public_data_mvp.py",
+    "scripts/data/build_kaggle_provider_fraud_mvp.py"
+  ]
+}

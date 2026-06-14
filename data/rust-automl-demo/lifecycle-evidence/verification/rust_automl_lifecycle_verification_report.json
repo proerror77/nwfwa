@@ -1,0 +1,95 @@
+{
+  "blocking_reasons": [],
+  "checks": [
+    {
+      "check": "demo_dataset_portfolio",
+      "evidence_refs": [
+        "demo_dataset_index:data/rust-automl-demo/index.json"
+      ],
+      "status": "passed",
+      "summary": "1 labeled dataset(s), 2 unlabeled dataset(s)"
+    },
+    {
+      "check": "labeled_supervised_dataset",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/labeled_claim_risk/manifest.json"
+      ],
+      "status": "passed",
+      "summary": "labeled claim-risk manifest carries confirmed_fwa and train/validation/out_of_time splits"
+    },
+    {
+      "check": "unlabeled_dataset_boundaries",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json",
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json"
+      ],
+      "status": "passed",
+      "summary": "unlabeled manifests carry no label column and block supervised training"
+    },
+    {
+      "check": "supervised_algorithm_portfolio",
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json"
+      ],
+      "status": "passed",
+      "summary": "XGBoost and LightGBM validation reports carry ONNX runtime and parity gate evidence"
+    },
+    {
+      "check": "rust_onnx_serving_gate",
+      "evidence_refs": [
+        "model_artifact_evaluations:data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/xgboost_model_artifact_evaluation.json",
+        "model_artifact_evaluations:data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/lightgbm_model_artifact_evaluation.json"
+      ],
+      "status": "passed",
+      "summary": "XGBoost and LightGBM artifact evaluations pass Rust serving gates"
+    },
+    {
+      "check": "rule_candidate_backtest_before_writeback",
+      "evidence_refs": [
+        "rule_candidate_backtests:data/rust-automl-demo/lifecycle-evidence/rule-candidates/backtest/rule_candidate_backtest_report.json"
+      ],
+      "status": "passed",
+      "summary": "explainable rule candidates are backtested and blocked before rule-library writeback"
+    },
+    {
+      "check": "unlabeled_clustering_review_only",
+      "evidence_refs": [
+        "provider_peer_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-peer/provider_peer_clustering_report.json",
+        "provider_graph_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-graph/provider_graph_community_report.json",
+        "claim_entity_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/claim-entity/claim_entity_clustering_report.json"
+      ],
+      "status": "passed",
+      "summary": "provider-peer, graph-community, and claim-entity clustering create review candidates only"
+    },
+    {
+      "check": "auto_mlops_monitoring_loop",
+      "evidence_refs": [
+        "mlops_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
+        "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json",
+        "mlops_monitoring_cycles:data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/mlops_monitoring_cycle_report.json"
+      ],
+      "status": "passed",
+      "summary": "monitoring, scheduler, and cycle reports are evidence-only and do not perform lifecycle actions"
+    },
+    {
+      "check": "lifecycle_closure_report",
+      "evidence_refs": [
+        "automl_lifecycle_closure:data/rust-automl-demo/lifecycle-evidence/closure/rust_automl_lifecycle_closure_report.json"
+      ],
+      "status": "passed",
+      "summary": "6 lifecycle stage(s) closed with human governance gates"
+    }
+  ],
+  "demo_root": "data/rust-automl-demo",
+  "evidence_dir": "data/rust-automl-demo/lifecycle-evidence",
+  "evidence_refs": [
+    "demo_dataset_index:data/rust-automl-demo/index.json",
+    "demo_lifecycle_evidence_index:data/rust-automl-demo/lifecycle-evidence/demo_lifecycle_evidence_index.json",
+    "automl_lifecycle_closure:data/rust-automl-demo/lifecycle-evidence/closure/rust_automl_lifecycle_closure_report.json"
+  ],
+  "governance_boundary": "verification proves the Rust Auto MLOps demo lifecycle evidence pack only; it must not activate models, assign labels, or publish rules",
+  "report_kind": "rust_automl_demo_lifecycle_verification",
+  "report_version": 1,
+  "verification_status": "passed"
+}

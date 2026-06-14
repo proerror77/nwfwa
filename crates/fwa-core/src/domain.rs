@@ -2,6 +2,14 @@ use crate::{ClaimId, MemberId, Money, PolicyId, ProviderId};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ActorContext {
+    pub actor_id: String,
+    pub actor_role: String,
+    pub source_system: String,
+    pub customer_scope_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Member {
     pub id: MemberId,

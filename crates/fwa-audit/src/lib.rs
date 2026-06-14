@@ -3,13 +3,7 @@ use fwa_core::{AuditEventId, ClaimId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ActorContext {
-    pub actor_id: String,
-    pub actor_role: String,
-    pub source_system: String,
-    pub customer_scope_id: String,
-}
+pub use fwa_core::ActorContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AuditEventStatus {
