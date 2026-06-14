@@ -252,6 +252,11 @@ As of the P1/P2 remediation commits after this review:
 - Worker-generated readiness/execution review tasks now carry the planned
   `api_path` alongside `required_permission`, so operator review evidence and
   API permission validation use the same endpoint-family contract.
+- Worker data-pipeline plans, readiness input templates, and run-status
+  templates now expose per-job `required_evidence_prefixes`; readiness reports
+  keep jobs blocked until customer evidence includes those prefixes, including
+  scoring-context source lineage for episode, peer, clinical, and unbundling
+  artifacts.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
 execution, official OIG/SAM feed configuration and credentials, customer
@@ -275,7 +280,9 @@ expected API paths and permission scopes, required execution URIs, required
 per-completed-job artifact URI/evidence refs, required evidence refs, and the
 no-adjudication boundary. It also checks scoring-context materialization source
 lineage against the same episode, peer, clinical, and unbundling evidence refs
-required by the API submit path, and the production readiness
+required by the API submit path. Worker-generated plan/readiness/run-status
+templates now surface those required evidence prefixes before scheduler
+execution, and the production readiness
 validator can execute those checks when given the customer evidence directory.
 
 ## A. Scoring Layer Gaps
