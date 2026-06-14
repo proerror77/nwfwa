@@ -160,6 +160,10 @@ CAPABILITIES = [
             ),
             (
                 "scripts/ops/validate_production_readiness_contract.py",
+                "WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS",
+            ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
                 "WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS",
             ),
             (

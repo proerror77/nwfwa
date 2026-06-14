@@ -246,9 +246,9 @@ for the governed worker write paths is required before production readiness can
 be claimed; that gate now carries acceptance checks for ready readiness status,
 completed scheduler status, zero pending or failed jobs, zero review tasks,
 completed governed job kinds, submitted governed write jobs, source snapshot
-artifact evidence, required evidence refs, and the no-adjudication boundary,
-and the production readiness validator can execute those checks when given the
-customer evidence directory.
+artifact evidence, expected API paths and permission scopes, required evidence
+refs, and the no-adjudication boundary, and the production readiness validator
+can execute those checks when given the customer evidence directory.
 
 ## A. Scoring Layer Gaps
 

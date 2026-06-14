@@ -62,7 +62,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     },
     {
         "check_id": "governed_submit_jobs_submitted",
-        "description": "Every governed worker data-pipeline submit job has submitted = true.",
+        "description": "Every governed worker data-pipeline submit job has submitted = true, expected API path and permission scope, and a non-empty reported artifact URI.",
     },
     {
         "check_id": "source_snapshot_artifact_reported",

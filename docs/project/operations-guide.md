@@ -765,8 +765,9 @@ checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
 zero review tasks, all governed worker job kinds completed, plan, run-status,
 and readiness evidence refs present, and the no-adjudication governance boundary
 preserved. All governed submit jobs must also show `submitted = true`, while
-the artifact-only OIG/SAM source snapshot job must report a non-empty artifact
-URI.
+the expected API path, required permission scope, and non-empty artifact URI
+are present. The artifact-only OIG/SAM source snapshot job must also report a
+non-empty artifact URI.
 After the customer scheduler publishes production evidence, validate the worker
 pipeline execution artifact against those checks:
 

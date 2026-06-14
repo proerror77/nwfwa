@@ -47,6 +47,30 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS = (
     WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS - {"oig_sam_sanctions_snapshot_fetch"}
 )
 
+WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS = {
+    "oig_sam_sanctions_sync": "/api/v1/ops/providers/sanctions-sync-reports",
+    "provider_profile_window_rollup": "/api/v1/ops/providers/profile-window-rollups",
+    "provider_graph_signal_rollup": "/api/v1/ops/providers/graph-signal-rollups",
+    "peer_percentile_benchmark": "/api/v1/ops/providers/peer-benchmarks",
+    "episode_aggregation": "/api/v1/ops/providers/episode-rollups",
+    "clinical_compatibility_reference": "/api/v1/ops/clinical-compatibility-references",
+    "unbundling_comparator": "/api/v1/ops/unbundling-comparator-candidates",
+    "scoring_feature_context_materialization": "/api/v1/ops/scoring-feature-context-materializations",
+    "probability_calibration_evidence": "/api/v1/ops/models/{model_key}/probability-calibration-reports",
+}
+
+WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS = {
+    "oig_sam_sanctions_sync": "ops:providers:write",
+    "provider_profile_window_rollup": "ops:providers:write",
+    "provider_graph_signal_rollup": "ops:providers:write",
+    "peer_percentile_benchmark": "ops:providers:write",
+    "episode_aggregation": "ops:providers:write",
+    "clinical_compatibility_reference": "ops:datasets:write",
+    "unbundling_comparator": "ops:datasets:write",
+    "scoring_feature_context_materialization": "ops:datasets:write",
+    "probability_calibration_evidence": "ops:models:review",
+}
+
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "report_kind_is_worker_data_pipeline_execution_report",
     "readiness_gate_status_ready",
@@ -175,9 +199,24 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
             f"worker data pipeline job {job_kind} must be completed",
         )
     for job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+        job = jobs_by_kind[job_kind]
         require(
-            jobs_by_kind[job_kind].get("submitted") is True,
+            job.get("submitted") is True,
             f"worker data pipeline submit job {job_kind} must have submitted true",
+        )
+        require(
+            job.get("api_path") == WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS[job_kind],
+            f"worker data pipeline submit job {job_kind} has wrong api_path",
+        )
+        require(
+            job.get("required_permission")
+            == WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind],
+            f"worker data pipeline submit job {job_kind} has wrong required_permission",
+        )
+        require(
+            isinstance(job.get("reported_artifact_uri"), str)
+            and job["reported_artifact_uri"].strip(),
+            f"worker data pipeline submit job {job_kind} must report artifact URI",
         )
     snapshot_job = jobs_by_kind["oig_sam_sanctions_snapshot_fetch"]
     require(
