@@ -18,6 +18,7 @@ REQUIRED_GATE_IDS = {
     "alert_router_delivery",
     "retention_legal_hold",
     "customer_data_governance",
+    "worker_data_pipeline_execution",
     "model_serving_slo",
     "ocr_vector_analytics_execution",
 }

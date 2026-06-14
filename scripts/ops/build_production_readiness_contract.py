@@ -63,6 +63,11 @@ REQUIRED_EVIDENCE = [
         "description": "Customer dataset provenance, label provenance, holdout split, and live shadow-traffic plan were approved.",
     },
     {
+        "gate_id": "worker_data_pipeline_execution",
+        "required_artifact": "worker_data_pipeline_execution_report.json",
+        "description": "Customer scheduler executed the governed worker data pipeline with readiness evidence, run-status evidence, artifact submit/write evidence, and dependency-blocker review for sanctions, provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling, scoring contexts, and probability calibration.",
+    },
+    {
         "gate_id": "model_serving_slo",
         "required_artifact": "model_serving_slo_report.json",
         "description": "ONNX/Rust model serving latency, error, fallback, checksum, signature, and rollback SLO evidence passed.",
@@ -90,6 +95,7 @@ def build_contract(output_dir: Path) -> dict:
                 "status": "requires_customer_environment_evidence",
                 "customer_data_required": item["gate_id"] in {
                     "customer_data_governance",
+                    "worker_data_pipeline_execution",
                     "model_serving_slo",
                     "ocr_vector_analytics_execution",
                 },

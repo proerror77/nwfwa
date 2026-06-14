@@ -146,6 +146,10 @@ CAPABILITIES = [
             ("apps/worker/src/worker_data_pipeline_readiness.rs", "required_permission"),
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "required_permission"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "required_permission"),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
+                "worker_data_pipeline_execution",
+            ),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_sanctions"),
@@ -350,7 +354,7 @@ def build_report() -> dict:
         "remaining_boundary": [
             "real customer labels and label provenance",
             "customer holdout validation and live shadow traffic",
-            "live customer scheduler execution and customer-approved source claim history/reference data",
+            "live customer worker data-pipeline scheduler execution and customer-approved source claim history/reference data",
             "customer-approved production deployment, secrets, retention, observability, OCR/vector workers, and analytics execution",
             "customer-executed live restore, rollback, alert, and operational drills beyond the staging drill contract",
         ],

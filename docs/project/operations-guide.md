@@ -757,7 +757,8 @@ python3 scripts/ops/validate_production_readiness_contract.py \
 The readiness contract is intentionally blocked until live environment evidence
 is attached for deployment apply, smoke, observability, secrets/access,
 backup/restore, rollback, alert delivery, retention/legal hold, customer data
-governance, model serving SLO, and OCR/vector/analytics execution.
+governance, worker data-pipeline scheduler execution, model serving SLO, and
+OCR/vector/analytics execution.
 
 Generate local pilot foundation evidence without customer data:
 

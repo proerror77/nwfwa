@@ -32,6 +32,9 @@ validation and environment execution:
 
 - real customer labels and label provenance;
 - customer holdout validation and live shadow traffic;
+- live customer worker data-pipeline scheduler execution for sanctions,
+  provider profiles, graph signals, peer benchmarks, episodes, clinical
+  references, unbundling, scoring contexts, and probability calibration;
 - customer-approved production deployment, secrets, retention, observability,
   OCR/vector workers, analytics execution, and network controls;
 - customer-executed live restore, rollback, alert, and operational drills beyond
@@ -91,7 +94,7 @@ groups can populate claim-time `claim_amount_peer_percentile` when explicit
 | Knowledge, agent, and AI evidence foundation | Staging proof with partial control-plane contract | `apps/api-server/src/routes/knowledge.rs`, `apps/api-server/src/routes/ops_evidence/mod.rs`, `scripts/ops/build_ai_evidence_foundation.py`; agent registry and investigation grouping contract verified in `fee9ea9`; runtime registry allowlist enforcement verified in `0b8d73a`; agent run cancellation control plane verified in `a7b3835`; deterministic orchestrator/specialist-plan contract verified in `e85d0e5`; crate-level investigation cancellation checkpoints verified in `cbe97a8`; deterministic specialist dispatch/tool mediation contract verified in `51fd3cc`; agent investigation API/output/OpenAPI exposure verified in `2166dc6` | Customer OCR, embedding/vector store, retrieval ranking, masking, retention execution, LLM-backed specialist execution, real external tool-call mediation, and wiring long-running/tool-using agents into the cancellation signal. |
 | Analytics scale | Staging proof | `analytics/clickhouse/schema.sql`, `analytics/clickhouse/dashboard_queries.sql`, `scripts/ops/build_analytics_export.py` | Live scheduler credentials, ClickHouse retention/backup/access policy, dashboard hosting. |
 | Pilot foundation and staging deployment | Staging proof | `infra/k8s/staging`, `.github/workflows/deploy-staging.yml`, `scripts/ops/build_staging_evidence.py`, `scripts/ops/validate_staging_deployment_package.py` | Customer cluster credentials, secrets, allowlists, observability receiver, restore drill. |
-| Production deployment and readiness contract | Implemented as customer-gated contract | `scripts/ops/build_production_deployment_package.py`, `infra/k8s/observability`, `scripts/ops/build_production_readiness_contract.py`; audit-retention dry-run scan contract verified in `3c90fb1` | Live customer cluster apply, real secrets/images/TLS, smoke, alert delivery, restore, rollback, retention archive/destruction execution, and SLO evidence. |
+| Production deployment and readiness contract | Implemented as customer-gated contract | `scripts/ops/build_production_deployment_package.py`, `infra/k8s/observability`, `scripts/ops/build_production_readiness_contract.py`; production readiness now includes a `worker_data_pipeline_execution` gate requiring customer scheduler evidence for governed worker write paths; audit-retention dry-run scan contract verified in `3c90fb1` | Live customer cluster apply, real secrets/images/TLS, smoke, alert delivery, restore, rollback, worker data-pipeline execution, retention archive/destruction execution, and SLO evidence. |
 | Web console operations studio | Implemented | `apps/web-console/src/main.rs`, `apps/web-console/src/styles.css`, `scripts/demo/smoke_web_console.mjs` | Customer UAT and role-specific UX refinements. |
 
 ## June 2026 Gap Backlog

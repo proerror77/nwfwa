@@ -240,7 +240,10 @@ probability serving activation, and replacement of the L3 heuristic anomaly
 scorer with a validated statistical baseline. Audit retention still needs
 customer-environment partitioning, archive storage, legal-hold reconciliation
 writes, approved destruction workflow execution, and live routing-impact
-validation on customer data.
+validation on customer data. The production readiness contract now includes a
+dedicated `worker_data_pipeline_execution` gate so customer scheduler evidence
+for the governed worker write paths is required before production readiness can
+be claimed.
 
 ## A. Scoring Layer Gaps
 
