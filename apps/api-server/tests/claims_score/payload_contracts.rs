@@ -572,6 +572,7 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
                     "data_source": "worker.episode_utilization_rollup"
                   },
                   "evidence_refs": [
+                    "claims:CLM-PERSISTED-WORKER-CONTEXT",
                     "scoring_feature_contexts:CLM-PERSISTED-WORKER-CONTEXT",
                     "unbundling:UNB-IMG:MBR-PERSISTED|PRV-PERSISTED"
                   ]
@@ -579,7 +580,11 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
               ],
               "evidence_refs": [
                 "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json",
-                "episode_rollups:local://artifacts/episode/episode_aggregation_report.json"
+                "scoring_feature_context_claim_snapshot:local://inputs/scoring-claims.json",
+                "episode_rollups:local://artifacts/episode/episode_aggregation_report.json",
+                "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json",
+                "clinical_compatibility:local://artifacts/clinical/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:local://artifacts/unbundling/unbundling_comparator_report.json"
               ],
               "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
             }"#,
@@ -677,6 +682,21 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
     assert!(evidence_refs.contains(&serde_json::json!(
         "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json"
     )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_context_claim_snapshot:local://inputs/scoring-claims.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "clinical_compatibility:local://artifacts/clinical/clinical_compatibility_reference_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "unbundling_candidates:local://artifacts/unbundling/unbundling_comparator_report.json"
+    )));
 }
 
 #[tokio::test]
@@ -721,6 +741,7 @@ async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
               ],
               "evidence_refs": [
                 "clinical_compatibility_references:local://artifacts/clinical/clinical_compatibility_reference_report.json",
+                "clinical_compatibility_reference:local://inputs/clinical-reference.json",
                 "clinical_policy_authority:customer-medical-policy-board"
               ],
               "governance_boundary": "clinical compatibility reference data can feed ClinicalCompatibilityFeatureContext; it must not deny claims or replace medical review without customer-approved policy authority"
