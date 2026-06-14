@@ -31,6 +31,20 @@ REQUIRED_WORKER_TEMPLATES = {
     "worker/worker_data_pipeline_readiness_input.json",
     "worker/worker_data_pipeline_run_status.json",
 }
+REQUIRED_SCORING_READBACK_PREFIXES = {
+    "scoring_feature_contexts:",
+    "provider_profile_window_rollups:",
+    "sanctions_sync_reports:",
+    "provider_graph_signal_rollups:",
+    "peer_benchmarks:",
+    "episode_rollups:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+}
+REQUIRED_SCORING_READBACK_INPUT_EVIDENCE_PREFIXES = {
+    "worker_data_pipeline_executions:",
+    "scoring_readback_score_requests:",
+}
 REQUIRED_RUNBOOKS = {"runbooks/worker-data-pipeline-commands.json"}
 REQUIRED_RUNBOOK_STEPS = {
     "build_worker_data_pipeline_plan": (
@@ -210,6 +224,35 @@ def validate_worker_templates(package_dir: Path) -> None:
             isinstance(prefix, str) and prefix.endswith(":"),
             f"scoring readback expected prefix must end with colon: {prefix}",
         )
+    observed_prefixes = set(expected_prefixes)
+    require(
+        REQUIRED_SCORING_READBACK_PREFIXES.issubset(observed_prefixes),
+        "scoring readback input missing required expected evidence prefixes: "
+        f"{sorted(REQUIRED_SCORING_READBACK_PREFIXES - observed_prefixes)}",
+    )
+    readback_evidence_refs = readback_input.get("evidence_refs")
+    require(
+        isinstance(readback_evidence_refs, list) and readback_evidence_refs,
+        "scoring readback input requires evidence_refs",
+    )
+    for required_prefix in REQUIRED_SCORING_READBACK_INPUT_EVIDENCE_PREFIXES:
+        require(
+            any(
+                isinstance(reference, str) and reference.startswith(required_prefix)
+                for reference in readback_evidence_refs
+            ),
+            f"scoring readback input evidence_refs missing {required_prefix}",
+        )
+    require(
+        readback_input.get("score_request_uri")
+        == "artifacts/production-evidence-package/worker/score_request.json",
+        "scoring readback input must point at worker/score_request.json",
+    )
+    require(
+        readback_input.get("score_response_uri")
+        == "artifacts/production-evidence-package/worker/scoring-readback/score_response.json",
+        "scoring readback input must point at worker/scoring-readback/score_response.json",
+    )
 
     readiness_input = load_json(package_dir / "worker" / "worker_data_pipeline_readiness_input.json")
     require(

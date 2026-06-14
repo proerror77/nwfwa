@@ -36,6 +36,40 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "worker_templates path missing"):
                 validate_package(package_dir)
 
+    def test_rejects_scoring_readback_input_missing_provider_graph_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            input_uri = package_dir / "worker" / "scoring_readback_input.json"
+            readback_input = _read_json(input_uri)
+            readback_input["expected_evidence_prefixes"] = [
+                prefix
+                for prefix in readback_input["expected_evidence_prefixes"]
+                if prefix != "provider_graph_signal_rollups:"
+            ]
+            _write_json(input_uri, readback_input)
+
+            with self.assertRaisesRegex(AssertionError, "provider_graph_signal_rollups"):
+                validate_package(package_dir)
+
+    def test_rejects_scoring_readback_input_missing_worker_execution_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            input_uri = package_dir / "worker" / "scoring_readback_input.json"
+            readback_input = _read_json(input_uri)
+            readback_input["evidence_refs"] = [
+                reference
+                for reference in readback_input["evidence_refs"]
+                if not reference.startswith("worker_data_pipeline_executions:")
+            ]
+            _write_json(input_uri, readback_input)
+
+            with self.assertRaisesRegex(
+                AssertionError, "worker_data_pipeline_executions:"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_worker_template_with_forbidden_phi_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
