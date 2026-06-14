@@ -120,6 +120,18 @@ REQUIRED_RUNBOOK_ARTIFACT_BUILD_COMMANDS = {
     "build-scoring-feature-contexts",
     "build-probability-calibration-report",
 }
+REQUIRED_RUNBOOK_ARTIFACT_BUILD_OUTPUTS = {
+    "fetch_oig_sam_sanctions_snapshot": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/oig_sam_sanctions_snapshot.json",
+    "sync_oig_sam_sanctions": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/sanctions_sync_report.json",
+    "build_provider_profile_windows": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json",
+    "build_provider_graph_signals": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-graph/<as-of-date>/provider_graph_signal_rollup_report.json",
+    "build_peer_benchmarks": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json",
+    "build_episode_aggregation": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json",
+    "build_clinical_compatibility_reference": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json",
+    "build_unbundling_comparator": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json",
+    "build_scoring_feature_contexts": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json",
+    "build_probability_calibration_report": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json",
+}
 REQUIRED_RUNBOOK_SUBMIT_COMMANDS = {
     "submit-worker-data-pipeline-readiness-report",
     "submit-sanctions-sync-report",
@@ -635,6 +647,13 @@ def validate_runbook(package_dir: Path) -> None:
         require(
             build_command in command_text,
             f"runbook artifact build commands missing {build_command}",
+        )
+    for step, expected_output in REQUIRED_RUNBOOK_ARTIFACT_BUILD_OUTPUTS.items():
+        command = commands_by_step.get(step)
+        require(command is not None, f"runbook missing artifact build step {step}")
+        require(
+            command.get("output") == expected_output,
+            f"runbook step {step} output must be {expected_output}",
         )
     for submit_command in REQUIRED_RUNBOOK_SUBMIT_COMMANDS:
         require(

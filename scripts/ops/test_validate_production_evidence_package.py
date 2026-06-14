@@ -346,6 +346,24 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "build-peer-benchmarks"):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_artifact_build_step_with_wrong_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            for command in runbook["commands"]:
+                if command["step"] == "build_peer_benchmarks":
+                    command["output"] = "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/wrong.json"
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "build_peer_benchmarks output must be "
+                "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json",
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_submit_step_with_wrong_api_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
