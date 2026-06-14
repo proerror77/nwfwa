@@ -82,6 +82,38 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "worker_template_count"):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_missing_scoring_readback_step(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            runbook["commands"] = [
+                command
+                for command in runbook["commands"]
+                if command["step"] != "build_scoring_readback_report"
+            ]
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(AssertionError, "build_scoring_readback_report"):
+                validate_package(package_dir)
+
+    def test_rejects_runbook_with_wrong_scoring_readback_input_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            for command in runbook["commands"]:
+                command["command"] = command["command"].replace(
+                    "artifacts/production-evidence-package/worker/scoring_readback_input.json",
+                    "artifacts/production-evidence-package/worker/scoring_readback_input_template.json",
+                )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(AssertionError, "scoring_readback_input.json"):
+                validate_package(package_dir)
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))

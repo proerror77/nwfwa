@@ -32,6 +32,45 @@ REQUIRED_WORKER_TEMPLATES = {
     "worker/worker_data_pipeline_run_status.json",
 }
 REQUIRED_RUNBOOKS = {"runbooks/worker-data-pipeline-commands.json"}
+REQUIRED_RUNBOOK_STEPS = {
+    "build_worker_data_pipeline_plan": (
+        "build-worker-data-pipeline-plan",
+        "worker/worker_data_pipeline_plan.json",
+    ),
+    "build_readiness_input_template": (
+        "build-worker-data-pipeline-readiness-input-template",
+        "worker/worker_data_pipeline_readiness_input_template.json",
+    ),
+    "build_readiness_report": (
+        "build-worker-data-pipeline-readiness-report",
+        "worker/worker_data_pipeline_readiness_report.json",
+    ),
+    "build_run_status_template": (
+        "build-worker-data-pipeline-run-status-template",
+        "worker/worker_data_pipeline_run_status_template.json",
+    ),
+    "build_execution_report": (
+        "build-worker-data-pipeline-execution-report",
+        "evidence/worker_data_pipeline_execution_report.json",
+    ),
+    "fetch_score_response": (
+        "fetch-scoring-readback-response",
+        "worker/scoring-readback/score_response.json",
+    ),
+    "build_scoring_readback_report": (
+        "build-scoring-readback-report",
+        "evidence/scoring_readback_report.json",
+    ),
+}
+REQUIRED_RUNBOOK_COMMAND_PATHS = {
+    "artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json",
+    "artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_input.json",
+    "artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_report.json",
+    "artifacts/production-evidence-package/worker/worker_data_pipeline_run_status.json",
+    "artifacts/production-evidence-package/worker/score_request.json",
+    "artifacts/production-evidence-package/worker/scoring_readback_input.json",
+    "artifacts/production-evidence-package/worker/scoring-readback/score_response.json",
+}
 FORBIDDEN_TEMPLATE_STRINGS = (
     "api_key",
     "patientName",
@@ -169,6 +208,33 @@ def validate_runbook(package_dir: Path) -> None:
         runbook.get("artifact_kind") == "worker_data_pipeline_command_runbook",
         "worker data-pipeline runbook has wrong artifact_kind",
     )
+    require(runbook.get("readiness_claim") is False, "runbook must not claim readiness")
+    require(
+        "runtime-secret-not-persisted" in json.dumps(runbook),
+        "runbook must use the runtime-secret-not-persisted API key placeholder",
+    )
+    commands = runbook.get("commands")
+    require(isinstance(commands, list), "runbook commands must be a list")
+    commands_by_step = {
+        command.get("step"): command for command in commands if isinstance(command, dict)
+    }
+    for step, (command_needle, output_path) in REQUIRED_RUNBOOK_STEPS.items():
+        command = commands_by_step.get(step)
+        require(command is not None, f"runbook missing required step {step}")
+        command_text = command.get("command")
+        require(
+            isinstance(command_text, str) and command_needle in command_text,
+            f"runbook step {step} missing command {command_needle}",
+        )
+        require(
+            command.get("output") == output_path,
+            f"runbook step {step} output must be {output_path}",
+        )
+    command_text = "\n".join(
+        command.get("command", "") for command in commands if isinstance(command, dict)
+    )
+    for path in REQUIRED_RUNBOOK_COMMAND_PATHS:
+        require(path in command_text, f"runbook command paths missing {path}")
     validate_command_includes_package_validator(runbook.get("validation_command"), "runbook")
 
 
