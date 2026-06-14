@@ -14,10 +14,10 @@ use sha2::{Digest, Sha256};
 #[path = "inbox_utils.rs"]
 mod inbox_utils;
 use inbox_utils::*;
-#[path = "inbox_validation.rs"]
-mod inbox_validation;
 #[path = "inbox_mapping.rs"]
 mod inbox_mapping;
+#[path = "inbox_validation.rs"]
+mod inbox_validation;
 use inbox_mapping::*;
 
 const MAPPING_VERSION: &str = "aiclaim-core-v1";

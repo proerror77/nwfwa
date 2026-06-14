@@ -1,4 +1,7 @@
-use crate::{comma_separated_values, request_json, RuleBacktestResponse, RuleDiscoveryCandidate, RuleDiscoveryResponse};
+use crate::{
+    comma_separated_values, request_json, RuleBacktestResponse, RuleDiscoveryCandidate,
+    RuleDiscoveryResponse,
+};
 use serde_json::{json, Value};
 use yew::prelude::*;
 

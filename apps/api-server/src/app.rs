@@ -111,9 +111,7 @@ pub fn build_app(config: AppConfig) -> anyhow::Result<Router> {
     ))
 }
 
-pub fn configured_model_scorer(
-    config: &AppConfig,
-) -> anyhow::Result<Arc<dyn ModelScorer>> {
+pub fn configured_model_scorer(config: &AppConfig) -> anyhow::Result<Arc<dyn ModelScorer>> {
     if let Some(manifest_uri) = config.model_serving_manifest_uri() {
         Ok(Arc::new(ServingManifestModelScorer::from_env(
             manifest_uri,

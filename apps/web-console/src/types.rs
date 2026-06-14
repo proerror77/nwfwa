@@ -1,7 +1,7 @@
 mod bootstrap;
 mod cases;
-mod data_sources;
 mod dashboard;
+mod data_sources;
 mod evidence;
 mod factor;
 mod governance;
@@ -15,8 +15,8 @@ mod runtime;
 
 pub(crate) use bootstrap::*;
 pub(crate) use cases::*;
-pub(crate) use data_sources::*;
 pub(crate) use dashboard::*;
+pub(crate) use data_sources::*;
 pub(crate) use evidence::*;
 pub(crate) use factor::*;
 pub(crate) use governance::*;

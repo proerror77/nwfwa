@@ -1,6 +1,4 @@
-use crate::{
-    parse_risk_score, parse_tags, DashboardSummary, LIVE_TPA_DEMO_PAYLOAD,
-};
+use crate::{parse_risk_score, parse_tags, DashboardSummary, LIVE_TPA_DEMO_PAYLOAD};
 use serde_json::{json, Value};
 
 pub(crate) fn agent_investigation_payload(

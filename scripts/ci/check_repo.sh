@@ -113,7 +113,7 @@ grep -q "INBOX_IDEMPOTENCY_CONFLICT" apps/api-server/src/routes/inbox.rs
 grep -q "inbox_claim_runs" migrations/0001_initial.sql
 grep -q "raw_payload_checksum" apps/api-server/src/routes/inbox.rs
 grep -q "inbox_run_id" apps/api-server/src/routes/claims.rs
-grep -q "InboxHandoffScoreClaimRequest" apps/api-server/src/routes/openapi.rs
+grep -q "InboxHandoffScoreClaimRequest" apps/api-server/src/routes/openapi_schemas_scoring_requests.rs
 grep -q "inbox handoff" docs/project/api-reference.md
 grep -q "inbox_run_id" docs/engineering/tpa-integration-contract.md
 grep -q "Error shape" docs/engineering/tpa-integration-contract.md
@@ -176,15 +176,15 @@ grep -q "Do not push from a dirty worktree" docs/engineering/git-flow.md
 grep -q "scripts/ci/assert_worker_health.py" .github/workflows/ci.yml
 grep -q "pilot_readiness_checker" scripts/ci/assert_worker_health.py
 grep -q "analytics_export_plan" scripts/ci/assert_worker_health.py
-grep -q "check-pilot-readiness" apps/worker/src/main.rs
-grep -q "build-analytics-export-plan" apps/worker/src/main.rs
-grep -q "serve-mlops-alert-router" apps/worker/src/main.rs
+grep -q "check-pilot-readiness" apps/worker/src/commands/mod.rs
+grep -q "build-analytics-export-plan" apps/worker/src/commands/mod.rs
+grep -q "serve-mlops-alert-router" apps/worker/src/commands/mod.rs
 grep -q "serve_mlops_alert_router" apps/worker/src/lib.rs
 grep -q "build_alertmanager_mlops_alert_delivery_submission" apps/worker/src/lib.rs
-grep -q "FWA_MLOPS_ALERT_ROUTER_TOKEN" apps/worker/src/main.rs
+grep -q "FWA_MLOPS_ALERT_ROUTER_TOKEN" apps/worker/src/commands/serve_mlops_alert_router.rs
 grep -q "axum.workspace = true" apps/worker/Cargo.toml
-grep -q "scheduled_analytics_export" apps/worker/src/lib.rs
-grep -q "analytics_provider_graph_snapshots" apps/worker/src/lib.rs
+grep -q "scheduled_analytics_export" apps/worker/src/ops_plans.rs
+grep -q "analytics_provider_graph_snapshots" apps/worker/src/ops_plans.rs
 grep -q "prd_coverage_summary" scripts/ops/build_prd_coverage.py
 grep -q "customer_data_or_environment_required" scripts/ops/build_prd_coverage.py
 grep -q "PRD Coverage" README.md
@@ -195,11 +195,11 @@ grep -q "Promotion Gates" docs/project/mlops-ui-design.md
 grep -q "Production Boundaries" docs/project/mlops-ui-design.md
 grep -q "Coverage Matrix" docs/project/prd-coverage.md
 grep -q "customer holdout validation and live shadow traffic" docs/project/prd-coverage.md
-grep -q -- "--require-ready" apps/worker/src/main.rs
+grep -q -- "--require-ready" apps/worker/src/commands/check_pilot_readiness.rs
 grep -q "check_pilot_readiness" apps/worker/src/lib.rs
-grep -q "ready_for_customer_pilot" apps/worker/src/lib.rs
-grep -q "remediation_summary" apps/worker/src/lib.rs
-grep -q "unwrap_or_else(|| format!(\"{}={}\"" apps/worker/src/lib.rs
+grep -q "ready_for_customer_pilot" apps/worker/src/health.rs
+grep -q "remediation_summary" apps/worker/src/health.rs
+grep -q "unwrap_or_else(|| format!(\"{}={}\"" apps/worker/src/health.rs
 grep -q "check-pilot-readiness" docs/project/operations-guide.md
 grep -q -- "--require-ready" docs/project/operations-guide.md
 grep -q "check-pilot-readiness" docs/engineering/pilot-readiness.md
@@ -217,10 +217,10 @@ if [[ -f apps/web-console/package.json || -f apps/web-console/package-lock.json 
 fi
 grep -q "yew = " apps/web-console/Cargo.toml
 grep -q "gloo-net" apps/web-console/Cargo.toml
-grep -q "/api/v1/inbox/claims/normalize" apps/web-console/src/main.rs
-grep -q "Correction Review" apps/web-console/src/main.rs
-grep -q "correction_overlay_template_for" apps/web-console/src/main.rs
-grep -q "merge_overlay" apps/web-console/src/main.rs
+grep -q "/api/v1/inbox/claims/normalize" apps/web-console/src/api/scoring.rs
+grep -q "Correction Worklist" apps/web-console/src/pages/claim_inbox.rs
+grep -q "correction_overlay_template_for" apps/web-console/src/inbox_helpers.rs
+grep -q "merge_overlay" apps/web-console/src/inbox_helpers.rs
 grep -q "Management Dashboard" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Discovery Mode" scripts/demo/smoke_web_console.mjs
@@ -250,12 +250,12 @@ grep -q "PRD runtime topology" scripts/demo/smoke_web_console.mjs
 grep -q "module_context" apps/web-console/src/main.rs
 grep -q "workspace-topbar" apps/web-console/src/styles.css
 grep -q "module-nav" apps/web-console/src/styles.css
-grep -q "/api/v1/health" apps/web-console/src/main.rs
+grep -q "/api/v1/health" apps/web-console/src/api/governance.rs
 grep -q "remediation" apps/api-server/src/routes/health.rs
-grep -q "Non-secret remediation hint" apps/api-server/src/routes/openapi.rs
-grep -Fq 'properties"]["remediation"]' apps/api-server/tests/ops_openapi.rs
-grep -q "Non-secret remediation hint" apps/api-server/tests/ops_openapi.rs
-grep -q "remediation" apps/web-console/src/main.rs
+grep -q "Non-secret remediation hint" apps/api-server/src/routes/openapi_schemas_health.rs
+grep -Fq 'properties"]["remediation"]' apps/api-server/tests/ops_openapi/schema_basics.rs
+grep -q "Non-secret remediation hint" apps/api-server/tests/ops_openapi/schema_basics.rs
+grep -q "remediation" apps/web-console/src/pages/governance.rs
 grep -q "remediation hints" docs/engineering/pilot-readiness.md
 grep -q "remediation hints" docs/project/api-reference.md
 grep -q "Guardrail Boundary" scripts/demo/smoke_web_console.mjs
@@ -297,25 +297,25 @@ grep -q "/api/v1/ops/models/{MODEL_KEY}/promotion-gates" scripts/demo/smoke_demo
 grep -q "/api/v1/ops/models/{MODEL_KEY}/performance" scripts/demo/smoke_demo.py
 grep -q "ArtifactModelScorer" apps/api-server/src/app.rs
 grep -q "ArtifactModelScorer" crates/fwa-ml-runtime/src/lib.rs
-grep -q "artifact_signature_status" crates/fwa-ml-runtime/src/lib.rs
-grep -q "rust_artifact" apps/api-server/src/config.rs
+grep -q "artifact_signature_status" crates/fwa-ml-runtime/src/scorer_artifact.rs
+grep -q "rust_artifact" apps/api-server/src/config/config_model.rs
 grep -q "FWA_MODEL_ARTIFACT_URI" docs/project/technology-stack.md
 grep -q "Rust runtime artifact scoring" docs/project/operations-guide.md
 grep -q "External Training Platform Boundary" docs/project/ml-pipeline-runbook.md
 grep -q "same Parquet dataset manifest" docs/project/ml-pipeline-runbook.md
 grep -q "external training platform" docs/project/architecture.md
-grep -q "build-training-handoff" apps/worker/src/main.rs
-grep -q "build-mlops-monitoring-plan" apps/worker/src/main.rs
-grep -q "scheduled_mlops_monitoring" apps/worker/src/lib.rs
-grep -q "shadow_traffic_evaluation" apps/worker/src/lib.rs
-grep -q "reviewer_disagreement_review" apps/worker/src/lib.rs
-grep -q "label_delay_review" apps/worker/src/lib.rs
+grep -q "build-training-handoff" apps/worker/src/commands/mod.rs
+grep -q "build-mlops-monitoring-plan" apps/worker/src/commands/mod.rs
+grep -q "scheduled_mlops_monitoring" apps/worker/src/mlops_monitoring_plan.rs
+grep -q "shadow_traffic_evaluation" apps/worker/src/mlops_monitoring_runtime.rs
+grep -q "reviewer_disagreement_review" apps/worker/src/mlops_monitoring_runtime.rs
+grep -q "label_delay_review" apps/worker/src/mlops_monitoring_runtime.rs
 grep -q "build-training-handoff" docs/project/ml-pipeline-runbook.md
 grep -q "build-mlops-monitoring-plan" docs/project/ml-pipeline-runbook.md
 grep -q "reviewer_disagreement_review" docs/project/ml-pipeline-runbook.md
 grep -q "label_delay_review" docs/project/ml-pipeline-runbook.md
 grep -q "FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND" scripts/demo/smoke_demo.py
-grep -q "Rust serving exports should use rust_serving_artifact.json" apps/api-server/src/routes/openapi.rs
+grep -q "Rust serving exports should use rust_serving_artifact.json" apps/api-server/src/routes/openapi_schemas_data_models_retraining.rs
 grep -q "Public Data MVP Pack" docs/project/public-data-mvp.md
 grep -q "CMS Medicare Claims Synthetic Public Use Files" docs/project/public-data-mvp.md
 grep -q "CMS Medicare Physician & Other Practitioners by Provider" docs/project/public-data-mvp.md
@@ -389,16 +389,16 @@ grep -q "FWA_API_KEY_PRINCIPALS" scripts/dev/start_local_runtime.sh
 grep -q "/api/v1/ops/dashboard/summary" scripts/dev/start_local_runtime.sh
 grep -q -- "--customer-principal-smoke" docs/engineering/demo-runbook.md
 grep -q -- "--customer-principal-smoke" docs/engineering/pilot-readiness.md
-grep -q "API Call Records" apps/web-console/src/main.rs
+grep -q "API Call Records" apps/web-console/src/pages/governance.rs
 grep -q "/api/v1/claims/score" scripts/demo/smoke_demo.py
 grep -q "score_normalized_inbox_context" scripts/demo/smoke_demo.py
 grep -q "canonical_claim_context" scripts/demo/smoke_demo.py
 grep -q "has_canonical_trace=true" scripts/demo/smoke_demo.py
-grep -q "has_canonical_trace" apps/api-server/src/routes/openapi.rs
+grep -q "has_canonical_trace" apps/api-server/src/routes/openapi_paths_data_ops_operations.rs
 grep -q "has_canonical_trace" apps/api-server/src/routes/ops_audit.rs
-grep -q "Canonical Trace Only" apps/web-console/src/main.rs
-grep -q "audit_coverage" apps/api-server/src/routes/openapi.rs
-grep -q "Audit Coverage" apps/web-console/src/main.rs
+grep -q "Canonical Trace Only" scripts/demo/smoke_web_console.mjs
+grep -q "audit_coverage" apps/api-server/src/routes/openapi_schemas_ops_dashboard.rs
+grep -q "Audit Coverage" apps/web-console/src/pages/governance.rs
 grep -q "Canonical Trace Coverage" scripts/demo/smoke_web_console.mjs
 grep -q "latest_canonical_claim_context_trace" apps/api-server/src/routes/agent.rs
 grep -q "Agent context snapshot carries" docs/project/api-reference.md
@@ -406,15 +406,15 @@ grep -q "canonical scoring trace" docs/project/api-reference.md
 grep -q "canonical_claim_context.claim_header.external_claim_id" docs/product/fwa-risk-operations-prd.md
 grep -q "QA result writeback, investigation result writeback, medical review result" docs/product/fwa-risk-operations-prd.md
 grep -q "canonical invoice" docs/engineering/tpa-integration-contract.md
-grep -q "canonical_source_refs" apps/api-server/src/routes/openapi.rs
-grep -q "source_claim_id has a prior canonical_claim_context_trace" apps/api-server/src/routes/openapi.rs
-grep -q "merge_latest_canonical_evidence_refs_for_investigation" apps/api-server/src/routes/pilot_loop.rs
+grep -q "canonical_source_refs" apps/api-server/src/routes/openapi_schemas_provider_medical.rs
+grep -q "source_claim_id has a prior canonical_claim_context_trace" apps/api-server/src/routes/openapi_schemas_ops_knowledge.rs
+grep -q "merge_latest_canonical_evidence_refs_for_investigation" apps/api-server/src/routes/pilot_loop_writebacks.rs
 grep -q "Investigation result writeback merges" docs/project/api-reference.md
-grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_loop.rs
+grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_loop_writebacks.rs
 grep -q "QA result writeback merges" docs/project/api-reference.md
 grep -q "merge_canonical_evidence_refs_for_medical_review" apps/api-server/src/routes/ops_medical.rs
 grep -q "Medical review result writeback merges" docs/project/api-reference.md
-grep -q "Canonical Evidence" apps/web-console/src/main.rs
+grep -q "Canonical Evidence" scripts/demo/smoke_web_console.mjs
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py
 grep -q "/api/v1/qa/results" scripts/demo/smoke_demo.py
@@ -429,8 +429,8 @@ grep -q "routing_policy_id=" scripts/demo/smoke_demo.py
 grep -q "agent_run_id=" scripts/demo/smoke_demo.py
 grep -q "saving_attributions" scripts/demo/smoke_demo.py
 grep -q "saving_segments" scripts/demo/smoke_demo.py
-grep -q "Time/group split strategy" apps/api-server/src/routes/ops_models.rs
-grep -q "time_group_split_status" apps/worker/src/lib.rs
+grep -q "Time/group split strategy" apps/api-server/src/routes/ops_models_gates.rs
+grep -q "time_group_split_status" apps/worker/src/retraining_output.rs
 grep -q "time_group_split_status" scripts/demo/seed_demo.sql
 grep -q "time_group_split_status" docs/product/fwa-risk-operations-prd.md
 grep -q "time_group_split_status" docs/project/api-reference.md
@@ -471,10 +471,10 @@ grep -q "evidence_redaction_reviews" migrations/0001_initial.sql
 grep -q "evidence_embedding_jobs" migrations/0001_initial.sql
 grep -q "evidence_retrieval_audit_events" migrations/0001_initial.sql
 grep -q "agent_workspace_artifacts" migrations/0001_initial.sql
-grep -q "ops_evidence" apps/api-server/src/app.rs
-grep -q "/api/v1/ops/evidence/documents" apps/api-server/src/routes/openapi.rs
-grep -q "evidence.document.registered" apps/api-server/src/routes/ops_evidence.rs
-grep -q "evidence.retrieval_audit.recorded" apps/api-server/src/routes/ops_evidence.rs
+grep -q "ops_evidence" apps/api-server/src/app/app_routes.rs
+grep -q "/api/v1/ops/evidence/documents" apps/api-server/src/routes/openapi_paths_data_ops_evidence.rs
+grep -q "evidence.document.registered" apps/api-server/src/routes/ops_evidence/ops_evidence_documents.rs
+grep -q "evidence.retrieval_audit.recorded" apps/api-server/src/routes/ops_evidence/ops_evidence_pipeline.rs
 grep -q "/api/v1/ops/evidence/embedding-jobs" docs/project/api-reference.md
 grep -q "/api/v1/ops/evidence/retrieval-audit-events" docs/project/ai-evidence-foundation.md
 grep -q "ai_evidence_foundation_manifest.json" docs/project/operations-guide.md
@@ -605,13 +605,13 @@ grep -q "serve-mlops-alert-router" scripts/ops/build_production_deployment_packa
 grep -q "allow-observability-to-mlops-alert-router" scripts/ops/build_production_deployment_package.py
 grep -q "FWA_MLOPS_ALERT_ROUTER_TOKEN" scripts/ops/validate_production_secret_file.py
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
-grep -q "scheduled_ai_evidence_execution" apps/worker/src/lib.rs
-grep -q "ai_evidence_execution_plan" apps/worker/src/lib.rs
-grep -q "retrieval_ranking_evaluation" apps/worker/src/lib.rs
-grep -q "build-ai-evidence-execution-plan" apps/worker/src/main.rs
-grep -q "scheduled_governance_ops" apps/worker/src/lib.rs
-grep -q "governance_ops_plan" apps/worker/src/lib.rs
-grep -q "build-governance-ops-plan" apps/worker/src/main.rs
+grep -q "scheduled_ai_evidence_execution" apps/worker/src/ops_plans.rs
+grep -q "ai_evidence_execution_plan" apps/worker/src/ops_plans.rs
+grep -q "retrieval_ranking_evaluation" apps/worker/src/ops_plans.rs
+grep -q "build-ai-evidence-execution-plan" apps/worker/src/commands/mod.rs
+grep -q "scheduled_governance_ops" apps/worker/src/ops_plans.rs
+grep -q "governance_ops_plan" apps/worker/src/health.rs
+grep -q "build-governance-ops-plan" apps/worker/src/commands/mod.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
 python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py

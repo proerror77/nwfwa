@@ -1,15 +1,15 @@
 use crate::api::*;
-use crate::types::*;
-use crate::constants::*;
-use crate::state::{use_api_key, ApiState};
-use crate::formatting::*;
 use crate::case_helpers::*;
+use crate::constants::*;
+use crate::formatting::*;
 use crate::inbox_helpers::*;
 use crate::payload_helpers::*;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use serde_json::{json, Value};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 #[path = "claim_inbox_view.rs"]
 mod claim_inbox_view;

@@ -10,7 +10,10 @@ pub(crate) async fn get_rule_ops_snapshot(
 ) -> Result<RuleOpsSnapshot, String> {
     let (rules_res, performance_res) = join!(
         request_get_json::<RuleListResponse>("/api/v1/ops/rules", api_key.clone()),
-        request_get_json::<RulePerformanceResponse>("/api/v1/ops/rules/performance", api_key.clone()),
+        request_get_json::<RulePerformanceResponse>(
+            "/api/v1/ops/rules/performance",
+            api_key.clone()
+        ),
     );
     let rules = rules_res?.rules;
     let performance = performance_res?.rules;

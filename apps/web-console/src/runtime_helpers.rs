@@ -1,4 +1,6 @@
-use crate::{payload_keys_label, risk_node, RuntimeModelScore, RuntimeRequiredEvidence, ScoreResponse};
+use crate::{
+    payload_keys_label, risk_node, RuntimeModelScore, RuntimeRequiredEvidence, ScoreResponse,
+};
 use serde_json::{json, Value};
 use yew::prelude::*;
 

@@ -1,12 +1,12 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
-use crate::formatting::*;
-use crate::ui_helpers::*;
 use crate::data_helpers::*;
 use crate::data_lineage_helpers::*;
-use yew::prelude::*;
+use crate::formatting::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
+use crate::ui_helpers::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[function_component(DataSourcesPage)]
 pub fn data_sources_page() -> Html {

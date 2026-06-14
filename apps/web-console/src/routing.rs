@@ -128,10 +128,7 @@ pub(crate) const NAV_SECTIONS: &[(&str, &[Module])] = &[
     ),
     (
         "Intake & Scoring",
-        &[
-            Module::IntakeOps,
-            Module::RuntimeScoring,
-        ],
+        &[Module::IntakeOps, Module::RuntimeScoring],
     ),
     (
         "Investigation",
@@ -261,7 +258,8 @@ pub(crate) fn system_map_stage(
 ) -> Html {
     let on_navigate = on_navigate.clone();
     let is_active = active == target
-        || (target == Module::ReviewWorkbench && matches!(active, Module::MedicalReview | Module::QaReview))
+        || (target == Module::ReviewWorkbench
+            && matches!(active, Module::MedicalReview | Module::QaReview))
         || (target == Module::EvidenceHub
             && matches!(
                 active,

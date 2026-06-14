@@ -1,10 +1,10 @@
-use crate::types::*;
-use crate::state::ApiState;
-use crate::formatting::*;
-use crate::rule_ui_helpers::*;
 use crate::data_helpers::*;
-use yew::prelude::*;
+use crate::formatting::*;
 use crate::rule_performance_for;
+use crate::rule_ui_helpers::*;
+use crate::state::ApiState;
+use crate::types::*;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub(crate) struct RulesProps {

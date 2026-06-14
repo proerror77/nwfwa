@@ -1,15 +1,15 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::ApiState;
+use crate::data_helpers::*;
 use crate::formatting::*;
-use crate::ui_helpers::*;
 use crate::rule_helpers::*;
 use crate::rule_ui_helpers::*;
-use crate::data_helpers::*;
-use yew::prelude::*;
+use crate::state::ApiState;
+use crate::types::*;
+use crate::ui_helpers::*;
 use serde_json::Value;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlTextAreaElement;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub(crate) struct RulesDiscoveryProps {

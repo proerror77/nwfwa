@@ -1,12 +1,12 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
-use crate::ui_helpers::*;
 use crate::data_helpers::*;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
+use crate::ui_helpers::*;
 use serde_json::{json, Value};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[function_component(KnowledgeBasePage)]
 pub fn knowledge_base_page() -> Html {

@@ -1,11 +1,11 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
-use crate::formatting::*;
 use crate::data_helpers::*;
-use yew::prelude::*;
+use crate::formatting::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[function_component(EvidenceRuntimePage)]
 pub fn evidence_runtime_page() -> Html {

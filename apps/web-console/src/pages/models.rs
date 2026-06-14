@@ -1,11 +1,11 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::formatting::*;
 use crate::model_ui_helpers::*;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[function_component(ModelsPage)]
 pub fn models_page() -> Html {

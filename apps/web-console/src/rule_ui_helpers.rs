@@ -475,7 +475,13 @@ pub(crate) fn rule_gate_pipeline(gates: &RulePromotionGates) -> Html {
     let nodes = gates
         .gates
         .iter()
-        .map(|gate| (gate.label.as_str(), gate.passed, gate.evidence_source.as_str()))
+        .map(|gate| {
+            (
+                gate.label.as_str(),
+                gate.passed,
+                gate.evidence_source.as_str(),
+            )
+        })
         .collect::<Vec<_>>();
     gate_pipeline("Rule promotion pipeline", &nodes)
 }

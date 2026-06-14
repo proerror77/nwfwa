@@ -1,9 +1,9 @@
 use crate::api::*;
-use crate::types::*;
 use crate::state::{use_api_key, ApiState};
-use yew::prelude::*;
-use wasm_bindgen_futures::spawn_local;
+use crate::types::*;
 use serde_json::Value;
+use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[path = "rules_view.rs"]
 mod rules_view;

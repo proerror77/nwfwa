@@ -1,12 +1,14 @@
-use crate::types::*;
-use crate::state::ApiState;
-use crate::formatting::*;
-use crate::ui_helpers::*;
-use crate::case_helpers::*;
-use yew::prelude::*;
 use super::super::agent_investigator::AgentInvestigationView;
-use super::leads_cases_view::{CaseUpdateResultView, InvestigationWritebackResultView, TriageResultView};
+use super::leads_cases_view::{
+    CaseUpdateResultView, InvestigationWritebackResultView, TriageResultView,
+};
+use crate::case_helpers::*;
+use crate::formatting::*;
+use crate::state::ApiState;
+use crate::types::*;
+use crate::ui_helpers::*;
 use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn leads_triage_workspace(

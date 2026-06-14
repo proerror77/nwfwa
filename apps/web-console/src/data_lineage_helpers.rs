@@ -46,9 +46,7 @@ pub(crate) fn lineage_for<'a>(
         .find(|record| record.evaluation_run_id == evaluation_run_id)
 }
 
-pub(crate) fn lineage_data_quality_label(
-    lineage: Option<&ModelEvaluationLineageRecord>,
-) -> String {
+pub(crate) fn lineage_data_quality_label(lineage: Option<&ModelEvaluationLineageRecord>) -> String {
     lineage
         .map(|record| {
             format!(

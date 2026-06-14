@@ -1,11 +1,11 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::formatting::*;
-use yew::prelude::*;
-use wasm_bindgen_futures::spawn_local;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use serde_json::json;
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 // ── Conclusion kind ────────────────────────────────────────────────────────────
 
@@ -21,31 +21,31 @@ enum Conclusion {
 impl Conclusion {
     fn label(self) -> &'static str {
         match self {
-            Conclusion::ConfirmedFwa          => "确认 FWA — 拒赔",
-            Conclusion::FalsePositive         => "误报 — 放行",
-            Conclusion::InsufficientEvidence  => "需补充材料",
-            Conclusion::ImproperPayment       => "不当支付 (非诈骗)",
-            Conclusion::DocumentationIssue    => "文件问题",
+            Conclusion::ConfirmedFwa => "确认 FWA — 拒赔",
+            Conclusion::FalsePositive => "误报 — 放行",
+            Conclusion::InsufficientEvidence => "需补充材料",
+            Conclusion::ImproperPayment => "不当支付 (非诈骗)",
+            Conclusion::DocumentationIssue => "文件问题",
         }
     }
 
     fn css_class(self) -> &'static str {
         match self {
-            Conclusion::ConfirmedFwa         => "fwa",
-            Conclusion::FalsePositive        => "clear",
+            Conclusion::ConfirmedFwa => "fwa",
+            Conclusion::FalsePositive => "clear",
             Conclusion::InsufficientEvidence => "more",
-            Conclusion::ImproperPayment      => "improper",
-            Conclusion::DocumentationIssue   => "doc",
+            Conclusion::ImproperPayment => "improper",
+            Conclusion::DocumentationIssue => "doc",
         }
     }
 
     fn outcome(self) -> &'static str {
         match self {
-            Conclusion::ConfirmedFwa         => "confirmed_fwa_prevented_payment",
-            Conclusion::FalsePositive        => "false_positive",
+            Conclusion::ConfirmedFwa => "confirmed_fwa_prevented_payment",
+            Conclusion::FalsePositive => "false_positive",
             Conclusion::InsufficientEvidence => "insufficient_evidence",
-            Conclusion::ImproperPayment      => "improper_payment",
-            Conclusion::DocumentationIssue   => "documentation_issue",
+            Conclusion::ImproperPayment => "improper_payment",
+            Conclusion::DocumentationIssue => "documentation_issue",
         }
     }
 
@@ -71,17 +71,17 @@ const CONCLUSIONS: &[Conclusion] = &[
 fn priority_badge(priority: &str) -> Html {
     let tone = match priority.to_ascii_lowercase().as_str() {
         "critical" | "high" => "high",
-        "medium"             => "medium",
-        _                    => "low",
+        "medium" => "medium",
+        _ => "low",
     };
     html! { <span class={classes!("risk-badge", tone)}>{priority}</span> }
 }
 
 fn sla_badge(sla_status: &str) -> Html {
     let (tone, label) = match sla_status.to_ascii_lowercase().as_str() {
-        "breached"    => ("critical", "SLA 超时"),
-        "at_risk"     => ("warning",  "SLA 预警"),
-        _             => ("ok",       "SLA 正常"),
+        "breached" => ("critical", "SLA 超时"),
+        "at_risk" => ("warning", "SLA 预警"),
+        _ => ("ok", "SLA 正常"),
     };
     html! { <span class={classes!("status-token", tone)}>{label}</span> }
 }
@@ -176,7 +176,8 @@ fn card_claim_info(case: &CaseRecord) -> Html {
 }
 
 fn card_risk_signals(case: &CaseRecord) -> Html {
-    let signals: Vec<&str> = case.routing_reason
+    let signals: Vec<&str> = case
+        .routing_reason
         .split(';')
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -184,13 +185,13 @@ fn card_risk_signals(case: &CaseRecord) -> Html {
 
     let risk_tone = match case.priority.to_ascii_lowercase().as_str() {
         "critical" | "high" => "High",
-        "medium"             => "Medium",
-        _                    => "Low",
+        "medium" => "Medium",
+        _ => "Low",
     };
     let badge_tone = match risk_tone {
-        "High"   => "high",
+        "High" => "high",
         "Medium" => "medium",
-        _        => "low",
+        _ => "low",
     };
 
     html! {
@@ -416,26 +417,26 @@ fn conclusion_panel(
 
 #[function_component(ReviewWorkbenchPage)]
 pub fn review_workbench_page() -> Html {
-    let api_key           = use_api_key();
-    let snapshot_state    = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
-    let selected_case_id  = use_state(String::new);
-    let member_state      = use_state(|| ApiState::<MemberProfileSummary>::Idle);
+    let api_key = use_api_key();
+    let snapshot_state = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
+    let selected_case_id = use_state(String::new);
+    let member_state = use_state(|| ApiState::<MemberProfileSummary>::Idle);
 
     // Conclusion form state
-    let selected_conclusion  = use_state(|| Option::<Conclusion>::None);
-    let saving_amount        = use_state(String::new);
-    let notes                = use_state(String::new);
-    let evidence_refs_input  = use_state(String::new);
-    let submit_state         = use_state(|| ApiState::<PilotWritebackResponse>::Idle);
-    let confirm_msg          = use_state(|| Option::<String>::None);
+    let selected_conclusion = use_state(|| Option::<Conclusion>::None);
+    let saving_amount = use_state(String::new);
+    let notes = use_state(String::new);
+    let evidence_refs_input = use_state(String::new);
+    let submit_state = use_state(|| ApiState::<PilotWritebackResponse>::Idle);
+    let confirm_msg = use_state(|| Option::<String>::None);
 
     // Auto-load on mount
     {
-        let api_key        = api_key.clone();
+        let api_key = api_key.clone();
         let snapshot_state = snapshot_state.clone();
         let selected_case_id = selected_case_id.clone();
         use_effect_with((), move |_| {
-            let api_key        = (*api_key).clone();
+            let api_key = (*api_key).clone();
             let snapshot_state = snapshot_state.clone();
             let selected_case_id = selected_case_id.clone();
             snapshot_state.set(ApiState::Loading);
@@ -443,7 +444,9 @@ pub fn review_workbench_page() -> Html {
                 match get_leads_cases_snapshot(api_key).await {
                     Ok(snap) => {
                         // Auto-select first investigating case
-                        let first_id = snap.cases.iter()
+                        let first_id = snap
+                            .cases
+                            .iter()
                             .find(|c| {
                                 let s = c.status.to_ascii_lowercase();
                                 s == "investigating" || s == "pending"
@@ -464,7 +467,8 @@ pub fn review_workbench_page() -> Html {
 
     // Derive filtered case list (investigating / pending)
     let reviewing_cases: Vec<CaseRecord> = if let ApiState::Ready(snap) = &*snapshot_state {
-        snap.cases.iter()
+        snap.cases
+            .iter()
             .filter(|c| {
                 let s = c.status.to_ascii_lowercase();
                 s == "investigating" || s == "pending"
@@ -484,12 +488,12 @@ pub fn review_workbench_page() -> Html {
 
     // Load member profile when selected case changes
     {
-        let api_key      = api_key.clone();
+        let api_key = api_key.clone();
         let member_state = member_state.clone();
-        let notes        = notes.clone();
+        let notes = notes.clone();
         let evidence_refs_input = evidence_refs_input.clone();
         let selected_conclusion = selected_conclusion.clone();
-        let confirm_msg  = confirm_msg.clone();
+        let confirm_msg = confirm_msg.clone();
         let submit_state = submit_state.clone();
         let saving_amount = saving_amount.clone();
         let selected_case = selected_case.clone();
@@ -508,15 +512,17 @@ pub fn review_workbench_page() -> Html {
                 let refs = evidence_refs_from_package(&case.evidence_package);
                 evidence_refs_input.set(refs.join(", "));
 
-                let api_key      = (*api_key).clone();
+                let api_key = (*api_key).clone();
                 let member_state = member_state.clone();
                 if !member_id.is_empty() {
                     member_state.set(ApiState::Loading);
                     spawn_local(async move {
-                        member_state.set(match get_member_profile_summary(api_key, member_id).await {
-                            Ok(m)  => ApiState::Ready(m),
-                            Err(e) => ApiState::Failed(e),
-                        });
+                        member_state.set(
+                            match get_member_profile_summary(api_key, member_id).await {
+                                Ok(m) => ApiState::Ready(m),
+                                Err(e) => ApiState::Failed(e),
+                            },
+                        );
                     });
                 }
             } else {
@@ -528,30 +534,39 @@ pub fn review_workbench_page() -> Html {
     }
 
     // Evidence refs list for current case
-    let ev_refs: Vec<String> = selected_case.as_ref()
+    let ev_refs: Vec<String> = selected_case
+        .as_ref()
         .map(|c| evidence_refs_from_package(&c.evidence_package))
         .unwrap_or_default();
 
     // Submit conclusion
     let on_submit = {
-        let api_key             = api_key.clone();
-        let selected_case       = selected_case.clone();
+        let api_key = api_key.clone();
+        let selected_case = selected_case.clone();
         let selected_conclusion = selected_conclusion.clone();
-        let saving_amount       = saving_amount.clone();
-        let notes               = notes.clone();
+        let saving_amount = saving_amount.clone();
+        let notes = notes.clone();
         let evidence_refs_input = evidence_refs_input.clone();
-        let submit_state        = submit_state.clone();
-        let confirm_msg         = confirm_msg.clone();
-        let selected_case_id    = selected_case_id.clone();
-        let snapshot_state      = snapshot_state.clone();
+        let submit_state = submit_state.clone();
+        let confirm_msg = confirm_msg.clone();
+        let selected_case_id = selected_case_id.clone();
+        let snapshot_state = snapshot_state.clone();
 
         Callback::from(move |_: MouseEvent| {
-            let Some(case) = &selected_case else { return; };
-            let Some(conclusion) = *selected_conclusion else { return; };
-            if matches!(*submit_state, ApiState::Loading) { return; }
+            let Some(case) = &selected_case else {
+                return;
+            };
+            let Some(conclusion) = *selected_conclusion else {
+                return;
+            };
+            if matches!(*submit_state, ApiState::Loading) {
+                return;
+            }
 
             let notes_val = (*notes).trim().to_string();
-            if notes_val.is_empty() { return; }
+            if notes_val.is_empty() {
+                return;
+            }
 
             let refs: Vec<String> = (*evidence_refs_input)
                 .split(',')
@@ -560,13 +575,15 @@ pub fn review_workbench_page() -> Html {
                 .collect();
 
             let saving_str = (*saving_amount).trim().to_string();
-            let saving_val: serde_json::Value = if conclusion.show_saving_amount() && !saving_str.is_empty() {
-                saving_str.parse::<f64>()
-                    .map(|v| json!(v))
-                    .unwrap_or(serde_json::Value::Null)
-            } else {
-                serde_json::Value::Null
-            };
+            let saving_val: serde_json::Value =
+                if conclusion.show_saving_amount() && !saving_str.is_empty() {
+                    saving_str
+                        .parse::<f64>()
+                        .map(|v| json!(v))
+                        .unwrap_or(serde_json::Value::Null)
+                } else {
+                    serde_json::Value::Null
+                };
 
             let payload = json!({
                 "claim_id":             case.claim_id,
@@ -580,12 +597,12 @@ pub fn review_workbench_page() -> Html {
                 "evidence_refs":        refs,
             });
 
-            let api_key          = (*api_key).clone();
-            let submit_state     = submit_state.clone();
-            let confirm_msg      = confirm_msg.clone();
+            let api_key = (*api_key).clone();
+            let submit_state = submit_state.clone();
+            let confirm_msg = confirm_msg.clone();
             let selected_case_id = selected_case_id.clone();
-            let snapshot_state   = snapshot_state.clone();
-            let claim_id         = case.claim_id.clone();
+            let snapshot_state = snapshot_state.clone();
+            let claim_id = case.claim_id.clone();
 
             submit_state.set(ApiState::Loading);
             confirm_msg.set(None);
@@ -593,15 +610,22 @@ pub fn review_workbench_page() -> Html {
             spawn_local(async move {
                 match post_investigation_result(api_key.clone(), payload).await {
                     Ok(resp) => {
-                        let msg = format!("理赔 {} 已提交：{}", resp.claim_id, business_label(&resp.event_status));
+                        let msg = format!(
+                            "理赔 {} 已提交：{}",
+                            resp.claim_id,
+                            business_label(&resp.event_status)
+                        );
                         submit_state.set(ApiState::Ready(resp));
                         confirm_msg.set(Some(msg));
                         // Refresh snapshot and advance to next case
                         if let Ok(snap) = get_leads_cases_snapshot(api_key).await {
-                            let next_id = snap.cases.iter()
+                            let next_id = snap
+                                .cases
+                                .iter()
                                 .find(|c| {
                                     let s = c.status.to_ascii_lowercase();
-                                    (s == "investigating" || s == "pending") && c.claim_id != claim_id
+                                    (s == "investigating" || s == "pending")
+                                        && c.claim_id != claim_id
                                 })
                                 .map(|c| c.case_id.clone())
                                 .unwrap_or_default();

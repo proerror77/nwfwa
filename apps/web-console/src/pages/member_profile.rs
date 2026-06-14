@@ -4,8 +4,8 @@ use crate::formatting::*;
 use crate::state::{use_api_key, ApiState};
 use crate::types::*;
 use crate::ui_helpers::text_input;
-use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[function_component(MemberProfilePage)]
 pub fn member_profile_page() -> Html {
@@ -147,11 +147,7 @@ fn profile_detail(props: &ProfileDetailProps) -> Html {
     let tone = risk_tone(&p.risk_level_summary);
     let label = risk_label(&p.risk_level_summary);
     let icon = risk_icon(&p.risk_level_summary);
-    let amount = format!(
-        "{} {}",
-        display_value(&p.total_claim_amount),
-        p.currency
-    );
+    let amount = format!("{} {}", display_value(&p.total_claim_amount), p.currency);
     let high_risk_pct = if p.claim_count > 0 {
         (p.high_risk_claim_count * 100) / p.claim_count
     } else {
@@ -294,9 +290,9 @@ fn kpi_card(label: &str, value: &str, unit: &str, color: &str) -> Html {
 
 fn kpi_card_pct(label: &str, pct: u32, tone: &str) -> Html {
     let color = match tone {
-        "danger"  => "#d8284f",
+        "danger" => "#d8284f",
         "warning" => "#b7791f",
-        _         => "#1a7a3c",
+        _ => "#1a7a3c",
     };
     html! {
         <section class="panel" style="text-align:center;padding:16px 12px;">
@@ -319,10 +315,14 @@ fn kpi_card_pct(label: &str, pct: u32, tone: &str) -> Html {
 
 fn signal_row(label: &str, value: &str, tone: &str) -> Html {
     let (bg, border, text_color) = match tone {
-        "danger"  => ("var(--red-soft)",   "var(--red)",   "var(--red)"),
+        "danger" => ("var(--red-soft)", "var(--red)", "var(--red)"),
         "warning" => ("var(--amber-soft)", "var(--amber)", "var(--amber)"),
-        "success" => ("#e8f7ee",           "#1a7a3c",      "#1a7a3c"),
-        _         => ("var(--surface-muted)", "var(--line-strong)", "var(--graphite)"),
+        "success" => ("#e8f7ee", "#1a7a3c", "#1a7a3c"),
+        _ => (
+            "var(--surface-muted)",
+            "var(--line-strong)",
+            "var(--graphite)",
+        ),
     };
     html! {
         <div style={format!(

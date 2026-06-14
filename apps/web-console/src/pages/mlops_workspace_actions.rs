@@ -1,9 +1,9 @@
 use crate::api::*;
-use crate::state::ApiState;
-use crate::formatting::*;
 use crate::data_helpers::*;
-use yew::prelude::*;
+use crate::formatting::*;
+use crate::state::ApiState;
 use serde_json::{json, Value};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub(crate) struct MlopsActionProps {

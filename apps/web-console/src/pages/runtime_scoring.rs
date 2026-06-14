@@ -1,13 +1,13 @@
 use crate::api::*;
-use crate::types::*;
 use crate::constants::*;
-use crate::state::{use_api_key, ApiState};
 use crate::formatting::*;
 use crate::runtime_helpers::*;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use serde_json::{json, Value};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 #[function_component(RuntimeScoringPage)]
 pub fn runtime_scoring_page() -> Html {

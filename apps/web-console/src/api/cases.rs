@@ -53,10 +53,7 @@ pub(crate) async fn get_claim_audit_history(
     api_key: String,
     claim_id: String,
 ) -> Result<ClaimAuditHistoryResponse, String> {
-    super::request_get_json(
-        &format!("/api/v1/audit/claims/{claim_id}"),
-        api_key,
-    ).await
+    super::request_get_json(&format!("/api/v1/audit/claims/{claim_id}"), api_key).await
 }
 
 pub(crate) async fn get_similar_cases_for_claim(
@@ -72,7 +69,8 @@ pub(crate) async fn get_similar_cases_for_claim(
             "scheme_family": scheme_family,
             "limit": 5
         }),
-    ).await
+    )
+    .await
 }
 
 pub(crate) async fn load_investigation_context(

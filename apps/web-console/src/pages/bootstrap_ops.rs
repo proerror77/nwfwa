@@ -1,10 +1,10 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::data_helpers::*;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 #[path = "bootstrap_ops_view.rs"]
 mod bootstrap_ops_view;

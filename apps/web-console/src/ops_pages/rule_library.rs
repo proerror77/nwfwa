@@ -1,8 +1,8 @@
 use crate::api::*;
-use crate::types::*;
 use crate::state::{use_api_key, ApiState};
-use yew::prelude::*;
+use crate::types::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -15,9 +15,9 @@ fn performance_for<'a>(
 
 fn review_mode_badge(review_mode: &str) -> Html {
     let tone = match review_mode.to_ascii_lowercase().as_str() {
-        "auto"   => "info",
+        "auto" => "info",
         "manual" => "warning",
-        _        => "neutral",
+        _ => "neutral",
     };
     html! { <span class={classes!("status-token", tone)}>{review_mode}</span> }
 }
@@ -25,7 +25,10 @@ fn review_mode_badge(review_mode: &str) -> Html {
 // ── KPI computations ──────────────────────────────────────────────────────────
 
 fn kpi_active_count(rules: &[RuleSummary]) -> usize {
-    rules.iter().filter(|r| r.status.eq_ignore_ascii_case("active")).count()
+    rules
+        .iter()
+        .filter(|r| r.status.eq_ignore_ascii_case("active"))
+        .count()
 }
 
 fn kpi_total_hits(performance: &[RulePerformance]) -> u32 {
@@ -41,7 +44,10 @@ fn kpi_avg_precision(performance: &[RulePerformance]) -> f64 {
 }
 
 fn kpi_pending_count(rules: &[RuleSummary]) -> usize {
-    rules.iter().filter(|r| r.status.eq_ignore_ascii_case("approved")).count()
+    rules
+        .iter()
+        .filter(|r| r.status.eq_ignore_ascii_case("approved"))
+        .count()
 }
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
@@ -58,10 +64,10 @@ fn page_header() -> Html {
 }
 
 fn kpi_strip(rules: &[RuleSummary], performance: &[RulePerformance]) -> Html {
-    let active_count   = kpi_active_count(rules);
-    let total_hits     = kpi_total_hits(performance);
-    let avg_precision  = kpi_avg_precision(performance);
-    let pending_count  = kpi_pending_count(rules);
+    let active_count = kpi_active_count(rules);
+    let total_hits = kpi_total_hits(performance);
+    let avg_precision = kpi_avg_precision(performance);
+    let pending_count = kpi_pending_count(rules);
     html! {
         <div class="ops-kpi-strip">
             <div class="ops-kpi-card positive">
@@ -222,22 +228,22 @@ fn active_section(rules: &[RuleSummary], performance: &[RulePerformance]) -> Htm
 
 #[function_component(RuleLibraryPage)]
 pub fn rule_library_page() -> Html {
-    let api_key       = use_api_key();
+    let api_key = use_api_key();
     let snapshot_state = use_state(|| ApiState::<RuleOpsSnapshot>::Idle);
-    let action_state  = use_state(|| ApiState::<serde_json::Value>::Idle);
-    let confirm_msg   = use_state(|| Option::<String>::None);
+    let action_state = use_state(|| ApiState::<serde_json::Value>::Idle);
+    let confirm_msg = use_state(|| Option::<String>::None);
 
     // Auto-load on mount
     {
-        let api_key        = api_key.clone();
+        let api_key = api_key.clone();
         let snapshot_state = snapshot_state.clone();
         use_effect_with((), move |_| {
-            let api_key        = (*api_key).clone();
+            let api_key = (*api_key).clone();
             let snapshot_state = snapshot_state.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
                 snapshot_state.set(match get_rule_ops_snapshot(api_key, String::new()).await {
-                    Ok(s)  => ApiState::Ready(s),
+                    Ok(s) => ApiState::Ready(s),
                     Err(e) => ApiState::Failed(e),
                 });
             });
@@ -247,15 +253,15 @@ pub fn rule_library_page() -> Html {
 
     // Factory: send a lifecycle action for a rule_id
     let do_action = {
-        let api_key       = api_key.clone();
+        let api_key = api_key.clone();
         let snapshot_state = snapshot_state.clone();
-        let action_state  = action_state.clone();
-        let confirm_msg   = confirm_msg.clone();
+        let action_state = action_state.clone();
+        let confirm_msg = confirm_msg.clone();
         move |rule_id: String, action: &'static str, label: &'static str| {
-            let api_key        = (*api_key).clone();
+            let api_key = (*api_key).clone();
             let snapshot_state = snapshot_state.clone();
-            let action_state   = action_state.clone();
-            let confirm_msg    = confirm_msg.clone();
+            let action_state = action_state.clone();
+            let confirm_msg = confirm_msg.clone();
             action_state.set(ApiState::Loading);
             confirm_msg.set(None);
             spawn_local(async move {
@@ -267,7 +273,7 @@ pub fn rule_library_page() -> Html {
                         snapshot_state.set(ApiState::Loading);
                         snapshot_state.set(
                             match get_rule_ops_snapshot(api_key, String::new()).await {
-                                Ok(s)  => ApiState::Ready(s),
+                                Ok(s) => ApiState::Ready(s),
                                 Err(e) => ApiState::Failed(e),
                             },
                         );

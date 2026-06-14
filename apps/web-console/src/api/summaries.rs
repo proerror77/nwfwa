@@ -34,19 +34,15 @@ pub(crate) async fn get_provider_risk_summary(
 }
 
 /// Fetch leads+cases snapshot and extract provider-member edges for the graph
-pub(crate) async fn get_graph_network_data(
-    api_key: String,
-) -> Result<GraphNetworkData, String> {
+pub(crate) async fn get_graph_network_data(api_key: String) -> Result<GraphNetworkData, String> {
     // Sequential fetches — WASM futures::join! needs careful boxing
     let leads = request_get_json::<LeadListResponse>("/api/v1/ops/leads", api_key.clone())
         .await?
         .leads;
-    let providers = request_get_json::<ProviderRiskSummary>(
-        "/api/v1/ops/providers/risk-summary",
-        api_key,
-    )
-    .await?
-    .providers;
+    let providers =
+        request_get_json::<ProviderRiskSummary>("/api/v1/ops/providers/risk-summary", api_key)
+            .await?
+            .providers;
     Ok(GraphNetworkData { leads, providers })
 }
 
@@ -59,5 +55,6 @@ pub(crate) async fn search_knowledge_cases(
         "/api/v1/knowledge/search-similar",
         api_key,
         json!({ "scheme_family": scheme_family, "limit": 8 }),
-    ).await
+    )
+    .await
 }

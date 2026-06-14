@@ -1,10 +1,10 @@
-use crate::types::*;
-use crate::state::ApiState;
-use crate::formatting::*;
-use crate::ui_helpers::*;
-use crate::data_helpers::*;
-use yew::prelude::*;
 use super::super::provider_risk::provider_signal_row;
+use crate::data_helpers::*;
+use crate::formatting::*;
+use crate::state::ApiState;
+use crate::types::*;
+use crate::ui_helpers::*;
+use yew::prelude::*;
 
 pub(super) fn agent_investigator_blueprint() -> Html {
     html! {

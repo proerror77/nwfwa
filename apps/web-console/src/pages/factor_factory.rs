@@ -1,10 +1,10 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::formatting::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use crate::ui_helpers::*;
-use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[function_component(FactorFactoryPage)]
 pub fn factor_factory_page() -> Html {

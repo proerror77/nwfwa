@@ -1,12 +1,12 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
-use crate::formatting::*;
-use crate::ui_helpers::*;
 use crate::data_helpers::*;
-use yew::prelude::*;
+use crate::formatting::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
+use crate::ui_helpers::*;
 use serde_json::Value;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[path = "mlops_workspace_view.rs"]
 mod mlops_workspace_view;

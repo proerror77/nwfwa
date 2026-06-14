@@ -1,15 +1,15 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
-use crate::formatting::*;
-use crate::ui_helpers::*;
-use crate::payload_helpers::*;
 use crate::data_helpers::*;
+use crate::formatting::*;
 use crate::medical_review_helpers::*;
-use yew::prelude::*;
+use crate::payload_helpers::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
+use crate::ui_helpers::*;
 use serde_json::json;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 #[function_component(MedicalReviewPage)]
 pub fn medical_review_page() -> Html {

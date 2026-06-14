@@ -2,7 +2,10 @@ use crate::{refs_label, CorrectionHint, InboxNormalizeResponse, InboxValidationE
 use serde_json::{json, Map, Value};
 use yew::prelude::*;
 
-pub(crate) fn merge_payload_text(raw_payload: &str, overlay_payload: &str) -> Result<Value, String> {
+pub(crate) fn merge_payload_text(
+    raw_payload: &str,
+    overlay_payload: &str,
+) -> Result<Value, String> {
     let mut payload = serde_json::from_str::<Value>(raw_payload)
         .map_err(|error| format!("raw payload JSON is invalid: {error}"))?;
     let overlay = serde_json::from_str::<Value>(overlay_payload)
@@ -69,7 +72,8 @@ fn blocks_direct_scoring(field_path: &str, severity: &str) -> bool {
 
 fn next_action_for_validation_error(error: &InboxValidationError) -> String {
     if error.field_path == "systemCode" {
-        return "use source-system/customer-scope config that matches the payload systemCode".into();
+        return "use source-system/customer-scope config that matches the payload systemCode"
+            .into();
     }
     if error.field_path.ends_with(".coverageLimit") {
         return "map the policy or liability coverage limit before risk queue release".into();

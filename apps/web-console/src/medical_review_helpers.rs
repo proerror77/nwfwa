@@ -1,6 +1,4 @@
-use crate::{
-    business_label, case_action, status_tone, timeline_item, MedicalReviewQueueItem,
-};
+use crate::{business_label, case_action, status_tone, timeline_item, MedicalReviewQueueItem};
 use yew::prelude::*;
 
 pub(crate) fn selected_medical_item<'a>(

@@ -1,11 +1,11 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
 use crate::case_helpers::*;
 use crate::payload_helpers::*;
-use yew::prelude::*;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
 use serde_json::{json, Value};
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 #[path = "leads_cases_view.rs"]
 mod leads_cases_view;
@@ -306,7 +306,9 @@ pub fn leads_cases_page() -> Html {
             selected_lead_id.set(lead_id.clone());
 
             let member_id = if let ApiState::Ready(snapshot) = &*snapshot_state {
-                snapshot.leads.iter()
+                snapshot
+                    .leads
+                    .iter()
                     .find(|l| l.lead_id == lead_id)
                     .map(|l| l.member_id.clone())
                     .unwrap_or_default()
@@ -323,7 +325,7 @@ pub fn leads_cases_page() -> Html {
                         match get_member_profile_summary(api_key_m, member_id).await {
                             Ok(summary) => ApiState::Ready(summary),
                             Err(error) => ApiState::Failed(error),
-                        }
+                        },
                     );
                 });
             }
@@ -332,12 +334,10 @@ pub fn leads_cases_page() -> Html {
             let provider_context_state = provider_context_state.clone();
             provider_context_state.set(ApiState::Loading);
             spawn_local(async move {
-                provider_context_state.set(
-                    match get_provider_risk_summary(api_key_p).await {
-                        Ok(summary) => ApiState::Ready(summary),
-                        Err(error) => ApiState::Failed(error),
-                    }
-                );
+                provider_context_state.set(match get_provider_risk_summary(api_key_p).await {
+                    Ok(summary) => ApiState::Ready(summary),
+                    Err(error) => ApiState::Failed(error),
+                });
             });
         })
     };

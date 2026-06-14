@@ -1,12 +1,12 @@
 use crate::api::*;
-use crate::types::*;
-use crate::state::{use_api_key, ApiState};
-use crate::ui_helpers::*;
 use crate::data_helpers::*;
-use yew::prelude::*;
-use wasm_bindgen_futures::spawn_local;
+use crate::state::{use_api_key, ApiState};
+use crate::types::*;
+use crate::ui_helpers::*;
 use serde_json::json;
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
+use yew::prelude::*;
 
 #[function_component(QaReviewPage)]
 pub fn qa_review_page() -> Html {
@@ -549,7 +549,9 @@ struct QaWritebackResultProps {
 #[function_component(QaWritebackResultView)]
 fn qa_writeback_result_view(props: &QaWritebackResultProps) -> Html {
     match &props.state {
-        ApiState::Idle => html! { <p class="empty">{"Select a QA case and submit a controlled conclusion."}</p> },
+        ApiState::Idle => {
+            html! { <p class="empty">{"Select a QA case and submit a controlled conclusion."}</p> }
+        }
         ApiState::Loading => html! { <p>{"Submitting QA review..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(response) => html! {

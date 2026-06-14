@@ -1,8 +1,8 @@
-use crate::types::*;
-use crate::state::ApiState;
-use crate::formatting::*;
-use crate::ui_helpers::*;
 use crate::case_helpers::*;
+use crate::formatting::*;
+use crate::state::ApiState;
+use crate::types::*;
+use crate::ui_helpers::*;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -152,7 +152,8 @@ fn lead_context_panel(
     member_state: &ApiState<MemberProfileSummary>,
     provider_state: &ApiState<ProviderRiskSummary>,
 ) -> Html {
-    let is_idle = matches!(member_state, ApiState::Idle) && matches!(provider_state, ApiState::Idle);
+    let is_idle =
+        matches!(member_state, ApiState::Idle) && matches!(provider_state, ApiState::Idle);
     if is_idle {
         return html! {};
     }
@@ -240,7 +241,7 @@ fn lead_context_panel(
                     }).unwrap_or_else(|| html! {})}
                 </div>
             }
-        },
+        }
     };
 
     html! {
@@ -302,7 +303,9 @@ pub(super) struct InvestigationWritebackResultProps {
 }
 
 #[function_component(InvestigationWritebackResultView)]
-pub(super) fn investigation_writeback_result_view(props: &InvestigationWritebackResultProps) -> Html {
+pub(super) fn investigation_writeback_result_view(
+    props: &InvestigationWritebackResultProps,
+) -> Html {
     match &props.state {
         ApiState::Idle => html! {},
         ApiState::Loading => html! { <p>{"Writing investigation result..."}</p> },
