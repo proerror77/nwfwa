@@ -47,6 +47,13 @@ fn probability_calibration_payload(evidence_refs: &str) -> String {
     )
 }
 
+fn complete_probability_calibration_evidence_refs() -> &'static str {
+    r#""model_versions:baseline_fwa:0.1.0",
+            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "probability_calibration_input:s3://customer-prod-artifacts/calibration/holdout-predictions.json",
+            "calibration_labels:s3://customer-prod-artifacts/calibration/holdout-labels.json""#
+}
+
 #[tokio::test]
 async fn submits_probability_calibration_report_as_review_only_governance_event() {
     let app = build_app(test_config()).unwrap();
@@ -88,12 +95,7 @@ async fn submits_probability_calibration_report_as_review_only_governance_event(
         app,
         "POST",
         "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
-        &probability_calibration_payload(
-            r#""model_versions:baseline_fwa:0.1.0",
-            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
-            "probability_calibration_input:s3://customer-prod-artifacts/calibration/holdout-predictions.json",
-            "calibration_labels:s3://customer-prod-artifacts/calibration/holdout-labels.json""#,
-        ),
+        &probability_calibration_payload(complete_probability_calibration_evidence_refs()),
     )
     .await;
 
@@ -126,4 +128,47 @@ async fn submits_probability_calibration_report_as_review_only_governance_event(
         .as_str()
         .unwrap()
         .contains("must not activate calibrated serving"));
+}
+
+#[tokio::test]
+async fn rejects_probability_calibration_status_that_contradicts_metrics() {
+    let app = build_app(test_config()).unwrap();
+    let failing_metrics_payload =
+        probability_calibration_payload(complete_probability_calibration_evidence_refs()).replace(
+            r#""expected_calibration_error": 0.02"#,
+            r#""expected_calibration_error": 0.07"#,
+        );
+
+    let (status, response) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &failing_metrics_payload,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(response["code"], "INVALID_PROBABILITY_CALIBRATION_STATUS");
+    assert!(response["message"]
+        .as_str()
+        .unwrap()
+        .contains("needs_calibration_review"));
+
+    let insufficient_sample_payload =
+        probability_calibration_payload(complete_probability_calibration_evidence_refs())
+            .replace(r#""row_count": 100"#, r#""row_count": 50"#);
+    let (status, response) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &insufficient_sample_payload,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(response["code"], "INVALID_PROBABILITY_CALIBRATION_STATUS");
+    assert!(response["message"]
+        .as_str()
+        .unwrap()
+        .contains("insufficient_sample"));
 }

@@ -260,6 +260,24 @@ pub(in crate::routes) fn validate_probability_calibration_report_request(
             "bin_count must match bins length",
         ));
     }
+    let expected_status = if request.row_count < request.minimum_calibration_rows {
+        "insufficient_sample"
+    } else if request.expected_calibration_error > request.max_expected_calibration_error
+        || request.brier_score > request.max_brier_score
+    {
+        "needs_calibration_review"
+    } else {
+        "passed"
+    };
+    if request.calibration_status != expected_status {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_STATUS",
+            format!(
+                "calibration_status must be {expected_status} for the submitted sample size and metrics"
+            ),
+        ));
+    }
     if request.bins.iter().any(|bin| match bin.as_object() {
         Some(object) => object.is_empty(),
         None => true,

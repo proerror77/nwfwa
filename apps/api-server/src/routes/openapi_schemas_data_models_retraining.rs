@@ -95,7 +95,8 @@ pub(super) fn retraining_schemas() -> Value {
                 "max_brier_score": { "type": "number", "minimum": 0, "maximum": 1 },
                 "calibration_status": {
                     "type": "string",
-                    "enum": ["passed", "needs_calibration_review", "insufficient_sample"]
+                    "enum": ["passed", "needs_calibration_review", "insufficient_sample"],
+                    "description": "Must match row_count, minimum_calibration_rows, expected_calibration_error, max_expected_calibration_error, brier_score, and max_brier_score."
                 },
                 "bins": {
                     "type": "array",
