@@ -838,3 +838,38 @@ fn clinical_evidence_gaps_raise_medical_reasonableness_score() {
         .top_reasons
         .contains(&"账单项目数量或结构需要医疗合理性复核".to_string()));
 }
+
+#[test]
+fn episode_utilization_features_raise_medical_reasonableness_score() {
+    let mut features = BTreeMap::new();
+    features.insert(
+        "diagnosis_procedure_match_score".into(),
+        feature(serde_json::json!(0.80)),
+    );
+    features.insert(
+        "high_cost_item_ratio".into(),
+        feature(serde_json::json!(0.0)),
+    );
+    features.insert(
+        "member_provider_claim_count_30d".into(),
+        feature(serde_json::json!(4)),
+    );
+    features.insert(
+        "duplicate_claim_similarity_score".into(),
+        feature(serde_json::json!(0.9)),
+    );
+    features.insert(
+        "procedure_frequency_peer_percentile".into(),
+        feature(serde_json::json!(96)),
+    );
+    features.insert(
+        "unbundling_candidate_count".into(),
+        feature(serde_json::json!(1)),
+    );
+
+    let decision = aggregate(&features, &[], &model(20), &anomaly(0), 0);
+
+    assert_eq!(decision.medical_reasonableness_score, 75);
+    assert_eq!(decision.layers[4].layer_id, "L5_MEDICAL_REASONABLENESS");
+    assert_eq!(decision.layers[4].score, 75);
+}

@@ -45,6 +45,15 @@ pub struct ClinicalCompatibilityFeatureContext {
     pub data_source: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct EpisodeUtilizationFeatureContext {
+    pub member_provider_claim_count_30d: Option<u32>,
+    pub duplicate_claim_similarity_score: Option<f64>,
+    pub procedure_frequency_peer_percentile: Option<u8>,
+    pub unbundling_candidate_count: Option<u32>,
+    pub data_source: Option<String>,
+}
+
 pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
     calculate_features_with_peer_context(context, None)
 }
@@ -69,6 +78,22 @@ pub fn calculate_features_with_all_contexts(
     peer_context: Option<&PeerFeatureContext>,
     provider_profile_context: Option<&ProviderProfileFeatureContext>,
     clinical_compatibility_context: Option<&ClinicalCompatibilityFeatureContext>,
+) -> FeatureMap {
+    calculate_features_with_operational_contexts(
+        context,
+        peer_context,
+        provider_profile_context,
+        clinical_compatibility_context,
+        None,
+    )
+}
+
+pub fn calculate_features_with_operational_contexts(
+    context: &ClaimContext,
+    peer_context: Option<&PeerFeatureContext>,
+    provider_profile_context: Option<&ProviderProfileFeatureContext>,
+    clinical_compatibility_context: Option<&ClinicalCompatibilityFeatureContext>,
+    episode_utilization_context: Option<&EpisodeUtilizationFeatureContext>,
 ) -> FeatureMap {
     let mut features = FeatureMap::new();
     let claim_id = context.claim.external_claim_id.clone();
@@ -130,6 +155,7 @@ pub fn calculate_features_with_all_contexts(
         &claim_id,
         "claim_items",
     );
+    insert_episode_utilization_features(&mut features, &claim_id, episode_utilization_context);
     let clinical_match_score = clinical_compatibility_context
         .and_then(|context| {
             context
@@ -191,6 +217,68 @@ pub fn calculate_features_with_all_contexts(
     );
 
     features
+}
+
+fn insert_episode_utilization_features(
+    features: &mut FeatureMap,
+    claim_id: &str,
+    context: Option<&EpisodeUtilizationFeatureContext>,
+) {
+    let Some(context) = context else {
+        return;
+    };
+    let data_source = context
+        .data_source
+        .as_deref()
+        .unwrap_or("worker.episode_utilization_rollup");
+    if let Some(count) = context.member_provider_claim_count_30d {
+        insert_number_with_metadata(
+            features,
+            "member_provider_claim_count_30d",
+            count,
+            "member_provider_episode",
+            claim_id,
+            "claim_count_30d",
+            false,
+            data_source,
+        );
+    }
+    if let Some(score) = context.duplicate_claim_similarity_score {
+        insert_number_with_metadata(
+            features,
+            "duplicate_claim_similarity_score",
+            score.clamp(0.0, 1.0),
+            "member_provider_episode",
+            claim_id,
+            "duplicate_claim_similarity_score",
+            false,
+            data_source,
+        );
+    }
+    if let Some(percentile) = context.procedure_frequency_peer_percentile {
+        insert_number_with_metadata(
+            features,
+            "procedure_frequency_peer_percentile",
+            percentile.min(100),
+            "provider_peer_stats",
+            claim_id,
+            "procedure_frequency_peer_percentile",
+            false,
+            data_source,
+        );
+    }
+    if let Some(count) = context.unbundling_candidate_count {
+        insert_number_with_metadata(
+            features,
+            "unbundling_candidate_count",
+            count,
+            "member_provider_episode",
+            claim_id,
+            "unbundling_candidate_count",
+            false,
+            data_source,
+        );
+    }
 }
 
 fn high_cost_item_ratio(context: &ClaimContext) -> f64 {
@@ -483,5 +571,52 @@ mod tests {
             features["diagnosis_procedure_match_score"].data_source,
             "worker.icd_cpt_compatibility_reference"
         );
+    }
+
+    #[test]
+    fn accepts_episode_utilization_features_from_worker_context() {
+        let episode_context = EpisodeUtilizationFeatureContext {
+            member_provider_claim_count_30d: Some(4),
+            duplicate_claim_similarity_score: Some(1.4),
+            procedure_frequency_peer_percentile: Some(99),
+            unbundling_candidate_count: Some(2),
+            data_source: Some("worker.episode_and_unbundling_rollup".into()),
+        };
+        let features = calculate_features_with_operational_contexts(
+            &context(),
+            None,
+            None,
+            None,
+            Some(&episode_context),
+        );
+
+        assert_eq!(
+            features["member_provider_claim_count_30d"].value,
+            serde_json::json!(4)
+        );
+        assert_eq!(
+            features["duplicate_claim_similarity_score"].value,
+            serde_json::json!(1.0)
+        );
+        assert_eq!(
+            features["procedure_frequency_peer_percentile"].value,
+            serde_json::json!(99)
+        );
+        assert_eq!(
+            features["unbundling_candidate_count"].value,
+            serde_json::json!(2)
+        );
+        for name in [
+            "member_provider_claim_count_30d",
+            "duplicate_claim_similarity_score",
+            "procedure_frequency_peer_percentile",
+            "unbundling_candidate_count",
+        ] {
+            assert!(!features[name].is_proxy);
+            assert_eq!(
+                features[name].data_source,
+                "worker.episode_and_unbundling_rollup"
+            );
+        }
     }
 }

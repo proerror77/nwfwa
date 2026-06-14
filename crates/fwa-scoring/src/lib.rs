@@ -509,20 +509,49 @@ fn medical_reasonableness_score(features: &FeatureMap) -> u8 {
     let clinical_review_risk = numeric_feature(features, "clinical_review_required")
         .map(|flag| if flag > 0.0 { 15.0 } else { 0.0 })
         .unwrap_or(0.0);
+    let episode_utilization_risk = episode_utilization_risk(features);
 
     if let Some(match_score) = numeric_feature(features, "diagnosis_procedure_match_score") {
         let mismatch_risk = ((1.0 - match_score) * 100.0).round().clamp(0.0, 100.0);
         let high_cost_risk = numeric_feature(features, "high_cost_item_ratio")
             .map(|ratio| (ratio * 25.0).round().clamp(0.0, 25.0))
             .unwrap_or(0.0);
-        return (mismatch_risk + high_cost_risk + clinical_gap_risk + clinical_review_risk)
+        return (mismatch_risk
+            + high_cost_risk
+            + clinical_gap_risk
+            + clinical_review_risk
+            + episode_utilization_risk)
             .round()
             .clamp(0.0, 100.0) as u8;
     }
     let item_count = numeric_feature(features, "claim_item_count").unwrap_or(0.0);
-    (item_count * 12.0 + clinical_gap_risk + clinical_review_risk)
+    (item_count * 12.0 + clinical_gap_risk + clinical_review_risk + episode_utilization_risk)
         .round()
         .clamp(0.0, 100.0) as u8
+}
+
+fn episode_utilization_risk(features: &FeatureMap) -> f64 {
+    let revisit_risk = numeric_feature(features, "member_provider_claim_count_30d")
+        .map(|count| ((count - 1.0).max(0.0) * 6.0).clamp(0.0, 24.0))
+        .unwrap_or(0.0);
+    let duplicate_risk = numeric_feature(features, "duplicate_claim_similarity_score")
+        .map(|score| (score * 30.0).round().clamp(0.0, 30.0))
+        .unwrap_or(0.0);
+    let procedure_frequency_risk = numeric_feature(features, "procedure_frequency_peer_percentile")
+        .map(|percentile| {
+            if percentile >= 95.0 {
+                20.0
+            } else if percentile >= 90.0 {
+                12.0
+            } else {
+                0.0
+            }
+        })
+        .unwrap_or(0.0);
+    let unbundling_risk = numeric_feature(features, "unbundling_candidate_count")
+        .map(|count| (count * 20.0).round().clamp(0.0, 40.0))
+        .unwrap_or(0.0);
+    (revisit_risk + duplicate_risk + procedure_frequency_risk + unbundling_risk).clamp(0.0, 55.0)
 }
 
 fn provider_network_score(features: &FeatureMap) -> u8 {
