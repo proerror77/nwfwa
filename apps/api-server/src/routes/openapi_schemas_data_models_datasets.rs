@@ -414,7 +414,28 @@ pub(super) fn dataset_schemas() -> Value {
                 "job_executions": {
                     "type": "array",
                     "minItems": 1,
-                    "items": { "type": "object" }
+                    "items": {
+                        "type": "object",
+                        "required": ["job_kind", "execution_status"],
+                        "properties": {
+                            "job_kind": { "type": "string", "minLength": 1 },
+                            "execution_status": {
+                                "type": "string",
+                                "enum": [
+                                    "completed",
+                                    "artifact_pending_submission",
+                                    "failed",
+                                    "scheduled_pending_customer_execution",
+                                    "dependency_not_completed"
+                                ]
+                            },
+                            "blocked_dependencies": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Required and non-empty when execution_status is dependency_not_completed."
+                            }
+                        }
+                    }
                 },
                 "review_tasks": {
                     "type": "array",

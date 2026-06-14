@@ -508,6 +508,89 @@ async fn submits_worker_data_pipeline_execution_report() {
 }
 
 #[tokio::test]
+async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(3);
+    payload["pending_or_failed_job_count"] = serde_json::json!(2);
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["job_executions"] = serde_json::json!([
+        {
+            "job_kind": "oig_sam_sanctions_snapshot_fetch",
+            "execution_status": "scheduled_pending_customer_execution",
+            "submitted": false
+        },
+        {
+            "job_kind": "oig_sam_sanctions_sync",
+            "execution_status": "dependency_not_completed",
+            "submitted": true,
+            "blocked_dependencies": ["oig_sam_sanctions_snapshot_fetch"]
+        },
+        {
+            "job_kind": "provider_profile_window_rollup",
+            "execution_status": "completed",
+            "submitted": true
+        }
+    ]);
+    payload["review_tasks"] = serde_json::json!([
+        {
+            "task_kind": "worker_data_pipeline_execution_review",
+            "job_kind": "oig_sam_sanctions_snapshot_fetch"
+        },
+        {
+            "task_kind": "worker_data_pipeline_execution_review",
+            "job_kind": "oig_sam_sanctions_sync",
+            "execution_status": "dependency_not_completed"
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["pending_or_failed_job_count"], 2);
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"][1]["execution_status"],
+        "dependency_not_completed"
+    );
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"][1]["blocked_dependencies"],
+        serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_dependency_blocker_details() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["execution_status"] =
+        serde_json::json!("dependency_not_completed");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_readiness_evidence_when_uri_supplied() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =

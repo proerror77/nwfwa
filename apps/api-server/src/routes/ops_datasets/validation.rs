@@ -755,6 +755,50 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 "job_kind must not be blank",
             ));
         }
+        let Some(execution_status) = execution
+            .get("execution_status")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS",
+                "each job execution must include execution_status",
+            ));
+        };
+        if !matches!(
+            execution_status,
+            "completed"
+                | "artifact_pending_submission"
+                | "failed"
+                | "scheduled_pending_customer_execution"
+                | "dependency_not_completed"
+        ) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS",
+                "execution_status must be completed, artifact_pending_submission, failed, scheduled_pending_customer_execution, or dependency_not_completed",
+            ));
+        }
+        if execution_status == "dependency_not_completed" {
+            let has_blocked_dependencies = execution
+                .get("blocked_dependencies")
+                .and_then(|value| value.as_array())
+                .is_some_and(|dependencies| {
+                    !dependencies.is_empty()
+                        && dependencies.iter().all(|dependency| {
+                            dependency
+                                .as_str()
+                                .is_some_and(|value| !value.trim().is_empty())
+                        })
+                });
+            if !has_blocked_dependencies {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES",
+                    "dependency_not_completed job executions require non-empty blocked_dependencies",
+                ));
+            }
+        }
     }
     Ok(())
 }
