@@ -43,6 +43,10 @@ WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS = {
     "probability_calibration_evidence",
 }
 
+WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS = (
+    WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS - {"oig_sam_sanctions_snapshot_fetch"}
+)
+
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "report_kind_is_worker_data_pipeline_execution_report",
     "readiness_gate_status_ready",
@@ -50,6 +54,8 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "pending_or_failed_job_count_zero",
     "review_task_count_zero",
     "required_job_kinds_completed",
+    "governed_submit_jobs_submitted",
+    "source_snapshot_artifact_reported",
     "evidence_refs_include_plan_run_status_and_readiness",
     "governance_boundary_no_adjudication",
 }
@@ -97,6 +103,13 @@ def validate_contract(contract: dict) -> None:
             require(
                 required_job_kinds == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
                 "worker data pipeline gate required_job_kinds changed unexpectedly",
+            )
+            governed_submit_job_kinds = set(
+                gate.get("governed_submit_job_kinds", [])
+            )
+            require(
+                governed_submit_job_kinds == WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
+                "worker data pipeline gate governed_submit_job_kinds changed unexpectedly",
             )
             acceptance_checks = gate.get("acceptance_checks")
             require(
@@ -161,6 +174,17 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
             job.get("execution_status") == "completed",
             f"worker data pipeline job {job_kind} must be completed",
         )
+    for job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+        require(
+            jobs_by_kind[job_kind].get("submitted") is True,
+            f"worker data pipeline submit job {job_kind} must have submitted true",
+        )
+    snapshot_job = jobs_by_kind["oig_sam_sanctions_snapshot_fetch"]
+    require(
+        isinstance(snapshot_job.get("reported_artifact_uri"), str)
+        and snapshot_job["reported_artifact_uri"].strip(),
+        "worker data pipeline source snapshot job must report artifact URI",
+    )
     evidence_refs = report.get("evidence_refs")
     require(
         isinstance(evidence_refs, list) and evidence_refs,

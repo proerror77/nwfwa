@@ -29,6 +29,12 @@ WORKER_DATA_PIPELINE_JOB_KINDS = [
     "probability_calibration_evidence",
 ]
 
+WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS = [
+    job_kind
+    for job_kind in WORKER_DATA_PIPELINE_JOB_KINDS
+    if job_kind != "oig_sam_sanctions_snapshot_fetch"
+]
+
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     {
         "check_id": "report_kind_is_worker_data_pipeline_execution_report",
@@ -53,6 +59,14 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     {
         "check_id": "required_job_kinds_completed",
         "description": "Every required worker data-pipeline job kind is present in job_executions with execution_status = completed.",
+    },
+    {
+        "check_id": "governed_submit_jobs_submitted",
+        "description": "Every governed worker data-pipeline submit job has submitted = true.",
+    },
+    {
+        "check_id": "source_snapshot_artifact_reported",
+        "description": "The artifact-only OIG/SAM source snapshot job reports a non-empty artifact URI.",
     },
     {
         "check_id": "evidence_refs_include_plan_run_status_and_readiness",
@@ -115,6 +129,7 @@ REQUIRED_EVIDENCE = [
         "required_artifact": "worker_data_pipeline_execution_report.json",
         "description": "Customer scheduler executed the governed worker data pipeline with readiness evidence, run-status evidence, artifact submit/write evidence, and dependency-blocker review for sanctions, provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling, scoring contexts, and probability calibration.",
         "required_job_kinds": WORKER_DATA_PIPELINE_JOB_KINDS,
+        "governed_submit_job_kinds": WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
         "acceptance_checks": WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS,
     },
     {
