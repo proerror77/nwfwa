@@ -911,6 +911,8 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             format!("worker data pipeline evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let mut ready_jobs = 0usize;
+    let mut blocked_jobs = 0usize;
     for readiness in &request.job_readiness {
         let Some(job_kind) = readiness.get("job_kind").and_then(|value| value.as_str()) else {
             return Err(ApiError::new(
@@ -926,6 +928,63 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                 "job_kind must not be blank",
             ));
         }
+        let Some(readiness_status) = readiness
+            .get("readiness_status")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_STATUS",
+                "each job readiness record must include readiness_status",
+            ));
+        };
+        match readiness_status {
+            "ready" => ready_jobs += 1,
+            "blocked" => {
+                blocked_jobs += 1;
+                let has_blockers = readiness
+                    .get("blockers")
+                    .and_then(|value| value.as_array())
+                    .is_some_and(|blockers| {
+                        !blockers.is_empty()
+                            && blockers.iter().all(|blocker| {
+                                blocker
+                                    .as_str()
+                                    .is_some_and(|value| !value.trim().is_empty())
+                            })
+                    });
+                if !has_blockers {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS",
+                        "blocked job readiness records require non-empty blockers",
+                    ));
+                }
+            }
+            _ => {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_STATUS",
+                    "job readiness_status must be ready or blocked",
+                ));
+            }
+        }
+    }
+    if ready_jobs != request.ready_job_count || blocked_jobs != request.blocked_job_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_COUNT",
+            "ready_job_count and blocked_job_count must match per-job readiness_status values",
+        ));
+    }
+    if (request.readiness_status == "ready" && blocked_jobs != 0)
+        || (request.readiness_status == "blocked" && blocked_jobs == 0)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_STATUS",
+            "readiness_status must match whether any job readiness record is blocked",
+        ));
     }
     Ok(())
 }

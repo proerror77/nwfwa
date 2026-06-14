@@ -708,6 +708,76 @@ async fn submits_worker_data_pipeline_readiness_report() {
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_blocker_details() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][1]["blockers"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_per_job_count_consistency() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["ready_job_count"] = serde_json::json!(2);
+    payload["blocked_job_count"] = serde_json::json!(0);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_COUNT"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_top_level_status_consistency() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["readiness_status"] = serde_json::json!("ready");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_STATUS"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_readiness_report_requires_dataset_write_permission() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
 

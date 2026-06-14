@@ -495,7 +495,19 @@ pub(super) fn dataset_schemas() -> Value {
                 "job_readiness": {
                     "type": "array",
                     "minItems": 1,
-                    "items": { "type": "object" }
+                    "items": {
+                        "type": "object",
+                        "required": ["job_kind", "readiness_status"],
+                        "properties": {
+                            "job_kind": { "type": "string", "minLength": 1 },
+                            "readiness_status": { "type": "string", "enum": ["ready", "blocked"] },
+                            "blockers": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Required and non-empty when readiness_status is blocked."
+                            }
+                        }
+                    }
                 },
                 "review_tasks": {
                     "type": "array",
