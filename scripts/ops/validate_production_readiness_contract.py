@@ -110,6 +110,14 @@ CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECK_IDS = {
     "customer_data_evidence_refs_present",
 }
 
+OCR_VECTOR_ANALYTICS_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_ocr_vector_analytics_execution_report",
+    "evidence_pipeline_jobs_completed",
+    "execution_counts_positive",
+    "phi_boundary_preserved",
+    "ocr_vector_analytics_evidence_refs_present",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -239,6 +247,26 @@ def validate_contract(contract: dict) -> list[dict]:
                 require(
                     check.get("description"),
                     f"customer data governance acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "ocr_vector_analytics_execution":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "OCR/vector/analytics gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == OCR_VECTOR_ANALYTICS_ACCEPTANCE_CHECK_IDS,
+                "OCR/vector/analytics gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"OCR/vector/analytics acceptance check {check.get('check_id')} missing description",
                 )
     return gates
 
@@ -520,6 +548,56 @@ def validate_customer_data_governance_evidence(report: dict) -> None:
         )
 
 
+def validate_ocr_vector_analytics_execution_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "ocr_vector_analytics_execution_report",
+        "OCR/vector/analytics execution evidence has wrong artifact_kind",
+    )
+    for field_name in (
+        "ocr_execution_status",
+        "embedding_vector_status",
+        "retrieval_ranking_status",
+        "clickhouse_export_status",
+        "dashboard_access_status",
+        "analytics_retention_backup_status",
+    ):
+        require(
+            report.get(field_name) == "completed",
+            f"OCR/vector/analytics evidence must have {field_name} completed",
+        )
+    for field_name in (
+        "document_count",
+        "embedding_job_count",
+        "retrieval_audit_count",
+        "analytics_export_job_count",
+    ):
+        require(
+            isinstance(report.get(field_name), int) and report[field_name] > 0,
+            f"OCR/vector/analytics evidence must include positive {field_name}",
+        )
+    require(
+        report.get("raw_phi_exported") is False,
+        "OCR/vector/analytics evidence must not export raw PHI",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "OCR/vector/analytics evidence must include evidence_refs",
+    )
+    for prefix in (
+        "ai_evidence_execution:",
+        "ocr_outputs:",
+        "embedding_jobs:",
+        "retrieval_audits:",
+        "analytics_exports:",
+        "clickhouse_dashboard:",
+    ):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"OCR/vector/analytics evidence_refs missing {prefix}",
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract-dir", default="artifacts/production-readiness")
@@ -544,6 +622,9 @@ def main() -> int:
         )
         validate_model_serving_slo_evidence(
             artifacts["model_serving_slo_report.json"]
+        )
+        validate_ocr_vector_analytics_execution_evidence(
+            artifacts["ocr_vector_analytics_execution_report.json"]
         )
         validate_worker_data_pipeline_execution_evidence(
             artifacts["worker_data_pipeline_execution_report.json"]

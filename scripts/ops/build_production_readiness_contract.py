@@ -155,6 +155,29 @@ CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECKS = [
     },
 ]
 
+OCR_VECTOR_ANALYTICS_ACCEPTANCE_CHECKS = [
+    {
+        "check_id": "report_kind_is_ocr_vector_analytics_execution_report",
+        "description": "OCR/vector/analytics evidence artifact has artifact_kind = ocr_vector_analytics_execution_report.",
+    },
+    {
+        "check_id": "evidence_pipeline_jobs_completed",
+        "description": "OCR, embedding/vector, retrieval ranking, ClickHouse export, dashboard access, and retention/backup checks are completed.",
+    },
+    {
+        "check_id": "execution_counts_positive",
+        "description": "Execution evidence includes positive document, embedding job, retrieval audit, and analytics export job counts.",
+    },
+    {
+        "check_id": "phi_boundary_preserved",
+        "description": "Execution evidence shows raw PHI was not exported into vectors or analytics tables.",
+    },
+    {
+        "check_id": "ocr_vector_analytics_evidence_refs_present",
+        "description": "Execution evidence includes AI evidence, OCR output, embedding job, retrieval audit, analytics export, and dashboard evidence refs.",
+    },
+]
+
 REQUIRED_EVIDENCE = [
     {
         "gate_id": "production_deployment_apply",
@@ -221,6 +244,7 @@ REQUIRED_EVIDENCE = [
         "gate_id": "ocr_vector_analytics_execution",
         "required_artifact": "ocr_vector_analytics_execution_report.json",
         "description": "OCR, embedding/vector store, retrieval ranking, ClickHouse export, retention, backup, and dashboard access were executed in the customer environment.",
+        "acceptance_checks": OCR_VECTOR_ANALYTICS_ACCEPTANCE_CHECKS,
     },
 ]
 

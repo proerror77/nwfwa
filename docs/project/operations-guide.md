@@ -771,6 +771,11 @@ The model-serving SLO gate requires `model_serving_slo_report.json` to show the
 served model identity, p95 latency and error rate within declared SLOs,
 checksum/signature verification, healthy fallback, rollback readiness, and
 model-serving plus model-artifact evidence refs.
+The OCR/vector/analytics gate requires
+`ocr_vector_analytics_execution_report.json` to show completed OCR,
+embedding/vector, retrieval ranking, ClickHouse export, dashboard access, and
+analytics retention/backup checks, positive execution counts, no raw PHI
+export, and evidence refs for each stage.
 The worker data-pipeline gate requires the customer
 `worker_data_pipeline_execution_report.json` to pass the contract acceptance
 checks: readiness gate ready, scheduler completed, zero pending or failed jobs,

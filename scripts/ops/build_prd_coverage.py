@@ -202,6 +202,14 @@ CAPABILITIES = [
                 "scripts/ops/validate_production_readiness_contract.py",
                 "validate_customer_data_governance_evidence",
             ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
+                "ocr_vector_analytics_evidence_refs_present",
+            ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
+                "validate_ocr_vector_analytics_execution_evidence",
+            ),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_sanctions"),

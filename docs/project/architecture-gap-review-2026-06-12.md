@@ -196,6 +196,10 @@ As of the P1/P2 remediation commits after this review:
 - The production readiness validator now deep-checks customer-data governance
   evidence for approved dataset provenance, label provenance, holdout split,
   shadow-traffic plan, positive validation sample counts, and evidence refs.
+- The production readiness validator now deep-checks OCR/vector/analytics
+  execution evidence for completed OCR, embedding/vector, retrieval,
+  ClickHouse export, dashboard access, analytics retention/backup, positive
+  counts, no raw PHI export, and stage evidence refs.
 - The worker now has a probability-calibration evidence report that computes
   ECE and Brier score from labeled holdout predictions and opens calibration
   review tasks when raw probabilities are miscalibrated or sample size is
