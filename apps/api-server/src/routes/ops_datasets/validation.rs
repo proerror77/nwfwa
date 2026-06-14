@@ -1301,6 +1301,23 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                 "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
             )?;
         }
+        let required_evidence_prefixes = readiness
+            .get("required_evidence_prefixes")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>();
+        if required_evidence_prefixes
+            .iter()
+            .any(|prefix| prefix.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                "required_evidence_prefixes must contain no blank values",
+            ));
+        }
         let Some(readiness_status) = readiness
             .get("readiness_status")
             .and_then(|value| value.as_str())
@@ -1362,6 +1379,26 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         StatusCode::BAD_REQUEST,
                         "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
                         "ready job readiness records require non-empty evidence_refs",
+                    ));
+                }
+                let missing_required_evidence_prefix =
+                    required_evidence_prefixes.iter().find(|prefix| {
+                        !readiness
+                            .get("evidence_refs")
+                            .and_then(|value| value.as_array())
+                            .into_iter()
+                            .flatten()
+                            .any(|reference| {
+                                reference
+                                    .as_str()
+                                    .is_some_and(|value| value.starts_with(*prefix))
+                            })
+                    });
+                if let Some(prefix) = missing_required_evidence_prefix {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        format!("ready job evidence_refs must include required prefix {prefix}"),
                     ));
                 }
                 ready_jobs += 1;

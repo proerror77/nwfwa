@@ -257,6 +257,9 @@ As of the P1/P2 remediation commits after this review:
   keep jobs blocked until customer evidence includes those prefixes, including
   scoring-context source lineage for episode, peer, clinical, and unbundling
   artifacts.
+- Worker data-pipeline readiness submit API now also rejects ready jobs with
+  blank required evidence prefixes or evidence refs that do not satisfy the
+  declared prefixes before persisting prerequisite evidence.
 - Worker data-pipeline execution reports now also consume those required
   evidence prefixes, mark succeeded jobs with missing prefixes as
   `artifact_missing_evidence`, and the execution submit API rejects completed
