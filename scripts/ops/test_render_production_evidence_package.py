@@ -28,8 +28,17 @@ class ProductionEvidencePackageRendererTests(unittest.TestCase):
 
             self.assertEqual(summary["rendered_count"], 4)
             self.assertEqual(summary["blocked_report_count"], 4)
+            self.assertEqual(summary["worker_template_count"], 4)
+            self.assertEqual(summary["pending_worker_template_count"], 4)
             self.assertEqual(summary["status"], "rendered_with_blockers")
             self.assertFalse(summary["readiness_claim"])
+            self.assertIn("worker_templates", summary)
+            self.assertTrue(
+                any(
+                    template["template"] == "worker/scoring_readback_input.json"
+                    for template in summary["worker_templates"]
+                )
+            )
             self.assertTrue((package_dir / "render_summary.json").exists())
 
     def test_renders_filled_sources_into_validator_accepted_reports(self) -> None:

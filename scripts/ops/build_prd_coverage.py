@@ -352,6 +352,14 @@ CAPABILITIES = [
                 "rendered_with_blockers",
             ),
             (
+                "scripts/ops/render_production_evidence_package.py",
+                "worker_template_count",
+            ),
+            (
+                "scripts/ops/render_production_evidence_package.py",
+                "pending_worker_template_count",
+            ),
+            (
                 "scripts/ops/build_customer_data_governance_report.py",
                 "customer_data_governance_report",
             ),

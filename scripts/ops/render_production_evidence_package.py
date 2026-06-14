@@ -61,12 +61,26 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def load_worker_templates(package_dir: Path) -> list[dict]:
+    index_uri = package_dir / "index.json"
+    if not index_uri.exists():
+        return []
+    index = json.loads(index_uri.read_text(encoding="utf-8"))
+    return index.get("worker_templates") or []
+
+
 def render_package(package_dir: Path) -> dict:
     source_dir = package_dir / "sources"
     evidence_dir = package_dir / "evidence"
     rendered = []
     missing_sources = []
     blocked_count = 0
+    worker_templates = load_worker_templates(package_dir)
+    pending_worker_template_count = sum(
+        1
+        for template in worker_templates
+        if template.get("status") == "pending_customer_input"
+    )
     for renderer in SUPPORTED_RENDERERS:
         source_uri = source_dir / renderer["source"]
         if not source_uri.exists():
@@ -92,6 +106,8 @@ def render_package(package_dir: Path) -> dict:
         "rendered_count": len(rendered),
         "missing_source_count": len(missing_sources),
         "blocked_report_count": blocked_count,
+        "worker_template_count": len(worker_templates),
+        "pending_worker_template_count": pending_worker_template_count,
         "status": (
             "rendered_with_blockers"
             if blocked_count or missing_sources
@@ -99,9 +115,12 @@ def render_package(package_dir: Path) -> dict:
         ),
         "readiness_claim": False,
         "rendered_reports": rendered,
+        "worker_templates": worker_templates,
         "missing_sources": missing_sources,
         "boundary": (
             "Rendering source templates only creates evidence report artifacts. "
+            "Worker templates remain customer inputs until production scheduler "
+            "and score-response artifacts replace placeholders. "
             "Production readiness still requires validate_production_readiness_contract.py "
             "to pass against all required evidence."
         ),
