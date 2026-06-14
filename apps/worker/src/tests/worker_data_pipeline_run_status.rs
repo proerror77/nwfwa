@@ -93,6 +93,7 @@ fn builds_worker_data_pipeline_run_status_template() {
         job_statuses[8]["required_evidence_prefixes"],
         serde_json::json!([
             "scoring_feature_contexts:",
+            "scoring_feature_context_claim_snapshot:",
             "episode_rollups:",
             "peer_benchmarks:",
             "clinical_compatibility:",

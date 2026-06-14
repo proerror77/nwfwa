@@ -295,6 +295,12 @@ pub(super) fn validate_scoring_feature_context_materialization(
     let required_evidence_refs = [
         format!("scoring_feature_contexts:{}", request.report_uri),
         format!(
+            "scoring_feature_context_claim_snapshot:{}",
+            request.source_uris["claims_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
             "episode_rollups:{}",
             request.source_uris["episode_rollups_uri"]
                 .as_str()

@@ -440,6 +440,7 @@ pub fn build_worker_data_pipeline_plan(
                 "required_permission": "ops:datasets:write",
                 "required_evidence_prefixes": [
                     "scoring_feature_contexts:",
+                    "scoring_feature_context_claim_snapshot:",
                     "episode_rollups:",
                     "peer_benchmarks:",
                     "clinical_compatibility:",

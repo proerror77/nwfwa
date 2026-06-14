@@ -75,6 +75,7 @@ fn builds_worker_data_pipeline_readiness_input_template() {
         checks[8]["required_evidence_prefixes"],
         serde_json::json!([
             "scoring_feature_contexts:",
+            "scoring_feature_context_claim_snapshot:",
             "episode_rollups:",
             "peer_benchmarks:",
             "clinical_compatibility:",

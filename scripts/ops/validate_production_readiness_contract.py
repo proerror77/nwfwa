@@ -96,6 +96,7 @@ WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
     ),
     "unbundling_comparator": ("unbundling_comparator_input:",),
     "scoring_feature_context_materialization": (
+        "scoring_feature_context_claim_snapshot:",
         "episode_rollups:",
         "peer_benchmarks:",
         "clinical_compatibility:",

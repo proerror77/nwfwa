@@ -98,18 +98,20 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
 
     def test_worker_execution_requires_submit_job_source_lineage(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=True)
-        peer_job = next(
+        scoring_context_job = next(
             job
             for job in report["job_executions"]
-            if job["job_kind"] == "peer_percentile_benchmark"
+            if job["job_kind"] == "scoring_feature_context_materialization"
         )
-        peer_job["evidence_refs"] = [
+        scoring_context_job["evidence_refs"] = [
             reference
-            for reference in peer_job["evidence_refs"]
-            if not reference.startswith("peer_benchmark_claim_snapshot:")
+            for reference in scoring_context_job["evidence_refs"]
+            if not reference.startswith("scoring_feature_context_claim_snapshot:")
         ]
 
-        with self.assertRaisesRegex(AssertionError, "peer_benchmark_claim_snapshot:"):
+        with self.assertRaisesRegex(
+            AssertionError, "scoring_feature_context_claim_snapshot:"
+        ):
             validate_worker_data_pipeline_execution_evidence(report)
 
 
