@@ -148,6 +148,8 @@ pub struct SubmitWorkerDataPipelineExecutionReportRequest {
     pub report_kind: String,
     pub plan_uri: String,
     pub run_status_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
     pub run_id: String,
     pub execution_date: String,
     pub job_count: usize,
@@ -166,6 +168,8 @@ pub struct SubmitWorkerDataPipelineExecutionReportRequest {
 pub struct WorkerDataPipelineExecutionReportSubmissionResponse {
     pub report_kind: String,
     pub source_report_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
     pub run_id: String,
     pub execution_date: String,
     pub job_count: usize,

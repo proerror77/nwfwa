@@ -112,6 +112,10 @@ As of the P1/P2 remediation commits after this review:
   utilization windows from an approved aggregation report while explicitly
   avoiding scoring-policy changes, fraud-label assignment, case creation, claim
   denial, or claim adjudication.
+- Worker data pipeline execution reports now carry an explicit readiness gate:
+  scheduler run-status artifacts can reference the readiness report, execution
+  evidence records `ready`/`blocked`/`missing`, and missing or blocked readiness
+  creates an operations review task instead of silently allowing downstream use.
 - The claims scoring API now accepts those materialized worker contexts and
   passes peer, clinical compatibility, and episode-utilization inputs into
   online feature calculation while preserving the assistive-only scoring

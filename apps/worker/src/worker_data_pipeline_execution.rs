@@ -12,6 +12,9 @@ pub struct WorkerDataPipelineExecutionReportSubmission {
     pub report_kind: String,
     pub plan_uri: String,
     pub run_status_uri: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: String,
     pub run_id: String,
     pub execution_date: String,
     pub job_count: usize,
@@ -46,6 +49,8 @@ pub fn build_worker_data_pipeline_execution_report(
         .context("worker data pipeline run status requires run_id")?;
     let execution_date = json_string(&run_status, "execution_date")
         .context("worker data pipeline run status requires execution_date")?;
+    let readiness_report_uri = json_string(&run_status, "readiness_report_uri");
+    let readiness_gate_status = readiness_gate_status(readiness_report_uri.as_deref())?;
     let jobs = plan
         .get("jobs")
         .and_then(|value| value.as_array())
@@ -78,11 +83,15 @@ pub fn build_worker_data_pipeline_execution_report(
         .filter(|execution| execution["execution_status"].as_str() != Some("completed"))
         .count();
     let scheduler_status = if pending_job_count == 0 {
-        "completed"
+        if readiness_gate_status == "ready" {
+            "completed"
+        } else {
+            "completed_with_pending_or_failed_jobs"
+        }
     } else {
         "completed_with_pending_or_failed_jobs"
     };
-    let review_tasks = job_executions
+    let mut review_tasks = job_executions
         .iter()
         .filter(|execution| execution["execution_status"].as_str() != Some("completed"))
         .map(|execution| {
@@ -97,11 +106,33 @@ pub fn build_worker_data_pipeline_execution_report(
             })
         })
         .collect::<Vec<_>>();
+    if readiness_gate_status != "ready" {
+        review_tasks.push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_readiness_gate_review",
+            "customer_scope_id": customer_scope_id,
+            "run_id": run_id,
+            "readiness_report_uri": readiness_report_uri,
+            "readiness_gate_status": readiness_gate_status,
+            "review_queue": "worker_data_pipeline_ops",
+            "required_review": "resolve worker data pipeline readiness gate before downstream scoring use"
+        }));
+    }
+    let mut evidence_refs = vec![
+        format!("worker_data_pipeline_plans:{plan_uri}"),
+        format!("worker_data_pipeline_run_status:{run_status_uri}"),
+    ];
+    if let Some(readiness_report_uri) = &readiness_report_uri {
+        evidence_refs.push(format!(
+            "worker_data_pipeline_readiness_reports:{readiness_report_uri}"
+        ));
+    }
     let report = serde_json::json!({
         "report_kind": "worker_data_pipeline_execution_report",
         "report_version": 1,
         "plan_uri": plan_uri,
         "run_status_uri": run_status_uri,
+        "readiness_report_uri": readiness_report_uri,
+        "readiness_gate_status": readiness_gate_status,
         "customer_scope_id": customer_scope_id,
         "run_id": run_id,
         "execution_date": execution_date,
@@ -113,10 +144,7 @@ pub fn build_worker_data_pipeline_execution_report(
         "review_task_count": review_tasks.len(),
         "review_tasks": review_tasks,
         "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
-        "evidence_refs": [
-            format!("worker_data_pipeline_plans:{plan_uri}"),
-            format!("worker_data_pipeline_run_status:{run_status_uri}")
-        ]
+        "evidence_refs": evidence_refs
     });
 
     fs::create_dir_all(output_dir.as_ref()).with_context(|| {
@@ -183,6 +211,9 @@ pub fn build_worker_data_pipeline_execution_submission(
             .context("worker data pipeline execution report requires plan_uri")?,
         run_status_uri: json_string(&report, "run_status_uri")
             .context("worker data pipeline execution report requires run_status_uri")?,
+        readiness_report_uri: json_string(&report, "readiness_report_uri"),
+        readiness_gate_status: json_string(&report, "readiness_gate_status")
+            .unwrap_or_else(|| "missing".into()),
         run_id: json_string(&report, "run_id")
             .context("worker data pipeline execution report requires run_id")?,
         execution_date: json_string(&report, "execution_date")
@@ -248,6 +279,23 @@ fn reported_job_statuses(run_status: &serde_json::Value) -> BTreeMap<String, ser
             Some((job_kind, status.clone()))
         })
         .collect()
+}
+
+fn readiness_gate_status(readiness_report_uri: Option<&str>) -> anyhow::Result<&'static str> {
+    let Some(readiness_report_uri) = readiness_report_uri else {
+        return Ok("missing");
+    };
+    let readiness_report = read_json_report(readiness_report_uri)?;
+    if json_string(&readiness_report, "report_kind").as_deref()
+        != Some("worker_data_pipeline_readiness_report")
+    {
+        bail!("readiness_report_uri must point to a worker_data_pipeline_readiness_report");
+    }
+    if json_string(&readiness_report, "readiness_status").as_deref() == Some("ready") {
+        Ok("ready")
+    } else {
+        Ok("blocked")
+    }
 }
 
 fn execution_status(reported: Option<&serde_json::Value>) -> &'static str {

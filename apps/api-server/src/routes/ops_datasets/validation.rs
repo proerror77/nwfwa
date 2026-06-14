@@ -673,6 +673,43 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             "pending_or_failed_job_count must not exceed job_count",
         ));
     }
+    if let Some(status) = request.readiness_gate_status.as_deref() {
+        if !matches!(status, "ready" | "blocked" | "missing") {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_GATE",
+                "readiness_gate_status must be ready, blocked, or missing",
+            ));
+        }
+    }
+    if let Some(readiness_report_uri) = request.readiness_report_uri.as_deref() {
+        if readiness_report_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_URI",
+                "readiness_report_uri must not be blank when supplied",
+            ));
+        }
+        match request.readiness_gate_status.as_deref() {
+            Some("ready" | "blocked") => {}
+            _ => {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_GATE",
+                    "readiness_gate_status must be ready or blocked when readiness_report_uri is supplied",
+                ));
+            }
+        }
+    } else if matches!(
+        request.readiness_gate_status.as_deref(),
+        Some("ready" | "blocked")
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_URI",
+            "readiness_report_uri is required when readiness_gate_status is ready or blocked",
+        ));
+    }
     let expected_report_ref = format!(
         "worker_data_pipeline_execution_reports:{}",
         request.source_report_uri
@@ -687,6 +724,21 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             "MISSING_WORKER_DATA_PIPELINE_EXECUTION_REPORT_EVIDENCE",
             format!("worker data pipeline evidence_refs must include {expected_report_ref}"),
         ));
+    }
+    if let Some(readiness_report_uri) = request.readiness_report_uri.as_deref() {
+        let expected_readiness_ref =
+            format!("worker_data_pipeline_readiness_reports:{readiness_report_uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_readiness_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_WORKER_DATA_PIPELINE_READINESS_REPORT_EVIDENCE",
+                format!("worker data pipeline evidence_refs must include {expected_readiness_ref}"),
+            ));
+        }
     }
     for execution in &request.job_executions {
         let Some(job_kind) = execution.get("job_kind").and_then(|value| value.as_str()) else {

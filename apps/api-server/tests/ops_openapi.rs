@@ -216,6 +216,14 @@ async fn openapi_includes_operations_paths() {
             ["properties"]["claim_scoring"]["const"]
             == false
     );
+    assert!(
+        schema["components"]["schemas"]["WorkerDataPipelineExecutionReportSubmissionRequest"]
+            ["properties"]["readiness_gate_status"]["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == "ready")
+    );
     assert!(schema["paths"]["/api/v1/ops/worker-data-pipeline-readiness"].is_object());
     assert!(
         schema["components"]["schemas"]["WorkerDataPipelineReadinessReportSubmissionResponse"]

@@ -399,6 +399,13 @@ pub(super) fn dataset_schemas() -> Value {
                 "report_kind": { "type": "string", "const": "worker_data_pipeline_execution_report" },
                 "plan_uri": { "type": "string", "minLength": 1 },
                 "run_status_uri": { "type": "string", "minLength": 1 },
+                "readiness_report_uri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "nullable": true,
+                    "description": "Optional URI for the worker_data_pipeline_readiness_report used as this scheduler run's readiness gate."
+                },
+                "readiness_gate_status": { "type": "string", "enum": ["ready", "blocked", "missing"], "nullable": true },
                 "run_id": { "type": "string", "minLength": 1 },
                 "execution_date": { "type": "string", "minLength": 1 },
                 "job_count": { "type": "integer", "minimum": 1 },
@@ -417,7 +424,7 @@ pub(super) fn dataset_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include worker_data_pipeline_execution_reports:{source_report_uri}."
+                    "description": "Must include worker_data_pipeline_execution_reports:{source_report_uri}; when readiness_report_uri is supplied, must also include worker_data_pipeline_readiness_reports:{readiness_report_uri}."
                 },
                 "governance_boundary": { "type": "string", "minLength": 1 }
             }
@@ -428,6 +435,8 @@ pub(super) fn dataset_schemas() -> Value {
             "properties": {
                 "report_kind": { "type": "string", "const": "worker_data_pipeline_execution_report" },
                 "source_report_uri": { "type": "string" },
+                "readiness_report_uri": { "type": "string", "nullable": true },
+                "readiness_gate_status": { "type": "string", "enum": ["ready", "blocked", "missing"], "nullable": true },
                 "run_id": { "type": "string" },
                 "execution_date": { "type": "string" },
                 "job_count": { "type": "integer" },

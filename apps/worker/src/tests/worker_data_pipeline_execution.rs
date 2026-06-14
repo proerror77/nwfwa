@@ -63,6 +63,7 @@ fn builds_worker_data_pipeline_execution_report() {
         report["scheduler_status"],
         "completed_with_pending_or_failed_jobs"
     );
+    assert_eq!(report["readiness_gate_status"], "missing");
     let executions = report["job_executions"].as_array().expect("executions");
     assert_eq!(executions[0]["execution_status"], "completed");
     assert_eq!(
@@ -74,7 +75,12 @@ fn builds_worker_data_pipeline_execution_report() {
         executions[3]["execution_status"],
         "scheduled_pending_customer_execution"
     );
-    assert_eq!(report["review_task_count"], 8);
+    assert_eq!(report["review_task_count"], 9);
+    assert!(report["review_tasks"]
+        .as_array()
+        .expect("review tasks")
+        .iter()
+        .any(|task| task["task_kind"] == "worker_data_pipeline_readiness_gate_review"));
     assert_eq!(
         report["governance_boundary"],
         "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy"
@@ -85,6 +91,152 @@ fn builds_worker_data_pipeline_execution_report() {
     assert!(output_dir
         .join("worker_data_pipeline_execution_review_tasks.json")
         .exists());
+}
+
+#[test]
+fn builds_worker_data_pipeline_execution_report_with_ready_gate() {
+    let root = temp_root("worker-data-pipeline-execution-ready");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let readiness_report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    let run_status_uri = root.join("worker_data_pipeline_run_status.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    write_json(
+        readiness_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "readiness_status": "ready"
+        }),
+    )
+    .expect("write readiness report");
+    let job_statuses = plan["jobs"]
+        .as_array()
+        .expect("jobs")
+        .iter()
+        .map(|job| {
+            let job_kind = job["job_kind"].as_str().expect("job kind");
+            serde_json::json!({
+                "job_kind": job_kind,
+                "status": "succeeded",
+                "artifact_uri": format!("s3://nwfwa-production-artifacts/{job_kind}.json"),
+                "submitted": true
+            })
+        })
+        .collect::<Vec<_>>();
+    write_json(
+        run_status_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "readiness_report_uri": readiness_report_uri.to_string_lossy(),
+            "job_statuses": job_statuses
+        }),
+    )
+    .expect("write run status");
+
+    let report = build_worker_data_pipeline_execution_report(
+        &plan_uri.to_string_lossy(),
+        &run_status_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect("worker data pipeline execution report");
+
+    assert_eq!(report["readiness_gate_status"], "ready");
+    assert_eq!(
+        report["readiness_report_uri"],
+        readiness_report_uri.to_string_lossy().to_string()
+    );
+    assert_eq!(report["scheduler_status"], "completed");
+    assert_eq!(report["pending_or_failed_job_count"], 0);
+    assert_eq!(report["review_task_count"], 0);
+    assert!(report["evidence_refs"]
+        .as_array()
+        .expect("evidence refs")
+        .iter()
+        .any(|reference| reference
+            == &serde_json::json!(format!(
+                "worker_data_pipeline_readiness_reports:{}",
+                readiness_report_uri.to_string_lossy()
+            ))));
+}
+
+#[test]
+fn builds_worker_data_pipeline_execution_report_with_blocked_gate() {
+    let root = temp_root("worker-data-pipeline-execution-blocked");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let readiness_report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    let run_status_uri = root.join("worker_data_pipeline_run_status.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    write_json(
+        readiness_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "readiness_status": "blocked"
+        }),
+    )
+    .expect("write readiness report");
+    let job_statuses = plan["jobs"]
+        .as_array()
+        .expect("jobs")
+        .iter()
+        .map(|job| {
+            let job_kind = job["job_kind"].as_str().expect("job kind");
+            serde_json::json!({
+                "job_kind": job_kind,
+                "status": "succeeded",
+                "artifact_uri": format!("s3://nwfwa-production-artifacts/{job_kind}.json"),
+                "submitted": true
+            })
+        })
+        .collect::<Vec<_>>();
+    write_json(
+        run_status_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "readiness_report_uri": readiness_report_uri.to_string_lossy(),
+            "job_statuses": job_statuses
+        }),
+    )
+    .expect("write run status");
+
+    let report = build_worker_data_pipeline_execution_report(
+        &plan_uri.to_string_lossy(),
+        &run_status_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect("worker data pipeline execution report");
+
+    assert_eq!(report["readiness_gate_status"], "blocked");
+    assert_eq!(
+        report["scheduler_status"],
+        "completed_with_pending_or_failed_jobs"
+    );
+    assert_eq!(report["pending_or_failed_job_count"], 0);
+    assert_eq!(report["review_task_count"], 1);
+    assert_eq!(
+        report["review_tasks"][0]["task_kind"],
+        "worker_data_pipeline_readiness_gate_review"
+    );
 }
 
 #[test]
@@ -132,6 +284,8 @@ fn builds_worker_data_pipeline_execution_submission() {
         "worker_data_pipeline_execution_report"
     );
     assert_eq!(submission.run_id, "wdp_2026_06_14");
+    assert_eq!(submission.readiness_report_uri, None);
+    assert_eq!(submission.readiness_gate_status, "missing");
     assert_eq!(submission.job_count, 1);
     assert_eq!(submission.review_task_count, 0);
     assert!(submission.evidence_refs.iter().any(|reference| {
@@ -153,6 +307,8 @@ async fn submits_worker_data_pipeline_execution_report_to_api() {
             "report_kind": "worker_data_pipeline_execution_report",
             "plan_uri": "local://plans/worker_data_pipeline_plan.json",
             "run_status_uri": "local://runs/worker_data_pipeline_run_status.json",
+            "readiness_report_uri": "local://readiness/worker_data_pipeline_readiness_report.json",
+            "readiness_gate_status": "ready",
             "customer_scope_id": "production-customer",
             "run_id": "wdp_2026_06_14",
             "execution_date": "2026-06-14",
@@ -170,7 +326,8 @@ async fn submits_worker_data_pipeline_execution_report_to_api() {
             "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
             "evidence_refs": [
                 "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
-                "worker_data_pipeline_run_status:local://runs/worker_data_pipeline_run_status.json"
+                "worker_data_pipeline_run_status:local://runs/worker_data_pipeline_run_status.json",
+                "worker_data_pipeline_readiness_reports:local://readiness/worker_data_pipeline_readiness_report.json"
             ]
         }),
     )
@@ -182,6 +339,8 @@ async fn submits_worker_data_pipeline_execution_report_to_api() {
         let request = read_http_request(&mut socket).await;
         assert!(request.contains("POST /api/v1/ops/worker-data-pipeline-executions HTTP/1.1"));
         assert!(request.contains(r#""report_kind":"worker_data_pipeline_execution_report""#));
+        assert!(request.contains(r#""readiness_gate_status":"ready""#));
+        assert!(request.contains("worker_data_pipeline_readiness_reports:"));
         assert!(request.contains("worker_data_pipeline_execution_reports:"));
         write_json_response(
             &mut socket,

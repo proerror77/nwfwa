@@ -564,6 +564,8 @@ pub async fn submit_worker_data_pipeline_execution_report(
     let response = WorkerDataPipelineExecutionReportSubmissionResponse {
         report_kind: request.report_kind.clone(),
         source_report_uri: request.source_report_uri.clone(),
+        readiness_report_uri: request.readiness_report_uri.clone(),
+        readiness_gate_status: request.readiness_gate_status.clone(),
         run_id: request.run_id.clone(),
         execution_date: request.execution_date.clone(),
         job_count: request.job_count,
@@ -593,6 +595,8 @@ pub async fn submit_worker_data_pipeline_execution_report(
                 "report_kind": request.report_kind,
                 "plan_uri": request.plan_uri,
                 "run_status_uri": request.run_status_uri,
+                "readiness_report_uri": request.readiness_report_uri,
+                "readiness_gate_status": request.readiness_gate_status,
                 "run_id": request.run_id,
                 "execution_date": request.execution_date,
                 "job_count": request.job_count,

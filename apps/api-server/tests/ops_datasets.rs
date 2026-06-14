@@ -206,6 +206,8 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
       "report_kind": "worker_data_pipeline_execution_report",
       "plan_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
       "run_status_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+      "readiness_report_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+      "readiness_gate_status": "ready",
       "run_id": "wdp_2026_06_14",
       "execution_date": "2026-06-14",
       "job_count": 2,
@@ -231,6 +233,7 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
       ],
       "evidence_refs": [
         "worker_data_pipeline_execution_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+        "worker_data_pipeline_readiness_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
         "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
         "worker_data_pipeline_run_status:local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
       ],
@@ -470,6 +473,11 @@ async fn submits_worker_data_pipeline_execution_report() {
         body["source_report_uri"],
         "local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
     );
+    assert_eq!(
+        body["readiness_report_uri"],
+        "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
+    );
+    assert_eq!(body["readiness_gate_status"], "ready");
     assert_eq!(body["run_id"], "wdp_2026_06_14");
     assert_eq!(body["job_count"], 2);
     assert_eq!(body["pending_or_failed_job_count"], 1);
@@ -483,6 +491,37 @@ async fn submits_worker_data_pipeline_execution_report() {
     assert_eq!(
         body["audit_event_type"],
         "worker_data_pipeline.execution_report.submitted"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_readiness_evidence_when_uri_supplied() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_readiness_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_WORKER_DATA_PIPELINE_READINESS_REPORT_EVIDENCE"
     );
 }
 
