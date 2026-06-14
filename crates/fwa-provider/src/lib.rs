@@ -160,24 +160,12 @@ pub fn assess_provider_profile(
     evidence_refs.dedup();
     let sanctions_hit = oig_excluded || sam_debarred;
     let risk_score = if sanctions_hit { 100 } else { risk_score };
-    let review_failure_count = profile
-        .windows
-        .iter()
-        .map(|window| window.review_failure_count)
-        .max()
-        .unwrap_or(0);
-    let confirmed_fwa_count = profile
-        .windows
-        .iter()
-        .map(|window| window.confirmed_fwa_count)
-        .max()
-        .unwrap_or(0);
-    let false_positive_count = profile
-        .windows
-        .iter()
-        .map(|window| window.false_positive_count)
-        .max()
-        .unwrap_or(0);
+    let review_failure_count =
+        weighted_window_count(&profile.windows, |window| window.review_failure_count);
+    let confirmed_fwa_count =
+        weighted_window_count(&profile.windows, |window| window.confirmed_fwa_count);
+    let false_positive_count =
+        weighted_window_count(&profile.windows, |window| window.false_positive_count);
 
     ProviderProfileAssessment {
         provider_id: provider.external_provider_id.clone(),
@@ -404,11 +392,7 @@ fn weighted_profile_risk_score(findings: &[ProviderProfileWindowFinding]) -> Opt
     let mut weighted = 0.0_f64;
     let mut total_weight = 0.0_f64;
     for finding in findings {
-        let weight = match finding.window_days {
-            0..=30 => 0.50,
-            31..=90 => 0.35,
-            _ => 0.15,
-        };
+        let weight = profile_window_weight(finding.window_days);
         weighted += finding.risk_score as f64 * weight;
         total_weight += weight;
     }
@@ -416,6 +400,32 @@ fn weighted_profile_risk_score(findings: &[ProviderProfileWindowFinding]) -> Opt
         None
     } else {
         Some((weighted / total_weight).round().clamp(0.0, 100.0) as u8)
+    }
+}
+
+fn weighted_window_count(
+    windows: &[ProviderProfileWindow],
+    count: impl Fn(&ProviderProfileWindow) -> u32,
+) -> u32 {
+    let mut weighted = 0.0_f64;
+    let mut total_weight = 0.0_f64;
+    for window in windows {
+        let weight = profile_window_weight(window.window_days);
+        weighted += count(window) as f64 * weight;
+        total_weight += weight;
+    }
+    if total_weight == 0.0 {
+        0
+    } else {
+        (weighted / total_weight).round().max(0.0) as u32
+    }
+}
+
+fn profile_window_weight(window_days: u16) -> f64 {
+    match window_days {
+        0..=30 => 0.50,
+        31..=90 => 0.35,
+        _ => 0.15,
     }
 }
 
@@ -544,6 +554,50 @@ mod tests {
         assert_eq!(assessment.risk_score, 50);
         assert_eq!(assessment.risk_tier, "medium");
         assert!(!assessment.review_required);
+        assert_eq!(assessment.review_failure_count, 2);
+        assert_eq!(assessment.confirmed_fwa_count, 2);
+        assert_eq!(assessment.false_positive_count, 1);
+    }
+
+    #[test]
+    fn provider_history_counts_are_recency_weighted() {
+        let provider = Provider {
+            id: ProviderId::from_external("PRV-OLD-HISTORY"),
+            external_provider_id: "PRV-OLD-HISTORY".into(),
+            name: "Demo Clinic".into(),
+            provider_type: "clinic".into(),
+            region: "SH".into(),
+            risk_tier: ProviderRiskTier::Medium,
+        };
+        let quiet_window = |window_days, confirmed_fwa_count| ProviderProfileWindow {
+            window_days,
+            claim_count: 40,
+            total_claim_amount: Decimal::new(100000, 0),
+            high_cost_item_ratio: 0.10,
+            diagnosis_procedure_mismatch_rate: 0.02,
+            peer_amount_percentile: 45,
+            peer_frequency_percentile: 50,
+            review_failure_count: confirmed_fwa_count,
+            confirmed_fwa_count,
+            false_positive_count: confirmed_fwa_count,
+        };
+        let profile = ProviderProfileInput {
+            specialty: Some("primary_care".into()),
+            network_status: Some("in_network".into()),
+            oig_excluded: None,
+            sam_debarred: None,
+            windows: vec![
+                quiet_window(30, 0),
+                quiet_window(90, 1),
+                quiet_window(365, 10),
+            ],
+        };
+
+        let assessment = assess_provider_profile(&provider, Some(&profile));
+
+        assert_eq!(assessment.review_failure_count, 2);
+        assert_eq!(assessment.confirmed_fwa_count, 2);
+        assert_eq!(assessment.false_positive_count, 2);
     }
 
     #[test]
