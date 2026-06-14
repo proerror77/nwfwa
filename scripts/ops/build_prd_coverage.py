@@ -202,6 +202,10 @@ CAPABILITIES = [
             ),
             (
                 "scripts/ops/validate_production_readiness_contract.py",
+                "WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES",
+            ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
                 "WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS",
             ),
             (
