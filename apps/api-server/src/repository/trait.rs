@@ -539,6 +539,13 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SaveEpisodeRollupsInput,
     ) -> anyhow::Result<Vec<EpisodeRollupRecord>>;
 
+    async fn latest_episode_rollup_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EpisodeRollupRecord>>;
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
     async fn save_knowledge_case(

@@ -248,6 +248,30 @@ impl InMemoryScoringRepository {
         }
         Ok(saved)
     }
+
+    pub(super) async fn in_memory_latest_episode_rollup_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EpisodeRollupRecord>> {
+        let member_id = member_id.trim();
+        let provider_id = provider_id.trim();
+        let record = self
+            .episode_rollups
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .filter(|record| record.member_id == member_id && record.provider_id == provider_id)
+            .max_by(|left, right| left.as_of_date.cmp(&right.as_of_date))
+            .cloned();
+        Ok(record)
+    }
 }
 
 fn provider_sanction_key(customer_scope_id: &str, sanction_key: &str) -> String {

@@ -87,6 +87,10 @@ As of the P1/P2 remediation commits after this review:
   member-provider revisit counts, duplicate-claim similarity, procedure
   frequency peer percentile, and unbundling candidate counts; these signals
   contribute to L5 only when worker-owned context is supplied.
+- `/api/v1/claims/score` can now load persisted member-provider episode
+  rollups directly when no inline or materialized episode context is supplied,
+  feeding 30-day revisit count and duplicate-claim similarity into L5 with
+  evidence refs.
 - The worker now has a scoring feature context materialization contract that
   maps episode rollups, peer benchmarks, clinical compatibility records, and
   unbundling candidates into claim-level contexts suitable for online scoring
@@ -211,14 +215,14 @@ validation on customer data.
 | A-5 | Seven-layer weights are hard-coded and do not renormalize when data is missing. | Represent layer values as data-present vs. actual zero and renormalize across available layers. |
 | A-6 | Provider history counts now use the same 30/90/365 recency weighting philosophy as provider profile risk, producing effective counts instead of letting a 365-day max dominate current scoring. | Validate effective-count interpretation with customer review policy before exposing it as an operational KPI. |
 | A-7 | L3 anomaly baseline has a comment but no quantified upgrade trigger. | Add a measurable threshold, e.g. upgrade evaluation after at least 500 confirmed FWA labels or poor 30-day recall. |
-| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, a worker materialization contract, persisted API ingestion and claim-time lookup support, an episode-rollup submit/write path, a clinical-compatibility reference submit/write path, and an unbundling comparator candidate submit/write path. Production scheduling and customer-data validation remain open. | Connect scheduled worker artifact persistence and customer-approved data sources before treating these schemes as production-covered. |
+| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, a worker materialization contract, persisted API ingestion and claim-time lookup support, direct persisted episode-rollup lookup for member-provider utilization, an episode-rollup submit/write path, a clinical-compatibility reference submit/write path, and an unbundling comparator candidate submit/write path. Production scheduling and customer-data validation remain open. | Connect scheduled worker artifact persistence and customer-approved data sources before treating these schemes as production-covered. |
 
 ## B. Feature Engineering And Data Quality Gaps
 
 | ID | Gap | Required planning response |
 | --- | --- | --- |
 | B-1 | Peer percentile fallback is still a proxy path unless upstream supplies peer context. | Feature metadata must expose `is_proxy`, `data_source`, and source lineage. |
-| B-2 | Episode-level features now have worker-owned 30/90/365 member-provider aggregation, scoring input materialization, and a permission-gated submit/write path; production scheduling and customer claim-history validation remain open. | Connect scheduled customer-history rollups before treating unbundling and excessive-utilization coverage as production-ready. |
+| B-2 | Episode-level features now have worker-owned 30/90/365 member-provider aggregation, scoring input materialization, a permission-gated submit/write path, and claim-time persisted rollup lookup for member-provider utilization fallback; production scheduling and customer claim-history validation remain open. | Connect scheduled customer-history rollups before treating unbundling and excessive-utilization coverage as production-ready. |
 | B-3 | ICD-10/CPT clinical compatibility ingestion now has a permission-gated reference submit/write path and claim-time scoring lookup. Unbundling comparator candidates now also have a permission-gated submit/write path, but customer-approved rule packs, production scheduling, and customer-data validation remain open. | Connect clinical compatibility references, bundled/component code references, and episode co-occurrence outputs to governed customer data before treating clinical matching or unbundling detection as production-covered. |
 | B-4 | Feature registry lacks proxy/source metadata. | Extend feature records and PRD acceptance criteria so compliance reports can distinguish real distributions from estimates. |
 

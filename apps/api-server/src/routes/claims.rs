@@ -16,7 +16,7 @@ use crate::{
     app::AppState,
     auth::AuthenticatedApiPrincipal,
     error::ApiError,
-    repository::{PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery},
+    repository::{EpisodeRollupRecord, PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery},
 };
 use axum::{extract::State, Json};
 use fwa_anomaly::detect_anomaly;
@@ -33,6 +33,7 @@ use fwa_provider::{
     ProviderRelationshipGraphInput,
 };
 use fwa_rules::evaluate_rules;
+use serde::Deserialize;
 use std::collections::BTreeSet;
 
 pub use super::claims_types::*;
@@ -47,6 +48,19 @@ struct ResolvedScoringFeatureContext {
 struct ResolvedClinicalCompatibilityContext {
     context: ClinicalCompatibilityFeatureContext,
     evidence_refs: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedEpisodeUtilizationContext {
+    context: EpisodeUtilizationFeatureContext,
+    evidence_refs: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct EpisodeRollupWindowPayload {
+    window_days: u16,
+    claim_count: u32,
+    duplicate_amount_day_count: u32,
 }
 
 fn peer_feature_context_from_request(
@@ -170,6 +184,86 @@ fn episode_utilization_context_from_request(
             unbundling_candidate_count: context.unbundling_candidate_count,
             data_source: context.data_source.clone(),
         })
+}
+
+fn episode_utilization_context_from_rollup(
+    record: &EpisodeRollupRecord,
+) -> Result<Option<EpisodeUtilizationFeatureContext>, ApiError> {
+    let windows = record
+        .windows
+        .iter()
+        .map(|window| {
+            serde_json::from_value::<EpisodeRollupWindowPayload>(window.clone())
+                .map_err(internal_error("EPISODE_ROLLUP_PARSE_FAILED"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let Some(window_30) = windows.iter().find(|window| window.window_days == 30) else {
+        return Ok(None);
+    };
+    let duplicate_claim_similarity_score = if window_30.claim_count <= 1 {
+        0.0
+    } else {
+        (window_30.duplicate_amount_day_count as f64 / (window_30.claim_count - 1) as f64)
+            .clamp(0.0, 1.0)
+    };
+
+    Ok(Some(EpisodeUtilizationFeatureContext {
+        member_provider_claim_count_30d: Some(window_30.claim_count),
+        duplicate_claim_similarity_score: Some(duplicate_claim_similarity_score),
+        procedure_frequency_peer_percentile: None,
+        unbundling_candidate_count: Some(0),
+        data_source: Some("worker.episode_utilization_rollup".into()),
+    }))
+}
+
+async fn resolve_episode_utilization_context(
+    state: &AppState,
+    actor: &ActorContext,
+    claim_context: &ClaimContext,
+    scoring_feature_context: Option<&ScoringFeatureContextPayload>,
+) -> Result<Option<ResolvedEpisodeUtilizationContext>, ApiError> {
+    if let Some(context) = episode_utilization_context_from_request(scoring_feature_context) {
+        return Ok(Some(ResolvedEpisodeUtilizationContext {
+            context,
+            evidence_refs: Vec::new(),
+        }));
+    }
+
+    let Some(record) = state
+        .repository
+        .latest_episode_rollup_for_member_provider(
+            &claim_context.member.external_member_id,
+            &claim_context.provider.external_provider_id,
+            Some(&actor.customer_scope_id),
+        )
+        .await
+        .map_err(internal_error("EPISODE_ROLLUP_LOAD_FAILED"))?
+    else {
+        return Ok(None);
+    };
+    let Some(context) = episode_utilization_context_from_rollup(&record)? else {
+        return Ok(None);
+    };
+    let evidence_refs = record
+        .evidence_refs
+        .iter()
+        .cloned()
+        .chain([
+            format!("episode_rollups:{}", record.source_report_uri),
+            format!(
+                "episode_rollup:{}:{}",
+                record.episode_key, record.as_of_date
+            ),
+        ])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(serde_json::Value::String)
+        .collect();
+
+    Ok(Some(ResolvedEpisodeUtilizationContext {
+        context,
+        evidence_refs,
+    }))
 }
 
 fn inline_scoring_feature_context_from_request(
@@ -607,8 +701,12 @@ pub async fn score_claim(
     let clinical_compatibility_context = resolved_clinical_compatibility_context
         .as_ref()
         .map(|resolved| &resolved.context);
-    let episode_utilization_context =
-        episode_utilization_context_from_request(scoring_feature_context);
+    let resolved_episode_utilization_context =
+        resolve_episode_utilization_context(&state, &actor, &context, scoring_feature_context)
+            .await?;
+    let episode_utilization_context = resolved_episode_utilization_context
+        .as_ref()
+        .map(|resolved| &resolved.context);
     let run_id = ScoringRunId::new();
     let (provider_profile_input, provider_profile_materialization_evidence_refs) =
         resolve_provider_profile_input(
@@ -635,7 +733,7 @@ pub async fn score_claim(
         peer_feature_context.as_ref(),
         Some(&provider_profile_feature_context),
         clinical_compatibility_context,
-        episode_utilization_context.as_ref(),
+        episode_utilization_context,
     );
     let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
     let provider_relationships = assess_provider_relationship_graph(
@@ -658,6 +756,9 @@ pub async fn score_claim(
         evidence_refs.extend(context.evidence_refs.clone());
     }
     if let Some(context) = &resolved_clinical_compatibility_context {
+        evidence_refs.extend(context.evidence_refs.clone());
+    }
+    if let Some(context) = &resolved_episode_utilization_context {
         evidence_refs.extend(context.evidence_refs.clone());
     }
     evidence_refs.extend(provider_profile_materialization_evidence_refs);

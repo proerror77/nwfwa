@@ -774,6 +774,20 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_episode_rollups(input).await
     }
 
+    async fn latest_episode_rollup_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EpisodeRollupRecord>> {
+        self.in_memory_latest_episode_rollup_for_member_provider(
+            member_id,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         self.in_memory_list_knowledge_cases().await
     }

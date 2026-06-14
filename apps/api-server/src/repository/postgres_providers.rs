@@ -548,3 +548,62 @@ pub(super) async fn save_episode_rollups(
     tx.commit().await?;
     Ok(saved)
 }
+
+pub(super) async fn latest_episode_rollup_for_member_provider(
+    repository: &PostgresScoringRepository,
+    member_id: &str,
+    provider_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<EpisodeRollupRecord>> {
+    let row: Option<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Value,
+        Value,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT customer_scope_id, episode_key, member_id, provider_id, as_of_date, windows, evidence_refs, source_report_uri, submitted_by, notes
+         FROM episode_rollups
+         WHERE ($1::text IS NULL OR customer_scope_id = $1)
+           AND member_id = $2
+           AND provider_id = $3
+         ORDER BY as_of_date DESC, updated_at DESC
+         LIMIT 1",
+    )
+    .bind(customer_scope_id)
+    .bind(member_id.trim())
+    .bind(provider_id.trim())
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            customer_scope_id,
+            episode_key,
+            member_id,
+            provider_id,
+            as_of_date,
+            windows,
+            evidence_refs,
+            source_report_uri,
+            submitted_by,
+            notes,
+        )| EpisodeRollupRecord {
+            customer_scope_id,
+            episode_key,
+            member_id,
+            provider_id,
+            as_of_date,
+            windows: serde_json::from_value(windows).unwrap_or_default(),
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            source_report_uri,
+            submitted_by,
+            notes,
+        },
+    ))
+}

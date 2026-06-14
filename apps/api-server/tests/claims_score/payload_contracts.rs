@@ -810,3 +810,148 @@ async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
     )));
     assert!(evidence_refs.contains(&serde_json::json!("policy:clinical:J:IMG-900")));
 }
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_episode_rollup() {
+    let app = build_app(test_config()).unwrap();
+
+    let episode_rollup_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/episode-rollups")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-episode-aggregation",
+              "notes": "daily member-provider episode rollup",
+              "source_report_uri": "local://artifacts/episode/episode_aggregation_report.json",
+              "report_kind": "member_provider_episode_aggregation",
+              "as_of_date": "2026-06-14",
+              "source_uri": "local://inputs/episode-claims.json",
+              "episode_count": 1,
+              "claim_count": 3,
+              "episodes": [
+                {
+                  "episode_key": "MBR-EPISODE-1|PRV-EPISODE-1",
+                  "member_id": "MBR-EPISODE-1",
+                  "provider_id": "PRV-EPISODE-1",
+                  "windows": [
+                    {
+                      "window_days": 30,
+                      "claim_count": 2,
+                      "total_claim_amount": 200.0,
+                      "unique_procedure_code_count": 2,
+                      "max_procedure_code_frequency": 2,
+                      "duplicate_amount_day_count": 1
+                    },
+                    {
+                      "window_days": 90,
+                      "claim_count": 3,
+                      "total_claim_amount": 450.0,
+                      "unique_procedure_code_count": 3,
+                      "max_procedure_code_frequency": 2,
+                      "duplicate_amount_day_count": 1
+                    }
+                  ],
+                  "evidence_refs": ["claims:CLM-EPISODE-1", "claims:CLM-EPISODE-2"]
+                }
+              ],
+              "evidence_refs": [
+                "episode_rollups:local://artifacts/episode/episode_aggregation_report.json",
+                "episode_claim_snapshot:local://inputs/episode-claims.json"
+              ],
+              "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
+            }"#,
+        ))
+        .unwrap();
+    let episode_rollup_response = app.clone().oneshot(episode_rollup_request).await.unwrap();
+    assert_eq!(episode_rollup_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-EPISODE-ROLLUP",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-900",
+                  "item_type": "procedure",
+                  "description": "Imaging bundle",
+                  "quantity": 1,
+                  "unit_amount": "8000",
+                  "total_amount": "8000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-EPISODE-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-EPISODE",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-EPISODE-1",
+                "name": "Persisted Episode Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let feature = |name: &str| {
+        feature_values
+            .iter()
+            .find(|feature| feature["name"] == name)
+            .unwrap_or_else(|| panic!("missing feature {name}"))
+    };
+
+    assert_eq!(
+        feature("member_provider_claim_count_30d")["value"],
+        serde_json::json!(2)
+    );
+    assert_eq!(
+        feature("duplicate_claim_similarity_score")["value"],
+        serde_json::json!(1.0)
+    );
+    assert_eq!(
+        feature("unbundling_candidate_count")["value"],
+        serde_json::json!(0)
+    );
+    assert_eq!(
+        feature("member_provider_claim_count_30d")["data_source"],
+        "worker.episode_utilization_rollup"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!("claims:CLM-EPISODE-1")));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "episode_rollup:MBR-EPISODE-1|PRV-EPISODE-1:2026-06-14"
+    )));
+}

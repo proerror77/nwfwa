@@ -812,6 +812,21 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_episode_rollups(self, input).await
     }
 
+    async fn latest_episode_rollup_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EpisodeRollupRecord>> {
+        postgres_providers::latest_episode_rollup_for_member_provider(
+            self,
+            member_id,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         postgres_knowledge::list_knowledge_cases(self).await
     }
