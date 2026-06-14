@@ -584,6 +584,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
             },
         ],
         "validation_command": (
+            "python3 scripts/ops/validate_production_evidence_package.py "
+            "--package-dir artifacts/production-evidence-package && "
             "python3 scripts/ops/validate_production_readiness_contract.py "
             "--contract-dir artifacts/production-evidence-package/contract "
             "--evidence-dir artifacts/production-evidence-package/evidence"
@@ -669,6 +671,8 @@ def build_evidence_package(output_dir: Path) -> dict:
             }
         ],
         "validation_command": (
+            "python3 scripts/ops/validate_production_evidence_package.py "
+            "--package-dir <package> && "
             "python3 scripts/ops/validate_production_readiness_contract.py "
             "--contract-dir <package>/contract --evidence-dir <package>/evidence"
         ),

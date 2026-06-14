@@ -72,6 +72,22 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn("build-scoring-readback-report", command_text)
             self.assertIn("runtime-secret-not-persisted", command_text)
             self.assertIn("No API keys", runbook["secret_boundary"])
+            self.assertIn(
+                "validate_production_evidence_package.py",
+                runbook["validation_command"],
+            )
+            self.assertIn(
+                "validate_production_readiness_contract.py",
+                runbook["validation_command"],
+            )
+            self.assertIn(
+                "validate_production_evidence_package.py",
+                package["validation_command"],
+            )
+            self.assertIn(
+                "validate_production_readiness_contract.py",
+                package["validation_command"],
+            )
             self.assertEqual(
                 artifacts["worker_data_pipeline_execution_report.json"]["readiness_gate_status"],
                 "blocked",
