@@ -203,6 +203,39 @@ fn provider_graph_signal_rollup_payload() -> &'static str {
     }"#
 }
 
+fn peer_benchmark_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-peer-benchmarks",
+      "notes": "monthly peer percentile benchmark",
+      "source_report_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
+      "report_kind": "peer_percentile_benchmark",
+      "benchmark_month": "2026-06",
+      "source_uri": "local://inputs/peer-claims.json",
+      "claim_count": 5,
+      "peer_group_count": 1,
+      "peer_groups": [
+        {
+          "peer_group_key": "dental|SH|outpatient",
+          "specialty": "dental",
+          "region": "SH",
+          "service_segment": "outpatient",
+          "claim_count": 5,
+          "p25": 200.0,
+          "p50": 300.0,
+          "p75": 400.0,
+          "p90": 500.0,
+          "p99": 500.0,
+          "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient"]
+        }
+      ],
+      "evidence_refs": [
+        "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json",
+        "peer_benchmark_claim_snapshot:local://inputs/peer-claims.json"
+      ],
+      "governance_boundary": "benchmark computes peer percentile reference data only; it must not score claims, assign labels, or change routing policy"
+    }"#
+}
+
 #[tokio::test]
 async fn submits_provider_sanctions_sync_report() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
@@ -305,6 +338,56 @@ async fn submits_provider_graph_signal_rollup() {
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["label_assignment"], false);
     assert_eq!(body["case_creation"], false);
+}
+
+#[tokio::test]
+async fn submits_peer_benchmark() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/peer-benchmarks",
+        peer_benchmark_payload(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "peer_percentile_benchmark");
+    assert_eq!(body["benchmark_month"], "2026-06");
+    assert_eq!(body["peer_group_count"], 1);
+    assert_eq!(body["claim_count"], 5);
+    assert_eq!(
+        body["persisted_peer_groups"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_peer_groups"][0]["peer_group_key"],
+        "dental|SH|outpatient"
+    );
+    assert_eq!(body["persisted_peer_groups"][0]["p90"], 500.0);
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_scoring"], false);
+}
+
+#[tokio::test]
+async fn peer_benchmark_requires_provider_write_permission() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/peer-benchmarks",
+        peer_benchmark_payload(),
+        "provider-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:providers:write");
 }
 
 #[tokio::test]

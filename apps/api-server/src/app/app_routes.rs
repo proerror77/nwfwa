@@ -276,6 +276,10 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             post(ops_providers::submit_provider_graph_signal_rollup),
         )
         .route(
+            "/api/v1/ops/providers/peer-benchmarks",
+            post(ops_providers::submit_peer_benchmark),
+        )
+        .route(
             "/api/v1/ops/providers/anomaly-review-queue",
             get(ops_providers::anomaly_review_queue),
         )

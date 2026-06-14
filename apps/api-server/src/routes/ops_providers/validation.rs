@@ -3,8 +3,9 @@ use axum::http::StatusCode;
 
 use super::{
     AnomalyClusteringReviewTaskInput, ReviewAnomalyCandidateRequest,
-    SubmitAnomalyClusteringReportRequest, SubmitProviderGraphSignalRollupRequest,
-    SubmitProviderProfileWindowRollupRequest, SubmitSanctionsSyncReportRequest,
+    SubmitAnomalyClusteringReportRequest, SubmitPeerBenchmarkRequest,
+    SubmitProviderGraphSignalRollupRequest, SubmitProviderProfileWindowRollupRequest,
+    SubmitSanctionsSyncReportRequest,
 };
 
 pub(super) fn validate_anomaly_clustering_report_submission(
@@ -508,6 +509,135 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
                     "referral_concentration_entropy must be between 0 and 1",
                 ));
             }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_peer_benchmark_submission(
+    request: &SubmitPeerBenchmarkRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_PEER_BENCHMARK_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_PEER_BENCHMARK_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_PEER_BENCHMARK_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_PEER_BENCHMARK_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.benchmark_month.as_str(),
+            "INVALID_PEER_BENCHMARK_MONTH",
+            "benchmark_month is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_PEER_BENCHMARK_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_PEER_BENCHMARK_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "peer_percentile_benchmark" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PEER_BENCHMARK_KIND",
+            "report_kind must be peer_percentile_benchmark",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PEER_BENCHMARK_URI",
+            "source_report_uri must point to a JSON peer benchmark report",
+        ));
+    }
+    if request.peer_groups.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PEER_BENCHMARK_GROUPS",
+            "peer_groups are required",
+        ));
+    }
+    if request.peer_group_count != request.peer_groups.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PEER_BENCHMARK_GROUP_COUNT",
+            "peer_group_count must match peer_groups length",
+        ));
+    }
+    let expected_report_ref = format!("peer_benchmarks:{}", request.source_report_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PEER_BENCHMARK_EVIDENCE",
+            format!("peer benchmark evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    for group in &request.peer_groups {
+        if group.peer_group_key.trim().is_empty()
+            || group.specialty.trim().is_empty()
+            || group.region.trim().is_empty()
+            || group.service_segment.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_GROUP",
+                "peer_group_key, specialty, region, and service_segment are required",
+            ));
+        }
+        if group.claim_count == 0 {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_GROUP",
+                "claim_count must be greater than 0",
+            ));
+        }
+        let percentiles = [group.p25, group.p50, group.p75, group.p90, group.p99];
+        if percentiles
+            .iter()
+            .any(|value| !value.is_finite() || *value < 0.0)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_PERCENTILES",
+                "peer benchmark percentiles must be finite non-negative amounts",
+            ));
+        }
+        if !(group.p25 <= group.p50
+            && group.p50 <= group.p75
+            && group.p75 <= group.p90
+            && group.p90 <= group.p99)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_PERCENTILES",
+                "peer benchmark percentiles must be monotonic",
+            ));
         }
     }
     Ok(())

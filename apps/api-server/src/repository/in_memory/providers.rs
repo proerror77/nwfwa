@@ -97,6 +97,44 @@ impl InMemoryScoringRepository {
         }
         Ok(saved)
     }
+
+    pub(super) async fn in_memory_save_peer_benchmark_groups(
+        &self,
+        input: SavePeerBenchmarkGroupsInput,
+    ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>> {
+        let mut records = self.peer_benchmark_groups.lock().await;
+        let mut saved = Vec::with_capacity(input.peer_groups.len());
+        for group in input.peer_groups {
+            let record = PeerBenchmarkGroupRecord {
+                customer_scope_id: input.customer_scope_id.clone(),
+                peer_group_key: group.peer_group_key,
+                specialty: group.specialty,
+                region: group.region,
+                service_segment: group.service_segment,
+                benchmark_month: input.benchmark_month.clone(),
+                claim_count: group.claim_count,
+                p25: group.p25,
+                p50: group.p50,
+                p75: group.p75,
+                p90: group.p90,
+                p99: group.p99,
+                evidence_refs: group.evidence_refs,
+                source_report_uri: input.source_report_uri.clone(),
+                submitted_by: input.submitted_by.clone(),
+                notes: input.notes.clone(),
+            };
+            records.insert(
+                peer_benchmark_group_key(
+                    &record.customer_scope_id,
+                    &record.peer_group_key,
+                    &record.benchmark_month,
+                ),
+                record.clone(),
+            );
+            saved.push(record);
+        }
+        Ok(saved)
+    }
 }
 
 fn provider_sanction_key(customer_scope_id: &str, sanction_key: &str) -> String {
@@ -113,4 +151,12 @@ fn provider_profile_window_key(
 
 fn provider_signal_key(customer_scope_id: &str, provider_id: &str, as_of_date: &str) -> String {
     format!("{customer_scope_id}::{provider_id}::{as_of_date}")
+}
+
+fn peer_benchmark_group_key(
+    customer_scope_id: &str,
+    peer_group_key: &str,
+    benchmark_month: &str,
+) -> String {
+    format!("{customer_scope_id}::{peer_group_key}::{benchmark_month}")
 }

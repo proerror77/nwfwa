@@ -109,3 +109,48 @@ pub struct ProviderGraphSignalRecord {
     pub submitted_by: String,
     pub notes: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerBenchmarkGroupUpsertInput {
+    pub peer_group_key: String,
+    pub specialty: String,
+    pub region: String,
+    pub service_segment: String,
+    pub claim_count: usize,
+    pub p25: f64,
+    pub p50: f64,
+    pub p75: f64,
+    pub p90: f64,
+    pub p99: f64,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavePeerBenchmarkGroupsInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub benchmark_month: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub peer_groups: Vec<PeerBenchmarkGroupUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerBenchmarkGroupRecord {
+    pub customer_scope_id: String,
+    pub peer_group_key: String,
+    pub specialty: String,
+    pub region: String,
+    pub service_segment: String,
+    pub benchmark_month: String,
+    pub claim_count: usize,
+    pub p25: f64,
+    pub p50: f64,
+    pub p75: f64,
+    pub p90: f64,
+    pub p99: f64,
+    pub evidence_refs: Vec<String>,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}

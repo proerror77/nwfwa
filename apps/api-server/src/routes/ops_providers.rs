@@ -3,10 +3,11 @@ use crate::{
     auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
-        AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent,
-        ProviderGraphSignalRecord, ProviderGraphSignalUpsertInput, ProviderProfileWindowRecord,
+        AuditEventListFilter, AuditHistoryEventRecord, PeerBenchmarkGroupRecord,
+        PeerBenchmarkGroupUpsertInput, PersistedAuditEvent, ProviderGraphSignalRecord,
+        ProviderGraphSignalUpsertInput, ProviderProfileWindowRecord,
         ProviderProfileWindowUpsertInput, ProviderRiskSummaryRecord, ProviderSanctionRecord,
-        ProviderSanctionUpsertInput, SaveProviderGraphSignalsInput,
+        ProviderSanctionUpsertInput, SavePeerBenchmarkGroupsInput, SaveProviderGraphSignalsInput,
         SaveProviderProfileWindowsInput, SaveProviderSanctionsInput,
     },
 };
@@ -22,7 +23,7 @@ mod validation;
 
 use validation::{
     validate_anomaly_candidate_review, validate_anomaly_clustering_report_submission,
-    validate_provider_graph_signal_rollup_submission,
+    validate_peer_benchmark_submission, validate_provider_graph_signal_rollup_submission,
     validate_provider_profile_window_rollup_submission, validate_sanctions_sync_report_submission,
 };
 
@@ -204,6 +205,38 @@ pub struct SubmitProviderGraphSignalRollupResponse {
     pub audit_event_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SubmitPeerBenchmarkRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub benchmark_month: String,
+    pub source_uri: String,
+    pub claim_count: usize,
+    pub peer_group_count: usize,
+    #[serde(default)]
+    pub peer_groups: Vec<PeerBenchmarkGroupUpsertInput>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitPeerBenchmarkResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub benchmark_month: String,
+    pub peer_group_count: usize,
+    pub claim_count: usize,
+    pub persisted_peer_groups: Vec<PeerBenchmarkGroupRecord>,
+    pub active_scoring_policy_change: bool,
+    pub label_assignment: bool,
+    pub claim_scoring: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AnomalyReviewQueueResponse {
     pub tasks: Vec<AnomalyReviewQueueTask>,
@@ -367,6 +400,46 @@ pub async fn submit_provider_graph_signal_rollup(
     record_provider_graph_signal_rollup_audit(&state, &actor, &request, &response)
         .await
         .map_err(internal_error("PROVIDER_GRAPH_SIGNALS_AUDIT_FAILED"))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_peer_benchmark(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitPeerBenchmarkRequest>,
+) -> Result<Json<SubmitPeerBenchmarkResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:providers:write")?;
+    validate_peer_benchmark_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_peer_benchmark_groups(SavePeerBenchmarkGroupsInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            benchmark_month: request.benchmark_month.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            peer_groups: request.peer_groups.clone(),
+        })
+        .await
+        .map_err(internal_error("PEER_BENCHMARK_GROUPS_SAVE_FAILED"))?;
+    let response = SubmitPeerBenchmarkResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        benchmark_month: request.benchmark_month.clone(),
+        peer_group_count: persisted.len(),
+        claim_count: request.claim_count,
+        persisted_peer_groups: persisted,
+        active_scoring_policy_change: false,
+        label_assignment: false,
+        claim_scoring: false,
+        governance_boundary:
+            "peer benchmark submission writes peer percentile reference data only; it must not score claims, assign fraud labels, or change scoring/routing policy"
+                .into(),
+        audit_event_type: "provider.peer_benchmarks.submitted".into(),
+    };
+    record_peer_benchmark_audit(&state, &actor, &request, &response)
+        .await
+        .map_err(internal_error("PEER_BENCHMARK_AUDIT_FAILED"))?;
     Ok(Json(response))
 }
 
@@ -607,6 +680,51 @@ async fn record_provider_graph_signal_rollup_audit(
                 "active_scoring_policy_change": response.active_scoring_policy_change,
                 "label_assignment": response.label_assignment,
                 "case_creation": response.case_creation,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_peer_benchmark_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    request: &SubmitPeerBenchmarkRequest,
+    response: &SubmitPeerBenchmarkResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: response.audit_event_type.clone(),
+            event_status: "succeeded".into(),
+            summary: format!("Peer benchmark submitted: {}", request.source_report_uri),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "benchmark_month": request.benchmark_month,
+                "source_uri": request.source_uri,
+                "claim_count": request.claim_count,
+                "peer_group_count": request.peer_group_count,
+                "persisted_peer_group_count": response.peer_group_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "label_assignment": response.label_assignment,
+                "claim_scoring": response.claim_scoring,
             }),
             evidence_refs: request
                 .evidence_refs

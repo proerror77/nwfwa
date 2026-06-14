@@ -218,6 +218,32 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
         );
     }
     assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/peer-benchmarks"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitPeerBenchmarkRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/peer-benchmarks"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitPeerBenchmarkResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PeerBenchmarkGroupUpsert"]["properties"]["claim_count"]
+            ["minimum"],
+        1
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "label_assignment",
+        "claim_scoring",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitPeerBenchmarkResponse"]["properties"][field]
+                ["const"],
+            false
+        );
+    }
+    assert_eq!(
         schema["components"]["schemas"]["AnomalyReviewQueueResponse"]["properties"]["tasks"]
             ["items"]["$ref"],
         "#/components/schemas/AnomalyReviewQueueTask"

@@ -340,6 +340,92 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["provider.graph_signals.submitted"] }
             }
         },
+        "PeerBenchmarkGroupUpsert": {
+            "type": "object",
+            "required": ["peer_group_key", "specialty", "region", "service_segment", "claim_count", "p25", "p50", "p75", "p90", "p99", "evidence_refs"],
+            "properties": {
+                "peer_group_key": { "type": "string", "minLength": 1 },
+                "specialty": { "type": "string", "minLength": 1 },
+                "region": { "type": "string", "minLength": 1 },
+                "service_segment": { "type": "string", "minLength": 1 },
+                "claim_count": { "type": "integer", "minimum": 1 },
+                "p25": { "type": "number", "minimum": 0 },
+                "p50": { "type": "number", "minimum": 0 },
+                "p75": { "type": "number", "minimum": 0 },
+                "p90": { "type": "number", "minimum": 0 },
+                "p99": { "type": "number", "minimum": 0 },
+                "evidence_refs": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                }
+            }
+        },
+        "PeerBenchmarkGroupRecord": {
+            "allOf": [
+                { "$ref": "#/components/schemas/PeerBenchmarkGroupUpsert" },
+                {
+                    "type": "object",
+                    "required": ["customer_scope_id", "benchmark_month", "source_report_uri", "submitted_by", "notes"],
+                    "properties": {
+                        "customer_scope_id": { "type": "string" },
+                        "benchmark_month": { "type": "string" },
+                        "source_report_uri": { "type": "string" },
+                        "submitted_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                }
+            ]
+        },
+        "SubmitPeerBenchmarkRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "benchmark_month", "source_uri", "claim_count", "peer_group_count", "peer_groups", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "peer_percentile_benchmark" },
+                "benchmark_month": { "type": "string", "minLength": 1 },
+                "source_uri": { "type": "string", "minLength": 1 },
+                "claim_count": { "type": "integer", "minimum": 0 },
+                "peer_group_count": { "type": "integer", "minimum": 1 },
+                "peer_groups": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/PeerBenchmarkGroupUpsert" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include peer_benchmarks:{source_report_uri}."
+                },
+                "governance_boundary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Source worker report boundary. Submission writes peer benchmark reference data only."
+                }
+            }
+        },
+        "SubmitPeerBenchmarkResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "benchmark_month", "peer_group_count", "claim_count", "persisted_peer_groups", "active_scoring_policy_change", "label_assignment", "claim_scoring", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "peer_percentile_benchmark" },
+                "source_report_uri": { "type": "string" },
+                "benchmark_month": { "type": "string" },
+                "peer_group_count": { "type": "integer" },
+                "claim_count": { "type": "integer" },
+                "persisted_peer_groups": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/PeerBenchmarkGroupRecord" }
+                },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "claim_scoring": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["provider.peer_benchmarks.submitted"] }
+            }
+        },
         "AnomalyReviewQueueTask": {
             "type": "object",
             "required": ["candidate_kind", "candidate_id", "task_kind", "review_queue", "required_review", "decision_options", "source_report_uri", "report_kind", "dataset_key", "dataset_version", "label_policy", "governance_boundary", "review_status", "candidate_payload", "evidence_refs"],

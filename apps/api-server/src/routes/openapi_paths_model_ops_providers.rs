@@ -149,6 +149,39 @@ pub(super) fn provider_paths() -> Value {
                 }
             }
         },
+        "/api/v1/ops/providers/peer-benchmarks": {
+            "post": {
+                "summary": "Submit peer percentile benchmark groups",
+                "description": "Persists peer percentile reference groups from a worker-generated benchmark report. This writes benchmark reference data only; it does not score claims, assign fraud labels, or change scoring/routing policy.",
+                "security": [{ "ApiKeyAuth": [] }],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": { "$ref": "#/components/schemas/SubmitPeerBenchmarkRequest" }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Persisted peer benchmark groups",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitPeerBenchmarkResponse" }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Requires ops:providers:write permission",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ops/providers/anomaly-review-queue": {
             "get": {
                 "summary": "List anomaly candidates derived from submitted clustering reports",

@@ -161,8 +161,9 @@ pub use provider_graph_rollup::{
 
 mod peer_benchmark;
 pub use peer_benchmark::{
-    build_peer_percentile_benchmark, PeerBenchmarkClaimInput, PeerBenchmarkGroup,
-    PeerBenchmarkInput, PeerBenchmarkReport,
+    build_peer_benchmark_submission, build_peer_percentile_benchmark, submit_peer_benchmark,
+    PeerBenchmarkClaimInput, PeerBenchmarkGroup, PeerBenchmarkInput, PeerBenchmarkReport,
+    PeerBenchmarkSubmission,
 };
 
 mod episode_rollup;

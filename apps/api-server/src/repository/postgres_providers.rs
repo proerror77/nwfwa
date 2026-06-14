@@ -198,3 +198,79 @@ pub(super) async fn save_provider_graph_signals(
     tx.commit().await?;
     Ok(saved)
 }
+
+pub(super) async fn save_peer_benchmark_groups(
+    repository: &PostgresScoringRepository,
+    input: SavePeerBenchmarkGroupsInput,
+) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>> {
+    let mut saved = Vec::with_capacity(input.peer_groups.len());
+    let mut tx = repository.pool.begin().await?;
+    for group in input.peer_groups {
+        let evidence_refs = serde_json::Value::Array(
+            group
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+        sqlx::query(
+            "INSERT INTO peer_benchmark_groups
+                 (customer_scope_id, peer_group_key, specialty, region, service_segment, benchmark_month, claim_count, p25, p50, p75, p90, p99, evidence_refs, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                 ON CONFLICT (customer_scope_id, peer_group_key, benchmark_month) DO UPDATE
+                 SET specialty = EXCLUDED.specialty,
+                     region = EXCLUDED.region,
+                     service_segment = EXCLUDED.service_segment,
+                     claim_count = EXCLUDED.claim_count,
+                     p25 = EXCLUDED.p25,
+                     p50 = EXCLUDED.p50,
+                     p75 = EXCLUDED.p75,
+                     p90 = EXCLUDED.p90,
+                     p99 = EXCLUDED.p99,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&group.peer_group_key)
+        .bind(&group.specialty)
+        .bind(&group.region)
+        .bind(&group.service_segment)
+        .bind(&input.benchmark_month)
+        .bind(group.claim_count as i32)
+        .bind(group.p25)
+        .bind(group.p50)
+        .bind(group.p75)
+        .bind(group.p90)
+        .bind(group.p99)
+        .bind(&evidence_refs)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(PeerBenchmarkGroupRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            peer_group_key: group.peer_group_key,
+            specialty: group.specialty,
+            region: group.region,
+            service_segment: group.service_segment,
+            benchmark_month: input.benchmark_month.clone(),
+            claim_count: group.claim_count,
+            p25: group.p25,
+            p50: group.p50,
+            p75: group.p75,
+            p90: group.p90,
+            p99: group.p99,
+            evidence_refs: group.evidence_refs,
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}

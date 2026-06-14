@@ -891,6 +891,32 @@ CREATE TABLE IF NOT EXISTS provider_graph_signals (
 CREATE INDEX IF NOT EXISTS provider_graph_signals_scope_provider_idx
   ON provider_graph_signals(customer_scope_id, provider_id);
 
+CREATE TABLE IF NOT EXISTS peer_benchmark_groups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  peer_group_key TEXT NOT NULL,
+  specialty TEXT NOT NULL,
+  region TEXT NOT NULL,
+  service_segment TEXT NOT NULL,
+  benchmark_month TEXT NOT NULL,
+  claim_count INTEGER NOT NULL DEFAULT 0,
+  p25 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p50 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p75 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p90 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p99 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, peer_group_key, benchmark_month)
+);
+
+CREATE INDEX IF NOT EXISTS peer_benchmark_groups_scope_segment_idx
+  ON peer_benchmark_groups(customer_scope_id, specialty, region, service_segment);
+
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

@@ -473,6 +473,11 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SaveProviderGraphSignalsInput,
     ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>>;
 
+    async fn save_peer_benchmark_groups(
+        &self,
+        input: SavePeerBenchmarkGroupsInput,
+    ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>>;
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
     async fn save_knowledge_case(

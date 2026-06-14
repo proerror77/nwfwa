@@ -700,6 +700,13 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_provider_graph_signals(self, input).await
     }
 
+    async fn save_peer_benchmark_groups(
+        &self,
+        input: SavePeerBenchmarkGroupsInput,
+    ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>> {
+        postgres_providers::save_peer_benchmark_groups(self, input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         postgres_knowledge::list_knowledge_cases(self).await
     }

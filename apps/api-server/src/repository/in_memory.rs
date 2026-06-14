@@ -54,6 +54,7 @@ pub struct InMemoryScoringRepository {
     provider_sanctions: Mutex<HashMap<String, ProviderSanctionRecord>>,
     provider_profile_windows: Mutex<HashMap<String, ProviderProfileWindowRecord>>,
     provider_graph_signals: Mutex<HashMap<String, ProviderGraphSignalRecord>>,
+    peer_benchmark_groups: Mutex<HashMap<String, PeerBenchmarkGroupRecord>>,
     routing_policies: Mutex<Vec<RoutingPolicyRecord>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,

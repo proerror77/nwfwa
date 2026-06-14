@@ -27,6 +27,7 @@ pub(super) const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "provider.sanctions_sync.submitted",
     "provider.profile_windows.submitted",
     "provider.graph_signals.submitted",
+    "provider.peer_benchmarks.submitted",
     "agent.approval.decided",
     "agent.run.cancelled",
     "audit_sample.created",

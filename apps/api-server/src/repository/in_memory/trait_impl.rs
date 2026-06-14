@@ -670,6 +670,13 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_provider_graph_signals(input).await
     }
 
+    async fn save_peer_benchmark_groups(
+        &self,
+        input: SavePeerBenchmarkGroupsInput,
+    ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>> {
+        self.in_memory_save_peer_benchmark_groups(input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         self.in_memory_list_knowledge_cases().await
     }
