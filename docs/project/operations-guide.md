@@ -779,6 +779,18 @@ The customer-data governance gate requires
 `customer_data_governance_report.json` to show approved dataset provenance,
 label provenance, holdout split, and shadow-traffic plan, plus positive
 approved-label and holdout-claim counts and matching evidence refs.
+After the customer supplies the approval source JSON, render the standard
+evidence artifact into the package:
+
+```bash
+python3 scripts/ops/build_customer_data_governance_report.py \
+  --source-uri artifacts/production-evidence-package/customer-data-governance-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder preserves incomplete or unapproved inputs as `status = blocked`;
+the production readiness validator remains the authority for accepting or
+rejecting the generated report.
 The retention/legal-hold gate requires `retention_legal_hold_report.json` to
 show at least six retention years, explicit retention and legal-hold policy ids,
 archive storage, completed legal-hold reconciliation, human approval before

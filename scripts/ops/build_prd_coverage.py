@@ -291,6 +291,18 @@ CAPABILITIES = [
                 "scripts/ops/build_production_evidence_package.py",
                 "pending_customer_evidence",
             ),
+            (
+                "scripts/ops/build_customer_data_governance_report.py",
+                "customer_data_governance_report",
+            ),
+            (
+                "scripts/ops/build_customer_data_governance_report.py",
+                "REQUIRED_STATUS_FIELDS",
+            ),
+            (
+                "scripts/ops/build_customer_data_governance_report.py",
+                "REQUIRED_EVIDENCE_PREFIXES",
+            ),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"),
