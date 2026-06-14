@@ -282,10 +282,10 @@ for the governed worker write paths is required before production readiness can
 be claimed; that gate now carries acceptance checks for ready readiness status,
 completed scheduler status, zero pending or failed jobs, zero review tasks,
 completed governed job kinds, submitted governed write jobs, source snapshot
-artifact evidence, scheduler-reported job success without dependency blockers,
-expected API paths and permission scopes, required execution URIs, required
-per-completed-job artifact URI/evidence refs, required evidence refs, and the
-no-adjudication boundary. It also checks scoring-context materialization source
+artifact and lineage evidence, scheduler-reported job success without dependency
+blockers, expected API paths and permission scopes, required execution URIs,
+required per-completed-job artifact URI/evidence refs, required evidence refs,
+and the no-adjudication boundary. It also checks scoring-context materialization source
 lineage against the same episode, peer, clinical, and unbundling evidence refs
 required by the API submit path. Worker-generated plan/readiness/run-status
 templates now surface those required evidence prefixes before scheduler

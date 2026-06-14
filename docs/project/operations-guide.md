@@ -789,7 +789,7 @@ template placeholder. All governed submit jobs must also show
 `submitted = true`, while the expected API path, required permission scope,
 non-empty artifact URI, and matching write evidence reference are present. The
 artifact-only OIG/SAM source snapshot job must also report a non-empty
-production artifact URI.
+production artifact URI and `oig_sam_snapshot:` source evidence reference.
 After the customer environment publishes production evidence, validate that all
 required readiness artifacts are present and JSON-parseable, and validate the
 worker pipeline execution artifact against those deeper checks:

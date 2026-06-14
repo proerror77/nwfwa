@@ -83,6 +83,8 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES = {
     "probability_calibration_evidence": "probability_calibration_reports:",
 }
 
+WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX = "oig_sam_snapshot:"
+
 WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
     "scoring_feature_context_materialization": (
         "episode_rollups:",
@@ -457,6 +459,12 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
     require(
         is_production_artifact_uri(snapshot_job.get("reported_artifact_uri")),
         "worker data pipeline source snapshot job must report a production artifact URI, not a local dry-run or template URI",
+    )
+    require(
+        evidence_refs_include_prefix(
+            snapshot_job, WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX
+        ),
+        f"worker data pipeline source snapshot job evidence_refs missing {WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX}",
     )
     evidence_refs = report.get("evidence_refs")
     require(

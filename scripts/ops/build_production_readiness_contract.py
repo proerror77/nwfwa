@@ -90,7 +90,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     },
     {
         "check_id": "source_snapshot_artifact_reported",
-        "description": "The artifact-only OIG/SAM source snapshot job reports a non-empty artifact URI.",
+        "description": "The artifact-only OIG/SAM source snapshot job reports a non-empty artifact URI and source snapshot evidence reference.",
     },
     {
         "check_id": "evidence_refs_include_plan_run_status_and_readiness",
