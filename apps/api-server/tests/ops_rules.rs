@@ -299,7 +299,7 @@ async fn returns_rule_performance_metrics_from_scoring_and_outcomes() {
 
 #[tokio::test]
 async fn advances_rule_lifecycle() {
-    let app = build_app(test_config()).unwrap();
+    let app = build_app(test_config_with_rule_actors()).unwrap();
     seed_rule_promotion_evidence(app.clone()).await;
 
     let (status, body) = json_request(
@@ -335,16 +335,29 @@ async fn advances_rule_lifecycle() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_RULE_LIFECYCLE");
 
-    for (uri, expected_status) in [
-        ("/api/v1/ops/rules/rule_early_claim/submit", "submitted"),
-        ("/api/v1/ops/rules/rule_early_claim/approve", "approved"),
-        ("/api/v1/ops/rules/rule_early_claim/publish", "active"),
+    for (uri, expected_status, api_key) in [
+        (
+            "/api/v1/ops/rules/rule_early_claim/submit",
+            "submitted",
+            "submit-secret",
+        ),
+        (
+            "/api/v1/ops/rules/rule_early_claim/approve",
+            "approved",
+            "approve-secret",
+        ),
+        (
+            "/api/v1/ops/rules/rule_early_claim/publish",
+            "active",
+            "approve-secret",
+        ),
     ] {
-        let (status, body) = json_request(
+        let (status, body) = json_request_with_key(
             app.clone(),
             "POST",
             uri,
             &rule_lifecycle_payload("rule_early_claim", 1),
+            api_key,
         )
         .await;
 
@@ -405,31 +418,34 @@ async fn blocks_rule_approval_before_submit() {
 
 #[tokio::test]
 async fn blocks_rule_publish_when_promotion_gates_are_blocked() {
-    let app = build_app(test_config()).unwrap();
+    let app = build_app(test_config_with_rule_actors()).unwrap();
 
-    let (status, _) = json_request(
+    let (status, _) = json_request_with_key(
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/submit",
         &rule_lifecycle_payload("rule_early_claim", 1),
+        "submit-secret",
     )
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, _) = json_request(
+    let (status, _) = json_request_with_key(
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/approve",
         &rule_lifecycle_payload("rule_early_claim", 1),
+        "approve-secret",
     )
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, body) = json_request(
+    let (status, body) = json_request_with_key(
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/publish",
         &rule_lifecycle_payload("rule_early_claim", 1),
+        "approve-secret",
     )
     .await;
 

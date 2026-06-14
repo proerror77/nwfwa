@@ -1,4 +1,9 @@
 #![recursion_limit = "1024"]
+#![allow(
+    clippy::items_after_test_module,
+    clippy::too_many_arguments,
+    clippy::type_complexity
+)]
 
 pub mod app;
 pub mod auth;

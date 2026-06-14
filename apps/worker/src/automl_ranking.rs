@@ -306,10 +306,10 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
     {
         reasons.push("rust_feature_set_status:missing_or_failed".into());
     }
-    if !metrics
+    if metrics
         .get("rust_feature_set_manifest_uri")
         .and_then(|value| value.as_str())
-        .is_some_and(|value| !value.trim().is_empty())
+        .is_none_or(|value| value.trim().is_empty())
     {
         reasons.push("rust_feature_set_manifest_uri:missing".into());
     }
@@ -338,10 +338,10 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
         reasons.push("onnx_parity_status:missing_or_failed".into());
     }
     if automl_requires_onnx_parity(metrics)
-        && !metrics
+        && metrics
             .get("onnx_parity_report_uri")
             .and_then(|value| value.as_str())
-            .is_some_and(|value| !value.trim().is_empty())
+            .is_none_or(|value| value.trim().is_empty())
     {
         reasons.push("onnx_parity_report_uri:missing".into());
     }
@@ -360,10 +360,10 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
     if !automl_has_permutation_importance(metrics) {
         reasons.push("permutation_importance_uri:missing".into());
     }
-    if !metrics
+    if metrics
         .get("overfitting_diagnostics_report_uri")
         .and_then(|value| value.as_str())
-        .is_some_and(|value| !value.trim().is_empty())
+        .is_none_or(|value| value.trim().is_empty())
     {
         reasons.push("overfitting_diagnostics_report_uri:missing".into());
     }

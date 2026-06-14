@@ -23,9 +23,7 @@ impl AppConfig {
     }
 
     pub fn model_service_configuration_status(&self) -> &'static str {
-        if self.model_serving_manifest_uri().is_some() {
-            "configured"
-        } else if self.model_artifact_uri().is_some() {
+        if self.model_serving_manifest_uri().is_some() || self.model_artifact_uri().is_some() {
             "configured"
         } else if self.model_service_url == "heuristic"
             || self.model_service_url.starts_with("heuristic://")

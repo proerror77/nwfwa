@@ -254,7 +254,7 @@ async fn backtests_dataset_mined_rule_against_parquet_dataset() {
     assert_eq!(body["sample_count"], 18);
     assert!(body["matched_count"].as_u64().unwrap() > 0);
     assert!(body["precision"].as_f64().unwrap() > 0.0);
-    assert!(body["matched_claim_ids"].as_array().unwrap().len() > 0);
+    assert!(!body["matched_claim_ids"].as_array().unwrap().is_empty());
     assert!(body["evidence_refs"]
         .as_array()
         .unwrap()

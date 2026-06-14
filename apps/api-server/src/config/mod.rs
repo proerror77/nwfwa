@@ -140,8 +140,7 @@ mod tests {
 
     #[test]
     fn api_key_configuration_status_rejects_any_malformed_principal() {
-        let mut config = AppConfig::from_env();
-        config.api_key = "customer-pilot-secret".into();
+        let api_key = "customer-pilot-secret".to_string();
 
         assert_eq!(
             api_key_principal_configuration_status(
@@ -149,7 +148,7 @@ mod tests {
                     "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta".into(),
                     "broken|entry".into(),
                 ],
-                &config.api_key,
+                &api_key,
             ),
             "invalid_api_key_principals"
         );

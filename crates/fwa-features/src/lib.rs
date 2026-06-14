@@ -134,8 +134,7 @@ pub fn calculate_features_with_operational_contexts(
             "claim_peer_stats",
             &claim_id,
             "claim_amount_peer_percentile",
-            false,
-            "worker.peer_percentile_benchmark_rollup",
+            FeatureMetadata::observed("worker.peer_percentile_benchmark_rollup"),
         );
     }
 
@@ -176,10 +175,19 @@ pub fn calculate_features_with_operational_contexts(
         "claim",
         &claim_id,
         "diagnosis_code",
-        clinical_match_score.1,
-        clinical_match_score
-            .2
-            .unwrap_or("worker.icd_cpt_compatibility_reference"),
+        if clinical_match_score.1 {
+            FeatureMetadata::proxy(
+                clinical_match_score
+                    .2
+                    .unwrap_or("worker.icd_cpt_compatibility_reference"),
+            )
+        } else {
+            FeatureMetadata::observed(
+                clinical_match_score
+                    .2
+                    .unwrap_or("worker.icd_cpt_compatibility_reference"),
+            )
+        },
     );
 
     let provider_risk = match context.provider.risk_tier {
@@ -212,8 +220,11 @@ pub fn calculate_features_with_operational_contexts(
         "provider",
         &context.provider.external_provider_id,
         "risk_tier",
-        provider_profile_score.1,
-        provider_profile_score.2,
+        if provider_profile_score.1 {
+            FeatureMetadata::proxy(provider_profile_score.2)
+        } else {
+            FeatureMetadata::observed(provider_profile_score.2)
+        },
     );
 
     features
@@ -239,8 +250,7 @@ fn insert_episode_utilization_features(
             "member_provider_episode",
             claim_id,
             "claim_count_30d",
-            false,
-            data_source,
+            FeatureMetadata::observed(data_source),
         );
     }
     if let Some(score) = context.duplicate_claim_similarity_score {
@@ -251,8 +261,7 @@ fn insert_episode_utilization_features(
             "member_provider_episode",
             claim_id,
             "duplicate_claim_similarity_score",
-            false,
-            data_source,
+            FeatureMetadata::observed(data_source),
         );
     }
     if let Some(percentile) = context.procedure_frequency_peer_percentile {
@@ -263,8 +272,7 @@ fn insert_episode_utilization_features(
             "provider_peer_stats",
             claim_id,
             "procedure_frequency_peer_percentile",
-            false,
-            data_source,
+            FeatureMetadata::observed(data_source),
         );
     }
     if let Some(count) = context.unbundling_candidate_count {
@@ -275,8 +283,7 @@ fn insert_episode_utilization_features(
             "member_provider_episode",
             claim_id,
             "unbundling_candidate_count",
-            false,
-            data_source,
+            FeatureMetadata::observed(data_source),
         );
     }
 }
@@ -339,9 +346,30 @@ fn insert_number(
         entity_type,
         entity_id,
         field,
-        false,
-        entity_type,
+        FeatureMetadata::observed(entity_type),
     )
+}
+
+#[derive(Clone, Copy)]
+struct FeatureMetadata<'a> {
+    is_proxy: bool,
+    data_source: &'a str,
+}
+
+impl<'a> FeatureMetadata<'a> {
+    fn observed(data_source: &'a str) -> Self {
+        Self {
+            is_proxy: false,
+            data_source,
+        }
+    }
+
+    fn proxy(data_source: &'a str) -> Self {
+        Self {
+            is_proxy: true,
+            data_source,
+        }
+    }
 }
 
 fn insert_number_with_metadata(
@@ -351,8 +379,7 @@ fn insert_number_with_metadata(
     entity_type: &str,
     entity_id: &str,
     field: &str,
-    is_proxy: bool,
-    data_source: &str,
+    metadata: FeatureMetadata<'_>,
 ) {
     features.insert(
         name.to_string(),
@@ -360,8 +387,8 @@ fn insert_number_with_metadata(
             name: name.to_string(),
             version: 1,
             value: serde_json::to_value(value).expect("feature value serializes"),
-            is_proxy,
-            data_source: data_source.to_string(),
+            is_proxy: metadata.is_proxy,
+            data_source: metadata.data_source.to_string(),
             evidence_refs: vec![EvidenceRef {
                 entity_type: entity_type.to_string(),
                 entity_id: entity_id.to_string(),

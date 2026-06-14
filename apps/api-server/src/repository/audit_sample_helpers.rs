@@ -207,10 +207,24 @@ fn strata_key(
 
 fn risk_band_for_score(risk_score: u8) -> &'static str {
     match risk_score {
-        90..=100 => "critical",
-        70..=89 => "high",
+        85..=100 => "critical",
+        70..=84 => "high",
         40..=69 => "medium",
         _ => "low",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::risk_band_for_score;
+
+    #[test]
+    fn risk_band_matches_default_scoring_thresholds() {
+        assert_eq!(risk_band_for_score(85), "critical");
+        assert_eq!(risk_band_for_score(84), "high");
+        assert_eq!(risk_band_for_score(70), "high");
+        assert_eq!(risk_band_for_score(69), "medium");
+        assert_eq!(risk_band_for_score(39), "low");
     }
 }
 
