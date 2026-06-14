@@ -108,6 +108,19 @@ REQUIRED_RUNBOOK_STEPS = {
         "evidence/scoring_readback_report.json",
     ),
 }
+REQUIRED_RUNBOOK_SUBMIT_COMMANDS = {
+    "submit-worker-data-pipeline-readiness-report",
+    "submit-sanctions-sync-report",
+    "submit-provider-profile-window-rollup",
+    "submit-provider-graph-signal-rollup",
+    "submit-peer-benchmark",
+    "submit-episode-aggregation",
+    "submit-clinical-compatibility-reference",
+    "submit-unbundling-comparator",
+    "submit-scoring-feature-contexts",
+    "submit-probability-calibration-report",
+    "submit-worker-data-pipeline-execution-report",
+}
 REQUIRED_RUNBOOK_COMMAND_PATHS = {
     "artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json",
     "artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_input.json",
@@ -575,6 +588,11 @@ def validate_runbook(package_dir: Path) -> None:
     )
     for path in REQUIRED_RUNBOOK_COMMAND_PATHS:
         require(path in command_text, f"runbook command paths missing {path}")
+    for submit_command in REQUIRED_RUNBOOK_SUBMIT_COMMANDS:
+        require(
+            submit_command in command_text,
+            f"runbook submit commands missing {submit_command}",
+        )
     validate_command_includes_package_validator(runbook.get("validation_command"), "runbook")
 
 

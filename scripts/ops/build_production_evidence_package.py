@@ -504,6 +504,8 @@ def source_template(gate_id: str, generated_at: str) -> dict | None:
 
 
 def worker_pipeline_command_runbook(generated_at: str) -> dict:
+    submit_actor = "worker:worker-data-pipeline-scheduler"
+    submit_notes = "customer-approved worker data pipeline artifact write"
     return {
         "artifact_kind": "worker_data_pipeline_command_runbook",
         "generated_at": generated_at,
@@ -552,6 +554,107 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                 "output": "worker/worker_data_pipeline_readiness_report.json",
             },
             {
+                "step": "submit_readiness_report",
+                "command": (
+                    "cargo run --locked -p worker -- submit-worker-data-pipeline-readiness-report "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/worker-data-pipeline-readiness",
+            },
+            {
+                "step": "submit_sanctions_sync_report",
+                "command": (
+                    "cargo run --locked -p worker -- submit-sanctions-sync-report "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/sanctions_sync_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/providers/sanctions-sync-reports",
+            },
+            {
+                "step": "submit_provider_profile_window_rollup",
+                "command": (
+                    "cargo run --locked -p worker -- submit-provider-profile-window-rollup "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/providers/profile-window-rollups",
+            },
+            {
+                "step": "submit_provider_graph_signal_rollup",
+                "command": (
+                    "cargo run --locked -p worker -- submit-provider-graph-signal-rollup "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-graph/<as-of-date>/provider_graph_signal_rollup_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/providers/graph-signal-rollups",
+            },
+            {
+                "step": "submit_peer_benchmark",
+                "command": (
+                    "cargo run --locked -p worker -- submit-peer-benchmark "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/providers/peer-benchmarks",
+            },
+            {
+                "step": "submit_episode_aggregation",
+                "command": (
+                    "cargo run --locked -p worker -- submit-episode-aggregation "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/providers/episode-rollups",
+            },
+            {
+                "step": "submit_clinical_compatibility_reference",
+                "command": (
+                    "cargo run --locked -p worker -- submit-clinical-compatibility-reference "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/clinical-compatibility-references",
+            },
+            {
+                "step": "submit_unbundling_comparator",
+                "command": (
+                    "cargo run --locked -p worker -- submit-unbundling-comparator "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/unbundling-comparator-candidates",
+            },
+            {
+                "step": "submit_scoring_feature_contexts",
+                "command": (
+                    "cargo run --locked -p worker -- submit-scoring-feature-contexts "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json "
+                    "--materialization-id <customer-scope-id>:<as-of-date> "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/scoring-feature-context-materializations",
+            },
+            {
+                "step": "submit_probability_calibration_report",
+                "command": (
+                    "cargo run --locked -p worker -- submit-probability-calibration-report "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/models/{model_key}/probability-calibration-reports",
+            },
+            {
                 "step": "build_run_status_template",
                 "command": (
                     "cargo run --locked -p worker -- build-worker-data-pipeline-run-status-template "
@@ -571,6 +674,16 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "--output-dir artifacts/production-evidence-package/evidence"
                 ),
                 "output": "evidence/worker_data_pipeline_execution_report.json",
+            },
+            {
+                "step": "submit_execution_report",
+                "command": (
+                    "cargo run --locked -p worker -- submit-worker-data-pipeline-execution-report "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--report artifacts/production-evidence-package/evidence/worker_data_pipeline_execution_report.json "
+                    f"--actor {submit_actor} --notes '{submit_notes}'"
+                ),
+                "output": "api:/api/v1/ops/worker-data-pipeline-executions",
             },
             {
                 "step": "fetch_score_response",

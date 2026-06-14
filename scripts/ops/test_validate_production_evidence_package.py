@@ -312,6 +312,24 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "build_scoring_readback_report"):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_missing_governed_submit_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            runbook["commands"] = [
+                command
+                for command in runbook["commands"]
+                if command["step"] != "submit_provider_profile_window_rollup"
+            ]
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError, "submit-provider-profile-window-rollup"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_with_wrong_scoring_readback_input_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
