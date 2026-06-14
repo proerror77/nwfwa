@@ -19,6 +19,7 @@ mod build_peer_benchmarks;
 mod build_probability_calibration_report;
 mod build_provider_graph_signals;
 mod build_provider_profile_windows;
+mod build_scoring_feature_contexts;
 mod build_training_handoff;
 mod build_unbundling_comparator;
 mod check_pilot_readiness;
@@ -81,6 +82,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-probability-calibration-report" => build_probability_calibration_report::run(args),
         "build-provider-graph-signals" => build_provider_graph_signals::run(args),
         "build-provider-profile-windows" => build_provider_profile_windows::run(args),
+        "build-scoring-feature-contexts" => build_scoring_feature_contexts::run(args),
         "build-unbundling-comparator" => build_unbundling_comparator::run(args),
         "submit-mlops-alert-delivery-tasks" => submit_mlops_alert_delivery_tasks::run(args).await,
         "submit-anomaly-clustering-report" => submit_anomaly_clustering_report::run(args).await,

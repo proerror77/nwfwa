@@ -176,6 +176,13 @@ pub use unbundling_comparator::{
     UnbundlingComparatorReport, UnbundlingEpisodeInput, UnbundlingRuleInput,
 };
 
+mod scoring_feature_context;
+pub use scoring_feature_context::{
+    build_scoring_feature_context_report, ClaimScoringFeatureContext,
+    ScoringFeatureContextClaimInput, ScoringFeatureContextInput, ScoringFeatureContextReport,
+    ScoringFeatureContextSourceUris,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,
