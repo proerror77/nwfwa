@@ -541,6 +541,14 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SavePeerBenchmarkGroupsInput,
     ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>>;
 
+    async fn latest_peer_benchmark_group(
+        &self,
+        specialty: &str,
+        region: &str,
+        service_segment: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PeerBenchmarkGroupRecord>>;
+
     async fn save_episode_rollups(
         &self,
         input: SaveEpisodeRollupsInput,

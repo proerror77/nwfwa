@@ -820,6 +820,23 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_peer_benchmark_groups(self, input).await
     }
 
+    async fn latest_peer_benchmark_group(
+        &self,
+        specialty: &str,
+        region: &str,
+        service_segment: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PeerBenchmarkGroupRecord>> {
+        postgres_providers::latest_peer_benchmark_group(
+            self,
+            specialty,
+            region,
+            service_segment,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn save_episode_rollups(
         &self,
         input: SaveEpisodeRollupsInput,

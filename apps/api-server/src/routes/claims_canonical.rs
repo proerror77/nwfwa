@@ -161,6 +161,7 @@ pub(super) fn canonical_score_input(
             claim_amount,
             currency,
             claim_amount_peer_percentile: None,
+            service_segment: None,
             service_date,
             diagnosis_code: Some(diagnosis_code),
             items: Some(items),

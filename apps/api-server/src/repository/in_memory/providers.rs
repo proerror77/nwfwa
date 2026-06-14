@@ -217,6 +217,36 @@ impl InMemoryScoringRepository {
         Ok(saved)
     }
 
+    pub(super) async fn in_memory_latest_peer_benchmark_group(
+        &self,
+        specialty: &str,
+        region: &str,
+        service_segment: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PeerBenchmarkGroupRecord>> {
+        let specialty = specialty.trim();
+        let region = region.trim();
+        let service_segment = service_segment.trim();
+        let record = self
+            .peer_benchmark_groups
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .filter(|record| {
+                record.specialty == specialty
+                    && record.region == region
+                    && record.service_segment == service_segment
+            })
+            .max_by(|left, right| left.benchmark_month.cmp(&right.benchmark_month))
+            .cloned();
+        Ok(record)
+    }
+
     pub(super) async fn in_memory_save_episode_rollups(
         &self,
         input: SaveEpisodeRollupsInput,

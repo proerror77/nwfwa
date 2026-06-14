@@ -812,6 +812,149 @@ async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
 }
 
 #[tokio::test]
+async fn scores_full_payload_with_persisted_peer_benchmark() {
+    let app = build_app(test_config()).unwrap();
+
+    let peer_benchmark_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/peer-benchmarks")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-peer-benchmarks",
+              "notes": "monthly peer percentile benchmark",
+              "source_report_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
+              "report_kind": "peer_percentile_benchmark",
+              "benchmark_month": "2026-06",
+              "source_uri": "local://inputs/peer-claims.json",
+              "claim_count": 5,
+              "peer_group_count": 1,
+              "peer_groups": [
+                {
+                  "peer_group_key": "dental|SH|outpatient",
+                  "specialty": "dental",
+                  "region": "SH",
+                  "service_segment": "outpatient",
+                  "claim_count": 5,
+                  "p25": 200.0,
+                  "p50": 300.0,
+                  "p75": 400.0,
+                  "p90": 500.0,
+                  "p99": 500.0,
+                  "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient"]
+                }
+              ],
+              "evidence_refs": [
+                "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json",
+                "peer_benchmark_claim_snapshot:local://inputs/peer-claims.json"
+              ],
+              "governance_boundary": "benchmark computes peer percentile reference data only; it must not score claims, assign labels, or change routing policy"
+            }"#,
+        ))
+        .unwrap();
+    let peer_benchmark_response = app.clone().oneshot(peer_benchmark_request).await.unwrap();
+    assert_eq!(peer_benchmark_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "service_segment": "outpatient",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-PEER-BENCHMARK",
+                "claim_amount": "450",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "K02"
+              },
+              "items": [
+                {
+                  "item_code": "DEN-100",
+                  "item_type": "procedure",
+                  "description": "Dental procedure",
+                  "quantity": 1,
+                  "unit_amount": "450",
+                  "total_amount": "450"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-PEER"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-PEER",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-PEER",
+                "name": "Persisted Peer Dental Clinic",
+                "provider_type": "clinic",
+                "region": "SH",
+                "risk_tier": "Medium"
+              },
+              "provider_profile": {
+                "specialty": "dental",
+                "network_status": "in_network",
+                "windows": [
+                  {
+                    "window_days": 30,
+                    "claim_count": 5,
+                    "total_claim_amount": "1500",
+                    "high_cost_item_ratio": 0.2,
+                    "diagnosis_procedure_mismatch_rate": 0.1,
+                    "peer_amount_percentile": 50,
+                    "peer_frequency_percentile": 50,
+                    "review_failure_count": 0,
+                    "confirmed_fwa_count": 0,
+                    "false_positive_count": 0
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let peer_feature = feature_values
+        .iter()
+        .find(|feature| feature["name"] == "claim_amount_peer_percentile")
+        .expect("peer percentile feature should be present");
+
+    assert_eq!(peer_feature["value"], serde_json::json!(90));
+    assert_eq!(peer_feature["is_proxy"], false);
+    assert_eq!(
+        peer_feature["data_source"],
+        "worker.peer_percentile_benchmark_rollup"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmark_groups:dental|SH|outpatient"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmark_group:dental|SH|outpatient:2026-06"
+    )));
+}
+
+#[tokio::test]
 async fn scores_full_payload_with_persisted_episode_rollup() {
     let app = build_app(test_config()).unwrap();
 

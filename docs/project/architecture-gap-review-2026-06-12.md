@@ -130,6 +130,10 @@ As of the P1/P2 remediation commits after this review:
   and worker command that persist specialty/region/service-segment benchmark
   groups from an approved benchmark report while explicitly avoiding claim
   scoring, fraud-label assignment, or routing-policy changes.
+- `/api/v1/claims/score` can now load the latest persisted peer benchmark
+  group by provider specialty, provider region, and explicit service segment
+  when no inline or materialized peer context is supplied, preserving non-proxy
+  source metadata and evidence refs in the scoring response.
 - The member-provider episode aggregation rollup now has a separate
   permission-gated submit path and worker command that persist episode
   utilization windows from an approved aggregation report while explicitly
@@ -211,7 +215,7 @@ validation on customer data.
 
 | ID | Gap | Required planning response |
 | --- | --- | --- |
-| A-1 | L1 peer percentile fallback can be confused with a real peer percentile when real peer data is absent. | Mark proxy/baseline paths explicitly and reduce or exclude L1 weight when only proxy data is available. |
+| A-1 | L1 peer percentile fallback is explicitly marked as proxy data when real peer data is absent; real peer percentile can now come from inline/materialized context or the latest persisted benchmark group when provider specialty, region, and explicit service segment are available. | Keep proxy paths excluded or down-weighted when those real peer inputs are missing, and validate persisted peer benchmarks against customer claim history before production use. |
 | A-2 | `diagnosis_procedure_match_score` has a real clinical compatibility input path, worker reference contract, permission-gated clinical reference submit/write path, and claim-time persisted-reference lookup. The default remains a hard-coded heuristic fallback when neither inline/materialized context nor a matching governed reference exists. | Populate the persisted reference set from customer-approved ICD-10/CPT compatibility or medical-policy data and validate it against customer claims before using this layer as production clinical consistency. |
 | A-3 | Confidence scoring overweights rule/anomaly/model agreement and ignores other high-signal layers. | Move to a weighted multi-layer confidence model or high-confidence rule based on two independent high-risk signals. |
 | A-4 | Provider graph input needs billing ring, temporal co-billing, and referral entropy signals. | Add fields to the provider graph contract and require worker rollups that compute them from claim/referral history. |
@@ -224,7 +228,7 @@ validation on customer data.
 
 | ID | Gap | Required planning response |
 | --- | --- | --- |
-| B-1 | Peer percentile fallback is still a proxy path unless upstream supplies peer context. | Feature metadata must expose `is_proxy`, `data_source`, and source lineage. |
+| B-1 | Peer percentile fallback remains a proxy path unless upstream supplies peer context or a matching persisted peer benchmark group is available by provider specialty, region, and explicit service segment. | Feature metadata must continue to expose `is_proxy`, `data_source`, and source lineage so compliance reports can distinguish real distributions from estimates. |
 | B-2 | Episode-level features now have worker-owned 30/90/365 member-provider aggregation, scoring input materialization, a permission-gated submit/write path, and claim-time persisted rollup lookup for member-provider utilization fallback; production scheduling and customer claim-history validation remain open. | Connect scheduled customer-history rollups before treating unbundling and excessive-utilization coverage as production-ready. |
 | B-3 | ICD-10/CPT clinical compatibility ingestion now has a permission-gated reference submit/write path and claim-time scoring lookup. Unbundling comparator candidates now also have a permission-gated submit/write path and claim-time candidate-count lookup, but customer-approved rule packs, production scheduling, and customer-data validation remain open. | Connect clinical compatibility references, bundled/component code references, and episode co-occurrence outputs to governed customer data before treating clinical matching or unbundling detection as production-covered. |
 | B-4 | Feature registry lacks proxy/source metadata. | Extend feature records and PRD acceptance criteria so compliance reports can distinguish real distributions from estimates. |
@@ -269,7 +273,7 @@ validation on customer data.
 | Billing ring detection | Graph clustering needs billing-ring membership or patient-overlap ring detection. | P2 |
 | Temporal co-billing | Needs 7-day co-occurrence computation from dated claim history. | P2 |
 | Referral entropy | Referral concentration should be entropy or HHI-backed, not an opaque score. | P2 |
-| Peer-group percentile benchmark | Monthly p25/p50/p75/p90/p99 by specialty/region/service segment is required. | P2 |
+| Peer-group percentile benchmark | Local worker rollup, permission-gated submit/write path, and claim-time persisted benchmark lookup exist; production scheduling and customer claim-history validation remain. | P2 |
 | Episode aggregation | Member-provider 30/90/365 episode rollups are missing for unbundling/utilization schemes. | P2 |
 | PSI actioning | PSI must create alerts/tasks, not only report values. | P1 |
 | Rule hit-rate trending | 7-day vs. 90-day rule hit-rate computation must be implemented and scheduled. | P1 |

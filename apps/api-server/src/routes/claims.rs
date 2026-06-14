@@ -17,8 +17,8 @@ use crate::{
     auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{
-        EpisodeRollupRecord, PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery,
-        UnbundlingComparatorCandidateRecord,
+        EpisodeRollupRecord, PeerBenchmarkGroupRecord, PersistedAuditEvent, PersistedScoringRun,
+        SimilarCaseQuery, UnbundlingComparatorCandidateRecord,
     },
 };
 use axum::{extract::State, Json};
@@ -36,6 +36,7 @@ use fwa_provider::{
     ProviderRelationshipGraphInput,
 };
 use fwa_rules::evaluate_rules;
+use rust_decimal::prelude::ToPrimitive;
 use serde::Deserialize;
 use std::collections::BTreeSet;
 
@@ -44,6 +45,12 @@ pub use super::claims_types::*;
 #[derive(Debug, Clone)]
 struct ResolvedScoringFeatureContext {
     payload: ScoringFeatureContextPayload,
+    evidence_refs: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedPeerFeatureContext {
+    context: PeerFeatureContext,
     evidence_refs: Vec<serde_json::Value>,
 }
 
@@ -95,6 +102,101 @@ fn peer_feature_context_from_request(
         }))
     } else {
         Ok(None)
+    }
+}
+
+async fn resolve_peer_feature_context(
+    state: &AppState,
+    request: &ScoreClaimRequest,
+    actor: &ActorContext,
+    claim_context: &ClaimContext,
+    scoring_feature_context: Option<&ScoringFeatureContextPayload>,
+    provider_profile_input: Option<&ProviderProfileInput>,
+) -> Result<Option<ResolvedPeerFeatureContext>, ApiError> {
+    if let Some(context) = peer_feature_context_from_request(request, scoring_feature_context)? {
+        return Ok(Some(ResolvedPeerFeatureContext {
+            context,
+            evidence_refs: Vec::new(),
+        }));
+    }
+
+    let Some(service_segment) = service_segment_from_request(request) else {
+        return Ok(None);
+    };
+    let Some(specialty) = provider_profile_input
+        .and_then(|profile| profile.specialty.as_deref())
+        .map(str::trim)
+        .filter(|specialty| !specialty.is_empty())
+    else {
+        return Ok(None);
+    };
+    let Some(record) = state
+        .repository
+        .latest_peer_benchmark_group(
+            specialty,
+            &claim_context.provider.region,
+            &service_segment,
+            Some(&actor.customer_scope_id),
+        )
+        .await
+        .map_err(internal_error("PEER_BENCHMARK_LOAD_FAILED"))?
+    else {
+        return Ok(None);
+    };
+
+    let evidence_refs = record
+        .evidence_refs
+        .iter()
+        .cloned()
+        .chain([
+            format!("peer_benchmarks:{}", record.source_report_uri),
+            format!(
+                "peer_benchmark_group:{}:{}",
+                record.peer_group_key, record.benchmark_month
+            ),
+        ])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(serde_json::Value::String)
+        .collect();
+
+    Ok(Some(ResolvedPeerFeatureContext {
+        context: PeerFeatureContext {
+            claim_amount_peer_percentile: Some(claim_amount_percentile_from_benchmark(
+                claim_context.claim.amount.amount.to_f64().unwrap_or(0.0),
+                &record,
+            )),
+        },
+        evidence_refs,
+    }))
+}
+
+fn service_segment_from_request(request: &ScoreClaimRequest) -> Option<String> {
+    request
+        .service_segment
+        .as_deref()
+        .or_else(|| request.claim.as_ref()?.service_segment.as_deref())
+        .map(str::trim)
+        .filter(|service_segment| !service_segment.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn claim_amount_percentile_from_benchmark(
+    claim_amount: f64,
+    group: &PeerBenchmarkGroupRecord,
+) -> u8 {
+    if claim_amount <= group.p25 {
+        25
+    } else if claim_amount <= group.p50 {
+        50
+    } else if claim_amount <= group.p75 {
+        75
+    } else if claim_amount <= group.p90 {
+        90
+    } else if claim_amount <= group.p99 {
+        99
+    } else {
+        100
     }
 }
 
@@ -739,8 +841,27 @@ pub async fn score_claim(
     let scoring_feature_context = resolved_scoring_feature_context
         .as_ref()
         .map(|context| &context.payload);
-    let peer_feature_context =
-        peer_feature_context_from_request(&request, scoring_feature_context)?;
+    let run_id = ScoringRunId::new();
+    let (provider_profile_input, provider_profile_materialization_evidence_refs) =
+        resolve_provider_profile_input(
+            &state,
+            &actor,
+            &context.provider.external_provider_id,
+            provider_profile_input,
+        )
+        .await?;
+    let resolved_peer_feature_context = resolve_peer_feature_context(
+        &state,
+        &request,
+        &actor,
+        &context,
+        scoring_feature_context,
+        provider_profile_input.as_ref(),
+    )
+    .await?;
+    let peer_feature_context = resolved_peer_feature_context
+        .as_ref()
+        .map(|resolved| &resolved.context);
     let resolved_clinical_compatibility_context =
         resolve_clinical_compatibility_context(&state, &actor, &context, scoring_feature_context)
             .await?;
@@ -753,15 +874,6 @@ pub async fn score_claim(
     let episode_utilization_context = resolved_episode_utilization_context
         .as_ref()
         .map(|resolved| &resolved.context);
-    let run_id = ScoringRunId::new();
-    let (provider_profile_input, provider_profile_materialization_evidence_refs) =
-        resolve_provider_profile_input(
-            &state,
-            &actor,
-            &context.provider.external_provider_id,
-            provider_profile_input,
-        )
-        .await?;
     let provider_relationships_input = resolve_provider_relationships_input(
         &state,
         &actor,
@@ -776,7 +888,7 @@ pub async fn score_claim(
     };
     let mut features = calculate_features_with_operational_contexts(
         &context,
-        peer_feature_context.as_ref(),
+        peer_feature_context,
         Some(&provider_profile_feature_context),
         clinical_compatibility_context,
         episode_utilization_context,
@@ -799,6 +911,9 @@ pub async fn score_claim(
         .collect::<Vec<_>>();
     evidence_refs.extend(request_evidence_refs);
     if let Some(context) = &resolved_scoring_feature_context {
+        evidence_refs.extend(context.evidence_refs.clone());
+    }
+    if let Some(context) = &resolved_peer_feature_context {
         evidence_refs.extend(context.evidence_refs.clone());
     }
     if let Some(context) = &resolved_clinical_compatibility_context {

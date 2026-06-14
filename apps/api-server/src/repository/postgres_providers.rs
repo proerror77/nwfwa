@@ -490,6 +490,86 @@ pub(super) async fn save_peer_benchmark_groups(
     Ok(saved)
 }
 
+pub(super) async fn latest_peer_benchmark_group(
+    repository: &PostgresScoringRepository,
+    specialty: &str,
+    region: &str,
+    service_segment: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<PeerBenchmarkGroupRecord>> {
+    let row: Option<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        i32,
+        f64,
+        f64,
+        f64,
+        f64,
+        f64,
+        Value,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT customer_scope_id, peer_group_key, specialty, region, service_segment, benchmark_month, claim_count, p25, p50, p75, p90, p99, evidence_refs, source_report_uri, submitted_by, notes
+         FROM peer_benchmark_groups
+         WHERE ($1::text IS NULL OR customer_scope_id = $1)
+           AND specialty = $2
+           AND region = $3
+           AND service_segment = $4
+         ORDER BY benchmark_month DESC, updated_at DESC
+         LIMIT 1",
+    )
+    .bind(customer_scope_id)
+    .bind(specialty.trim())
+    .bind(region.trim())
+    .bind(service_segment.trim())
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            customer_scope_id,
+            peer_group_key,
+            specialty,
+            region,
+            service_segment,
+            benchmark_month,
+            claim_count,
+            p25,
+            p50,
+            p75,
+            p90,
+            p99,
+            evidence_refs,
+            source_report_uri,
+            submitted_by,
+            notes,
+        )| PeerBenchmarkGroupRecord {
+            customer_scope_id,
+            peer_group_key,
+            specialty,
+            region,
+            service_segment,
+            benchmark_month,
+            claim_count: claim_count.max(0) as usize,
+            p25,
+            p50,
+            p75,
+            p90,
+            p99,
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            source_report_uri,
+            submitted_by,
+            notes,
+        },
+    ))
+}
+
 pub(super) async fn save_episode_rollups(
     repository: &PostgresScoringRepository,
     input: SaveEpisodeRollupsInput,

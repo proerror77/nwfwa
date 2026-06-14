@@ -781,6 +781,22 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_peer_benchmark_groups(input).await
     }
 
+    async fn latest_peer_benchmark_group(
+        &self,
+        specialty: &str,
+        region: &str,
+        service_segment: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PeerBenchmarkGroupRecord>> {
+        self.in_memory_latest_peer_benchmark_group(
+            specialty,
+            region,
+            service_segment,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn save_episode_rollups(
         &self,
         input: SaveEpisodeRollupsInput,
