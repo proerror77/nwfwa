@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::Path};
 
-use crate::{json_string, read_json_report, required_non_empty, write_json};
+use crate::{api_url, json_string, read_json_report, required_non_empty, write_json};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerDataPipelineReadinessInput {
@@ -23,6 +23,25 @@ pub struct WorkerDataPipelineReadinessCheck {
     pub data_quality_status: Option<String>,
     #[serde(default)]
     pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkerDataPipelineReadinessReportSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub readiness_input_uri: String,
+    pub readiness_status: String,
+    pub job_count: usize,
+    pub ready_job_count: usize,
+    pub blocked_job_count: usize,
+    pub review_task_count: usize,
+    pub job_readiness: Vec<serde_json::Value>,
+    pub review_tasks: Vec<serde_json::Value>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
 }
 
 pub fn build_worker_data_pipeline_readiness_report(
@@ -139,6 +158,90 @@ pub fn build_worker_data_pipeline_readiness_report(
     Ok(report)
 }
 
+pub fn build_worker_data_pipeline_readiness_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<WorkerDataPipelineReadinessReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report = read_json_report(report_uri)?;
+    if json_string(&report, "report_kind").as_deref()
+        != Some("worker_data_pipeline_readiness_report")
+    {
+        bail!("report_kind must be worker_data_pipeline_readiness_report");
+    }
+    let job_readiness = report
+        .get("job_readiness")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .context("worker data pipeline readiness report requires job_readiness")?;
+    let review_tasks = report
+        .get("review_tasks")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut evidence_refs = report
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    evidence_refs.push(format!(
+        "worker_data_pipeline_readiness_reports:{report_uri}"
+    ));
+    Ok(WorkerDataPipelineReadinessReportSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: report_uri.into(),
+        report_kind: "worker_data_pipeline_readiness_report".into(),
+        plan_uri: json_string(&report, "plan_uri")
+            .context("worker data pipeline readiness report requires plan_uri")?,
+        readiness_input_uri: json_string(&report, "readiness_input_uri")
+            .context("worker data pipeline readiness report requires readiness_input_uri")?,
+        readiness_status: json_string(&report, "readiness_status")
+            .context("worker data pipeline readiness report requires readiness_status")?,
+        job_count: json_usize(&report, "job_count")?,
+        ready_job_count: json_usize(&report, "ready_job_count")?,
+        blocked_job_count: json_usize(&report, "blocked_job_count")?,
+        review_task_count: json_usize(&report, "review_task_count")?,
+        job_readiness,
+        review_tasks,
+        evidence_refs,
+        governance_boundary: json_string(&report, "governance_boundary")
+            .context("worker data pipeline readiness report requires governance_boundary")?,
+    })
+}
+
+pub async fn submit_worker_data_pipeline_readiness_report(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_worker_data_pipeline_readiness_submission(report_uri, actor, notes)?;
+    let client = reqwest::Client::new();
+    let response = client
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/worker-data-pipeline-readiness",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit worker data pipeline readiness report")?;
+    let status = response.status();
+    let body = response.text().await.context("read submit response")?;
+    if !status.is_success() {
+        bail!("submit worker data pipeline readiness report failed with {status}: {body}");
+    }
+    serde_json::from_str(&body).context("parse worker data pipeline readiness response")
+}
+
 fn readiness_blockers(
     job_kind: &str,
     check: Option<&WorkerDataPipelineReadinessCheck>,
@@ -181,4 +284,12 @@ fn readiness_blockers(
         blockers.push("missing_evidence_refs".into());
     }
     blockers
+}
+
+fn json_usize(value: &serde_json::Value, key: &'static str) -> anyhow::Result<usize> {
+    value
+        .get(key)
+        .and_then(|value| value.as_u64())
+        .map(|value| value as usize)
+        .with_context(|| format!("worker data pipeline readiness report requires {key}"))
 }

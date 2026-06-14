@@ -181,6 +181,49 @@ pub struct WorkerDataPipelineExecutionReportSubmissionResponse {
     pub audit_event_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SubmitWorkerDataPipelineReadinessReportRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub readiness_input_uri: String,
+    pub readiness_status: String,
+    pub job_count: usize,
+    pub ready_job_count: usize,
+    pub blocked_job_count: usize,
+    pub review_task_count: usize,
+    #[serde(default)]
+    pub job_readiness: Vec<Value>,
+    #[serde(default)]
+    pub review_tasks: Vec<Value>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkerDataPipelineReadinessReportSubmissionResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub readiness_status: String,
+    pub job_count: usize,
+    pub ready_job_count: usize,
+    pub blocked_job_count: usize,
+    pub review_task_count: usize,
+    pub active_scoring_policy_change: bool,
+    pub claim_scoring: bool,
+    pub label_assignment: bool,
+    pub claim_denial: bool,
+    pub model_activation: bool,
+    pub routing_policy_change: bool,
+    pub external_fetch_execution: bool,
+    pub artifact_submission: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ModelEvaluationLineageRecord {
     pub evaluation_run_id: String,

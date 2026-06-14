@@ -56,6 +56,7 @@ mod submit_sanctions_sync_report;
 mod submit_scoring_feature_contexts;
 mod submit_unbundling_comparator;
 mod submit_worker_data_pipeline_execution_report;
+mod submit_worker_data_pipeline_readiness_report;
 mod sync_oig_sam_sanctions;
 mod verify_demo_automl_lifecycle;
 
@@ -115,6 +116,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "submit-unbundling-comparator" => submit_unbundling_comparator::run(args).await,
         "submit-worker-data-pipeline-execution-report" => {
             submit_worker_data_pipeline_execution_report::run(args).await
+        }
+        "submit-worker-data-pipeline-readiness-report" => {
+            submit_worker_data_pipeline_readiness_report::run(args).await
         }
         "submit-mlops-alert-delivery-tasks" => submit_mlops_alert_delivery_tasks::run(args).await,
         "submit-anomaly-clustering-report" => submit_anomaly_clustering_report::run(args).await,

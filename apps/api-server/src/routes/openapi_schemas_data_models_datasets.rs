@@ -443,5 +443,61 @@ pub(super) fn dataset_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["worker_data_pipeline.execution_report.submitted"] }
             }
         },
+        "WorkerDataPipelineReadinessReportSubmissionRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "plan_uri", "readiness_input_uri", "readiness_status", "job_count", "ready_job_count", "blocked_job_count", "review_task_count", "job_readiness", "review_tasks", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "worker_data_pipeline_readiness_report" },
+                "plan_uri": { "type": "string", "minLength": 1 },
+                "readiness_input_uri": { "type": "string", "minLength": 1 },
+                "readiness_status": { "type": "string", "enum": ["ready", "blocked"] },
+                "job_count": { "type": "integer", "minimum": 1 },
+                "ready_job_count": { "type": "integer", "minimum": 0 },
+                "blocked_job_count": { "type": "integer", "minimum": 0 },
+                "review_task_count": { "type": "integer", "minimum": 0 },
+                "job_readiness": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "object" }
+                },
+                "review_tasks": {
+                    "type": "array",
+                    "items": { "type": "object" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include worker_data_pipeline_readiness_reports:{source_report_uri}."
+                },
+                "governance_boundary": { "type": "string", "minLength": 1 }
+            }
+        },
+        "WorkerDataPipelineReadinessReportSubmissionResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "readiness_status", "job_count", "ready_job_count", "blocked_job_count", "review_task_count", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "model_activation", "routing_policy_change", "external_fetch_execution", "artifact_submission", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "worker_data_pipeline_readiness_report" },
+                "source_report_uri": { "type": "string" },
+                "readiness_status": { "type": "string", "enum": ["ready", "blocked"] },
+                "job_count": { "type": "integer" },
+                "ready_job_count": { "type": "integer" },
+                "blocked_job_count": { "type": "integer" },
+                "review_task_count": { "type": "integer" },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "claim_scoring": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "claim_denial": { "type": "boolean", "const": false },
+                "model_activation": { "type": "boolean", "const": false },
+                "routing_policy_change": { "type": "boolean", "const": false },
+                "external_fetch_execution": { "type": "boolean", "const": false },
+                "artifact_submission": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["worker_data_pipeline.readiness_report.submitted"] }
+            }
+        },
     })
 }

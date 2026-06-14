@@ -307,6 +307,7 @@ pub fn build_worker_data_pipeline_plan(
             "unbundling_comparator_path": "/api/v1/ops/unbundling-comparator-candidates",
             "scoring_context_path": "/api/v1/ops/scoring-feature-context-materializations",
             "probability_calibration_path": "/api/v1/ops/models/{model_key}/probability-calibration-reports",
+            "worker_data_pipeline_readiness_path": "/api/v1/ops/worker-data-pipeline-readiness",
             "worker_data_pipeline_execution_path": "/api/v1/ops/worker-data-pipeline-executions"
         },
         "schedule": {

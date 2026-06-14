@@ -150,6 +150,9 @@ As of the P1/P2 remediation commits after this review:
 - The worker now has a data-pipeline readiness report that checks customer-
   approved artifact URIs, minimum row counts, data-quality status, evidence
   refs, and external OIG/SAM fetch configuration before scheduled writes.
+- The worker data-pipeline readiness report now has a permission-gated API
+  submit path that records prerequisite evidence into governance audit while
+  explicitly avoiding external fetch execution or artifact submission.
 - The worker now has a data-pipeline execution report contract that converts a
   customer scheduler run-status artifact into per-job completion, pending,
   failed, and review-task evidence without running live customer jobs itself.

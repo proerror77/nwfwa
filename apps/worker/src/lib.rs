@@ -146,8 +146,9 @@ pub use worker_data_pipeline_execution::{
 
 mod worker_data_pipeline_readiness;
 pub use worker_data_pipeline_readiness::{
-    build_worker_data_pipeline_readiness_report, WorkerDataPipelineReadinessCheck,
-    WorkerDataPipelineReadinessInput,
+    build_worker_data_pipeline_readiness_report, build_worker_data_pipeline_readiness_submission,
+    submit_worker_data_pipeline_readiness_report, WorkerDataPipelineReadinessCheck,
+    WorkerDataPipelineReadinessInput, WorkerDataPipelineReadinessReportSubmission,
 };
 
 mod sanctions;

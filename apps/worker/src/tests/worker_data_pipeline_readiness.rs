@@ -136,3 +136,123 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
     assert_eq!(report["blocked_job_count"], 0);
     assert_eq!(report["review_task_count"], 0);
 }
+
+#[test]
+fn builds_worker_data_pipeline_readiness_submission() {
+    let root = temp_root("worker-data-pipeline-readiness-submission");
+    let report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
+            "readiness_input_uri": "local://inputs/worker_data_pipeline_readiness_input.json",
+            "customer_scope_id": "production-customer",
+            "readiness_status": "ready",
+            "job_count": 1,
+            "ready_job_count": 1,
+            "blocked_job_count": 0,
+            "job_readiness": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "readiness_status": "ready"
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_readiness_inputs:local://inputs/worker_data_pipeline_readiness_input.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let submission = build_worker_data_pipeline_readiness_submission(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-readiness",
+        "daily readiness evidence",
+    )
+    .expect("worker data pipeline readiness submission");
+
+    assert_eq!(
+        submission.report_kind,
+        "worker_data_pipeline_readiness_report"
+    );
+    assert_eq!(submission.readiness_status, "ready");
+    assert_eq!(submission.job_count, 1);
+    assert_eq!(submission.ready_job_count, 1);
+    assert!(submission.evidence_refs.iter().any(|reference| {
+        reference
+            == &format!(
+                "worker_data_pipeline_readiness_reports:{}",
+                report_uri.to_string_lossy()
+            )
+    }));
+}
+
+#[tokio::test]
+async fn submits_worker_data_pipeline_readiness_report_to_api() {
+    let root = temp_root("worker-data-pipeline-readiness-submit-api");
+    let report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
+            "readiness_input_uri": "local://inputs/worker_data_pipeline_readiness_input.json",
+            "customer_scope_id": "production-customer",
+            "readiness_status": "ready",
+            "job_count": 1,
+            "ready_job_count": 1,
+            "blocked_job_count": 0,
+            "job_readiness": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "readiness_status": "ready"
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_readiness_inputs:local://inputs/worker_data_pipeline_readiness_input.json"
+            ]
+        }),
+    )
+    .expect("write report");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        assert!(request.contains("POST /api/v1/ops/worker-data-pipeline-readiness HTTP/1.1"));
+        assert!(request.contains(r#""report_kind":"worker_data_pipeline_readiness_report""#));
+        assert!(request.contains("worker_data_pipeline_readiness_reports:"));
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "report_kind": "worker_data_pipeline_readiness_report",
+                "readiness_status": "ready",
+                "external_fetch_execution": false
+            }),
+        )
+        .await;
+    });
+
+    let response = submit_worker_data_pipeline_readiness_report(
+        &format!("http://{addr}"),
+        "test-api-key",
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-readiness",
+        "daily readiness evidence",
+    )
+    .await
+    .expect("submit worker data pipeline readiness report");
+    server.await.unwrap();
+
+    assert_eq!(response["readiness_status"], "ready");
+    assert_eq!(response["external_fetch_execution"], false);
+}

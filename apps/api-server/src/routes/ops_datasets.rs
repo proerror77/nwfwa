@@ -32,6 +32,7 @@ use validation::{
     validate_model_evaluation_registration, validate_parquet_uri,
     validate_scoring_feature_context_materialization, validate_unbundling_comparator_submission,
     validate_worker_data_pipeline_execution_report_submission,
+    validate_worker_data_pipeline_readiness_report_submission,
 };
 
 pub async fn register_dataset(
@@ -612,6 +613,73 @@ pub async fn submit_worker_data_pipeline_execution_report(
     .await
     .map_err(internal_error(
         "WORKER_DATA_PIPELINE_EXECUTION_REPORT_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_worker_data_pipeline_readiness_report(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitWorkerDataPipelineReadinessReportRequest>,
+) -> Result<Json<WorkerDataPipelineReadinessReportSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_worker_data_pipeline_readiness_report_submission(&request)?;
+    let response = WorkerDataPipelineReadinessReportSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        readiness_status: request.readiness_status.clone(),
+        job_count: request.job_count,
+        ready_job_count: request.ready_job_count,
+        blocked_job_count: request.blocked_job_count,
+        review_task_count: request.review_task_count,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        model_activation: false,
+        routing_policy_change: false,
+        external_fetch_execution: false,
+        artifact_submission: false,
+        governance_boundary:
+            "worker data pipeline readiness report submission records prerequisite evidence only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy"
+                .into(),
+        audit_event_type: "worker_data_pipeline.readiness_report.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "worker_data_pipeline.readiness_report.submitted",
+            summary: "Worker data pipeline readiness report submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "plan_uri": request.plan_uri,
+                "readiness_input_uri": request.readiness_input_uri,
+                "readiness_status": request.readiness_status,
+                "job_count": request.job_count,
+                "ready_job_count": request.ready_job_count,
+                "blocked_job_count": request.blocked_job_count,
+                "review_task_count": request.review_task_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "model_activation": response.model_activation,
+                "routing_policy_change": response.routing_policy_change,
+                "external_fetch_execution": response.external_fetch_execution,
+                "artifact_submission": response.artifact_submission,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "WORKER_DATA_PIPELINE_READINESS_REPORT_AUDIT_SAVE_FAILED",
     ))?;
     Ok(Json(response))
 }

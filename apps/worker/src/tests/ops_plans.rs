@@ -189,6 +189,10 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         plan["api_contract"]["worker_data_pipeline_execution_path"],
         "/api/v1/ops/worker-data-pipeline-executions"
     );
+    assert_eq!(
+        plan["api_contract"]["worker_data_pipeline_readiness_path"],
+        "/api/v1/ops/worker-data-pipeline-readiness"
+    );
     assert!(plan["readiness_gates"]
         .as_array()
         .unwrap()

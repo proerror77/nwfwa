@@ -238,6 +238,45 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
     }"#
 }
 
+fn worker_data_pipeline_readiness_payload() -> &'static str {
+    r#"{
+      "actor": "worker:worker-data-pipeline-readiness",
+      "notes": "daily customer data readiness evidence",
+      "source_report_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+      "report_kind": "worker_data_pipeline_readiness_report",
+      "plan_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+      "readiness_input_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+      "readiness_status": "blocked",
+      "job_count": 2,
+      "ready_job_count": 1,
+      "blocked_job_count": 1,
+      "review_task_count": 1,
+      "job_readiness": [
+        {
+          "job_kind": "oig_sam_sanctions_sync",
+          "readiness_status": "ready"
+        },
+        {
+          "job_kind": "provider_profile_window_rollup",
+          "readiness_status": "blocked",
+          "blockers": ["customer_approval_missing"]
+        }
+      ],
+      "review_tasks": [
+        {
+          "task_kind": "worker_data_pipeline_readiness_review",
+          "job_kind": "provider_profile_window_rollup"
+        }
+      ],
+      "evidence_refs": [
+        "worker_data_pipeline_readiness_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+        "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+        "worker_data_pipeline_readiness_inputs:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json"
+      ],
+      "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy"
+    }"#
+}
+
 fn renewal_dataset_payload(storage_format: &str) -> String {
     format!(
         r#"{{
@@ -456,6 +495,57 @@ async fn worker_data_pipeline_execution_report_requires_dataset_write_permission
         "POST",
         "/api/v1/ops/worker-data-pipeline-executions",
         worker_data_pipeline_execution_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn submits_worker_data_pipeline_readiness_report() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        worker_data_pipeline_readiness_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "worker_data_pipeline_readiness_report");
+    assert_eq!(body["readiness_status"], "blocked");
+    assert_eq!(body["job_count"], 2);
+    assert_eq!(body["ready_job_count"], 1);
+    assert_eq!(body["blocked_job_count"], 1);
+    assert_eq!(body["review_task_count"], 1);
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["model_activation"], false);
+    assert_eq!(body["routing_policy_change"], false);
+    assert_eq!(body["external_fetch_execution"], false);
+    assert_eq!(body["artifact_submission"], false);
+    assert_eq!(
+        body["audit_event_type"],
+        "worker_data_pipeline.readiness_report.submitted"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        worker_data_pipeline_readiness_payload(),
         "dataset-read-secret",
     )
     .await;
