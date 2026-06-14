@@ -759,6 +759,22 @@ is attached for deployment apply, smoke, observability, secrets/access,
 backup/restore, rollback, alert delivery, retention/legal hold, customer data
 governance, worker data-pipeline scheduler execution, model serving SLO, and
 OCR/vector/analytics execution.
+
+Generate the customer-fillable evidence package template from the same contract
+before a production readiness workshop:
+
+```bash
+python3 scripts/ops/build_production_evidence_package.py \
+  --output-dir artifacts/production-evidence-package
+```
+
+The template writes `contract/` plus one blocked JSON file under `evidence/`
+for every required gate. It is not a readiness claim. Running the production
+readiness validator against a newly generated template should fail until the
+customer replaces `local://template/...` placeholders and pending statuses with
+real production artifact URIs, scheduler execution results, approvals, counts,
+and evidence refs.
+
 The customer-data governance gate requires
 `customer_data_governance_report.json` to show approved dataset provenance,
 label provenance, holdout split, and shadow-traffic plan, plus positive
