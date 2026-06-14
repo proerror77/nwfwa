@@ -74,7 +74,7 @@ pub fn build_worker_data_pipeline_execution_report(
                     .and_then(|status| status.get("submitted"))
                     .and_then(|value| value.as_bool())
                     .unwrap_or(false),
-                "execution_status": execution_status(reported)
+                "execution_status": execution_status(job, reported)
             })
         })
         .collect::<Vec<_>>();
@@ -298,19 +298,30 @@ fn readiness_gate_status(readiness_report_uri: Option<&str>) -> anyhow::Result<&
     }
 }
 
-fn execution_status(reported: Option<&serde_json::Value>) -> &'static str {
+fn execution_status(job: &serde_json::Value, reported: Option<&serde_json::Value>) -> &'static str {
     let Some(reported) = reported else {
         return "scheduled_pending_customer_execution";
     };
-    if json_string(reported, "status").as_deref() == Some("succeeded")
-        && reported
-            .get("submitted")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false)
-    {
-        "completed"
-    } else if json_string(reported, "status").as_deref() == Some("failed") {
+    if json_string(reported, "status").as_deref() == Some("failed") {
         "failed"
+    } else if json_string(reported, "status").as_deref() == Some("succeeded") {
+        if json_string(job, "submit_command").is_some() {
+            if reported
+                .get("submitted")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false)
+            {
+                "completed"
+            } else {
+                "artifact_pending_submission"
+            }
+        } else if json_string(reported, "artifact_uri")
+            .is_some_and(|value| !value.trim().is_empty())
+        {
+            "completed"
+        } else {
+            "artifact_pending_submission"
+        }
     } else {
         "artifact_pending_submission"
     }

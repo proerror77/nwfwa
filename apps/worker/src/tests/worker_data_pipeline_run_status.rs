@@ -29,13 +29,22 @@ fn builds_worker_data_pipeline_run_status_template() {
     assert_eq!(report["customer_scope_id"], "production-customer");
     assert_eq!(report["run_id"], "wdp_2026_06_14");
     assert_eq!(report["execution_date"], "2026-06-14");
-    assert_eq!(report["job_count"], 9);
+    assert_eq!(report["job_count"], 10);
     assert_eq!(
         report["readiness_report_uri"],
         "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/readiness/2026-06-14/worker_data_pipeline_readiness_report.json"
     );
     let job_statuses = report["job_statuses"].as_array().expect("job statuses");
-    assert_eq!(job_statuses[0]["job_kind"], "oig_sam_sanctions_sync");
+    assert_eq!(
+        job_statuses[0]["job_kind"],
+        "oig_sam_sanctions_snapshot_fetch"
+    );
+    assert_eq!(
+        job_statuses[0]["planned_report_uri"],
+        "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/{as_of_date}/oig_sam_sanctions_snapshot.json"
+    );
+    assert_eq!(job_statuses[0]["submit_command"], serde_json::Value::Null);
+    assert_eq!(job_statuses[0]["api_path"], serde_json::Value::Null);
     assert_eq!(
         job_statuses[0]["status"],
         "scheduled_pending_customer_execution"

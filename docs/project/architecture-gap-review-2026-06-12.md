@@ -107,8 +107,11 @@ As of the P1/P2 remediation commits after this review:
   changes, fraud-label assignment, or claim adjudication.
 - The worker now also has a configured-endpoint OIG/SAM-compatible snapshot
   fetcher that writes the governed sanctions snapshot artifact used by the
-  existing dry-run/report/submit path. Official feed configuration,
-  credentials, and customer scheduler execution remain external.
+  existing dry-run/report/submit path. The scheduled worker data pipeline now
+  exposes that fetcher as an artifact-only daily job before
+  `sync-oig-sam-sanctions`; execution evidence treats a successful snapshot
+  artifact as complete without requiring API submission. Official feed
+  configuration, credentials, and customer scheduler execution remain external.
 - Claims scoring can now load persisted provider sanctions by provider and
   merge OIG/SAM hits into the provider profile input, including sanctions-only
   provider review when no inline `provider_profile` payload is supplied.
@@ -190,7 +193,9 @@ As of the P1/P2 remediation commits after this review:
   build and submit commands for sanctions, provider profiles, graph signals,
   peer benchmarks, episode rollups, clinical references, unbundling candidates,
   scoring feature contexts, and probability-calibration evidence under daily
-  or monthly cadence with explicit readiness gates.
+  or monthly cadence with explicit readiness gates. OIG/SAM sanctions now start
+  with a configured-endpoint snapshot fetch job and then feed the governed
+  snapshot into the sanctions sync submit path.
 - The worker now has a data-pipeline readiness report that checks customer-
   approved artifact URIs, minimum row counts, data-quality status, evidence
   refs, and external OIG/SAM fetch configuration before scheduled writes.
@@ -276,7 +281,7 @@ validation on customer data.
 
 | Pipeline | Current gap | Priority |
 | --- | --- | --- |
-| OIG/SAM daily sanctions sync | Configured-endpoint snapshot fetcher, local worker contract, submit/write path, and claim-time sanctions consumption exist; official feed configuration and scheduling remain. | P1 |
+| OIG/SAM daily sanctions sync | Configured-endpoint snapshot fetcher is part of the scheduled pipeline before sanctions sync; local worker contract, submit/write path, and claim-time sanctions consumption exist; official feed configuration and scheduling remain. | P1 |
 | Provider profile windows | Local 30/90/365 worker rollup, submit/write path, and claim-time persisted profile consumption exist; customer claim-history validation remains. | P1 |
 | Billing ring detection | Local graph-signal rollup and persisted consumption exist; production validation against customer claim/referral history remains. | P2 |
 | Temporal co-billing | Local graph-signal rollup and persisted consumption exist; production validation against dated customer claim history remains. | P2 |

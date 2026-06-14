@@ -156,29 +156,33 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         "submit commands persist governed artifacts only; no claim scoring, label assignment, claim denial, routing-policy change, model activation, or case creation"
     );
     let jobs = plan["jobs"].as_array().expect("jobs");
-    assert_eq!(jobs.len(), 9);
-    assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_sync");
-    assert_eq!(jobs[0]["submit_command"], "submit-sanctions-sync-report");
-    assert_eq!(jobs[1]["job_kind"], "provider_profile_window_rollup");
-    assert_eq!(jobs[2]["job_kind"], "provider_graph_signal_rollup");
-    assert_eq!(jobs[3]["job_kind"], "peer_percentile_benchmark");
-    assert_eq!(jobs[3]["cadence"], "monthly");
-    assert_eq!(jobs[4]["job_kind"], "episode_aggregation");
-    assert_eq!(jobs[5]["job_kind"], "clinical_compatibility_reference");
-    assert_eq!(jobs[5]["cadence"], "on_reference_update");
-    assert_eq!(jobs[6]["job_kind"], "unbundling_comparator");
-    assert_eq!(jobs[6]["depends_on"][0], "episode_aggregation");
+    assert_eq!(jobs.len(), 10);
+    assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
+    assert_eq!(jobs[0]["build_command"], "fetch-oig-sam-sanctions-snapshot");
+    assert_eq!(jobs[0]["artifact_kind"], "source_snapshot");
+    assert_eq!(jobs[1]["job_kind"], "oig_sam_sanctions_sync");
+    assert_eq!(jobs[1]["submit_command"], "submit-sanctions-sync-report");
+    assert_eq!(jobs[1]["depends_on"][0], "oig_sam_sanctions_snapshot_fetch");
+    assert_eq!(jobs[2]["job_kind"], "provider_profile_window_rollup");
+    assert_eq!(jobs[3]["job_kind"], "provider_graph_signal_rollup");
+    assert_eq!(jobs[4]["job_kind"], "peer_percentile_benchmark");
+    assert_eq!(jobs[4]["cadence"], "monthly");
+    assert_eq!(jobs[5]["job_kind"], "episode_aggregation");
+    assert_eq!(jobs[6]["job_kind"], "clinical_compatibility_reference");
+    assert_eq!(jobs[6]["cadence"], "on_reference_update");
+    assert_eq!(jobs[7]["job_kind"], "unbundling_comparator");
+    assert_eq!(jobs[7]["depends_on"][0], "episode_aggregation");
     assert_eq!(
-        jobs[7]["job_kind"],
+        jobs[8]["job_kind"],
         "scoring_feature_context_materialization"
     );
-    assert!(jobs[7]["depends_on"]
+    assert!(jobs[8]["depends_on"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("peer_percentile_benchmark")));
-    assert_eq!(jobs[8]["job_kind"], "probability_calibration_evidence");
+    assert_eq!(jobs[9]["job_kind"], "probability_calibration_evidence");
     assert_eq!(
-        jobs[8]["api_path"],
+        jobs[9]["api_path"],
         "/api/v1/ops/models/{model_key}/probability-calibration-reports"
     );
     assert_eq!(

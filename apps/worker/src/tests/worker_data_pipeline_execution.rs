@@ -23,6 +23,12 @@ fn builds_worker_data_pipeline_execution_report() {
             "execution_date": "2026-06-14",
             "job_statuses": [
                 {
+                    "job_kind": "oig_sam_sanctions_snapshot_fetch",
+                    "status": "succeeded",
+                    "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/oig_sam_sanctions_snapshot.json",
+                    "submitted": false
+                },
+                {
                     "job_kind": "oig_sam_sanctions_sync",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/sanctions_sync_report.json",
@@ -58,7 +64,7 @@ fn builds_worker_data_pipeline_execution_report() {
     );
     assert_eq!(report["customer_scope_id"], "production-customer");
     assert_eq!(report["run_id"], "wdp_2026_06_14");
-    assert_eq!(report["job_count"], 9);
+    assert_eq!(report["job_count"], 10);
     assert_eq!(
         report["scheduler_status"],
         "completed_with_pending_or_failed_jobs"
@@ -66,13 +72,15 @@ fn builds_worker_data_pipeline_execution_report() {
     assert_eq!(report["readiness_gate_status"], "missing");
     let executions = report["job_executions"].as_array().expect("executions");
     assert_eq!(executions[0]["execution_status"], "completed");
+    assert_eq!(executions[0]["submit_command"], serde_json::Value::Null);
+    assert_eq!(executions[1]["execution_status"], "completed");
     assert_eq!(
-        executions[1]["execution_status"],
+        executions[2]["execution_status"],
         "artifact_pending_submission"
     );
-    assert_eq!(executions[2]["execution_status"], "failed");
+    assert_eq!(executions[3]["execution_status"], "failed");
     assert_eq!(
-        executions[3]["execution_status"],
+        executions[4]["execution_status"],
         "scheduled_pending_customer_execution"
     );
     assert_eq!(report["review_task_count"], 9);

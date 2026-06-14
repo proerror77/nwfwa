@@ -20,7 +20,7 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         &serde_json::json!({
             "checks": [
                 {
-                    "job_kind": "oig_sam_sanctions_sync",
+                    "job_kind": "oig_sam_sanctions_snapshot_fetch",
                     "artifact_uri": "s3://nwfwa-production-artifacts/sanctions/source.json",
                     "customer_approved": true,
                     "external_fetch_configured": false,
@@ -55,28 +55,28 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         "worker_data_pipeline_readiness_report"
     );
     assert_eq!(report["readiness_status"], "blocked");
-    assert_eq!(report["job_count"], 9);
+    assert_eq!(report["job_count"], 10);
     assert_eq!(report["ready_job_count"], 0);
-    assert_eq!(report["blocked_job_count"], 9);
+    assert_eq!(report["blocked_job_count"], 10);
     let jobs = report["job_readiness"].as_array().expect("jobs");
-    assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_sync");
+    assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
     assert!(jobs[0]["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("external_oig_sam_fetch_not_configured")));
-    assert!(jobs[1]["blockers"]
+    assert!(jobs[2]["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("row_count_below_minimum")));
-    assert!(jobs[1]["blockers"]
+    assert!(jobs[2]["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("customer_approval_missing")));
-    assert!(jobs[3]["blockers"]
+    assert!(jobs[4]["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("missing_customer_readiness_check")));
-    assert_eq!(report["review_task_count"], 9);
+    assert_eq!(report["review_task_count"], 10);
     assert!(output_dir
         .join("worker_data_pipeline_readiness_report.json")
         .exists());
@@ -109,7 +109,7 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
                 "job_kind": job_kind,
                 "artifact_uri": format!("s3://nwfwa-production-artifacts/readiness/{job_kind}.json"),
                 "customer_approved": true,
-                "external_fetch_configured": job_kind == "oig_sam_sanctions_sync",
+                "external_fetch_configured": job_kind == "oig_sam_sanctions_snapshot_fetch",
                 "row_count": 100,
                 "minimum_row_count": 10,
                 "data_quality_status": "passed",
@@ -132,7 +132,7 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
     .expect("readiness report");
 
     assert_eq!(report["readiness_status"], "ready");
-    assert_eq!(report["ready_job_count"], 9);
+    assert_eq!(report["ready_job_count"], 10);
     assert_eq!(report["blocked_job_count"], 0);
     assert_eq!(report["review_task_count"], 0);
 }

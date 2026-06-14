@@ -121,6 +121,7 @@ CAPABILITIES = [
             ("apps/worker/src/commands/mod.rs", "build-worker-data-pipeline-run-status-template"),
             ("apps/worker/src/commands/mod.rs", "build-worker-data-pipeline-execution-report"),
             ("apps/worker/src/commands/mod.rs", "fetch-oig-sam-sanctions-snapshot"),
+            ("apps/worker/src/ops_plans.rs", "oig_sam_sanctions_snapshot_fetch"),
             ("apps/worker/src/commands/mod.rs", "submit-sanctions-sync-report"),
             ("apps/worker/src/commands/mod.rs", "submit-provider-profile-window-rollup"),
             ("apps/worker/src/commands/mod.rs", "submit-provider-graph-signal-rollup"),

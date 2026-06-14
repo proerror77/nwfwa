@@ -319,11 +319,20 @@ pub fn build_worker_data_pipeline_plan(
         "artifact_root_uri": root,
         "jobs": [
             {
+                "job_kind": "oig_sam_sanctions_snapshot_fetch",
+                "cadence": "daily",
+                "build_command": "fetch-oig-sam-sanctions-snapshot",
+                "source_input": "customer_configured_oig_sam_compatible_endpoints",
+                "artifact_kind": "source_snapshot",
+                "report_uri": format!("{root}/sanctions/{{as_of_date}}/oig_sam_sanctions_snapshot.json")
+            },
+            {
                 "job_kind": "oig_sam_sanctions_sync",
                 "cadence": "daily",
                 "build_command": "sync-oig-sam-sanctions",
                 "submit_command": "submit-sanctions-sync-report",
-                "source_input": "customer_approved_oig_sam_snapshot_or_live_fetch_in_customer_environment",
+                "source_input": "governed_oig_sam_sanctions_snapshot",
+                "depends_on": ["oig_sam_sanctions_snapshot_fetch"],
                 "report_uri": format!("{root}/sanctions/{{as_of_date}}/sanctions_sync_report.json"),
                 "api_path": "/api/v1/ops/providers/sanctions-sync-reports"
             },

@@ -260,7 +260,7 @@ fn readiness_blockers(
     if !check.customer_approved {
         blockers.push("customer_approval_missing".into());
     }
-    if job_kind == "oig_sam_sanctions_sync" && !check.external_fetch_configured {
+    if job_kind == "oig_sam_sanctions_snapshot_fetch" && !check.external_fetch_configured {
         blockers.push("external_oig_sam_fetch_not_configured".into());
     }
     if let Some(minimum) = check.minimum_row_count {
