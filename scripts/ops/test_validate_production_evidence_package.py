@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from scripts.ops.build_production_evidence_package import build_evidence_package
+from scripts.ops.render_production_evidence_package import render_package
 from scripts.ops.validate_production_evidence_package import validate_package
 
 
@@ -48,6 +50,45 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
 
             with self.assertRaisesRegex(AssertionError, "forbidden placeholder string"):
                 validate_package(package_dir)
+
+    def test_rejects_runbook_without_package_validator_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            runbook["validation_command"] = runbook["validation_command"].replace(
+                "python3 scripts/ops/validate_production_evidence_package.py "
+                "--package-dir artifacts/production-evidence-package && ",
+                "",
+            )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError, "validate_production_evidence_package.py"
+            ):
+                validate_package(package_dir)
+
+    def test_rejects_render_summary_with_missing_worker_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            render_package(package_dir)
+            summary_uri = package_dir / "render_summary.json"
+            summary = _read_json(summary_uri)
+            summary["worker_template_count"] = 0
+            _write_json(summary_uri, summary)
+
+            with self.assertRaisesRegex(AssertionError, "worker_template_count"):
+                validate_package(package_dir)
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 if __name__ == "__main__":

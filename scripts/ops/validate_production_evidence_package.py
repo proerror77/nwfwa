@@ -74,7 +74,10 @@ def validate_package(package_dir: Path) -> dict:
     validate_index_entries(package_dir, index, "source_templates", REQUIRED_SOURCE_TEMPLATES)
     validate_index_entries(package_dir, index, "worker_templates", REQUIRED_WORKER_TEMPLATES)
     validate_index_entries(package_dir, index, "runbooks", REQUIRED_RUNBOOKS)
+    validate_command_includes_package_validator(index.get("validation_command"), "index")
     validate_worker_templates(package_dir)
+    validate_runbook(package_dir)
+    validate_render_summary_if_present(package_dir, index)
 
     summary = {
         "artifact_kind": "production_evidence_package_validation",
@@ -158,6 +161,47 @@ def validate_worker_templates(package_dir: Path) -> None:
                 forbidden not in template_text,
                 f"worker template {path} contains forbidden placeholder string {forbidden}",
             )
+
+
+def validate_runbook(package_dir: Path) -> None:
+    runbook = load_json(package_dir / "runbooks" / "worker-data-pipeline-commands.json")
+    require(
+        runbook.get("artifact_kind") == "worker_data_pipeline_command_runbook",
+        "worker data-pipeline runbook has wrong artifact_kind",
+    )
+    validate_command_includes_package_validator(runbook.get("validation_command"), "runbook")
+
+
+def validate_command_includes_package_validator(command: object, owner: str) -> None:
+    require(isinstance(command, str) and command, f"{owner} validation_command is required")
+    require(
+        "validate_production_evidence_package.py" in command,
+        f"{owner} validation_command must run validate_production_evidence_package.py",
+    )
+    require(
+        "validate_production_readiness_contract.py" in command,
+        f"{owner} validation_command must run validate_production_readiness_contract.py",
+    )
+
+
+def validate_render_summary_if_present(package_dir: Path, index: dict) -> None:
+    render_summary_uri = package_dir / "render_summary.json"
+    if not render_summary_uri.exists():
+        return
+    summary = load_json(render_summary_uri)
+    require(
+        summary.get("artifact_kind") == "production_evidence_package_render_summary",
+        "render summary has wrong artifact_kind",
+    )
+    require(summary.get("readiness_claim") is False, "render summary must not claim readiness")
+    require(
+        summary.get("worker_template_count") == len(index.get("worker_templates") or []),
+        "render summary worker_template_count must match index",
+    )
+    require(
+        summary.get("pending_worker_template_count") == len(index.get("worker_templates") or []),
+        "render summary must keep worker templates pending until customer execution",
+    )
 
 
 def main() -> int:
