@@ -50,6 +50,7 @@ pub struct InMemoryScoringRepository {
     model_versions: Mutex<HashMap<String, ModelVersionRecord>>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
+    probability_calibration_reports: Mutex<HashMap<String, ProbabilityCalibrationReportRecord>>,
     model_retraining_jobs: Mutex<HashMap<String, ModelRetrainingJobRecord>>,
     model_retraining_job_sequence: Mutex<u64>,
     model_statuses: Mutex<HashMap<String, String>>,

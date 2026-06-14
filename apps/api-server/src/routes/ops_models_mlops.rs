@@ -21,7 +21,7 @@ use crate::{
     app::AppState,
     auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
-    repository::AuditEventListFilter,
+    repository::{AuditEventListFilter, ProbabilityCalibrationReportRecord},
 };
 use axum::{
     extract::{Path, State},
@@ -186,6 +186,32 @@ pub async fn submit_probability_calibration_report(
         "probability calibration report",
     )?;
     validate_probability_calibration_report_evidence(&request)?;
+    let persisted_report = state
+        .repository
+        .save_probability_calibration_report(ProbabilityCalibrationReportRecord {
+            model_key: model.model_key.clone(),
+            model_version: model.version.clone(),
+            report_uri: request.report_uri.clone(),
+            report_kind: request.report_kind.clone(),
+            as_of_date: request.as_of_date.clone(),
+            row_count: request.row_count,
+            minimum_calibration_rows: request.minimum_calibration_rows,
+            bin_count: request.bin_count,
+            expected_calibration_error: request.expected_calibration_error,
+            max_expected_calibration_error: request.max_expected_calibration_error,
+            brier_score: request.brier_score,
+            max_brier_score: request.max_brier_score,
+            calibration_status: request.calibration_status.clone(),
+            bins_json: serde_json::Value::Array(request.bins.clone()),
+            review_tasks_json: serde_json::Value::Array(request.review_tasks.clone()),
+            evidence_refs: request.evidence_refs.clone(),
+            governance_boundary: request.governance_boundary.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            created_at: None,
+        })
+        .await
+        .map_err(internal_error("PROBABILITY_CALIBRATION_REPORT_SAVE_FAILED"))?;
     let response = SubmitProbabilityCalibrationReportResponse {
         model_key: model.model_key.clone(),
         model_version: model.version.clone(),
@@ -199,6 +225,7 @@ pub async fn submit_probability_calibration_report(
         calibrated_probability_serving_activation: false,
         threshold_change: false,
         label_assignment: false,
+        persisted_report,
         governance_boundary:
             "probability calibration report submission records model-governance evidence only; it must not activate calibrated serving, change thresholds, or assign labels"
                 .into(),

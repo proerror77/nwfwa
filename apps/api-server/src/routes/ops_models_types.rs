@@ -1,5 +1,6 @@
 use crate::repository::{
-    ModelEvaluationRecord, ModelRetrainingJobRecord, ModelVersionRecord, RuleDetailRecord,
+    ModelEvaluationRecord, ModelRetrainingJobRecord, ModelVersionRecord,
+    ProbabilityCalibrationReportRecord, RuleDetailRecord,
 };
 use fwa_rules::Rule;
 use rust_decimal::Decimal;
@@ -200,6 +201,7 @@ pub struct SubmitProbabilityCalibrationReportResponse {
     pub calibrated_probability_serving_activation: bool,
     pub threshold_change: bool,
     pub label_assignment: bool,
+    pub persisted_report: ProbabilityCalibrationReportRecord,
     pub governance_boundary: String,
 }
 

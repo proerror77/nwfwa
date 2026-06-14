@@ -106,6 +106,21 @@ impl InMemoryScoringRepository {
             .cloned())
     }
 
+    pub(super) async fn in_memory_save_probability_calibration_report(
+        &self,
+        mut record: ProbabilityCalibrationReportRecord,
+    ) -> anyhow::Result<ProbabilityCalibrationReportRecord> {
+        record.created_at = Some(chrono::Utc::now().to_rfc3339());
+        self.probability_calibration_reports.lock().await.insert(
+            format!(
+                "{}:{}:{}",
+                record.model_key, record.model_version, record.report_uri
+            ),
+            record.clone(),
+        );
+        Ok(record)
+    }
+
     pub(super) async fn in_memory_save_model_retraining_job(
         &self,
         mut record: ModelRetrainingJobRecord,

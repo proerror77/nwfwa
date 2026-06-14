@@ -147,8 +147,9 @@ As of the P1/P2 remediation commits after this review:
   review tasks when raw probabilities are miscalibrated or sample size is
   insufficient.
 - Probability calibration reports now have a model-governance submit path and
-  worker command that record calibration evidence while explicitly avoiding
-  calibrated serving activation, threshold changes, or label assignment.
+  worker command that persist calibration evidence and record audit lineage
+  while explicitly avoiding calibrated serving activation, threshold changes, or
+  label assignment.
 - The worker now has a scheduled data-pipeline plan contract that orders the
   build and submit commands for sanctions, provider profiles, graph signals,
   peer benchmarks, episode rollups, clinical references, unbundling candidates,

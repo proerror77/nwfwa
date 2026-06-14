@@ -118,7 +118,7 @@ pub(super) fn retraining_schemas() -> Value {
         },
         "SubmitProbabilityCalibrationReportResponse": {
             "type": "object",
-            "required": ["model_key", "model_version", "report_uri", "calibration_status", "row_count", "expected_calibration_error", "brier_score", "review_task_count", "active_calibration_change", "calibrated_probability_serving_activation", "threshold_change", "label_assignment", "governance_boundary"],
+            "required": ["model_key", "model_version", "report_uri", "calibration_status", "row_count", "expected_calibration_error", "brier_score", "review_task_count", "active_calibration_change", "calibrated_probability_serving_activation", "threshold_change", "label_assignment", "persisted_report", "governance_boundary"],
             "properties": {
                 "model_key": { "type": "string" },
                 "model_version": { "type": "string" },
@@ -135,6 +135,10 @@ pub(super) fn retraining_schemas() -> Value {
                 "calibrated_probability_serving_activation": { "type": "boolean", "const": false },
                 "threshold_change": { "type": "boolean", "const": false },
                 "label_assignment": { "type": "boolean", "const": false },
+                "persisted_report": {
+                    "type": "object",
+                    "description": "Persisted model-governance calibration evidence. It does not activate calibrated serving."
+                },
                 "governance_boundary": { "type": "string" }
             }
         },

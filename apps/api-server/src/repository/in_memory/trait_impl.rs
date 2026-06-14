@@ -308,6 +308,14 @@ impl ModelsRepository for InMemoryScoringRepository {
         self.in_memory_save_model_promotion_review(record).await
     }
 
+    async fn save_probability_calibration_report(
+        &self,
+        record: ProbabilityCalibrationReportRecord,
+    ) -> anyhow::Result<ProbabilityCalibrationReportRecord> {
+        self.in_memory_save_probability_calibration_report(record)
+            .await
+    }
+
     async fn latest_model_promotion_review(
         &self,
         model_key: &str,

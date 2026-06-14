@@ -1008,6 +1008,34 @@ CREATE TABLE IF NOT EXISTS model_promotion_reviews (
 
 ALTER TABLE model_promotion_reviews ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
 
+CREATE TABLE IF NOT EXISTS probability_calibration_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  model_key TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  row_count BIGINT NOT NULL,
+  minimum_calibration_rows BIGINT NOT NULL,
+  bin_count BIGINT NOT NULL,
+  expected_calibration_error DOUBLE PRECISION NOT NULL,
+  max_expected_calibration_error DOUBLE PRECISION NOT NULL,
+  brier_score DOUBLE PRECISION NOT NULL,
+  max_brier_score DOUBLE PRECISION NOT NULL,
+  calibration_status TEXT NOT NULL,
+  bins_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  review_tasks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(model_key, model_version, report_uri)
+);
+
+CREATE INDEX IF NOT EXISTS probability_calibration_reports_model_idx
+  ON probability_calibration_reports(model_key, model_version, as_of_date);
+
 CREATE TABLE IF NOT EXISTS model_retraining_jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

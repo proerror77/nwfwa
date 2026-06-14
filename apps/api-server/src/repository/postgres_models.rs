@@ -271,6 +271,64 @@ pub(super) async fn latest_model_promotion_review(
     ))
 }
 
+pub(super) async fn save_probability_calibration_report(
+    repository: &PostgresScoringRepository,
+    record: ProbabilityCalibrationReportRecord,
+) -> anyhow::Result<ProbabilityCalibrationReportRecord> {
+    let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
+        "INSERT INTO probability_calibration_reports
+             (model_key, model_version, report_uri, report_kind, as_of_date, row_count,
+              minimum_calibration_rows, bin_count, expected_calibration_error,
+              max_expected_calibration_error, brier_score, max_brier_score,
+              calibration_status, bins_json, review_tasks_json, evidence_refs,
+              governance_boundary, submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+             ON CONFLICT (model_key, model_version, report_uri) DO UPDATE
+             SET report_kind = EXCLUDED.report_kind,
+                 as_of_date = EXCLUDED.as_of_date,
+                 row_count = EXCLUDED.row_count,
+                 minimum_calibration_rows = EXCLUDED.minimum_calibration_rows,
+                 bin_count = EXCLUDED.bin_count,
+                 expected_calibration_error = EXCLUDED.expected_calibration_error,
+                 max_expected_calibration_error = EXCLUDED.max_expected_calibration_error,
+                 brier_score = EXCLUDED.brier_score,
+                 max_brier_score = EXCLUDED.max_brier_score,
+                 calibration_status = EXCLUDED.calibration_status,
+                 bins_json = EXCLUDED.bins_json,
+                 review_tasks_json = EXCLUDED.review_tasks_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes
+             RETURNING created_at",
+    )
+    .bind(&record.model_key)
+    .bind(&record.model_version)
+    .bind(&record.report_uri)
+    .bind(&record.report_kind)
+    .bind(&record.as_of_date)
+    .bind(record.row_count as i64)
+    .bind(record.minimum_calibration_rows as i64)
+    .bind(record.bin_count as i64)
+    .bind(record.expected_calibration_error)
+    .bind(record.max_expected_calibration_error)
+    .bind(record.brier_score)
+    .bind(record.max_brier_score)
+    .bind(&record.calibration_status)
+    .bind(record.bins_json.clone())
+    .bind(record.review_tasks_json.clone())
+    .bind(serde_json::json!(record.evidence_refs.clone()))
+    .bind(&record.governance_boundary)
+    .bind(&record.submitted_by)
+    .bind(&record.notes)
+    .fetch_one(&repository.pool)
+    .await?;
+    Ok(ProbabilityCalibrationReportRecord {
+        created_at: Some(row.0.to_rfc3339()),
+        ..record
+    })
+}
+
 pub(super) async fn save_model_retraining_job(
     repository: &PostgresScoringRepository,
     record: ModelRetrainingJobRecord,

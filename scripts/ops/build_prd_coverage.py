@@ -144,6 +144,7 @@ CAPABILITIES = [
             ("apps/api-server/src/repository/trait.rs", "save_scoring_feature_context_materialization"),
             ("apps/api-server/src/repository/trait.rs", "save_clinical_compatibility_references"),
             ("apps/api-server/src/repository/trait.rs", "save_unbundling_comparator_candidates"),
+            ("apps/api-server/src/repository/trait.rs", "save_probability_calibration_report"),
         ],
         "customer_data_required": True,
     },

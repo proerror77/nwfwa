@@ -85,6 +85,21 @@ async fn submits_probability_calibration_report_as_review_only_governance_event(
     assert_eq!(response["calibrated_probability_serving_activation"], false);
     assert_eq!(response["threshold_change"], false);
     assert_eq!(response["label_assignment"], false);
+    assert_eq!(response["persisted_report"]["model_key"], "baseline_fwa");
+    assert_eq!(response["persisted_report"]["model_version"], "0.1.0");
+    assert_eq!(
+        response["persisted_report"]["report_uri"],
+        "data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json"
+    );
+    assert_eq!(response["persisted_report"]["row_count"], 100);
+    assert_eq!(response["persisted_report"]["calibration_status"], "passed");
+    assert_eq!(
+        response["persisted_report"]["bins_json"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     assert!(response["governance_boundary"]
         .as_str()
         .unwrap()
