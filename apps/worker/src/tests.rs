@@ -22,6 +22,7 @@ mod rule_candidates;
 mod sanctions;
 mod training_handoff;
 mod training_output_enrichment;
+mod unbundling_comparator;
 
 async fn read_http_request(socket: &mut tokio::net::TcpStream) -> String {
     use tokio::io::AsyncReadExt;

@@ -170,6 +170,12 @@ pub use clinical_compatibility::{
     ClinicalCompatibilityReferenceRow, ClinicalCompatibilityReviewTask,
 };
 
+mod unbundling_comparator;
+pub use unbundling_comparator::{
+    build_unbundling_comparator_report, UnbundlingComparatorCandidate, UnbundlingComparatorInput,
+    UnbundlingComparatorReport, UnbundlingEpisodeInput, UnbundlingRuleInput,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,
