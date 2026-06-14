@@ -769,8 +769,9 @@ no-adjudication governance boundary preserved. Every job must show
 jobs must also show `submitted = true`, while the expected API path, required
 permission scope, and non-empty artifact URI are present. The artifact-only
 OIG/SAM source snapshot job must also report a non-empty artifact URI.
-After the customer scheduler publishes production evidence, validate the worker
-pipeline execution artifact against those checks:
+After the customer environment publishes production evidence, validate that all
+required readiness artifacts are present and JSON-parseable, and validate the
+worker pipeline execution artifact against those deeper checks:
 
 ```bash
 python3 scripts/ops/validate_production_readiness_contract.py \

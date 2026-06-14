@@ -99,7 +99,7 @@ def load_json(path: Path) -> dict:
         raise AssertionError(f"missing JSON artifact: {path}") from exc
 
 
-def validate_contract(contract: dict) -> None:
+def validate_contract(contract: dict) -> list[dict]:
     require(
         contract.get("artifact_kind") == "production_readiness_evidence_contract",
         "wrong production readiness contract artifact kind",
@@ -156,6 +156,25 @@ def validate_contract(contract: dict) -> None:
                     check.get("description"),
                     f"worker data pipeline acceptance check {check.get('check_id')} missing description",
                 )
+    return gates
+
+
+def validate_evidence_dir(evidence_dir: Path, gates: list[dict]) -> dict[str, dict]:
+    artifacts = {}
+    for gate in gates:
+        gate_id = gate.get("gate_id")
+        required_artifact = gate.get("required_artifact")
+        require(
+            isinstance(required_artifact, str) and required_artifact.strip(),
+            f"gate {gate_id} missing required_artifact",
+        )
+        artifact = load_json(evidence_dir / required_artifact)
+        require(
+            isinstance(artifact, dict),
+            f"production evidence artifact {required_artifact} must be a JSON object",
+        )
+        artifacts[required_artifact] = artifact
+    return artifacts
 
 
 def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
@@ -284,13 +303,14 @@ def main() -> int:
     args = parser.parse_args()
 
     contract_dir = Path(args.contract_dir)
-    validate_contract(load_json(contract_dir / "production_readiness_contract.json"))
+    gates = validate_contract(load_json(contract_dir / "production_readiness_contract.json"))
     index = load_json(contract_dir / "index.json")
     require(index.get("artifact_kind") == "production_readiness_contract_index", "wrong index artifact kind")
     if args.evidence_dir:
         evidence_dir = Path(args.evidence_dir)
+        artifacts = validate_evidence_dir(evidence_dir, gates)
         validate_worker_data_pipeline_execution_evidence(
-            load_json(evidence_dir / "worker_data_pipeline_execution_report.json")
+            artifacts["worker_data_pipeline_execution_report.json"]
         )
     print("production readiness contract validation passed")
     return 0

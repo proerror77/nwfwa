@@ -174,6 +174,10 @@ CAPABILITIES = [
                 "scripts/ops/validate_production_readiness_contract.py",
                 "validate_worker_data_pipeline_execution_evidence",
             ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
+                "validate_evidence_dir",
+            ),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_sanctions"),
