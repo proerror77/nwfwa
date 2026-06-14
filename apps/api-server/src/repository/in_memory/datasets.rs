@@ -288,6 +288,44 @@ impl InMemoryScoringRepository {
         Ok(record)
     }
 
+    pub(super) async fn in_memory_latest_scoring_feature_context_for_claim(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>> {
+        let records = self.scoring_feature_context_materializations.lock().await;
+        let mut candidates = records
+            .values()
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .filter_map(|record| {
+                let context_json = record
+                    .contexts_json
+                    .as_array()?
+                    .iter()
+                    .find(|context| context["claim_id"].as_str() == Some(claim_id))?
+                    .clone();
+                Some(ScoringFeatureContextForClaimRecord {
+                    materialization_id: record.materialization_id.clone(),
+                    as_of_date: record.as_of_date.clone(),
+                    report_uri: record.report_uri.clone(),
+                    context_json,
+                    evidence_refs: record.evidence_refs.clone(),
+                })
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by(|left, right| {
+            right
+                .as_of_date
+                .cmp(&left.as_of_date)
+                .then_with(|| right.materialization_id.cmp(&left.materialization_id))
+        });
+        Ok(candidates.into_iter().next())
+    }
+
     pub(super) async fn in_memory_save_clinical_compatibility_references(
         &self,
         input: SaveClinicalCompatibilityReferencesInput,

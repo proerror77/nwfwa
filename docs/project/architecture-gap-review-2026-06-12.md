@@ -119,10 +119,12 @@ As of the P1/P2 remediation commits after this review:
 - The worker also emits a run-status template contract so customer schedulers
   can start from the planned job list and readiness report URI instead of
   hand-authoring the execution input JSON.
-- The claims scoring API now accepts those materialized worker contexts and
-  passes peer, clinical compatibility, and episode-utilization inputs into
-  online feature calculation while preserving the assistive-only scoring
-  boundary and feature-value trace.
+- The claims scoring API now accepts inline materialized worker contexts and
+  also loads the latest persisted scoring-feature-context materialization by
+  claim when no inline context is supplied, passing peer, clinical
+  compatibility, and episode-utilization inputs into online feature
+  calculation while preserving the assistive-only scoring boundary and
+  feature-value trace.
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
@@ -193,7 +195,7 @@ validation on customer data.
 | A-5 | Seven-layer weights are hard-coded and do not renormalize when data is missing. | Represent layer values as data-present vs. actual zero and renormalize across available layers. |
 | A-6 | Provider history counts now use the same 30/90/365 recency weighting philosophy as provider profile risk, producing effective counts instead of letting a 365-day max dominate current scoring. | Validate effective-count interpretation with customer review policy before exposing it as an operational KPI. |
 | A-7 | L3 anomaly baseline has a comment but no quantified upgrade trigger. | Add a measurable threshold, e.g. upgrade evaluation after at least 500 confirmed FWA labels or poor 30-day recall. |
-| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, a worker materialization contract, API ingestion support, an episode-rollup submit/write path, a clinical-compatibility reference submit/write path, and an unbundling comparator candidate submit/write path. Production scheduling and customer-data validation remain open. | Connect scheduled worker artifact persistence and customer-approved data sources before treating these schemes as production-covered. |
+| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, a worker materialization contract, persisted API ingestion and claim-time lookup support, an episode-rollup submit/write path, a clinical-compatibility reference submit/write path, and an unbundling comparator candidate submit/write path. Production scheduling and customer-data validation remain open. | Connect scheduled worker artifact persistence and customer-approved data sources before treating these schemes as production-covered. |
 
 ## B. Feature Engineering And Data Quality Gaps
 

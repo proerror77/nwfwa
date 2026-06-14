@@ -527,3 +527,154 @@ async fn scores_full_payload_with_materialized_worker_feature_context() {
         "unbundling:UNB-IMG:MBR-WORKER-CONTEXT|PRV-WORKER-CONTEXT"
     )));
 }
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_worker_feature_context() {
+    let app = build_app(test_config()).unwrap();
+
+    let materialization_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/scoring-feature-context-materializations")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "materialization_id": "sfc-mat-claims-score-2026-06-13",
+              "actor": "worker:scoring-feature-contexts",
+              "notes": "claims scoring materialized context test",
+              "report_uri": "local://artifacts/scoring/scoring_feature_context_report.json",
+              "report_kind": "scoring_feature_context_materialization",
+              "as_of_date": "2026-06-13",
+              "source_uris": {
+                "claims_uri": "local://inputs/scoring-claims.json",
+                "episode_rollups_uri": "local://artifacts/episode/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "local://artifacts/unbundling/unbundling_comparator_report.json"
+              },
+              "claim_count": 1,
+              "context_count": 1,
+              "contexts": [
+                {
+                  "claim_id": "CLM-PERSISTED-WORKER-CONTEXT",
+                  "peer_context": {
+                    "claim_amount_peer_percentile": 91
+                  },
+                  "clinical_compatibility_context": {
+                    "diagnosis_procedure_match_score": 0.28,
+                    "data_source": "worker.icd_cpt_compatibility_reference:clinical-ref-v1"
+                  },
+                  "episode_utilization_context": {
+                    "member_provider_claim_count_30d": 4,
+                    "duplicate_claim_similarity_score": 0.8,
+                    "procedure_frequency_peer_percentile": 89,
+                    "unbundling_candidate_count": 3,
+                    "data_source": "worker.episode_utilization_rollup"
+                  },
+                  "evidence_refs": [
+                    "scoring_feature_contexts:CLM-PERSISTED-WORKER-CONTEXT",
+                    "unbundling:UNB-IMG:MBR-PERSISTED|PRV-PERSISTED"
+                  ]
+                }
+              ],
+              "evidence_refs": [
+                "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json",
+                "episode_rollups:local://artifacts/episode/episode_aggregation_report.json"
+              ],
+              "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
+            }"#,
+        ))
+        .unwrap();
+    let materialization_response = app.clone().oneshot(materialization_request).await.unwrap();
+    assert_eq!(materialization_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-WORKER-CONTEXT",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-900",
+                  "item_type": "procedure",
+                  "description": "Imaging bundle",
+                  "quantity": 1,
+                  "unit_amount": "8000",
+                  "total_amount": "8000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED",
+                "name": "Persisted Worker Context Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let feature = |name: &str| {
+        feature_values
+            .iter()
+            .find(|feature| feature["name"] == name)
+            .unwrap_or_else(|| panic!("missing feature {name}"))
+    };
+
+    assert_eq!(
+        feature("claim_amount_peer_percentile")["value"],
+        serde_json::json!(91)
+    );
+    assert_eq!(
+        feature("diagnosis_procedure_match_score")["value"],
+        serde_json::json!(0.28)
+    );
+    assert_eq!(
+        feature("member_provider_claim_count_30d")["value"],
+        serde_json::json!(4)
+    );
+    assert_eq!(
+        feature("unbundling_candidate_count")["value"],
+        serde_json::json!(3)
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_contexts:CLM-PERSISTED-WORKER-CONTEXT"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_context_materializations:sfc-mat-claims-score-2026-06-13"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json"
+    )));
+}

@@ -588,6 +588,38 @@ pub(super) async fn get_scoring_feature_context_materialization(
     ))
 }
 
+pub(super) async fn latest_scoring_feature_context_for_claim(
+    repository: &PostgresScoringRepository,
+    claim_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>> {
+    let row: Option<(String, String, String, Value, Value)> = sqlx::query_as(
+        "SELECT materialization_id, as_of_date, report_uri, context_json, evidence_refs
+             FROM scoring_feature_context_materializations
+             CROSS JOIN LATERAL jsonb_array_elements(contexts_json) AS context_json
+             WHERE context_json->>'claim_id' = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)
+             ORDER BY as_of_date DESC, created_at DESC, materialization_id DESC
+             LIMIT 1",
+    )
+    .bind(claim_id)
+    .bind(customer_scope_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(materialization_id, as_of_date, report_uri, context_json, evidence_refs)| {
+            ScoringFeatureContextForClaimRecord {
+                materialization_id,
+                as_of_date,
+                report_uri,
+                context_json,
+                evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            }
+        },
+    ))
+}
+
 pub(super) async fn save_clinical_compatibility_references(
     repository: &PostgresScoringRepository,
     input: SaveClinicalCompatibilityReferencesInput,

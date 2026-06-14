@@ -825,6 +825,8 @@ CREATE TABLE IF NOT EXISTS scoring_feature_context_materializations (
 
 CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_scope_date_idx
   ON scoring_feature_context_materializations(customer_scope_id, as_of_date);
+CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_contexts_gin_idx
+  ON scoring_feature_context_materializations USING GIN (contexts_json);
 
 CREATE TABLE IF NOT EXISTS worker_data_pipeline_readiness_reports (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

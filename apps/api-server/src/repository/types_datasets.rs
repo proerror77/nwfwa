@@ -184,6 +184,15 @@ pub struct ScoringFeatureContextMaterializationRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoringFeatureContextForClaimRecord {
+    pub materialization_id: String,
+    pub as_of_date: String,
+    pub report_uri: String,
+    pub context_json: Value,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveScoringFeatureContextMaterializationInput {
     pub materialization_id: String,
     pub customer_scope_id: String,

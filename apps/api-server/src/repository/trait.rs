@@ -325,6 +325,12 @@ pub trait DatasetsRepository: Send + Sync {
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>>;
 
+    async fn latest_scoring_feature_context_for_claim(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>>;
+
     async fn save_clinical_compatibility_references(
         &self,
         input: SaveClinicalCompatibilityReferencesInput,

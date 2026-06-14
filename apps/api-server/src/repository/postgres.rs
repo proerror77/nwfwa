@@ -514,6 +514,19 @@ impl DatasetsRepository for PostgresScoringRepository {
         .await
     }
 
+    async fn latest_scoring_feature_context_for_claim(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>> {
+        postgres_datasets::latest_scoring_feature_context_for_claim(
+            self,
+            claim_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn save_clinical_compatibility_references(
         &self,
         input: SaveClinicalCompatibilityReferencesInput,

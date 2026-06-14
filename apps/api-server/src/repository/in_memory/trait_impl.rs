@@ -461,6 +461,15 @@ impl DatasetsRepository for InMemoryScoringRepository {
         .await
     }
 
+    async fn latest_scoring_feature_context_for_claim(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>> {
+        self.in_memory_latest_scoring_feature_context_for_claim(claim_id, customer_scope_id)
+            .await
+    }
+
     async fn save_clinical_compatibility_references(
         &self,
         input: SaveClinicalCompatibilityReferencesInput,

@@ -33,11 +33,19 @@ use fwa_provider::{
     ProviderRelationshipGraphInput,
 };
 use fwa_rules::evaluate_rules;
+use std::collections::BTreeSet;
 
 pub use super::claims_types::*;
 
+#[derive(Debug, Clone)]
+struct ResolvedScoringFeatureContext {
+    payload: ScoringFeatureContextPayload,
+    evidence_refs: Vec<serde_json::Value>,
+}
+
 fn peer_feature_context_from_request(
     request: &ScoreClaimRequest,
+    scoring_feature_context: Option<&ScoringFeatureContextPayload>,
 ) -> Result<Option<PeerFeatureContext>, ApiError> {
     let direct_percentile = request.claim_amount_peer_percentile.or_else(|| {
         request
@@ -45,7 +53,7 @@ fn peer_feature_context_from_request(
             .as_ref()
             .and_then(|claim| claim.claim_amount_peer_percentile)
     });
-    let materialized_percentile = scoring_feature_context_from_request(request)
+    let materialized_percentile = scoring_feature_context
         .and_then(|context| context.peer_context.as_ref())
         .and_then(|context| context.claim_amount_peer_percentile);
     if let (Some(direct), Some(materialized)) = (direct_percentile, materialized_percentile) {
@@ -68,9 +76,9 @@ fn peer_feature_context_from_request(
 }
 
 fn clinical_compatibility_context_from_request(
-    request: &ScoreClaimRequest,
+    scoring_feature_context: Option<&ScoringFeatureContextPayload>,
 ) -> Option<ClinicalCompatibilityFeatureContext> {
-    scoring_feature_context_from_request(request)
+    scoring_feature_context
         .and_then(|context| context.clinical_compatibility_context.as_ref())
         .and_then(|context| {
             context.diagnosis_procedure_match_score.map(|score| {
@@ -83,9 +91,9 @@ fn clinical_compatibility_context_from_request(
 }
 
 fn episode_utilization_context_from_request(
-    request: &ScoreClaimRequest,
+    scoring_feature_context: Option<&ScoringFeatureContextPayload>,
 ) -> Option<EpisodeUtilizationFeatureContext> {
-    scoring_feature_context_from_request(request)
+    scoring_feature_context
         .and_then(|context| context.episode_utilization_context.as_ref())
         .map(|context| EpisodeUtilizationFeatureContext {
             member_provider_claim_count_30d: context.member_provider_claim_count_30d,
@@ -96,7 +104,7 @@ fn episode_utilization_context_from_request(
         })
 }
 
-fn scoring_feature_context_from_request(
+fn inline_scoring_feature_context_from_request(
     request: &ScoreClaimRequest,
 ) -> Option<&ScoringFeatureContextPayload> {
     request
@@ -105,13 +113,64 @@ fn scoring_feature_context_from_request(
         .or_else(|| request.claim.as_ref()?.scoring_feature_context.as_ref())
 }
 
-fn scoring_feature_context_evidence_refs(request: &ScoreClaimRequest) -> Vec<serde_json::Value> {
-    scoring_feature_context_from_request(request)
-        .and_then(|context| context.evidence_refs.as_ref())
+fn scoring_feature_context_payload_evidence_refs(
+    context: &ScoringFeatureContextPayload,
+) -> Vec<serde_json::Value> {
+    context
+        .evidence_refs
+        .as_ref()
         .into_iter()
         .flat_map(|refs| refs.iter())
         .map(|reference| serde_json::Value::String(reference.clone()))
         .collect()
+}
+
+async fn resolve_scoring_feature_context(
+    state: &AppState,
+    request: &ScoreClaimRequest,
+    actor: &ActorContext,
+    claim_id: &str,
+) -> Result<Option<ResolvedScoringFeatureContext>, ApiError> {
+    if let Some(payload) = inline_scoring_feature_context_from_request(request) {
+        return Ok(Some(ResolvedScoringFeatureContext {
+            payload: payload.clone(),
+            evidence_refs: scoring_feature_context_payload_evidence_refs(payload),
+        }));
+    }
+
+    let Some(record) = state
+        .repository
+        .latest_scoring_feature_context_for_claim(claim_id, Some(&actor.customer_scope_id))
+        .await
+        .map_err(internal_error("SCORING_FEATURE_CONTEXT_LOAD_FAILED"))?
+    else {
+        return Ok(None);
+    };
+
+    let payload = serde_json::from_value::<ScoringFeatureContextPayload>(record.context_json)
+        .map_err(internal_error("SCORING_FEATURE_CONTEXT_PARSE_FAILED"))?;
+    let mut evidence_ref_strings = BTreeSet::new();
+    if let Some(context_refs) = &payload.evidence_refs {
+        evidence_ref_strings.extend(context_refs.iter().cloned());
+    }
+    evidence_ref_strings.extend(record.evidence_refs);
+    evidence_ref_strings.insert(format!(
+        "scoring_feature_context_materializations:{}",
+        record.materialization_id
+    ));
+    evidence_ref_strings.insert(format!(
+        "scoring_feature_context_materialization_reports:{}",
+        record.report_uri
+    ));
+    let evidence_refs = evidence_ref_strings
+        .into_iter()
+        .map(serde_json::Value::String)
+        .collect();
+
+    Ok(Some(ResolvedScoringFeatureContext {
+        payload,
+        evidence_refs,
+    }))
 }
 
 pub async fn score_claim(
@@ -315,9 +374,18 @@ pub async fn score_claim(
         )
     };
 
-    let peer_feature_context = peer_feature_context_from_request(&request)?;
-    let clinical_compatibility_context = clinical_compatibility_context_from_request(&request);
-    let episode_utilization_context = episode_utilization_context_from_request(&request);
+    let resolved_scoring_feature_context =
+        resolve_scoring_feature_context(&state, &request, &actor, &context.claim.external_claim_id)
+            .await?;
+    let scoring_feature_context = resolved_scoring_feature_context
+        .as_ref()
+        .map(|context| &context.payload);
+    let peer_feature_context =
+        peer_feature_context_from_request(&request, scoring_feature_context)?;
+    let clinical_compatibility_context =
+        clinical_compatibility_context_from_request(scoring_feature_context);
+    let episode_utilization_context =
+        episode_utilization_context_from_request(scoring_feature_context);
     let run_id = ScoringRunId::new();
     let provider_profile =
         assess_provider_profile(&context.provider, provider_profile_input.as_ref());
@@ -348,7 +416,9 @@ pub async fn score_claim(
         })
         .collect::<Vec<_>>();
     evidence_refs.extend(request_evidence_refs);
-    evidence_refs.extend(scoring_feature_context_evidence_refs(&request));
+    if let Some(context) = &resolved_scoring_feature_context {
+        evidence_refs.extend(context.evidence_refs.clone());
+    }
     evidence_refs.extend(
         clinical_evidence
             .evidence_refs
