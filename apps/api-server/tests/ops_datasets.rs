@@ -428,6 +428,26 @@ async fn clinical_compatibility_reference_requires_dataset_write_permission() {
 }
 
 #[tokio::test]
+async fn clinical_compatibility_reference_requires_policy_authority_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(clinical_compatibility_reference_payload()).unwrap();
+    payload["records"][0]["evidence_refs"] = serde_json::json!(["medical_policy:v2026-06"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE");
+}
+
+#[tokio::test]
 async fn submits_unbundling_comparator_candidates() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
 
@@ -476,6 +496,27 @@ async fn unbundling_comparator_candidates_require_dataset_write_permission() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body["code"], "PERMISSION_DENIED");
     assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn unbundling_comparator_candidates_require_claim_source_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(unbundling_comparator_payload()).unwrap();
+    payload["candidates"][0]["evidence_refs"] =
+        serde_json::json!(["policy:unbundling:BUNDLE-900", "claims:CLM-001"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE");
 }
 
 #[tokio::test]

@@ -518,6 +518,20 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
                 "clinical compatibility records require non-empty evidence_refs",
             ));
         }
+        if !record
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == record.policy_authority_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+                format!(
+                    "clinical compatibility evidence_refs must include {}",
+                    record.policy_authority_ref
+                ),
+            ));
+        }
     }
     Ok(())
 }
@@ -674,6 +688,34 @@ pub(super) fn validate_unbundling_comparator_submission(
                 "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
                 "unbundling candidates require non-empty evidence_refs",
             ));
+        }
+        if !candidate
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == candidate.policy_authority_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                format!(
+                    "unbundling candidate evidence_refs must include {}",
+                    candidate.policy_authority_ref
+                ),
+            ));
+        }
+        for claim_id in &candidate.claim_ids {
+            let expected_claim_ref = format!("claims:{}", claim_id.trim());
+            if !candidate
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim() == expected_claim_ref)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                    format!("unbundling candidate evidence_refs must include {expected_claim_ref}"),
+                ));
+            }
         }
     }
     Ok(())
