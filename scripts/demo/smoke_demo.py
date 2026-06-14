@@ -20,6 +20,7 @@ MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
 EXPECTED_ACTOR_ROLE = os.environ.get("FWA_DEMO_EXPECTED_ACTOR_ROLE")
 EXPECTED_CUSTOMER_SCOPE_ID = os.environ.get("FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID")
+EXPECT_CONFIGURED_API_KEY = os.environ.get("FWA_DEMO_EXPECT_CONFIGURED_API_KEY") == "1"
 EXPECTED_MODEL_RUNTIME_KIND = os.environ.get("FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND", "python_http")
 EXPECTED_MODEL_METADATA_RUNTIME_KIND = os.environ.get(
     "FWA_DEMO_EXPECTED_MODEL_METADATA_RUNTIME_KIND",
@@ -166,12 +167,18 @@ def assert_health_readiness_contract(health):
         required_check_count == blocking_check_count + ready_check_count,
         "pilot readiness check counts do not reconcile",
     )
-    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+    if CUSTOMER_PRINCIPAL_ASSERTIONS or EXPECT_CONFIGURED_API_KEY:
         health_checks = health.get("checks", [])
         assert_true(
             has_health_check(health_checks, "api_key_configuration", "configured"),
             "customer principal smoke requires configured API key readiness",
         )
+        assert_true(
+            not has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
+            "configured API key smoke must not report the local dev API key blocker",
+        )
+    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+        health_checks = health.get("checks", [])
         assert_true(
             has_health_check(health_checks, "source_system_configuration", "configured"),
             "customer principal smoke requires configured source-system readiness",
@@ -179,10 +186,6 @@ def assert_health_readiness_contract(health):
         assert_true(
             has_health_check(health_checks, "customer_scope_configuration", "configured"),
             "customer principal smoke requires configured customer-scope readiness",
-        )
-        assert_true(
-            not has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
-            "customer principal smoke must not use the local dev API key",
         )
         assert_true(
             not any(
@@ -196,6 +199,8 @@ def assert_health_readiness_contract(health):
             ),
             "customer principal smoke has customer identity readiness blockers",
         )
+        return
+    if EXPECT_CONFIGURED_API_KEY:
         return
 
     assert_true(

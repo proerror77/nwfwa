@@ -221,7 +221,7 @@ jobs:
           raise SystemExit("ml-service did not become healthy")
           PY
 
-          if ! FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py; then
+          if ! FWA_DEMO_EXPECT_CONFIGURED_API_KEY=1 FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py; then
             cat /tmp/fwa-ml-service.log
             cat /tmp/fwa-api-server.log
             exit 1
@@ -238,7 +238,7 @@ jobs:
             exit 1
           fi
 
-          if ! FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py --govern-retraining-candidate; then
+          if ! FWA_DEMO_EXPECT_CONFIGURED_API_KEY=1 FWA_DEMO_RULE_SUBMIT_API_KEY=rule-submit-secret FWA_DEMO_RULE_APPROVE_API_KEY=rule-approve-secret scripts/demo/smoke_demo.py --govern-retraining-candidate; then
             cat /tmp/fwa-ml-service.log
             cat /tmp/fwa-api-server.log
             exit 1
