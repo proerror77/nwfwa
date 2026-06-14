@@ -138,6 +138,9 @@ pub use ops_plans::{
     build_worker_data_pipeline_plan,
 };
 
+mod worker_data_pipeline_execution;
+pub use worker_data_pipeline_execution::build_worker_data_pipeline_execution_report;
+
 mod sanctions;
 pub use sanctions::{
     build_sanctions_sync_report, build_sanctions_sync_report_submission,

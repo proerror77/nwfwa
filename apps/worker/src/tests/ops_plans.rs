@@ -191,4 +191,8 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         .contains(&serde_json::json!(
             "dry_run_reports_reviewed_before_first_submit"
         )));
+    assert_eq!(
+        plan["downstream_contracts"]["scheduler_execution_report"],
+        "build-worker-data-pipeline-execution-report"
+    );
 }

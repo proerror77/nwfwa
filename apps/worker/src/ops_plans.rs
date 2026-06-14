@@ -411,6 +411,9 @@ pub fn build_worker_data_pipeline_plan(
             "api_keys_include_ops_providers_write_ops_datasets_write_and_ops_models_review",
             "artifact_publication_storage_configured",
             "dry_run_reports_reviewed_before_first_submit"
-        ]
+        ],
+        "downstream_contracts": {
+            "scheduler_execution_report": "build-worker-data-pipeline-execution-report"
+        }
     }))
 }

@@ -22,6 +22,7 @@ mod build_provider_profile_windows;
 mod build_scoring_feature_contexts;
 mod build_training_handoff;
 mod build_unbundling_comparator;
+mod build_worker_data_pipeline_execution_report;
 mod build_worker_data_pipeline_plan;
 mod check_pilot_readiness;
 mod claim_retraining_job;
@@ -130,6 +131,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-analytics-export-plan" => build_analytics_export_plan::run(args),
         "build-ai-evidence-execution-plan" => build_ai_evidence_execution_plan::run(args),
         "build-governance-ops-plan" => build_governance_ops_plan::run(args),
+        "build-worker-data-pipeline-execution-report" => {
+            build_worker_data_pipeline_execution_report::run(args)
+        }
         "build-worker-data-pipeline-plan" => build_worker_data_pipeline_plan::run(args),
         "claim-retraining-job" => claim_retraining_job::run(args).await,
         "run-retraining-job" => run_retraining_job::run(args).await,
