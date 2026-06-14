@@ -93,6 +93,7 @@ pub struct MediatedToolCall {
     pub purpose: String,
     pub input_scope: Vec<String>,
     pub policy_check: String,
+    pub cancellation_checkpoint: String,
     pub execution_mode: String,
     pub decision_boundary: String,
 }
@@ -364,6 +365,7 @@ fn mediated_tool_calls_for_task(task: &SpecialistAgentTask) -> Vec<MediatedToolC
                 "similar_cases.evidence_refs".into(),
             ],
             policy_check: "agent_registry.capability:knowledge.search_similar".into(),
+            cancellation_checkpoint: "specialist.evidence_review.start".into(),
             execution_mode: "contract_only_not_executed".into(),
             decision_boundary: "assistive_only".into(),
         }],
@@ -377,6 +379,7 @@ fn mediated_tool_calls_for_task(task: &SpecialistAgentTask) -> Vec<MediatedToolC
                 "similar_cases.provenance_refs".into(),
             ],
             policy_check: "agent_registry.capability:provider.graph.review".into(),
+            cancellation_checkpoint: "specialist.network_analysis.start".into(),
             execution_mode: "contract_only_not_executed".into(),
             decision_boundary: "assistive_only".into(),
         }],
@@ -722,6 +725,10 @@ mod tests {
             evidence_review.tool_calls[0].policy_check,
             "agent_registry.capability:knowledge.search_similar"
         );
+        assert_eq!(
+            evidence_review.tool_calls[0].cancellation_checkpoint,
+            "specialist.evidence_review.start"
+        );
         let network_analysis = executions
             .iter()
             .find(|execution| execution.agent_kind == "network_analysis")
@@ -729,6 +736,10 @@ mod tests {
         assert_eq!(
             network_analysis.tool_calls[0].tool_name,
             "provider.graph.review"
+        );
+        assert_eq!(
+            network_analysis.tool_calls[0].cancellation_checkpoint,
+            "specialist.network_analysis.start"
         );
     }
 

@@ -345,6 +345,18 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
             ["const"],
         "contract_only_not_executed"
     );
+    assert!(
+        schema["components"]["schemas"]["MediatedToolCall"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "cancellation_checkpoint")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["MediatedToolCall"]["properties"]
+            ["cancellation_checkpoint"]["type"],
+        "string"
+    );
     assert!(schema["components"]["schemas"]["EvidenceSufficiency"].is_object());
     for field in ["population_definition", "reviewer", "assignment_queue"] {
         assert_eq!(

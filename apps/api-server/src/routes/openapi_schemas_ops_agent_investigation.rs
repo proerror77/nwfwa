@@ -105,12 +105,16 @@ pub(super) fn agent_investigation_schemas() -> Value {
         },
         "MediatedToolCall": {
             "type": "object",
-            "required": ["tool_name", "purpose", "input_scope", "policy_check", "execution_mode", "decision_boundary"],
+            "required": ["tool_name", "purpose", "input_scope", "policy_check", "cancellation_checkpoint", "execution_mode", "decision_boundary"],
             "properties": {
                 "tool_name": { "type": "string" },
                 "purpose": { "type": "string" },
                 "input_scope": { "type": "array", "items": { "type": "string" } },
                 "policy_check": { "type": "string" },
+                "cancellation_checkpoint": {
+                    "type": "string",
+                    "description": "Checkpoint that must be evaluated before executing the mediated tool call."
+                },
                 "execution_mode": { "type": "string", "const": "contract_only_not_executed" },
                 "decision_boundary": { "type": "string", "const": "assistive_only" }
             }

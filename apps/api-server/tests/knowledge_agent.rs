@@ -516,6 +516,10 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         mediated_tool_call["execution_mode"],
         "contract_only_not_executed"
     );
+    assert_eq!(
+        mediated_tool_call["cancellation_checkpoint"],
+        "specialist.evidence_review.start"
+    );
     assert_eq!(mediated_tool_call["decision_boundary"], "assistive_only");
 }
 
