@@ -35,6 +35,7 @@ required_files=(
   "scripts/ops/validate_production_secret_file.py"
   "scripts/ops/validate_observability_manifests.py"
   "scripts/ops/validate_production_readiness_contract.py"
+  "scripts/ops/test_validate_production_readiness_contract.py"
   "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
@@ -121,6 +122,7 @@ grep -q "docs/engineering/tpa-integration-contract.md" apps/api-server/tests/tpa
 grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "ErrorResponse" apps/api-server/tests/tpa_contract_docs.rs
 python3 -m unittest scripts.demo.test_tpa_mock_client
+python3 -m unittest scripts.ops.test_validate_production_readiness_contract
 python3 -m py_compile scripts/data/build_kaggle_provider_fraud_mvp.py scripts/data/build_public_data_mvp.py
 grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
 grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
