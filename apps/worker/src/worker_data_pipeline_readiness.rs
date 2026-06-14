@@ -273,6 +273,21 @@ pub fn build_worker_data_pipeline_readiness_submission(
         .flatten()
         .filter_map(|value| value.as_str().map(str::to_string))
         .collect::<Vec<_>>();
+    let plan_uri = json_string(&report, "plan_uri")
+        .context("worker data pipeline readiness report requires plan_uri")?;
+    let readiness_input_uri = json_string(&report, "readiness_input_uri")
+        .context("worker data pipeline readiness report requires readiness_input_uri")?;
+    for required_ref in [
+        format!("worker_data_pipeline_plans:{plan_uri}"),
+        format!("worker_data_pipeline_readiness_inputs:{readiness_input_uri}"),
+    ] {
+        if !evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == required_ref)
+        {
+            bail!("worker data pipeline readiness report requires {required_ref} evidence");
+        }
+    }
     evidence_refs.push(format!(
         "worker_data_pipeline_readiness_reports:{report_uri}"
     ));
@@ -281,10 +296,8 @@ pub fn build_worker_data_pipeline_readiness_submission(
         notes: notes.into(),
         source_report_uri: report_uri.into(),
         report_kind: "worker_data_pipeline_readiness_report".into(),
-        plan_uri: json_string(&report, "plan_uri")
-            .context("worker data pipeline readiness report requires plan_uri")?,
-        readiness_input_uri: json_string(&report, "readiness_input_uri")
-            .context("worker data pipeline readiness report requires readiness_input_uri")?,
+        plan_uri,
+        readiness_input_uri,
         readiness_status: json_string(&report, "readiness_status")
             .context("worker data pipeline readiness report requires readiness_status")?,
         job_count: json_usize(&report, "job_count")?,

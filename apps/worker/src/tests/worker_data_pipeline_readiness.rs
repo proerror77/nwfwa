@@ -429,6 +429,49 @@ fn builds_worker_data_pipeline_readiness_submission() {
     }));
 }
 
+#[test]
+fn rejects_worker_data_pipeline_readiness_submission_without_source_evidence() {
+    let root = temp_root("worker-data-pipeline-readiness-submission-missing-source-evidence");
+    let report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
+            "readiness_input_uri": "local://inputs/worker_data_pipeline_readiness_input.json",
+            "customer_scope_id": "production-customer",
+            "readiness_status": "ready",
+            "job_count": 1,
+            "ready_job_count": 1,
+            "blocked_job_count": 0,
+            "job_readiness": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "readiness_status": "ready"
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_readiness_submission(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-readiness",
+        "daily readiness evidence",
+    )
+    .expect_err("readiness submission without input evidence must fail");
+
+    assert!(error.to_string().contains(
+        "worker_data_pipeline_readiness_inputs:local://inputs/worker_data_pipeline_readiness_input.json"
+    ));
+}
+
 #[tokio::test]
 async fn submits_worker_data_pipeline_readiness_report_to_api() {
     let root = temp_root("worker-data-pipeline-readiness-submit-api");

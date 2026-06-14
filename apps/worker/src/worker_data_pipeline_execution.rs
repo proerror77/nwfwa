@@ -217,6 +217,28 @@ pub fn build_worker_data_pipeline_execution_submission(
         .flatten()
         .filter_map(|value| value.as_str().map(str::to_string))
         .collect::<Vec<_>>();
+    let plan_uri = json_string(&report, "plan_uri")
+        .context("worker data pipeline execution report requires plan_uri")?;
+    let run_status_uri = json_string(&report, "run_status_uri")
+        .context("worker data pipeline execution report requires run_status_uri")?;
+    let readiness_report_uri = json_string(&report, "readiness_report_uri");
+    let mut required_refs = vec![
+        format!("worker_data_pipeline_plans:{plan_uri}"),
+        format!("worker_data_pipeline_run_status:{run_status_uri}"),
+    ];
+    if let Some(readiness_report_uri) = readiness_report_uri.as_deref() {
+        required_refs.push(format!(
+            "worker_data_pipeline_readiness_reports:{readiness_report_uri}"
+        ));
+    }
+    for required_ref in required_refs {
+        if !evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == required_ref)
+        {
+            bail!("worker data pipeline execution report requires {required_ref} evidence");
+        }
+    }
     evidence_refs.push(format!(
         "worker_data_pipeline_execution_reports:{report_uri}"
     ));
@@ -225,11 +247,9 @@ pub fn build_worker_data_pipeline_execution_submission(
         notes: notes.into(),
         source_report_uri: report_uri.into(),
         report_kind: "worker_data_pipeline_execution_report".into(),
-        plan_uri: json_string(&report, "plan_uri")
-            .context("worker data pipeline execution report requires plan_uri")?,
-        run_status_uri: json_string(&report, "run_status_uri")
-            .context("worker data pipeline execution report requires run_status_uri")?,
-        readiness_report_uri: json_string(&report, "readiness_report_uri"),
+        plan_uri,
+        run_status_uri,
+        readiness_report_uri,
         readiness_gate_status: json_string(&report, "readiness_gate_status")
             .unwrap_or_else(|| "missing".into()),
         run_id: json_string(&report, "run_id")
