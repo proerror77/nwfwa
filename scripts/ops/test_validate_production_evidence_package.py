@@ -70,6 +70,54 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_worker_readiness_input_missing_required_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            input_uri = package_dir / "worker" / "worker_data_pipeline_readiness_input.json"
+            readiness_input = _read_json(input_uri)
+            readiness_input["checks"] = [
+                check
+                for check in readiness_input["checks"]
+                if check["job_kind"] != "provider_graph_signal_rollup"
+            ]
+            _write_json(input_uri, readiness_input)
+
+            with self.assertRaisesRegex(AssertionError, "job kind set"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_readiness_input_missing_required_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            input_uri = package_dir / "worker" / "worker_data_pipeline_readiness_input.json"
+            readiness_input = _read_json(input_uri)
+            for check in readiness_input["checks"]:
+                if check["job_kind"] == "provider_profile_window_rollup":
+                    check["required_evidence_prefixes"] = [
+                        prefix
+                        for prefix in check["required_evidence_prefixes"]
+                        if prefix != "provider_profile_window_rollups:"
+                    ]
+            _write_json(input_uri, readiness_input)
+
+            with self.assertRaisesRegex(AssertionError, "provider_profile_window_rollup"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_run_status_wrong_submit_permission(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            run_status_uri = package_dir / "worker" / "worker_data_pipeline_run_status.json"
+            run_status = _read_json(run_status_uri)
+            for job in run_status["job_statuses"]:
+                if job["job_kind"] == "peer_percentile_benchmark":
+                    job["required_permission"] = "ops:providers:read"
+            _write_json(run_status_uri, run_status)
+
+            with self.assertRaisesRegex(AssertionError, "required_permission"):
+                validate_package(package_dir)
+
     def test_rejects_worker_template_with_forbidden_phi_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

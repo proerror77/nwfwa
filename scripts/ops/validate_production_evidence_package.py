@@ -13,6 +13,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ops.validate_production_readiness_contract import (
+    WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES,
+    WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+    WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES,
+    WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX,
+    WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS,
+    WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
+    WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
+    WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
     validate_contract,
     validate_evidence_dir,
 )
@@ -259,7 +267,7 @@ def validate_worker_templates(package_dir: Path) -> None:
         readiness_input.get("artifact_kind") == "worker_data_pipeline_readiness_input_template",
         "worker readiness input has wrong artifact_kind",
     )
-    require(readiness_input.get("checks"), "worker readiness input requires checks")
+    validate_worker_readiness_checks(readiness_input.get("checks"))
 
     run_status = load_json(package_dir / "worker" / "worker_data_pipeline_run_status.json")
     require(
@@ -267,6 +275,7 @@ def validate_worker_templates(package_dir: Path) -> None:
         "worker run status template has wrong report_kind",
     )
     require(run_status.get("run_status_template") is True, "run status must remain a template")
+    validate_worker_run_status_jobs(run_status.get("job_statuses"))
 
     for path in REQUIRED_WORKER_TEMPLATES:
         template_text = (package_dir / path).read_text(encoding="utf-8")
@@ -275,6 +284,106 @@ def validate_worker_templates(package_dir: Path) -> None:
                 forbidden not in template_text,
                 f"worker template {path} contains forbidden placeholder string {forbidden}",
             )
+
+
+def expected_worker_evidence_prefixes(job_kind: str) -> set[str]:
+    prefixes = set()
+    if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+        prefixes.add(WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES[job_kind])
+    if job_kind == "oig_sam_sanctions_snapshot_fetch":
+        prefixes.add(WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX)
+    if job_kind == "scoring_online_readback":
+        prefixes.update(WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES)
+    prefixes.update(WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(job_kind, ()))
+    return prefixes
+
+
+def validate_worker_readiness_checks(checks: object) -> None:
+    require(isinstance(checks, list) and checks, "worker readiness input requires checks")
+    checks_by_kind = {
+        check.get("job_kind"): check for check in checks if isinstance(check, dict)
+    }
+    require(
+        set(checks_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+        "worker readiness input job kind set changed unexpectedly",
+    )
+    for job_kind, check in checks_by_kind.items():
+        validate_worker_required_prefixes(
+            job_kind,
+            check.get("required_evidence_prefixes"),
+            check.get("evidence_refs"),
+            "worker readiness input",
+        )
+        require(
+            check.get("artifact_uri") == f"local://template/worker/{job_kind}.json",
+            f"worker readiness input {job_kind} has wrong artifact_uri",
+        )
+
+
+def validate_worker_run_status_jobs(job_statuses: object) -> None:
+    require(
+        isinstance(job_statuses, list) and job_statuses,
+        "worker run status requires job_statuses",
+    )
+    jobs_by_kind = {
+        job.get("job_kind"): job for job in job_statuses if isinstance(job, dict)
+    }
+    require(
+        set(jobs_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+        "worker run status job kind set changed unexpectedly",
+    )
+    for job_kind, job in jobs_by_kind.items():
+        validate_worker_required_prefixes(
+            job_kind,
+            job.get("required_evidence_prefixes"),
+            job.get("evidence_refs"),
+            "worker run status",
+            require_evidence_refs=False,
+        )
+        if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+            require(
+                job.get("api_path") == WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS[job_kind],
+                f"worker run status {job_kind} has wrong api_path",
+            )
+            require(
+                job.get("required_permission")
+                == WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind],
+                f"worker run status {job_kind} has wrong required_permission",
+            )
+
+
+def validate_worker_required_prefixes(
+    job_kind: str,
+    required_prefixes: object,
+    evidence_refs: object,
+    owner: str,
+    *,
+    require_evidence_refs: bool = True,
+) -> None:
+    require(
+        isinstance(required_prefixes, list),
+        f"{owner} {job_kind} requires required_evidence_prefixes",
+    )
+    observed_prefixes = set(required_prefixes)
+    expected_prefixes = expected_worker_evidence_prefixes(job_kind)
+    require(
+        observed_prefixes == expected_prefixes,
+        f"{owner} {job_kind} required_evidence_prefixes changed unexpectedly",
+    )
+    if not require_evidence_refs:
+        return
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        f"{owner} {job_kind} requires evidence_refs",
+    )
+    for prefix in expected_prefixes:
+        require(
+            any(
+                isinstance(reference, str) and reference.startswith(prefix)
+                for reference in evidence_refs
+            ),
+            f"{owner} {job_kind} evidence_refs missing {prefix}",
+        )
 
 
 def validate_runbook(package_dir: Path) -> None:
