@@ -39,11 +39,13 @@ fn builds_worker_data_pipeline_readiness_input_template() {
     );
     assert_eq!(checks[0]["customer_approved"], false);
     assert_eq!(checks[0]["external_fetch_configured"], false);
+    assert_eq!(checks[0]["required_permission"], serde_json::Value::Null);
     assert_eq!(checks[0]["minimum_row_count"], 1);
     assert_eq!(
         checks[1]["depends_on"],
         serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
     );
+    assert_eq!(checks[1]["required_permission"], "ops:providers:write");
     assert!(output_dir
         .join("worker_data_pipeline_readiness_input_template.json")
         .exists());
@@ -153,10 +155,12 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
     assert_eq!(report["blocked_job_count"], 10);
     let jobs = report["job_readiness"].as_array().expect("jobs");
     assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
+    assert_eq!(jobs[0]["required_permission"], serde_json::Value::Null);
     assert!(jobs[0]["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("external_oig_sam_fetch_not_configured")));
+    assert_eq!(jobs[2]["required_permission"], "ops:providers:write");
     assert!(jobs[2]["blockers"]
         .as_array()
         .unwrap()

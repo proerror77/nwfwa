@@ -56,6 +56,10 @@ fn builds_worker_data_pipeline_run_status_template() {
     assert_eq!(job_statuses[0]["submit_command"], serde_json::Value::Null);
     assert_eq!(job_statuses[0]["api_path"], serde_json::Value::Null);
     assert_eq!(
+        job_statuses[0]["required_permission"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
         job_statuses[0]["status"],
         "scheduled_pending_customer_execution"
     );
@@ -63,6 +67,10 @@ fn builds_worker_data_pipeline_run_status_template() {
     assert_eq!(job_statuses[0]["submitted"], false);
     assert_eq!(job_statuses[1]["job_kind"], "oig_sam_sanctions_sync");
     assert_eq!(job_statuses[1]["build_command"], "sync-oig-sam-sanctions");
+    assert_eq!(
+        job_statuses[1]["required_permission"],
+        "ops:providers:write"
+    );
     assert_eq!(
         job_statuses[1]["depends_on"],
         serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])

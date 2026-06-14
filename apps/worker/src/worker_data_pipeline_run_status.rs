@@ -32,6 +32,7 @@ pub fn build_worker_data_pipeline_run_status_template(
                 "cadence": json_string(job, "cadence"),
                 "build_command": json_string(job, "build_command"),
                 "source_input": json_string(job, "source_input"),
+                "required_permission": json_string(job, "required_permission"),
                 "depends_on": job
                     .get("depends_on")
                     .cloned()

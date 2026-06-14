@@ -70,6 +70,7 @@ pub fn build_worker_data_pipeline_readiness_input_template(
                 "cadence": json_string(job, "cadence"),
                 "build_command": json_string(job, "build_command"),
                 "source_input": json_string(job, "source_input"),
+                "required_permission": json_string(job, "required_permission"),
                 "depends_on": job
                     .get("depends_on")
                     .cloned()
@@ -144,6 +145,7 @@ pub fn build_worker_data_pipeline_readiness_report(
                 "job_kind": job_kind,
                 "cadence": json_string(job, "cadence"),
                 "source_input": json_string(job, "source_input"),
+                "required_permission": json_string(job, "required_permission"),
                 "artifact_uri": check.and_then(|check| check.artifact_uri.clone()),
                 "customer_approved": check.map(|check| check.customer_approved).unwrap_or(false),
                 "external_fetch_configured": check

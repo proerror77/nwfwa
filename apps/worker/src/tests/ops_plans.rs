@@ -162,6 +162,7 @@ fn builds_scheduled_worker_data_pipeline_plan() {
     assert_eq!(jobs[0]["artifact_kind"], "source_snapshot");
     assert_eq!(jobs[1]["job_kind"], "oig_sam_sanctions_sync");
     assert_eq!(jobs[1]["submit_command"], "submit-sanctions-sync-report");
+    assert_eq!(jobs[1]["required_permission"], "ops:providers:write");
     assert_eq!(jobs[1]["depends_on"][0], "oig_sam_sanctions_snapshot_fetch");
     assert_eq!(jobs[2]["job_kind"], "provider_profile_window_rollup");
     assert_eq!(jobs[3]["job_kind"], "provider_graph_signal_rollup");
@@ -170,6 +171,7 @@ fn builds_scheduled_worker_data_pipeline_plan() {
     assert_eq!(jobs[5]["job_kind"], "episode_aggregation");
     assert_eq!(jobs[6]["job_kind"], "clinical_compatibility_reference");
     assert_eq!(jobs[6]["cadence"], "on_reference_update");
+    assert_eq!(jobs[6]["required_permission"], "ops:datasets:write");
     assert_eq!(jobs[7]["job_kind"], "unbundling_comparator");
     assert_eq!(jobs[7]["depends_on"][0], "episode_aggregation");
     assert_eq!(
@@ -181,6 +183,7 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         .unwrap()
         .contains(&serde_json::json!("peer_percentile_benchmark")));
     assert_eq!(jobs[9]["job_kind"], "probability_calibration_evidence");
+    assert_eq!(jobs[9]["required_permission"], "ops:models:review");
     assert_eq!(
         jobs[9]["api_path"],
         "/api/v1/ops/models/{model_key}/probability-calibration-reports"
