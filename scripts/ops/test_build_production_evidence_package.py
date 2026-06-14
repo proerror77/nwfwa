@@ -37,6 +37,10 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             artifacts["scoring_readback_report.json"]["readback_status"],
             "blocked",
         )
+        model_slo = artifacts["model_serving_slo_report.json"]
+        self.assertIn("model_key", model_slo)
+        self.assertIn("latency_slo_ms", model_slo)
+        self.assertIn("checksum_verified", model_slo)
 
     def test_template_does_not_validate_as_customer_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

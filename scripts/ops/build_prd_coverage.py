@@ -264,6 +264,14 @@ CAPABILITIES = [
                 "validate_model_serving_slo_evidence",
             ),
             (
+                "scripts/ops/build_model_serving_slo_report.py",
+                "model_serving_slo_report",
+            ),
+            (
+                "scripts/ops/build_model_serving_slo_report.py",
+                "probability_calibration_status_not_calibrated",
+            ),
+            (
                 "scripts/ops/build_production_readiness_contract.py",
                 "customer_data_evidence_refs_present",
             ),

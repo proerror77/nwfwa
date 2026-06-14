@@ -800,6 +800,17 @@ served model identity, p95 latency and error rate within declared SLOs,
 checksum/signature verification, healthy fallback, rollback readiness,
 calibrated probability serving active, and model-serving, model-artifact, plus
 probability-calibration evidence refs.
+Render production model-serving measurements into the required report shape:
+
+```bash
+python3 scripts/ops/build_model_serving_slo_report.py \
+  --source-uri artifacts/production-evidence-package/model-serving-slo-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder leaves the report blocked when latency, error-rate, artifact
+integrity, fallback, rollback, or calibrated-probability evidence is missing or
+outside the declared SLO.
 The OCR/vector/analytics gate requires
 `ocr_vector_analytics_execution_report.json` to show completed OCR,
 embedding/vector, retrieval ranking, ClickHouse export, dashboard access, and
