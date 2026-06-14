@@ -86,6 +86,15 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES = {
 WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX = "oig_sam_snapshot:"
 
 WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
+    "provider_profile_window_rollup": ("provider_profile_claim_snapshot:",),
+    "provider_graph_signal_rollup": ("provider_graph_claim_snapshot:",),
+    "peer_percentile_benchmark": ("peer_benchmark_claim_snapshot:",),
+    "episode_aggregation": ("episode_claim_snapshot:",),
+    "clinical_compatibility_reference": (
+        "clinical_compatibility_reference:",
+        "clinical_policy_authority:",
+    ),
+    "unbundling_comparator": ("unbundling_comparator_input:",),
     "scoring_feature_context_materialization": (
         "episode_rollups:",
         "peer_benchmarks:",

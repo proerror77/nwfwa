@@ -7,6 +7,7 @@ import copy
 import unittest
 
 from scripts.ops.validate_production_readiness_contract import (
+    WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
@@ -47,6 +48,11 @@ def worker_execution_report(include_snapshot_evidence: bool = True) -> dict:
                     "unbundling_candidates:s3://customer-prod-artifacts/unbundling.json",
                 ]
             )
+        for prefix in WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(
+            job_kind, ()
+        ):
+            if not any(reference.startswith(prefix) for reference in evidence_refs):
+                evidence_refs.append(f"{prefix}s3://customer-prod-artifacts/{job_kind}.json")
         if job_kind == "oig_sam_sanctions_snapshot_fetch" and include_snapshot_evidence:
             evidence_refs.append(
                 "oig_sam_snapshot:s3://customer-prod-artifacts/oig_sam_snapshot.json"
@@ -89,6 +95,22 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         report = worker_execution_report(include_snapshot_evidence=True)
 
         validate_worker_data_pipeline_execution_evidence(copy.deepcopy(report))
+
+    def test_worker_execution_requires_submit_job_source_lineage(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        peer_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "peer_percentile_benchmark"
+        )
+        peer_job["evidence_refs"] = [
+            reference
+            for reference in peer_job["evidence_refs"]
+            if not reference.startswith("peer_benchmark_claim_snapshot:")
+        ]
+
+        with self.assertRaisesRegex(AssertionError, "peer_benchmark_claim_snapshot:"):
+            validate_worker_data_pipeline_execution_evidence(report)
 
 
 if __name__ == "__main__":
