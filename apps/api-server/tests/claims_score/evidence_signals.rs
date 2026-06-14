@@ -808,7 +808,7 @@ async fn returns_persisted_provider_graph_signal_for_l6_network_risk() {
                   "shared_member_provider_count": 2,
                   "connected_confirmed_fwa_count": 2,
                   "network_component_risk_score": 82,
-                  "evidence_refs": ["provider_graph_rollups:PRV-PERSISTED-GRAPH"]
+                  "evidence_refs": ["provider_graph_rollups:PRV-PERSISTED-GRAPH", "claims:CLM-PERSISTED-GRAPH-1"]
                 }
               ],
               "evidence_refs": [

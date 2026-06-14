@@ -200,7 +200,7 @@ fn provider_graph_signal_rollup_payload() -> &'static str {
           "shared_member_provider_count": 2,
           "connected_confirmed_fwa_count": 2,
           "network_component_risk_score": 82,
-          "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+          "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1", "claims:CLM-GRAPH-1"]
         }
       ],
       "evidence_refs": [
@@ -233,7 +233,7 @@ fn peer_benchmark_payload() -> &'static str {
           "p75": 400.0,
           "p90": 500.0,
           "p99": 500.0,
-          "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient"]
+          "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient", "claims:CLM-PEER-1"]
         }
       ],
       "evidence_refs": [
@@ -473,6 +473,27 @@ async fn provider_graph_signal_rollup_rejects_signal_without_evidence_refs() {
 }
 
 #[tokio::test]
+async fn provider_graph_signal_rollup_rejects_signal_without_source_lineage() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(provider_graph_signal_rollup_payload()).unwrap();
+    payload["provider_relationships"][0]["evidence_refs"] =
+        serde_json::json!(["provider_graph_rollups:PRV-GRAPH-1"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/graph-signal-rollups",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PROVIDER_GRAPH_SIGNAL_EVIDENCE");
+}
+
+#[tokio::test]
 async fn submits_peer_benchmark() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
 
@@ -509,6 +530,26 @@ async fn peer_benchmark_rejects_group_without_evidence_refs() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
     let mut payload: serde_json::Value = serde_json::from_str(peer_benchmark_payload()).unwrap();
     payload["peer_groups"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/peer-benchmarks",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PEER_BENCHMARK_EVIDENCE");
+}
+
+#[tokio::test]
+async fn peer_benchmark_rejects_group_without_source_lineage() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value = serde_json::from_str(peer_benchmark_payload()).unwrap();
+    payload["peer_groups"][0]["evidence_refs"] =
+        serde_json::json!(["peer_benchmark_groups:dental|SH|outpatient"]);
 
     let (status, body) = json_request_with_key(
         app,

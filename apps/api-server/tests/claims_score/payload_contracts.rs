@@ -842,7 +842,7 @@ async fn scores_full_payload_with_persisted_peer_benchmark() {
                   "p75": 400.0,
                   "p90": 500.0,
                   "p99": 500.0,
-                  "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient"]
+                  "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient", "claims:CLM-PEER-BENCHMARK-1"]
                 }
               ],
               "evidence_refs": [
