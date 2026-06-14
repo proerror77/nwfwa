@@ -206,6 +206,21 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
             ["temporal_co_billing_frequency_7d"]["maximum"],
         1
     );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["high_risk_neighbor_ratio"]["maximum"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["provider_patient_overlap_score"]["maximum"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["network_component_risk_score"]["maximum"],
+        100
+    );
     for field in [
         "active_scoring_policy_change",
         "label_assignment",

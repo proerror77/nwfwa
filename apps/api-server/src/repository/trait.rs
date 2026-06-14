@@ -510,6 +510,12 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SaveProviderGraphSignalsInput,
     ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>>;
 
+    async fn latest_provider_graph_signal_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderGraphSignalRecord>>;
+
     async fn save_peer_benchmark_groups(
         &self,
         input: SavePeerBenchmarkGroupsInput,

@@ -188,10 +188,15 @@ fn provider_graph_signal_rollup_payload() -> &'static str {
       "provider_relationships": [
         {
           "provider_id": "PRV-GRAPH-1",
+          "high_risk_neighbor_ratio": 0.34,
+          "provider_patient_overlap_score": 0.68,
+          "referral_concentration_score": 0.78,
           "billing_ring_membership": true,
           "temporal_co_billing_frequency_7d": 0.67,
           "referral_concentration_entropy": 0.22,
           "shared_member_provider_count": 2,
+          "connected_confirmed_fwa_count": 2,
+          "network_component_risk_score": 82,
           "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
         }
       ],
@@ -386,6 +391,18 @@ async fn submits_provider_graph_signal_rollup() {
     assert_eq!(
         body["persisted_provider_relationships"][0]["temporal_co_billing_frequency_7d"],
         0.67
+    );
+    assert_eq!(
+        body["persisted_provider_relationships"][0]["high_risk_neighbor_ratio"],
+        0.34
+    );
+    assert_eq!(
+        body["persisted_provider_relationships"][0]["provider_patient_overlap_score"],
+        0.68
+    );
+    assert_eq!(
+        body["persisted_provider_relationships"][0]["connected_confirmed_fwa_count"],
+        2
     );
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["label_assignment"], false);

@@ -106,6 +106,12 @@ As of the P1/P2 remediation commits after this review:
   referral-entropy signals from an approved rollup report while explicitly
   avoiding scoring-policy changes, fraud-label assignment, case creation, or
   claim adjudication.
+- The provider graph signal contract now also carries high-risk neighbor ratio,
+  provider-patient overlap, connected confirmed FWA counts, referral
+  concentration score, and optional network component risk. Claims scoring can
+  consume the latest persisted graph signal by provider when those complete
+  fields are present and no inline `provider_relationships` payload is
+  supplied.
 - The peer percentile benchmark now has a separate permission-gated submit path
   and worker command that persist specialty/region/service-segment benchmark
   groups from an approved benchmark report while explicitly avoiding claim

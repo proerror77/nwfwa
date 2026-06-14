@@ -728,6 +728,15 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_provider_graph_signals(input).await
     }
 
+    async fn latest_provider_graph_signal_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderGraphSignalRecord>> {
+        self.in_memory_latest_provider_graph_signal_for_provider(provider_id, customer_scope_id)
+            .await
+    }
+
     async fn save_peer_benchmark_groups(
         &self,
         input: SavePeerBenchmarkGroupsInput,

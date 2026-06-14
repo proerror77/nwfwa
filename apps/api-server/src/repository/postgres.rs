@@ -761,6 +761,19 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_provider_graph_signals(self, input).await
     }
 
+    async fn latest_provider_graph_signal_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderGraphSignalRecord>> {
+        postgres_providers::latest_provider_graph_signal_for_provider(
+            self,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn save_peer_benchmark_groups(
         &self,
         input: SavePeerBenchmarkGroupsInput,

@@ -101,10 +101,15 @@ impl InMemoryScoringRepository {
                 customer_scope_id: input.customer_scope_id.clone(),
                 provider_id: relationship.provider_id,
                 as_of_date: input.as_of_date.clone(),
+                high_risk_neighbor_ratio: relationship.high_risk_neighbor_ratio,
+                provider_patient_overlap_score: relationship.provider_patient_overlap_score,
+                referral_concentration_score: relationship.referral_concentration_score,
                 billing_ring_membership: relationship.billing_ring_membership,
                 temporal_co_billing_frequency_7d: relationship.temporal_co_billing_frequency_7d,
                 referral_concentration_entropy: relationship.referral_concentration_entropy,
                 shared_member_provider_count: relationship.shared_member_provider_count,
+                connected_confirmed_fwa_count: relationship.connected_confirmed_fwa_count,
+                network_component_risk_score: relationship.network_component_risk_score,
                 evidence_refs: relationship.evidence_refs,
                 source_report_uri: input.source_report_uri.clone(),
                 submitted_by: input.submitted_by.clone(),
@@ -121,6 +126,31 @@ impl InMemoryScoringRepository {
             saved.push(record);
         }
         Ok(saved)
+    }
+
+    pub(super) async fn in_memory_latest_provider_graph_signal_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderGraphSignalRecord>> {
+        let records = self.provider_graph_signals.lock().await;
+        let mut candidates = records
+            .values()
+            .filter(|record| record.provider_id == provider_id)
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        candidates.sort_by(|left, right| {
+            right
+                .as_of_date
+                .cmp(&left.as_of_date)
+                .then_with(|| right.source_report_uri.cmp(&left.source_report_uri))
+        });
+        Ok(candidates.into_iter().next())
     }
 
     pub(super) async fn in_memory_save_peer_benchmark_groups(

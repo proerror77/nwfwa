@@ -211,13 +211,18 @@ pub(super) async fn save_provider_graph_signals(
         );
         sqlx::query(
             "INSERT INTO provider_graph_signals
-                 (customer_scope_id, provider_id, as_of_date, billing_ring_membership, temporal_co_billing_frequency_7d, referral_concentration_entropy, shared_member_provider_count, evidence_refs, source_report_uri, submitted_by, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                 (customer_scope_id, provider_id, as_of_date, high_risk_neighbor_ratio, provider_patient_overlap_score, referral_concentration_score, billing_ring_membership, temporal_co_billing_frequency_7d, referral_concentration_entropy, shared_member_provider_count, connected_confirmed_fwa_count, network_component_risk_score, evidence_refs, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                  ON CONFLICT (customer_scope_id, provider_id, as_of_date) DO UPDATE
-                 SET billing_ring_membership = EXCLUDED.billing_ring_membership,
+                 SET high_risk_neighbor_ratio = EXCLUDED.high_risk_neighbor_ratio,
+                     provider_patient_overlap_score = EXCLUDED.provider_patient_overlap_score,
+                     referral_concentration_score = EXCLUDED.referral_concentration_score,
+                     billing_ring_membership = EXCLUDED.billing_ring_membership,
                      temporal_co_billing_frequency_7d = EXCLUDED.temporal_co_billing_frequency_7d,
                      referral_concentration_entropy = EXCLUDED.referral_concentration_entropy,
                      shared_member_provider_count = EXCLUDED.shared_member_provider_count,
+                     connected_confirmed_fwa_count = EXCLUDED.connected_confirmed_fwa_count,
+                     network_component_risk_score = EXCLUDED.network_component_risk_score,
                      evidence_refs = EXCLUDED.evidence_refs,
                      source_report_uri = EXCLUDED.source_report_uri,
                      submitted_by = EXCLUDED.submitted_by,
@@ -227,10 +232,15 @@ pub(super) async fn save_provider_graph_signals(
         .bind(&input.customer_scope_id)
         .bind(&relationship.provider_id)
         .bind(&input.as_of_date)
+        .bind(relationship.high_risk_neighbor_ratio)
+        .bind(relationship.provider_patient_overlap_score)
+        .bind(relationship.referral_concentration_score)
         .bind(relationship.billing_ring_membership)
         .bind(relationship.temporal_co_billing_frequency_7d)
         .bind(relationship.referral_concentration_entropy)
         .bind(relationship.shared_member_provider_count as i32)
+        .bind(relationship.connected_confirmed_fwa_count.map(|count| count as i32))
+        .bind(relationship.network_component_risk_score.map(|score| score as i32))
         .bind(&evidence_refs)
         .bind(&input.source_report_uri)
         .bind(&input.submitted_by)
@@ -241,10 +251,15 @@ pub(super) async fn save_provider_graph_signals(
             customer_scope_id: input.customer_scope_id.clone(),
             provider_id: relationship.provider_id,
             as_of_date: input.as_of_date.clone(),
+            high_risk_neighbor_ratio: relationship.high_risk_neighbor_ratio,
+            provider_patient_overlap_score: relationship.provider_patient_overlap_score,
+            referral_concentration_score: relationship.referral_concentration_score,
             billing_ring_membership: relationship.billing_ring_membership,
             temporal_co_billing_frequency_7d: relationship.temporal_co_billing_frequency_7d,
             referral_concentration_entropy: relationship.referral_concentration_entropy,
             shared_member_provider_count: relationship.shared_member_provider_count,
+            connected_confirmed_fwa_count: relationship.connected_confirmed_fwa_count,
+            network_component_risk_score: relationship.network_component_risk_score,
             evidence_refs: relationship.evidence_refs,
             source_report_uri: input.source_report_uri.clone(),
             submitted_by: input.submitted_by.clone(),
@@ -253,6 +268,80 @@ pub(super) async fn save_provider_graph_signals(
     }
     tx.commit().await?;
     Ok(saved)
+}
+
+pub(super) async fn latest_provider_graph_signal_for_provider(
+    repository: &PostgresScoringRepository,
+    provider_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ProviderGraphSignalRecord>> {
+    let row: Option<(
+        String,
+        String,
+        String,
+        Option<f64>,
+        Option<f64>,
+        Option<f64>,
+        bool,
+        f64,
+        Option<f64>,
+        i32,
+        Option<i32>,
+        Option<i32>,
+        Value,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT customer_scope_id, provider_id, as_of_date, high_risk_neighbor_ratio, provider_patient_overlap_score, referral_concentration_score, billing_ring_membership, temporal_co_billing_frequency_7d, referral_concentration_entropy, shared_member_provider_count, connected_confirmed_fwa_count, network_component_risk_score, evidence_refs, source_report_uri, submitted_by, notes
+             FROM provider_graph_signals
+             WHERE provider_id = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)
+             ORDER BY as_of_date DESC, updated_at DESC
+             LIMIT 1",
+    )
+    .bind(provider_id)
+    .bind(customer_scope_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            customer_scope_id,
+            provider_id,
+            as_of_date,
+            high_risk_neighbor_ratio,
+            provider_patient_overlap_score,
+            referral_concentration_score,
+            billing_ring_membership,
+            temporal_co_billing_frequency_7d,
+            referral_concentration_entropy,
+            shared_member_provider_count,
+            connected_confirmed_fwa_count,
+            network_component_risk_score,
+            evidence_refs,
+            source_report_uri,
+            submitted_by,
+            notes,
+        )| ProviderGraphSignalRecord {
+            customer_scope_id,
+            provider_id,
+            as_of_date,
+            high_risk_neighbor_ratio,
+            provider_patient_overlap_score,
+            referral_concentration_score,
+            billing_ring_membership,
+            temporal_co_billing_frequency_7d,
+            referral_concentration_entropy,
+            shared_member_provider_count: shared_member_provider_count as usize,
+            connected_confirmed_fwa_count: connected_confirmed_fwa_count.map(|count| count as u32),
+            network_component_risk_score: network_component_risk_score.map(|score| score as u8),
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            source_report_uri,
+            submitted_by,
+            notes,
+        },
+    ))
 }
 
 pub(super) async fn save_peer_benchmark_groups(

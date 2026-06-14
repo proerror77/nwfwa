@@ -21,6 +21,11 @@ fn builds_provider_graph_signal_rollup_contract() {
                 {"provider_id": "PRV-A", "referring_provider_id": "REF-2", "referral_count": 1},
                 {"provider_id": "PRV-B", "referring_provider_id": "REF-3", "referral_count": 5},
                 {"provider_id": "PRV-B", "referring_provider_id": "REF-4", "referral_count": 5}
+            ],
+            "provider_risks": [
+                {"provider_id": "PRV-A", "high_risk": false, "confirmed_fwa_count": 0, "network_component_risk_score": 72},
+                {"provider_id": "PRV-B", "high_risk": true, "confirmed_fwa_count": 2, "network_component_risk_score": 85},
+                {"provider_id": "PRV-C", "high_risk": false, "confirmed_fwa_count": 0, "network_component_risk_score": 20}
             ]
         }),
     )
@@ -39,7 +44,12 @@ fn builds_provider_graph_signal_rollup_contract() {
         .find(|provider| provider.provider_id == "PRV-A")
         .expect("PRV-A rollup");
     assert!(provider_a.billing_ring_membership);
+    assert_eq!(provider_a.high_risk_neighbor_ratio, Some(0.5));
+    assert!(provider_a.provider_patient_overlap_score.unwrap() >= 0.66);
+    assert_eq!(provider_a.connected_confirmed_fwa_count, Some(2));
+    assert_eq!(provider_a.network_component_risk_score, Some(72));
     assert!(provider_a.temporal_co_billing_frequency_7d >= 0.66);
+    assert!(provider_a.referral_concentration_score.unwrap() > 0.50);
     assert!(provider_a.referral_concentration_entropy.unwrap() < 0.50);
     assert_eq!(provider_a.shared_member_provider_count, 1);
     assert!(provider_a
@@ -75,10 +85,15 @@ fn builds_provider_graph_signal_rollup_submission() {
             "provider_relationships": [
                 {
                     "provider_id": "PRV-GRAPH-1",
+                    "high_risk_neighbor_ratio": 0.34,
+                    "provider_patient_overlap_score": 0.68,
+                    "referral_concentration_score": 0.78,
                     "billing_ring_membership": true,
                     "temporal_co_billing_frequency_7d": 0.67,
                     "referral_concentration_entropy": 0.22,
                     "shared_member_provider_count": 2,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 82,
                     "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
                 }
             ],
@@ -125,10 +140,15 @@ async fn submits_provider_graph_signal_rollup_to_api() {
             "provider_relationships": [
                 {
                     "provider_id": "PRV-GRAPH-1",
+                    "high_risk_neighbor_ratio": 0.34,
+                    "provider_patient_overlap_score": 0.68,
+                    "referral_concentration_score": 0.78,
                     "billing_ring_membership": true,
                     "temporal_co_billing_frequency_7d": 0.67,
                     "referral_concentration_entropy": 0.22,
                     "shared_member_provider_count": 2,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 82,
                     "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
                 }
             ],

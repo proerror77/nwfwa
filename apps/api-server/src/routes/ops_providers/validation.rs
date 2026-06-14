@@ -494,12 +494,45 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
                 "provider_id is required",
             ));
         }
+        for (value, field) in [
+            (
+                relationship.high_risk_neighbor_ratio,
+                "high_risk_neighbor_ratio",
+            ),
+            (
+                relationship.provider_patient_overlap_score,
+                "provider_patient_overlap_score",
+            ),
+            (
+                relationship.referral_concentration_score,
+                "referral_concentration_score",
+            ),
+        ] {
+            if let Some(value) = value {
+                if !(0.0..=1.0).contains(&value) {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_PROVIDER_GRAPH_SIGNAL",
+                        format!("{field} must be between 0 and 1"),
+                    ));
+                }
+            }
+        }
         if !(0.0..=1.0).contains(&relationship.temporal_co_billing_frequency_7d) {
             return Err(ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "INVALID_PROVIDER_GRAPH_SIGNAL",
                 "temporal_co_billing_frequency_7d must be between 0 and 1",
             ));
+        }
+        if let Some(score) = relationship.network_component_risk_score {
+            if score > 100 {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_GRAPH_SIGNAL",
+                    "network_component_risk_score must be between 0 and 100",
+                ));
+            }
         }
         if let Some(entropy) = relationship.referral_concentration_entropy {
             if !(0.0..=1.0).contains(&entropy) {

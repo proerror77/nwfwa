@@ -78,10 +78,15 @@ pub struct ProviderProfileWindowRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderGraphSignalUpsertInput {
     pub provider_id: String,
+    pub high_risk_neighbor_ratio: Option<f64>,
+    pub provider_patient_overlap_score: Option<f64>,
+    pub referral_concentration_score: Option<f64>,
     pub billing_ring_membership: bool,
     pub temporal_co_billing_frequency_7d: f64,
     pub referral_concentration_entropy: Option<f64>,
     pub shared_member_provider_count: usize,
+    pub connected_confirmed_fwa_count: Option<u32>,
+    pub network_component_risk_score: Option<u8>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -100,10 +105,15 @@ pub struct ProviderGraphSignalRecord {
     pub customer_scope_id: String,
     pub provider_id: String,
     pub as_of_date: String,
+    pub high_risk_neighbor_ratio: Option<f64>,
+    pub provider_patient_overlap_score: Option<f64>,
+    pub referral_concentration_score: Option<f64>,
     pub billing_ring_membership: bool,
     pub temporal_co_billing_frequency_7d: f64,
     pub referral_concentration_entropy: Option<f64>,
     pub shared_member_provider_count: usize,
+    pub connected_confirmed_fwa_count: Option<u32>,
+    pub network_component_risk_score: Option<u8>,
     pub evidence_refs: Vec<String>,
     pub source_report_uri: String,
     pub submitted_by: String,

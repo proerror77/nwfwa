@@ -257,6 +257,21 @@ pub(super) fn provider_anomaly_schemas() -> Value {
             "required": ["provider_id", "billing_ring_membership", "temporal_co_billing_frequency_7d", "shared_member_provider_count", "evidence_refs"],
             "properties": {
                 "provider_id": { "type": "string", "minLength": 1 },
+                "high_risk_neighbor_ratio": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "provider_patient_overlap_score": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "referral_concentration_score": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1
+                },
                 "billing_ring_membership": { "type": "boolean" },
                 "temporal_co_billing_frequency_7d": {
                     "type": "number",
@@ -269,6 +284,15 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                     "maximum": 1
                 },
                 "shared_member_provider_count": { "type": "integer", "minimum": 0 },
+                "connected_confirmed_fwa_count": {
+                    "type": ["integer", "null"],
+                    "minimum": 0
+                },
+                "network_component_risk_score": {
+                    "type": ["integer", "null"],
+                    "minimum": 0,
+                    "maximum": 100
+                },
                 "evidence_refs": {
                     "type": "array",
                     "items": { "type": "string", "minLength": 1 }

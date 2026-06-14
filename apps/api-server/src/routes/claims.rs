@@ -224,6 +224,67 @@ async fn resolve_provider_profile_input(
     Ok((Some(profile), evidence_refs))
 }
 
+async fn resolve_provider_relationships_input(
+    state: &AppState,
+    actor: &ActorContext,
+    provider_id: &str,
+    inline_relationships: Option<ProviderRelationshipGraphInput>,
+) -> Result<Option<ProviderRelationshipGraphInput>, ApiError> {
+    if inline_relationships.is_some() {
+        return Ok(inline_relationships);
+    }
+
+    let Some(record) = state
+        .repository
+        .latest_provider_graph_signal_for_provider(provider_id, Some(&actor.customer_scope_id))
+        .await
+        .map_err(internal_error("PROVIDER_GRAPH_SIGNAL_LOAD_FAILED"))?
+    else {
+        return Ok(None);
+    };
+
+    let (
+        Some(high_risk_neighbor_ratio),
+        Some(provider_patient_overlap_score),
+        Some(connected_confirmed_fwa_count),
+    ) = (
+        record.high_risk_neighbor_ratio,
+        record.provider_patient_overlap_score,
+        record.connected_confirmed_fwa_count,
+    )
+    else {
+        return Ok(None);
+    };
+
+    let mut evidence_refs = record
+        .evidence_refs
+        .into_iter()
+        .chain([
+            format!(
+                "provider_graph_signals:{}:{}",
+                record.provider_id, record.as_of_date
+            ),
+            format!("provider_graph_signal_rollups:{}", record.source_report_uri),
+        ])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    evidence_refs.sort();
+
+    Ok(Some(ProviderRelationshipGraphInput {
+        high_risk_neighbor_ratio,
+        provider_patient_overlap_score,
+        referral_concentration_score: record.referral_concentration_score,
+        referral_concentration_entropy: record.referral_concentration_entropy,
+        temporal_co_billing_score: None,
+        temporal_co_billing_frequency_7d: Some(record.temporal_co_billing_frequency_7d),
+        billing_ring_membership: Some(record.billing_ring_membership),
+        connected_confirmed_fwa_count,
+        network_component_risk_score: record.network_component_risk_score,
+        evidence_refs,
+    }))
+}
+
 pub async fn score_claim(
     State(state): State<AppState>,
     AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
@@ -446,6 +507,13 @@ pub async fn score_claim(
             provider_profile_input,
         )
         .await?;
+    let provider_relationships_input = resolve_provider_relationships_input(
+        &state,
+        &actor,
+        &context.provider.external_provider_id,
+        provider_relationships_input,
+    )
+    .await?;
     let provider_profile =
         assess_provider_profile(&context.provider, provider_profile_input.as_ref());
     let provider_profile_feature_context = ProviderProfileFeatureContext {

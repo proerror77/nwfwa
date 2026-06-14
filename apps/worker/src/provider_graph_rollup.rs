@@ -15,6 +15,8 @@ pub struct ProviderGraphRollupInput {
     pub claims: Vec<ProviderGraphClaimInput>,
     #[serde(default)]
     pub referrals: Vec<ProviderReferralInput>,
+    #[serde(default)]
+    pub provider_risks: Vec<ProviderRiskInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,12 +35,26 @@ pub struct ProviderReferralInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderRiskInput {
+    pub provider_id: String,
+    pub high_risk: bool,
+    #[serde(default)]
+    pub confirmed_fwa_count: u32,
+    pub network_component_risk_score: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderGraphSignalRollup {
     pub provider_id: String,
+    pub high_risk_neighbor_ratio: Option<f64>,
+    pub provider_patient_overlap_score: Option<f64>,
+    pub referral_concentration_score: Option<f64>,
     pub billing_ring_membership: bool,
     pub temporal_co_billing_frequency_7d: f64,
     pub referral_concentration_entropy: Option<f64>,
     pub shared_member_provider_count: usize,
+    pub connected_confirmed_fwa_count: Option<u32>,
+    pub network_component_risk_score: Option<u8>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -97,6 +113,12 @@ pub fn build_provider_graph_signal_rollup(
             .push(claim);
     }
     let referral_entropy = referral_entropy_by_provider(&input.referrals);
+    let provider_risks = input
+        .provider_risks
+        .into_iter()
+        .filter(|risk| !risk.provider_id.trim().is_empty())
+        .map(|risk| (risk.provider_id.trim().to_string(), risk))
+        .collect::<BTreeMap<_, _>>();
     let shared_member_counts = shared_member_provider_counts(&claims_by_provider);
 
     let provider_relationships = claims_by_provider
@@ -104,19 +126,34 @@ pub fn build_provider_graph_signal_rollup(
         .map(|(provider_id, claims)| {
             let shared_member_provider_count =
                 shared_member_counts.get(provider_id).copied().unwrap_or(0);
+            let neighbor_ids = shared_member_neighbor_ids(provider_id, claims, &claims_by_provider);
+            let high_risk_neighbor_ratio = high_risk_neighbor_ratio(&neighbor_ids, &provider_risks);
+            let connected_confirmed_fwa_count =
+                connected_confirmed_fwa_count(&neighbor_ids, &provider_risks);
+            let referral_concentration_entropy =
+                referral_entropy.get(provider_id).copied().flatten();
             ProviderGraphSignalRollup {
                 provider_id: provider_id.clone(),
+                high_risk_neighbor_ratio,
+                provider_patient_overlap_score: Some(provider_patient_overlap_score(
+                    provider_id,
+                    claims,
+                    &claims_by_provider,
+                )),
+                referral_concentration_score: referral_concentration_entropy
+                    .map(|entropy| (1.0 - entropy).clamp(0.0, 1.0)),
                 billing_ring_membership: shared_member_provider_count >= 1,
                 temporal_co_billing_frequency_7d: temporal_co_billing_frequency(
                     provider_id,
                     claims,
                     &claims_by_provider,
                 ),
-                referral_concentration_entropy: referral_entropy
-                    .get(provider_id)
-                    .copied()
-                    .flatten(),
+                referral_concentration_entropy,
                 shared_member_provider_count,
+                connected_confirmed_fwa_count,
+                network_component_risk_score: provider_risks
+                    .get(provider_id)
+                    .and_then(|risk| risk.network_component_risk_score),
                 evidence_refs: vec![format!("provider_graph_rollups:{provider_id}")],
             }
         })
@@ -222,6 +259,93 @@ pub async fn submit_provider_graph_signal_rollup(
         .json::<serde_json::Value>()
         .await
         .context("parse provider graph signal rollup response")
+}
+
+fn shared_member_neighbor_ids(
+    provider_id: &str,
+    claims: &[ProviderGraphClaimInput],
+    claims_by_provider: &BTreeMap<String, Vec<ProviderGraphClaimInput>>,
+) -> Vec<String> {
+    let members = claims
+        .iter()
+        .map(|claim| claim.member_id.clone())
+        .collect::<BTreeSet<_>>();
+    claims_by_provider
+        .iter()
+        .filter(|(other_provider_id, _)| other_provider_id.as_str() != provider_id)
+        .filter(|(_, other_claims)| {
+            other_claims
+                .iter()
+                .any(|claim| members.contains(&claim.member_id))
+        })
+        .map(|(other_provider_id, _)| other_provider_id.clone())
+        .collect()
+}
+
+fn high_risk_neighbor_ratio(
+    neighbor_ids: &[String],
+    provider_risks: &BTreeMap<String, ProviderRiskInput>,
+) -> Option<f64> {
+    if neighbor_ids.is_empty()
+        || neighbor_ids
+            .iter()
+            .any(|provider_id| !provider_risks.contains_key(provider_id))
+    {
+        return None;
+    }
+    let high_risk_count = neighbor_ids
+        .iter()
+        .filter(|provider_id| {
+            provider_risks
+                .get(provider_id.as_str())
+                .is_some_and(|risk| risk.high_risk)
+        })
+        .count();
+    Some(high_risk_count as f64 / neighbor_ids.len() as f64)
+}
+
+fn connected_confirmed_fwa_count(
+    neighbor_ids: &[String],
+    provider_risks: &BTreeMap<String, ProviderRiskInput>,
+) -> Option<u32> {
+    if neighbor_ids
+        .iter()
+        .any(|provider_id| !provider_risks.contains_key(provider_id))
+    {
+        return None;
+    }
+    Some(
+        neighbor_ids
+            .iter()
+            .filter_map(|provider_id| provider_risks.get(provider_id.as_str()))
+            .map(|risk| risk.confirmed_fwa_count)
+            .sum(),
+    )
+}
+
+fn provider_patient_overlap_score(
+    provider_id: &str,
+    claims: &[ProviderGraphClaimInput],
+    claims_by_provider: &BTreeMap<String, Vec<ProviderGraphClaimInput>>,
+) -> f64 {
+    let members = claims
+        .iter()
+        .map(|claim| claim.member_id.clone())
+        .collect::<BTreeSet<_>>();
+    if members.is_empty() {
+        return 0.0;
+    }
+    claims_by_provider
+        .iter()
+        .filter(|(other_provider_id, _)| other_provider_id.as_str() != provider_id)
+        .map(|(_, other_claims)| {
+            let other_members = other_claims
+                .iter()
+                .map(|claim| claim.member_id.clone())
+                .collect::<BTreeSet<_>>();
+            members.intersection(&other_members).count() as f64 / members.len() as f64
+        })
+        .fold(0.0, f64::max)
 }
 
 fn temporal_co_billing_frequency(
