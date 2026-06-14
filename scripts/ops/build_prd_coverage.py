@@ -360,6 +360,18 @@ CAPABILITIES = [
                 "pending_worker_template_count",
             ),
             (
+                "scripts/ops/validate_production_evidence_package.py",
+                "production_evidence_package_validation",
+            ),
+            (
+                "scripts/ops/validate_production_evidence_package.py",
+                "REQUIRED_WORKER_TEMPLATES",
+            ),
+            (
+                "scripts/ops/validate_production_evidence_package.py",
+                "FORBIDDEN_TEMPLATE_STRINGS",
+            ),
+            (
                 "scripts/ops/build_customer_data_governance_report.py",
                 "customer_data_governance_report",
             ),

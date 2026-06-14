@@ -766,6 +766,8 @@ before a production readiness workshop:
 ```bash
 python3 scripts/ops/build_production_evidence_package.py \
   --output-dir artifacts/production-evidence-package
+python3 scripts/ops/validate_production_evidence_package.py \
+  --package-dir artifacts/production-evidence-package
 ```
 
 The template writes `contract/` plus one blocked JSON file under `evidence/`
@@ -779,6 +781,8 @@ sources into the matching evidence reports:
 
 ```bash
 python3 scripts/ops/render_production_evidence_package.py \
+  --package-dir artifacts/production-evidence-package
+python3 scripts/ops/validate_production_evidence_package.py \
   --package-dir artifacts/production-evidence-package
 ```
 

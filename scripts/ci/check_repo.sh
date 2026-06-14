@@ -35,7 +35,9 @@ required_files=(
   "scripts/ops/validate_production_secret_file.py"
   "scripts/ops/validate_observability_manifests.py"
   "scripts/ops/validate_production_readiness_contract.py"
+  "scripts/ops/validate_production_evidence_package.py"
   "scripts/ops/test_validate_production_readiness_contract.py"
+  "scripts/ops/test_validate_production_evidence_package.py"
   "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
@@ -134,7 +136,7 @@ grep -q "docs/engineering/tpa-integration-contract.md" apps/api-server/tests/tpa
 grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "ErrorResponse" apps/api-server/tests/tpa_contract_docs.rs
 python3 -m unittest scripts.demo.test_tpa_mock_client
-python3 -m unittest scripts.ops.test_validate_production_readiness_contract
+python3 -m unittest scripts.ops.test_validate_production_readiness_contract scripts.ops.test_validate_production_evidence_package
 python3 -m unittest scripts.ops.test_build_production_evidence_package scripts.ops.test_render_production_evidence_package scripts.ops.test_build_customer_data_governance_report scripts.ops.test_build_retention_legal_hold_report scripts.ops.test_build_model_serving_slo_report scripts.ops.test_build_ocr_vector_analytics_execution_report
 python3 -m py_compile scripts/data/build_kaggle_provider_fraud_mvp.py scripts/data/build_public_data_mvp.py
 grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
@@ -628,7 +630,7 @@ grep -q "governance_ops_plan" apps/worker/src/health.rs
 grep -q "build-governance-ops-plan" apps/worker/src/commands/mod.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_production_evidence_package.py scripts/ops/render_production_evidence_package.py scripts/ops/build_customer_data_governance_report.py scripts/ops/build_retention_legal_hold_report.py scripts/ops/build_model_serving_slo_report.py scripts/ops/build_ocr_vector_analytics_execution_report.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/validate_production_evidence_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_production_evidence_package.py scripts/ops/render_production_evidence_package.py scripts/ops/build_customer_data_governance_report.py scripts/ops/build_retention_legal_hold_report.py scripts/ops/build_model_serving_slo_report.py scripts/ops/build_ocr_vector_analytics_execution_report.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 bash -n scripts/ops/run_k3d_simulation.sh
 bash -n scripts/dev/start_local_runtime.sh scripts/dev/stop_local_runtime.sh
 python3 scripts/ops/validate_k8s_staging.py
@@ -657,6 +659,7 @@ python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwf
 python3 scripts/ops/validate_production_readiness_contract.py --contract-dir /tmp/nwfwa-production-readiness
 python3 scripts/ops/build_production_evidence_package.py --output-dir /tmp/nwfwa-production-evidence-package >/tmp/nwfwa-production-evidence-package.json
 python3 scripts/ops/render_production_evidence_package.py --package-dir /tmp/nwfwa-production-evidence-package >/tmp/nwfwa-production-evidence-render-summary.json
+python3 scripts/ops/validate_production_evidence_package.py --package-dir /tmp/nwfwa-production-evidence-package
 python3 - <<'PY'
 import importlib.util
 from pathlib import Path
