@@ -765,6 +765,14 @@ checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
 zero review tasks, all governed worker job kinds completed, plan, run-status,
 and readiness evidence refs present, and the no-adjudication governance boundary
 preserved.
+After the customer scheduler publishes production evidence, validate the worker
+pipeline execution artifact against those checks:
+
+```bash
+python3 scripts/ops/validate_production_readiness_contract.py \
+  --contract-dir artifacts/production-readiness \
+  --evidence-dir artifacts/production-readiness/evidence
+```
 
 Generate local pilot foundation evidence without customer data:
 

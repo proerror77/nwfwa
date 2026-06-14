@@ -119,15 +119,94 @@ def validate_contract(contract: dict) -> None:
                 )
 
 
+def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
+    require(
+        report.get("report_kind") == "worker_data_pipeline_execution_report",
+        "worker data pipeline execution evidence has wrong report_kind",
+    )
+    require(
+        report.get("readiness_gate_status") == "ready",
+        "worker data pipeline execution evidence must have readiness_gate_status ready",
+    )
+    require(
+        report.get("scheduler_status") == "completed",
+        "worker data pipeline execution evidence must have scheduler_status completed",
+    )
+    require(
+        report.get("pending_or_failed_job_count") == 0,
+        "worker data pipeline execution evidence must have zero pending or failed jobs",
+    )
+    require(
+        report.get("review_task_count") == 0,
+        "worker data pipeline execution evidence must have zero review tasks",
+    )
+    job_executions = report.get("job_executions")
+    require(
+        isinstance(job_executions, list) and job_executions,
+        "worker data pipeline execution evidence must include job_executions",
+    )
+    require(
+        report.get("job_count") == len(job_executions),
+        "worker data pipeline execution evidence job_count must match job_executions",
+    )
+    jobs_by_kind = {
+        job.get("job_kind"): job for job in job_executions if isinstance(job, dict)
+    }
+    require(
+        set(jobs_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+        "worker data pipeline execution evidence job kind set changed unexpectedly",
+    )
+    for job_kind, job in jobs_by_kind.items():
+        require(
+            job.get("execution_status") == "completed",
+            f"worker data pipeline job {job_kind} must be completed",
+        )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "worker data pipeline execution evidence must include evidence_refs",
+    )
+    for prefix in (
+        "worker_data_pipeline_plans:",
+        "worker_data_pipeline_run_status:",
+        "worker_data_pipeline_readiness_reports:",
+    ):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"worker data pipeline execution evidence_refs missing {prefix}",
+        )
+    governance_boundary = report.get("governance_boundary", "")
+    for forbidden_side_effect in (
+        "score claims",
+        "assign labels",
+        "deny claims",
+        "activate models",
+        "change routing policy",
+    ):
+        require(
+            forbidden_side_effect in governance_boundary,
+            f"worker data pipeline governance boundary missing {forbidden_side_effect}",
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract-dir", default="artifacts/production-readiness")
+    parser.add_argument(
+        "--evidence-dir",
+        help="Optional directory containing production evidence artifacts to validate.",
+    )
     args = parser.parse_args()
 
     contract_dir = Path(args.contract_dir)
     validate_contract(load_json(contract_dir / "production_readiness_contract.json"))
     index = load_json(contract_dir / "index.json")
     require(index.get("artifact_kind") == "production_readiness_contract_index", "wrong index artifact kind")
+    if args.evidence_dir:
+        evidence_dir = Path(args.evidence_dir)
+        validate_worker_data_pipeline_execution_evidence(
+            load_json(evidence_dir / "worker_data_pipeline_execution_report.json")
+        )
     print("production readiness contract validation passed")
     return 0
 
