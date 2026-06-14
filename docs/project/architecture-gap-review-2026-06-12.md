@@ -100,7 +100,9 @@ As of the P1/P2 remediation commits after this review:
   integration, plus a permission-gated
   `/api/v1/ops/scoring-feature-context-materializations` submit path and
   `submit-scoring-feature-contexts` worker command so those claim-level
-  contexts can be audited and persisted before scoring.
+  contexts can be audited and persisted before scoring. The submit path now
+  requires the claims, episode, peer, clinical, and unbundling source URIs,
+  matching top-level source evidence refs, and per-context evidence refs.
 - The OIG/SAM sanctions worker contract now has a separate permission-gated
   sanctions sync report submit path and worker command that persist provider
   sanctions from an approved report while explicitly avoiding scoring-policy
@@ -271,7 +273,9 @@ completed governed job kinds, submitted governed write jobs, source snapshot
 artifact evidence, scheduler-reported job success without dependency blockers,
 expected API paths and permission scopes, required execution URIs, required
 per-completed-job artifact URI/evidence refs, required evidence refs, and the
-no-adjudication boundary, and the production readiness
+no-adjudication boundary. It also checks scoring-context materialization source
+lineage against the same episode, peer, clinical, and unbundling evidence refs
+required by the API submit path, and the production readiness
 validator can execute those checks when given the customer evidence directory.
 
 ## A. Scoring Layer Gaps
