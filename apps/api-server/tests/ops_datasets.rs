@@ -1706,6 +1706,37 @@ async fn worker_data_pipeline_readiness_report_rejects_blank_required_evidence_p
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_without_required_evidence_prefixes(
+) {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_evidence_prefixes");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_evidence_prefixes"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_readiness_report_rejects_ready_job_missing_required_evidence_prefix()
 {
     let app = build_app(test_config_with_dataset_actors()).unwrap();

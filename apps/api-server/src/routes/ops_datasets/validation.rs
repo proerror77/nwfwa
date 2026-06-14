@@ -1388,6 +1388,13 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         "ready job readiness records require non-empty evidence_refs",
                     ));
                 }
+                if required_evidence_prefixes.is_empty() {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job readiness records require non-empty required_evidence_prefixes",
+                    ));
+                }
                 let missing_required_evidence_prefix =
                     required_evidence_prefixes.iter().find(|prefix| {
                         !readiness

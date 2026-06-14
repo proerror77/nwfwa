@@ -631,8 +631,9 @@ pub(super) fn dataset_schemas() -> Value {
                             },
                             "required_evidence_prefixes": {
                                 "type": "array",
+                                "minItems": 1,
                                 "items": { "type": "string", "minLength": 1 },
-                                "description": "Worker-plan prefixes that per-job customer evidence_refs must satisfy before this job can be considered ready."
+                                "description": "Required and non-empty when readiness_status is ready. Worker-plan prefixes that per-job customer evidence_refs must satisfy before this job can be considered ready."
                             },
                             "blockers": {
                                 "type": "array",
