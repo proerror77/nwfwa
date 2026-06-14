@@ -132,3 +132,63 @@ fn builds_scheduled_governance_ops_plan() {
             "s3://nwfwa-staging-artifacts/governance-ops/staging-customer/retention/{window_start}/retention_scan_report.json"
         );
 }
+
+#[test]
+fn builds_scheduled_worker_data_pipeline_plan() {
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080/",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+
+    assert_eq!(plan["plan_kind"], "scheduled_worker_data_pipeline");
+    assert_eq!(plan["plan_version"], 1);
+    assert_eq!(plan["customer_scope_id"], "production-customer");
+    assert_eq!(plan["api_contract"]["base_url"], "http://api-server:8080");
+    assert_eq!(plan["schedule"]["daily_cron"], "15 1 * * *");
+    assert_eq!(plan["schedule"]["monthly_cron"], "30 2 1 * *");
+    assert_eq!(plan["schedule"]["concurrency_policy"], "forbid");
+    assert_eq!(
+        plan["runtime_boundary"]["side_effect_policy"],
+        "submit commands persist governed artifacts only; no claim scoring, label assignment, claim denial, routing-policy change, model activation, or case creation"
+    );
+    let jobs = plan["jobs"].as_array().expect("jobs");
+    assert_eq!(jobs.len(), 9);
+    assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_sync");
+    assert_eq!(jobs[0]["submit_command"], "submit-sanctions-sync-report");
+    assert_eq!(jobs[1]["job_kind"], "provider_profile_window_rollup");
+    assert_eq!(jobs[2]["job_kind"], "provider_graph_signal_rollup");
+    assert_eq!(jobs[3]["job_kind"], "peer_percentile_benchmark");
+    assert_eq!(jobs[3]["cadence"], "monthly");
+    assert_eq!(jobs[4]["job_kind"], "episode_aggregation");
+    assert_eq!(jobs[5]["job_kind"], "clinical_compatibility_reference");
+    assert_eq!(jobs[5]["cadence"], "on_reference_update");
+    assert_eq!(jobs[6]["job_kind"], "unbundling_comparator");
+    assert_eq!(jobs[6]["depends_on"][0], "episode_aggregation");
+    assert_eq!(
+        jobs[7]["job_kind"],
+        "scoring_feature_context_materialization"
+    );
+    assert!(jobs[7]["depends_on"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("peer_percentile_benchmark")));
+    assert_eq!(jobs[8]["job_kind"], "probability_calibration_evidence");
+    assert_eq!(
+        jobs[8]["api_path"],
+        "/api/v1/ops/models/{model_key}/probability-calibration-reports"
+    );
+    assert_eq!(
+        plan["api_contract"]["unbundling_comparator_path"],
+        "/api/v1/ops/unbundling-comparator-candidates"
+    );
+    assert!(plan["readiness_gates"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "dry_run_reports_reviewed_before_first_submit"
+        )));
+}

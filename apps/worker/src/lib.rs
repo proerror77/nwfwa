@@ -135,6 +135,7 @@ pub(crate) use automl_ranking::{metric_at, read_feature_importance, round4};
 mod ops_plans;
 pub use ops_plans::{
     build_ai_evidence_execution_plan, build_analytics_export_plan, build_governance_ops_plan,
+    build_worker_data_pipeline_plan,
 };
 
 mod sanctions;

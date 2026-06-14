@@ -270,3 +270,147 @@ pub fn build_governance_ops_plan(
         }
     }))
 }
+
+pub fn build_worker_data_pipeline_plan(
+    api_base_url: &str,
+    object_storage_uri: &str,
+    customer_scope_id: &str,
+    daily_cron: &str,
+    monthly_cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let api_base_url = required_non_empty("api_base_url", api_base_url)?.trim_end_matches('/');
+    let object_storage_uri =
+        required_non_empty("object_storage_uri", object_storage_uri)?.trim_end_matches('/');
+    let customer_scope_id = required_non_empty("customer_scope_id", customer_scope_id)?;
+    let daily_cron = required_non_empty("daily_cron", daily_cron)?;
+    let monthly_cron = required_non_empty("monthly_cron", monthly_cron)?;
+    let root = format!("{object_storage_uri}/worker-data-pipelines/{customer_scope_id}");
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_worker_data_pipeline",
+        "plan_version": 1,
+        "customer_scope_id": customer_scope_id,
+        "runtime_boundary": {
+            "execution_contract": "schedule_contract_only",
+            "external_fetch": "customer_environment_required_for_live_oig_sam_and_source_claim_history",
+            "customer_data_validation": "customer_approved_claim_history_and_reference_data_required",
+            "side_effect_policy": "submit commands persist governed artifacts only; no claim scoring, label assignment, claim denial, routing-policy change, model activation, or case creation"
+        },
+        "api_contract": {
+            "base_url": api_base_url,
+            "provider_sanctions_path": "/api/v1/ops/providers/sanctions-sync-reports",
+            "provider_profile_path": "/api/v1/ops/providers/profile-window-rollups",
+            "provider_graph_path": "/api/v1/ops/providers/graph-signal-rollups",
+            "peer_benchmark_path": "/api/v1/ops/providers/peer-benchmarks",
+            "episode_rollup_path": "/api/v1/ops/providers/episode-rollups",
+            "clinical_compatibility_path": "/api/v1/ops/clinical-compatibility-references",
+            "unbundling_comparator_path": "/api/v1/ops/unbundling-comparator-candidates",
+            "scoring_context_path": "/api/v1/ops/scoring-feature-context-materializations",
+            "probability_calibration_path": "/api/v1/ops/models/{model_key}/probability-calibration-reports"
+        },
+        "schedule": {
+            "daily_cron": daily_cron,
+            "monthly_cron": monthly_cron,
+            "concurrency_policy": "forbid",
+            "idempotency_key": "customer_scope_id + job_kind + as_of_date + source_report_uri"
+        },
+        "artifact_root_uri": root,
+        "jobs": [
+            {
+                "job_kind": "oig_sam_sanctions_sync",
+                "cadence": "daily",
+                "build_command": "sync-oig-sam-sanctions",
+                "submit_command": "submit-sanctions-sync-report",
+                "source_input": "customer_approved_oig_sam_snapshot_or_live_fetch_in_customer_environment",
+                "report_uri": format!("{root}/sanctions/{{as_of_date}}/sanctions_sync_report.json"),
+                "api_path": "/api/v1/ops/providers/sanctions-sync-reports"
+            },
+            {
+                "job_kind": "provider_profile_window_rollup",
+                "cadence": "daily",
+                "build_command": "build-provider-profile-windows",
+                "submit_command": "submit-provider-profile-window-rollup",
+                "source_input": "customer_claim_history_30_90_365d",
+                "report_uri": format!("{root}/provider-profile/{{as_of_date}}/provider_profile_window_rollup_report.json"),
+                "api_path": "/api/v1/ops/providers/profile-window-rollups"
+            },
+            {
+                "job_kind": "provider_graph_signal_rollup",
+                "cadence": "daily",
+                "build_command": "build-provider-graph-signals",
+                "submit_command": "submit-provider-graph-signal-rollup",
+                "source_input": "customer_claim_and_referral_history_with_service_dates",
+                "report_uri": format!("{root}/provider-graph/{{as_of_date}}/provider_graph_signal_rollup_report.json"),
+                "api_path": "/api/v1/ops/providers/graph-signal-rollups"
+            },
+            {
+                "job_kind": "peer_percentile_benchmark",
+                "cadence": "monthly",
+                "build_command": "build-peer-benchmarks",
+                "submit_command": "submit-peer-benchmark",
+                "source_input": "customer_claim_history_grouped_by_specialty_region_service_segment",
+                "report_uri": format!("{root}/peer-benchmark/{{benchmark_month}}/peer_percentile_benchmark.json"),
+                "api_path": "/api/v1/ops/providers/peer-benchmarks"
+            },
+            {
+                "job_kind": "episode_aggregation",
+                "cadence": "daily",
+                "build_command": "build-episode-aggregation",
+                "submit_command": "submit-episode-aggregation",
+                "source_input": "customer_member_provider_claim_history",
+                "report_uri": format!("{root}/episodes/{{as_of_date}}/episode_aggregation_report.json"),
+                "api_path": "/api/v1/ops/providers/episode-rollups"
+            },
+            {
+                "job_kind": "clinical_compatibility_reference",
+                "cadence": "on_reference_update",
+                "build_command": "build-clinical-compatibility-reference",
+                "submit_command": "submit-clinical-compatibility-reference",
+                "source_input": "customer_approved_icd_cpt_or_medical_policy_reference",
+                "report_uri": format!("{root}/clinical-compatibility/{{reference_version}}/clinical_compatibility_reference_report.json"),
+                "api_path": "/api/v1/ops/clinical-compatibility-references"
+            },
+            {
+                "job_kind": "unbundling_comparator",
+                "cadence": "daily",
+                "build_command": "build-unbundling-comparator",
+                "submit_command": "submit-unbundling-comparator",
+                "source_input": "customer_approved_unbundling_rule_pack_plus_episode_procedure_codes",
+                "depends_on": ["episode_aggregation"],
+                "report_uri": format!("{root}/unbundling/{{as_of_date}}/unbundling_comparator_report.json"),
+                "api_path": "/api/v1/ops/unbundling-comparator-candidates"
+            },
+            {
+                "job_kind": "scoring_feature_context_materialization",
+                "cadence": "daily",
+                "build_command": "build-scoring-feature-contexts",
+                "submit_command": "submit-scoring-feature-contexts",
+                "source_input": "persisted_or_approved_episode_peer_clinical_and_unbundling_artifacts",
+                "depends_on": [
+                    "episode_aggregation",
+                    "peer_percentile_benchmark",
+                    "clinical_compatibility_reference",
+                    "unbundling_comparator"
+                ],
+                "report_uri": format!("{root}/scoring-contexts/{{as_of_date}}/scoring_feature_context_report.json"),
+                "api_path": "/api/v1/ops/scoring-feature-context-materializations"
+            },
+            {
+                "job_kind": "probability_calibration_evidence",
+                "cadence": "monthly",
+                "build_command": "build-probability-calibration-report",
+                "submit_command": "submit-probability-calibration-report",
+                "source_input": "customer_labeled_holdout_predictions",
+                "report_uri": format!("{root}/probability-calibration/{{benchmark_month}}/probability_calibration_report.json"),
+                "api_path": "/api/v1/ops/models/{model_key}/probability-calibration-reports"
+            }
+        ],
+        "readiness_gates": [
+            "customer_approved_source_claim_history_available",
+            "customer_approved_reference_data_available",
+            "api_keys_include_ops_providers_write_ops_datasets_write_and_ops_models_review",
+            "artifact_publication_storage_configured",
+            "dry_run_reports_reviewed_before_first_submit"
+        ]
+    }))
+}

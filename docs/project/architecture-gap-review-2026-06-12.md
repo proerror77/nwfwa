@@ -142,18 +142,23 @@ As of the P1/P2 remediation commits after this review:
 - Probability calibration reports now have a model-governance submit path and
   worker command that record calibration evidence while explicitly avoiding
   calibrated serving activation, threshold changes, or label assignment.
+- The worker now has a scheduled data-pipeline plan contract that orders the
+  build and submit commands for sanctions, provider profiles, graph signals,
+  peer benchmarks, episode rollups, clinical references, unbundling candidates,
+  scoring feature contexts, and probability-calibration evidence under daily
+  or monthly cadence with explicit readiness gates.
 
-Remaining boundaries after those commits are production scheduling, live
-external OIG/SAM fetch, customer claim/history data, LLM-backed specialist
-execution, real external tool-call runtime mediation, wiring long-running/tool-
-using agents into the cancellation signal, customer-approved ICD-10/CPT or
-medical-policy reference data, customer-approved unbundling rule packs,
-customer-approved feature lineage/source mappings, calibrated-probability
-serving activation, and replacement of the L3 heuristic anomaly scorer with a
-validated statistical baseline. Audit retention still needs customer-
-environment partitioning, archive storage, legal-hold reconciliation writes,
-approved destruction workflow execution, and live routing-impact validation on
-customer data.
+Remaining boundaries after those commits are live scheduler deployment/runtime
+execution, live external OIG/SAM fetch, customer claim/history data, LLM-backed
+specialist execution, real external tool-call runtime mediation, wiring long-
+running/tool-using agents into the cancellation signal, customer-approved
+ICD-10/CPT or medical-policy reference data, customer-approved unbundling rule
+packs, customer-approved feature lineage/source mappings, calibrated-
+probability serving activation, and replacement of the L3 heuristic anomaly
+scorer with a validated statistical baseline. Audit retention still needs
+customer-environment partitioning, archive storage, legal-hold reconciliation
+writes, approved destruction workflow execution, and live routing-impact
+validation on customer data.
 
 ## A. Scoring Layer Gaps
 
