@@ -352,11 +352,114 @@ def source_template(gate_id: str, generated_at: str) -> dict | None:
     return None
 
 
+def worker_pipeline_command_runbook(generated_at: str) -> dict:
+    return {
+        "artifact_kind": "worker_data_pipeline_command_runbook",
+        "generated_at": generated_at,
+        "status": "pending_customer_execution",
+        "readiness_claim": False,
+        "secret_boundary": "No API keys or production secrets belong in this runbook.",
+        "required_customer_inputs": [
+            "production API base URL",
+            "customer object-storage artifact root",
+            "customer scope id",
+            "daily and monthly scheduler cadence",
+            "filled worker readiness input",
+            "customer scheduler run-status artifact",
+            "customer-authorized scoring request and score response artifacts",
+        ],
+        "commands": [
+            {
+                "step": "build_worker_data_pipeline_plan",
+                "command": (
+                    "cargo run --locked -p worker -- build-worker-data-pipeline-plan "
+                    "--api-base-url <production-api-base-url> "
+                    "--object-storage-uri <customer-artifact-root> "
+                    "--customer-scope-id <customer-scope-id> "
+                    "--daily-cron '<daily-cron>' --monthly-cron '<monthly-cron>' "
+                    "> artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json"
+                ),
+                "output": "worker/worker_data_pipeline_plan.json",
+            },
+            {
+                "step": "build_readiness_input_template",
+                "command": (
+                    "cargo run --locked -p worker -- build-worker-data-pipeline-readiness-input-template "
+                    "--plan artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json "
+                    "--output-dir artifacts/production-evidence-package/worker"
+                ),
+                "output": "worker/worker_data_pipeline_readiness_input_template.json",
+            },
+            {
+                "step": "build_readiness_report",
+                "command": (
+                    "cargo run --locked -p worker -- build-worker-data-pipeline-readiness-report "
+                    "--plan artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json "
+                    "--readiness-input artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_input.json "
+                    "--output-dir artifacts/production-evidence-package/worker"
+                ),
+                "output": "worker/worker_data_pipeline_readiness_report.json",
+            },
+            {
+                "step": "build_run_status_template",
+                "command": (
+                    "cargo run --locked -p worker -- build-worker-data-pipeline-run-status-template "
+                    "--plan artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json "
+                    "--readiness-report artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_report.json "
+                    "--run-id <customer-scheduler-run-id> --execution-date <yyyy-mm-dd> "
+                    "--output-dir artifacts/production-evidence-package/worker"
+                ),
+                "output": "worker/worker_data_pipeline_run_status_template.json",
+            },
+            {
+                "step": "build_execution_report",
+                "command": (
+                    "cargo run --locked -p worker -- build-worker-data-pipeline-execution-report "
+                    "--plan artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json "
+                    "--run-status artifacts/production-evidence-package/worker/worker_data_pipeline_run_status.json "
+                    "--output-dir artifacts/production-evidence-package/evidence"
+                ),
+                "output": "evidence/worker_data_pipeline_execution_report.json",
+            },
+            {
+                "step": "fetch_score_response",
+                "command": (
+                    "cargo run --locked -p worker -- fetch-scoring-readback-response "
+                    "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
+                    "--score-request-uri artifacts/production-evidence-package/worker/score_request.json "
+                    "--output-dir artifacts/production-evidence-package/worker/scoring-readback"
+                ),
+                "output": "worker/scoring-readback/score_response.json",
+            },
+            {
+                "step": "build_scoring_readback_report",
+                "command": (
+                    "cargo run --locked -p worker -- build-scoring-readback-report "
+                    "--input-uri artifacts/production-evidence-package/worker/scoring_readback_input.json "
+                    "--score-response-uri artifacts/production-evidence-package/worker/scoring-readback/score_response.json "
+                    "--output-dir artifacts/production-evidence-package/evidence"
+                ),
+                "output": "evidence/scoring_readback_report.json",
+            },
+        ],
+        "validation_command": (
+            "python3 scripts/ops/validate_production_readiness_contract.py "
+            "--contract-dir artifacts/production-evidence-package/contract "
+            "--evidence-dir artifacts/production-evidence-package/evidence"
+        ),
+        "boundary": (
+            "These commands package customer evidence. They must not score claims, assign labels, "
+            "deny claims, activate models, or change routing policy."
+        ),
+    }
+
+
 def build_evidence_package(output_dir: Path) -> dict:
     generated_at = datetime.now(timezone.utc).isoformat()
     contract_dir = output_dir / "contract"
     evidence_dir = output_dir / "evidence"
     source_dir = output_dir / "sources"
+    runbook_dir = output_dir / "runbooks"
     contract = build_contract(contract_dir)
     artifacts = []
     sources = []
@@ -384,6 +487,10 @@ def build_evidence_package(output_dir: Path) -> dict:
                     "customer_data_required": gate["customer_data_required"],
                 }
             )
+    write_json(
+        runbook_dir / "worker-data-pipeline-commands.json",
+        worker_pipeline_command_runbook(generated_at),
+    )
     package = {
         "artifact_kind": "production_readiness_evidence_package_template",
         "generated_at": generated_at,
@@ -392,10 +499,19 @@ def build_evidence_package(output_dir: Path) -> dict:
         "contract_dir": "contract",
         "evidence_dir": "evidence",
         "source_dir": "sources",
+        "runbook_dir": "runbooks",
         "artifact_count": len(artifacts),
         "source_template_count": len(sources),
+        "runbook_count": 1,
         "artifacts": artifacts,
         "source_templates": sources,
+        "runbooks": [
+            {
+                "runbook": "runbooks/worker-data-pipeline-commands.json",
+                "status": "pending_customer_execution",
+                "customer_data_required": True,
+            }
+        ],
         "validation_command": (
             "python3 scripts/ops/validate_production_readiness_contract.py "
             "--contract-dir <package>/contract --evidence-dir <package>/evidence"

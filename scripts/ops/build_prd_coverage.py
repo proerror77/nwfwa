@@ -324,6 +324,14 @@ CAPABILITIES = [
                 "source_template_count",
             ),
             (
+                "scripts/ops/build_production_evidence_package.py",
+                "worker_data_pipeline_command_runbook",
+            ),
+            (
+                "scripts/ops/build_production_evidence_package.py",
+                "fetch-scoring-readback-response",
+            ),
+            (
                 "scripts/ops/render_production_evidence_package.py",
                 "production_evidence_package_render_summary",
             ),

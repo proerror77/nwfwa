@@ -786,6 +786,12 @@ The renderer currently covers customer-data governance, retention/legal hold,
 model-serving SLO, and OCR/vector/analytics execution. It writes
 `render_summary.json`; blocked source inputs remain blocked reports, and the
 production readiness validator remains the final acceptance gate.
+The package also writes
+`runbooks/worker-data-pipeline-commands.json`, which lists the customer-side
+worker commands for plan generation, readiness input/report, scheduler
+run-status, execution report, score-response capture, and scoring readback
+report generation. The runbook uses placeholders for runtime secrets and must
+not persist API keys.
 
 The customer-data governance gate requires
 `customer_data_governance_report.json` to show approved dataset provenance,

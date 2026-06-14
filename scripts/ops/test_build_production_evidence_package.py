@@ -29,6 +29,7 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
 
             self.assertEqual(package["artifact_count"], len(gates))
             self.assertEqual(package["source_template_count"], 4)
+            self.assertEqual(package["runbook_count"], 1)
             self.assertEqual(
                 set(artifacts),
                 {gate["required_artifact"] for gate in gates},
@@ -45,6 +46,17 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertTrue(
                 (Path(temp_dir) / "sources" / "ocr-vector-analytics-source.json").exists()
             )
+            runbook = _read_json(
+                Path(temp_dir) / "runbooks" / "worker-data-pipeline-commands.json"
+            )
+            command_text = "\n".join(command["command"] for command in runbook["commands"])
+            self.assertEqual(runbook["artifact_kind"], "worker_data_pipeline_command_runbook")
+            self.assertIn("build-worker-data-pipeline-plan", command_text)
+            self.assertIn("build-worker-data-pipeline-execution-report", command_text)
+            self.assertIn("fetch-scoring-readback-response", command_text)
+            self.assertIn("build-scoring-readback-report", command_text)
+            self.assertIn("runtime-secret-not-persisted", command_text)
+            self.assertIn("No API keys", runbook["secret_boundary"])
             self.assertEqual(
                 artifacts["worker_data_pipeline_execution_report.json"]["readiness_gate_status"],
                 "blocked",
