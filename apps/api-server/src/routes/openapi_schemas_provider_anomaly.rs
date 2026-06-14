@@ -426,6 +426,105 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["provider.peer_benchmarks.submitted"] }
             }
         },
+        "EpisodeWindowRollupPayload": {
+            "type": "object",
+            "required": ["window_days", "claim_count", "total_claim_amount", "unique_procedure_code_count", "max_procedure_code_frequency", "duplicate_amount_day_count"],
+            "properties": {
+                "window_days": {
+                    "type": "integer",
+                    "enum": [30, 90, 365]
+                },
+                "claim_count": { "type": "integer", "minimum": 0 },
+                "total_claim_amount": { "type": "number", "minimum": 0 },
+                "unique_procedure_code_count": { "type": "integer", "minimum": 0 },
+                "max_procedure_code_frequency": { "type": "integer", "minimum": 0 },
+                "duplicate_amount_day_count": { "type": "integer", "minimum": 0 }
+            }
+        },
+        "EpisodeRollupUpsert": {
+            "type": "object",
+            "required": ["episode_key", "member_id", "provider_id", "windows", "evidence_refs"],
+            "properties": {
+                "episode_key": { "type": "string", "minLength": 1 },
+                "member_id": { "type": "string", "minLength": 1 },
+                "provider_id": { "type": "string", "minLength": 1 },
+                "windows": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/EpisodeWindowRollupPayload" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                }
+            }
+        },
+        "EpisodeRollupRecord": {
+            "allOf": [
+                { "$ref": "#/components/schemas/EpisodeRollupUpsert" },
+                {
+                    "type": "object",
+                    "required": ["customer_scope_id", "as_of_date", "source_report_uri", "submitted_by", "notes"],
+                    "properties": {
+                        "customer_scope_id": { "type": "string" },
+                        "as_of_date": { "type": "string" },
+                        "source_report_uri": { "type": "string" },
+                        "submitted_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                }
+            ]
+        },
+        "SubmitEpisodeRollupRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "as_of_date", "source_uri", "episode_count", "claim_count", "episodes", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "member_provider_episode_aggregation" },
+                "as_of_date": { "type": "string", "minLength": 1 },
+                "source_uri": { "type": "string", "minLength": 1 },
+                "episode_count": { "type": "integer", "minimum": 1 },
+                "claim_count": { "type": "integer", "minimum": 0 },
+                "episodes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/EpisodeRollupUpsert" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include episode_rollups:{source_report_uri}."
+                },
+                "governance_boundary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Source worker report boundary. Submission writes episode rollups only."
+                }
+            }
+        },
+        "SubmitEpisodeRollupResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "episode_count", "claim_count", "persisted_episode_rollups", "active_scoring_policy_change", "label_assignment", "case_creation", "claim_denial", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "member_provider_episode_aggregation" },
+                "source_report_uri": { "type": "string" },
+                "episode_count": { "type": "integer" },
+                "claim_count": { "type": "integer" },
+                "persisted_episode_rollups": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/EpisodeRollupRecord" }
+                },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "case_creation": { "type": "boolean", "const": false },
+                "claim_denial": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["provider.episode_rollups.submitted"] }
+            }
+        },
         "AnomalyReviewQueueTask": {
             "type": "object",
             "required": ["candidate_kind", "candidate_id", "task_kind", "review_queue", "required_review", "decision_options", "source_report_uri", "report_kind", "dataset_key", "dataset_version", "label_policy", "governance_boundary", "review_status", "candidate_payload", "evidence_refs"],

@@ -41,6 +41,7 @@ mod run_rule_candidate_backtest;
 mod run_scheduled_mlops_monitoring;
 mod serve_mlops_alert_router;
 mod submit_anomaly_clustering_report;
+mod submit_episode_aggregation;
 mod submit_mlops_alert_delivery_tasks;
 mod submit_mlops_monitoring_report;
 mod submit_peer_benchmark;
@@ -83,6 +84,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
             build_model_promotion_orchestration_report::run(args)
         }
         "build-episode-aggregation" => build_episode_aggregation::run(args),
+        "submit-episode-aggregation" => submit_episode_aggregation::run(args).await,
         "build-peer-benchmarks" => build_peer_benchmarks::run(args),
         "submit-peer-benchmark" => submit_peer_benchmark::run(args).await,
         "build-probability-calibration-report" => build_probability_calibration_report::run(args),

@@ -274,3 +274,62 @@ pub(super) async fn save_peer_benchmark_groups(
     tx.commit().await?;
     Ok(saved)
 }
+
+pub(super) async fn save_episode_rollups(
+    repository: &PostgresScoringRepository,
+    input: SaveEpisodeRollupsInput,
+) -> anyhow::Result<Vec<EpisodeRollupRecord>> {
+    let mut saved = Vec::with_capacity(input.episodes.len());
+    let mut tx = repository.pool.begin().await?;
+    for episode in input.episodes {
+        let windows = serde_json::Value::Array(episode.windows.clone());
+        let evidence_refs = serde_json::Value::Array(
+            episode
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+        sqlx::query(
+            "INSERT INTO episode_rollups
+                 (customer_scope_id, episode_key, member_id, provider_id, as_of_date, windows, evidence_refs, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 ON CONFLICT (customer_scope_id, episode_key, as_of_date) DO UPDATE
+                 SET member_id = EXCLUDED.member_id,
+                     provider_id = EXCLUDED.provider_id,
+                     windows = EXCLUDED.windows,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&episode.episode_key)
+        .bind(&episode.member_id)
+        .bind(&episode.provider_id)
+        .bind(&input.as_of_date)
+        .bind(&windows)
+        .bind(&evidence_refs)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(EpisodeRollupRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            episode_key: episode.episode_key,
+            member_id: episode.member_id,
+            provider_id: episode.provider_id,
+            as_of_date: input.as_of_date.clone(),
+            windows: episode.windows,
+            evidence_refs: episode.evidence_refs,
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}

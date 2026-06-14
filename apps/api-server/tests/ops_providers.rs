@@ -236,6 +236,58 @@ fn peer_benchmark_payload() -> &'static str {
     }"#
 }
 
+fn episode_rollup_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-episode-aggregation",
+      "notes": "daily member-provider episode rollup",
+      "source_report_uri": "local://artifacts/episode/episode_aggregation_report.json",
+      "report_kind": "member_provider_episode_aggregation",
+      "as_of_date": "2026-06-14",
+      "source_uri": "local://inputs/episode-claims.json",
+      "episode_count": 1,
+      "claim_count": 3,
+      "episodes": [
+        {
+          "episode_key": "MBR-EPISODE-1|PRV-EPISODE-1",
+          "member_id": "MBR-EPISODE-1",
+          "provider_id": "PRV-EPISODE-1",
+          "windows": [
+            {
+              "window_days": 30,
+              "claim_count": 2,
+              "total_claim_amount": 200.0,
+              "unique_procedure_code_count": 2,
+              "max_procedure_code_frequency": 2,
+              "duplicate_amount_day_count": 1
+            },
+            {
+              "window_days": 90,
+              "claim_count": 3,
+              "total_claim_amount": 450.0,
+              "unique_procedure_code_count": 3,
+              "max_procedure_code_frequency": 2,
+              "duplicate_amount_day_count": 1
+            },
+            {
+              "window_days": 365,
+              "claim_count": 3,
+              "total_claim_amount": 450.0,
+              "unique_procedure_code_count": 3,
+              "max_procedure_code_frequency": 2,
+              "duplicate_amount_day_count": 1
+            }
+          ],
+          "evidence_refs": ["claims:CLM-EPISODE-1", "claims:CLM-EPISODE-2"]
+        }
+      ],
+      "evidence_refs": [
+        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json",
+        "episode_claim_snapshot:local://inputs/episode-claims.json"
+      ],
+      "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
+    }"#
+}
+
 #[tokio::test]
 async fn submits_provider_sanctions_sync_report() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
@@ -373,6 +425,41 @@ async fn submits_peer_benchmark() {
 }
 
 #[tokio::test]
+async fn submits_episode_rollup() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/episode-rollups",
+        episode_rollup_payload(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "member_provider_episode_aggregation");
+    assert_eq!(body["episode_count"], 1);
+    assert_eq!(body["claim_count"], 3);
+    assert_eq!(
+        body["persisted_episode_rollups"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_episode_rollups"][0]["episode_key"],
+        "MBR-EPISODE-1|PRV-EPISODE-1"
+    );
+    assert_eq!(
+        body["persisted_episode_rollups"][0]["windows"][0]["window_days"],
+        30
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["case_creation"], false);
+    assert_eq!(body["claim_denial"], false);
+}
+
+#[tokio::test]
 async fn peer_benchmark_requires_provider_write_permission() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
 
@@ -381,6 +468,24 @@ async fn peer_benchmark_requires_provider_write_permission() {
         "POST",
         "/api/v1/ops/providers/peer-benchmarks",
         peer_benchmark_payload(),
+        "provider-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:providers:write");
+}
+
+#[tokio::test]
+async fn episode_rollup_requires_provider_write_permission() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/episode-rollups",
+        episode_rollup_payload(),
         "provider-read-secret",
     )
     .await;

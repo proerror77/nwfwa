@@ -154,3 +154,36 @@ pub struct PeerBenchmarkGroupRecord {
     pub submitted_by: String,
     pub notes: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpisodeRollupUpsertInput {
+    pub episode_key: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub windows: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveEpisodeRollupsInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub as_of_date: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub episodes: Vec<EpisodeRollupUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpisodeRollupRecord {
+    pub customer_scope_id: String,
+    pub episode_key: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub as_of_date: String,
+    pub windows: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}

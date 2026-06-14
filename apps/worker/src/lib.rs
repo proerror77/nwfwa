@@ -168,8 +168,9 @@ pub use peer_benchmark::{
 
 mod episode_rollup;
 pub use episode_rollup::{
-    build_episode_aggregation_report, EpisodeAggregationReport, EpisodeClaimInput,
-    EpisodeRollupInput, EpisodeWindowRollup, MemberProviderEpisodeRollup,
+    build_episode_aggregation_report, build_episode_aggregation_submission,
+    submit_episode_aggregation, EpisodeAggregationReport, EpisodeAggregationSubmission,
+    EpisodeClaimInput, EpisodeRollupInput, EpisodeWindowRollup, MemberProviderEpisodeRollup,
 };
 
 mod clinical_compatibility;

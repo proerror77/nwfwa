@@ -3,11 +3,12 @@ use crate::{
     auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
-        AuditEventListFilter, AuditHistoryEventRecord, PeerBenchmarkGroupRecord,
-        PeerBenchmarkGroupUpsertInput, PersistedAuditEvent, ProviderGraphSignalRecord,
-        ProviderGraphSignalUpsertInput, ProviderProfileWindowRecord,
-        ProviderProfileWindowUpsertInput, ProviderRiskSummaryRecord, ProviderSanctionRecord,
-        ProviderSanctionUpsertInput, SavePeerBenchmarkGroupsInput, SaveProviderGraphSignalsInput,
+        AuditEventListFilter, AuditHistoryEventRecord, EpisodeRollupRecord,
+        EpisodeRollupUpsertInput, PeerBenchmarkGroupRecord, PeerBenchmarkGroupUpsertInput,
+        PersistedAuditEvent, ProviderGraphSignalRecord, ProviderGraphSignalUpsertInput,
+        ProviderProfileWindowRecord, ProviderProfileWindowUpsertInput, ProviderRiskSummaryRecord,
+        ProviderSanctionRecord, ProviderSanctionUpsertInput, SaveEpisodeRollupsInput,
+        SavePeerBenchmarkGroupsInput, SaveProviderGraphSignalsInput,
         SaveProviderProfileWindowsInput, SaveProviderSanctionsInput,
     },
 };
@@ -23,7 +24,8 @@ mod validation;
 
 use validation::{
     validate_anomaly_candidate_review, validate_anomaly_clustering_report_submission,
-    validate_peer_benchmark_submission, validate_provider_graph_signal_rollup_submission,
+    validate_episode_rollup_submission, validate_peer_benchmark_submission,
+    validate_provider_graph_signal_rollup_submission,
     validate_provider_profile_window_rollup_submission, validate_sanctions_sync_report_submission,
 };
 
@@ -237,6 +239,38 @@ pub struct SubmitPeerBenchmarkResponse {
     pub audit_event_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SubmitEpisodeRollupRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uri: String,
+    pub episode_count: usize,
+    pub claim_count: usize,
+    #[serde(default)]
+    pub episodes: Vec<EpisodeRollupUpsertInput>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitEpisodeRollupResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub episode_count: usize,
+    pub claim_count: usize,
+    pub persisted_episode_rollups: Vec<EpisodeRollupRecord>,
+    pub active_scoring_policy_change: bool,
+    pub label_assignment: bool,
+    pub case_creation: bool,
+    pub claim_denial: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AnomalyReviewQueueResponse {
     pub tasks: Vec<AnomalyReviewQueueTask>,
@@ -440,6 +474,46 @@ pub async fn submit_peer_benchmark(
     record_peer_benchmark_audit(&state, &actor, &request, &response)
         .await
         .map_err(internal_error("PEER_BENCHMARK_AUDIT_FAILED"))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_episode_rollup(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitEpisodeRollupRequest>,
+) -> Result<Json<SubmitEpisodeRollupResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:providers:write")?;
+    validate_episode_rollup_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_episode_rollups(SaveEpisodeRollupsInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            as_of_date: request.as_of_date.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            episodes: request.episodes.clone(),
+        })
+        .await
+        .map_err(internal_error("EPISODE_ROLLUPS_SAVE_FAILED"))?;
+    let response = SubmitEpisodeRollupResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        episode_count: persisted.len(),
+        claim_count: request.claim_count,
+        persisted_episode_rollups: persisted,
+        active_scoring_policy_change: false,
+        label_assignment: false,
+        case_creation: false,
+        claim_denial: false,
+        governance_boundary:
+            "episode rollup submission writes member-provider utilization rollups only; it must not change scoring policy, assign fraud labels, open cases, deny claims, or adjudicate claims"
+                .into(),
+        audit_event_type: "provider.episode_rollups.submitted".into(),
+    };
+    record_episode_rollup_audit(&state, &actor, &request, &response)
+        .await
+        .map_err(internal_error("EPISODE_ROLLUPS_AUDIT_FAILED"))?;
     Ok(Json(response))
 }
 
@@ -725,6 +799,52 @@ async fn record_peer_benchmark_audit(
                 "active_scoring_policy_change": response.active_scoring_policy_change,
                 "label_assignment": response.label_assignment,
                 "claim_scoring": response.claim_scoring,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_episode_rollup_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    request: &SubmitEpisodeRollupRequest,
+    response: &SubmitEpisodeRollupResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: response.audit_event_type.clone(),
+            event_status: "succeeded".into(),
+            summary: format!("Episode rollups submitted: {}", request.source_report_uri),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "as_of_date": request.as_of_date,
+                "source_uri": request.source_uri,
+                "claim_count": request.claim_count,
+                "episode_count": request.episode_count,
+                "persisted_episode_count": response.episode_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "label_assignment": response.label_assignment,
+                "case_creation": response.case_creation,
+                "claim_denial": response.claim_denial,
             }),
             evidence_refs: request
                 .evidence_refs

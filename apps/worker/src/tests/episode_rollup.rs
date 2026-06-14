@@ -56,3 +56,134 @@ fn builds_member_provider_episode_aggregation_contract() {
     assert!(output_dir.join("episode_aggregation_report.json").exists());
     assert!(output_dir.join("episode_rollups.json").exists());
 }
+
+#[test]
+fn builds_episode_aggregation_submission() {
+    let root = temp_root("episode-rollup-submission");
+    let report_uri = root.join("episode_aggregation_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "member_provider_episode_aggregation",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/episode-claims.json",
+            "episode_count": 1,
+            "claim_count": 2,
+            "windows": [30, 90, 365],
+            "episodes": [
+                {
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-A",
+                    "episode_key": "MBR-1|PRV-A",
+                    "windows": [
+                        {
+                            "window_days": 30,
+                            "claim_count": 2,
+                            "total_claim_amount": 200.0,
+                            "unique_procedure_code_count": 2,
+                            "max_procedure_code_frequency": 2,
+                            "duplicate_amount_day_count": 1
+                        }
+                    ],
+                    "evidence_refs": ["claims:CLM-1", "claims:CLM-2"]
+                }
+            ],
+            "evidence_refs": ["episode_claim_snapshot:local://inputs/episode-claims.json"],
+            "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
+        }),
+    )
+    .unwrap();
+
+    let submission = build_episode_aggregation_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-episode-aggregation",
+        "daily episode rollup",
+    )
+    .expect("episode aggregation submission");
+
+    assert_eq!(
+        submission.report_kind,
+        "member_provider_episode_aggregation"
+    );
+    assert_eq!(submission.episode_count, 1);
+    assert_eq!(submission.claim_count, 2);
+    assert_eq!(submission.episodes[0].episode_key, "MBR-1|PRV-A");
+    assert!(submission
+        .evidence_refs
+        .contains(&format!("episode_rollups:{}", report_uri.to_string_lossy())));
+}
+
+#[tokio::test]
+async fn submits_episode_aggregation_to_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("episode-rollup-submit-api");
+    let report_uri = root.join("episode_aggregation_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "member_provider_episode_aggregation",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/episode-claims.json",
+            "episode_count": 1,
+            "claim_count": 2,
+            "windows": [30, 90, 365],
+            "episodes": [
+                {
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-A",
+                    "episode_key": "MBR-1|PRV-A",
+                    "windows": [
+                        {
+                            "window_days": 30,
+                            "claim_count": 2,
+                            "total_claim_amount": 200.0,
+                            "unique_procedure_code_count": 2,
+                            "max_procedure_code_frequency": 2,
+                            "duplicate_amount_day_count": 1
+                        }
+                    ],
+                    "evidence_refs": ["claims:CLM-1", "claims:CLM-2"]
+                }
+            ],
+            "evidence_refs": ["episode_claim_snapshot:local://inputs/episode-claims.json"],
+            "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
+        }),
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "report_kind": "member_provider_episode_aggregation",
+                "episode_count": 1
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = submit_episode_aggregation(
+        &api_url,
+        "provider-write-secret",
+        &report_uri.to_string_lossy(),
+        "worker:build-episode-aggregation",
+        "daily episode rollup",
+    )
+    .await
+    .expect("submit episode aggregation");
+
+    assert_eq!(response["episode_count"], 1);
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /api/v1/ops/providers/episode-rollups HTTP/1.1"));
+    assert!(request.contains("x-api-key: provider-write-secret"));
+    assert!(request.contains(r#""episode_key":"MBR-1|PRV-A""#));
+    assert!(request.contains("episode_rollups:"));
+}

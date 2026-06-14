@@ -182,6 +182,39 @@ pub(super) fn provider_paths() -> Value {
                 }
             }
         },
+        "/api/v1/ops/providers/episode-rollups": {
+            "post": {
+                "summary": "Submit member-provider episode rollups",
+                "description": "Persists member-provider episode utilization rollups from a worker-generated aggregation report. This writes episode rollups only; it does not change scoring policy, assign fraud labels, open cases, deny claims, or adjudicate claims.",
+                "security": [{ "ApiKeyAuth": [] }],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": { "$ref": "#/components/schemas/SubmitEpisodeRollupRequest" }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Persisted episode rollups",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitEpisodeRollupResponse" }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Requires ops:providers:write permission",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ops/providers/anomaly-review-queue": {
             "get": {
                 "summary": "List anomaly candidates derived from submitted clustering reports",

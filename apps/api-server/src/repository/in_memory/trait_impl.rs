@@ -677,6 +677,13 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_peer_benchmark_groups(input).await
     }
 
+    async fn save_episode_rollups(
+        &self,
+        input: SaveEpisodeRollupsInput,
+    ) -> anyhow::Result<Vec<EpisodeRollupRecord>> {
+        self.in_memory_save_episode_rollups(input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         self.in_memory_list_knowledge_cases().await
     }

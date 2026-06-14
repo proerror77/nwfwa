@@ -917,6 +917,29 @@ CREATE TABLE IF NOT EXISTS peer_benchmark_groups (
 CREATE INDEX IF NOT EXISTS peer_benchmark_groups_scope_segment_idx
   ON peer_benchmark_groups(customer_scope_id, specialty, region, service_segment);
 
+CREATE TABLE IF NOT EXISTS episode_rollups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  episode_key TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  windows JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, episode_key, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS episode_rollups_scope_provider_idx
+  ON episode_rollups(customer_scope_id, provider_id);
+
+CREATE INDEX IF NOT EXISTS episode_rollups_scope_member_idx
+  ON episode_rollups(customer_scope_id, member_id);
+
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

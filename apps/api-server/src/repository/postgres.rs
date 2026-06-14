@@ -707,6 +707,13 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_peer_benchmark_groups(self, input).await
     }
 
+    async fn save_episode_rollups(
+        &self,
+        input: SaveEpisodeRollupsInput,
+    ) -> anyhow::Result<Vec<EpisodeRollupRecord>> {
+        postgres_providers::save_episode_rollups(self, input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         postgres_knowledge::list_knowledge_cases(self).await
     }

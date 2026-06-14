@@ -478,6 +478,11 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SavePeerBenchmarkGroupsInput,
     ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>>;
 
+    async fn save_episode_rollups(
+        &self,
+        input: SaveEpisodeRollupsInput,
+    ) -> anyhow::Result<Vec<EpisodeRollupRecord>>;
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
     async fn save_knowledge_case(

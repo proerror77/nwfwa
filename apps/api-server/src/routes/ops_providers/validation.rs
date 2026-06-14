@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 
 use super::{
     AnomalyClusteringReviewTaskInput, ReviewAnomalyCandidateRequest,
-    SubmitAnomalyClusteringReportRequest, SubmitPeerBenchmarkRequest,
+    SubmitAnomalyClusteringReportRequest, SubmitEpisodeRollupRequest, SubmitPeerBenchmarkRequest,
     SubmitProviderGraphSignalRollupRequest, SubmitProviderProfileWindowRollupRequest,
     SubmitSanctionsSyncReportRequest,
 };
@@ -639,6 +639,171 @@ pub(super) fn validate_peer_benchmark_submission(
                 "peer benchmark percentiles must be monotonic",
             ));
         }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_episode_rollup_submission(
+    request: &SubmitEpisodeRollupRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_EPISODE_ROLLUP_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_EPISODE_ROLLUP_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_EPISODE_ROLLUP_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_EPISODE_ROLLUP_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_EPISODE_ROLLUP_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_EPISODE_ROLLUP_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "member_provider_episode_aggregation" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_ROLLUP_KIND",
+            "report_kind must be member_provider_episode_aggregation",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_ROLLUP_URI",
+            "source_report_uri must point to a JSON episode aggregation report",
+        ));
+    }
+    if request.episodes.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_EPISODE_ROLLUPS",
+            "episodes are required",
+        ));
+    }
+    if request.episode_count != request.episodes.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_ROLLUP_COUNT",
+            "episode_count must match episodes length",
+        ));
+    }
+    let expected_report_ref = format!("episode_rollups:{}", request.source_report_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_EPISODE_ROLLUP_EVIDENCE",
+            format!("episode rollup evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    for episode in &request.episodes {
+        if episode.episode_key.trim().is_empty()
+            || episode.member_id.trim().is_empty()
+            || episode.provider_id.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_ROLLUP",
+                "episode_key, member_id, and provider_id are required",
+            ));
+        }
+        if episode.windows.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_ROLLUP",
+                "windows are required",
+            ));
+        }
+        for window in &episode.windows {
+            validate_episode_window(window)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_episode_window(window: &serde_json::Value) -> Result<(), ApiError> {
+    let window_days = window
+        .get("window_days")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_WINDOW",
+                "window_days is required",
+            )
+        })?;
+    if !matches!(window_days, 30 | 90 | 365) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_WINDOW",
+            "window_days must be 30, 90, or 365",
+        ));
+    }
+    for field in [
+        "claim_count",
+        "unique_procedure_code_count",
+        "max_procedure_code_frequency",
+        "duplicate_amount_day_count",
+    ] {
+        if window
+            .get(field)
+            .and_then(serde_json::Value::as_u64)
+            .is_none()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_WINDOW",
+                format!("{field} is required"),
+            ));
+        }
+    }
+    let total_claim_amount = window
+        .get("total_claim_amount")
+        .and_then(serde_json::Value::as_f64)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_WINDOW",
+                "total_claim_amount is required",
+            )
+        })?;
+    if !total_claim_amount.is_finite() || total_claim_amount < 0.0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_WINDOW",
+            "total_claim_amount must be finite and non-negative",
+        ));
     }
     Ok(())
 }

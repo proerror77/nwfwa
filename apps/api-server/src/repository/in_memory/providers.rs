@@ -135,6 +135,38 @@ impl InMemoryScoringRepository {
         }
         Ok(saved)
     }
+
+    pub(super) async fn in_memory_save_episode_rollups(
+        &self,
+        input: SaveEpisodeRollupsInput,
+    ) -> anyhow::Result<Vec<EpisodeRollupRecord>> {
+        let mut records = self.episode_rollups.lock().await;
+        let mut saved = Vec::with_capacity(input.episodes.len());
+        for episode in input.episodes {
+            let record = EpisodeRollupRecord {
+                customer_scope_id: input.customer_scope_id.clone(),
+                episode_key: episode.episode_key,
+                member_id: episode.member_id,
+                provider_id: episode.provider_id,
+                as_of_date: input.as_of_date.clone(),
+                windows: episode.windows,
+                evidence_refs: episode.evidence_refs,
+                source_report_uri: input.source_report_uri.clone(),
+                submitted_by: input.submitted_by.clone(),
+                notes: input.notes.clone(),
+            };
+            records.insert(
+                episode_rollup_key(
+                    &record.customer_scope_id,
+                    &record.episode_key,
+                    &record.as_of_date,
+                ),
+                record.clone(),
+            );
+            saved.push(record);
+        }
+        Ok(saved)
+    }
 }
 
 fn provider_sanction_key(customer_scope_id: &str, sanction_key: &str) -> String {
@@ -159,4 +191,8 @@ fn peer_benchmark_group_key(
     benchmark_month: &str,
 ) -> String {
     format!("{customer_scope_id}::{peer_group_key}::{benchmark_month}")
+}
+
+fn episode_rollup_key(customer_scope_id: &str, episode_key: &str, as_of_date: &str) -> String {
+    format!("{customer_scope_id}::{episode_key}::{as_of_date}")
 }

@@ -244,6 +244,38 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
         );
     }
     assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/episode-rollups"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitEpisodeRollupRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/episode-rollups"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitEpisodeRollupResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["EpisodeRollupUpsert"]["properties"]["windows"]["items"]
+            ["$ref"],
+        "#/components/schemas/EpisodeWindowRollupPayload"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["EpisodeWindowRollupPayload"]["properties"]["window_days"]
+            ["enum"],
+        serde_json::json!([30, 90, 365])
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "label_assignment",
+        "case_creation",
+        "claim_denial",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitEpisodeRollupResponse"]["properties"][field]
+                ["const"],
+            false
+        );
+    }
+    assert_eq!(
         schema["components"]["schemas"]["AnomalyReviewQueueResponse"]["properties"]["tasks"]
             ["items"]["$ref"],
         "#/components/schemas/AnomalyReviewQueueTask"
