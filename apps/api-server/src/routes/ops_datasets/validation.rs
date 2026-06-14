@@ -753,6 +753,31 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             format!("worker data pipeline evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_plan_ref = format!("worker_data_pipeline_plans:{}", request.plan_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_plan_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_plan_ref}"),
+        ));
+    }
+    let expected_run_status_ref =
+        format!("worker_data_pipeline_run_status:{}", request.run_status_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_run_status_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_RUN_STATUS_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_run_status_ref}"),
+        ));
+    }
     if let Some(readiness_report_uri) = request.readiness_report_uri.as_deref() {
         let expected_readiness_ref =
             format!("worker_data_pipeline_readiness_reports:{readiness_report_uri}");

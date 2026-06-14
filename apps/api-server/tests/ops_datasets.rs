@@ -1145,6 +1145,65 @@ async fn worker_data_pipeline_execution_report_requires_readiness_evidence_when_
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_plan_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE");
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_run_status_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_run_status:local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_WORKER_DATA_PIPELINE_RUN_STATUS_EVIDENCE"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_dataset_write_permission() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
 

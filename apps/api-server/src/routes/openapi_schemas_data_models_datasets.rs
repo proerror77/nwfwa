@@ -538,7 +538,7 @@ pub(super) fn dataset_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include worker_data_pipeline_execution_reports:{source_report_uri}; when readiness_report_uri is supplied, must also include worker_data_pipeline_readiness_reports:{readiness_report_uri}."
+                    "description": "Must include worker_data_pipeline_execution_reports:{source_report_uri}, worker_data_pipeline_plans:{plan_uri}, worker_data_pipeline_run_status:{run_status_uri}; when readiness_report_uri is supplied, must also include worker_data_pipeline_readiness_reports:{readiness_report_uri}."
                 },
                 "governance_boundary": { "type": "string", "minLength": 1 }
             }
