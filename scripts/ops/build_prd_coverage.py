@@ -159,6 +159,9 @@ CAPABILITIES = [
             ("apps/worker/src/ops_plans.rs", "required_permission"),
             ("apps/worker/src/worker_data_pipeline_readiness.rs", "required_permission"),
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "required_permission"),
+            ("apps/worker/src/ops_plans.rs", "required_evidence_prefixes"),
+            ("apps/worker/src/worker_data_pipeline_readiness.rs", "required_evidence_prefixes"),
+            ("apps/worker/src/worker_data_pipeline_run_status.rs", "required_evidence_prefixes"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "required_permission"),
             (
                 "scripts/ops/build_production_readiness_contract.py",

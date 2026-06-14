@@ -74,6 +74,10 @@ pub fn build_worker_data_pipeline_readiness_input_template(
                 "source_input": json_string(job, "source_input"),
                 "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),
+                "required_evidence_prefixes": job
+                    .get("required_evidence_prefixes")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "depends_on": job
                     .get("depends_on")
                     .cloned()
@@ -145,13 +149,15 @@ pub fn build_worker_data_pipeline_readiness_report(
         .map(|job| {
             let job_kind = json_string(job, "job_kind").unwrap_or_else(|| "unknown".into());
             let check = checks_by_job.get(job_kind.as_str()).copied();
-            let blockers = readiness_blockers(&job_kind, check);
+            let required_evidence_prefixes = required_evidence_prefixes(job);
+            let blockers = readiness_blockers(&job_kind, check, &required_evidence_prefixes);
             serde_json::json!({
                 "job_kind": job_kind,
                 "cadence": json_string(job, "cadence"),
                 "source_input": json_string(job, "source_input"),
                 "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),
+                "required_evidence_prefixes": required_evidence_prefixes,
                 "artifact_uri": check.and_then(|check| check.artifact_uri.clone()),
                 "customer_approved": check.map(|check| check.customer_approved).unwrap_or(false),
                 "external_fetch_configured": check
@@ -323,6 +329,7 @@ pub async fn submit_worker_data_pipeline_readiness_report(
 fn readiness_blockers(
     job_kind: &str,
     check: Option<&WorkerDataPipelineReadinessCheck>,
+    required_evidence_prefixes: &[String],
 ) -> Vec<String> {
     let Some(check) = check else {
         return vec!["missing_customer_readiness_check".into()];
@@ -367,7 +374,25 @@ fn readiness_blockers(
     {
         blockers.push("missing_evidence_refs".into());
     }
+    if required_evidence_prefixes.iter().any(|prefix| {
+        !check
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.starts_with(prefix))
+    }) {
+        blockers.push("missing_required_evidence_prefixes".into());
+    }
     blockers
+}
+
+fn required_evidence_prefixes(job: &serde_json::Value) -> Vec<String> {
+    job.get("required_evidence_prefixes")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str())
+        .map(str::to_string)
+        .collect()
 }
 
 fn json_usize(value: &serde_json::Value, key: &'static str) -> anyhow::Result<usize> {

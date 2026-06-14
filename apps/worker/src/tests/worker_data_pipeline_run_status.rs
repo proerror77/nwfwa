@@ -75,6 +75,16 @@ fn builds_worker_data_pipeline_run_status_template() {
         job_statuses[1]["depends_on"],
         serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
     );
+    assert_eq!(
+        job_statuses[8]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_feature_contexts:",
+            "episode_rollups:",
+            "peer_benchmarks:",
+            "clinical_compatibility:",
+            "unbundling_candidates:"
+        ])
+    );
     assert!(report["evidence_refs"]
         .as_array()
         .expect("evidence refs")

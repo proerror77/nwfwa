@@ -324,6 +324,7 @@ pub fn build_worker_data_pipeline_plan(
                 "build_command": "fetch-oig-sam-sanctions-snapshot",
                 "source_input": "customer_configured_oig_sam_compatible_endpoints",
                 "artifact_kind": "source_snapshot",
+                "required_evidence_prefixes": ["oig_sam_snapshot:"],
                 "report_uri": format!("{root}/sanctions/{{as_of_date}}/oig_sam_sanctions_snapshot.json")
             },
             {
@@ -334,6 +335,7 @@ pub fn build_worker_data_pipeline_plan(
                 "source_input": "governed_oig_sam_sanctions_snapshot",
                 "depends_on": ["oig_sam_sanctions_snapshot_fetch"],
                 "required_permission": "ops:providers:write",
+                "required_evidence_prefixes": ["sanctions_sync_reports:"],
                 "report_uri": format!("{root}/sanctions/{{as_of_date}}/sanctions_sync_report.json"),
                 "api_path": "/api/v1/ops/providers/sanctions-sync-reports"
             },
@@ -344,6 +346,7 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-provider-profile-window-rollup",
                 "source_input": "customer_claim_history_30_90_365d",
                 "required_permission": "ops:providers:write",
+                "required_evidence_prefixes": ["provider_profile_window_rollups:"],
                 "report_uri": format!("{root}/provider-profile/{{as_of_date}}/provider_profile_window_rollup_report.json"),
                 "api_path": "/api/v1/ops/providers/profile-window-rollups"
             },
@@ -354,6 +357,7 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-provider-graph-signal-rollup",
                 "source_input": "customer_claim_and_referral_history_with_service_dates",
                 "required_permission": "ops:providers:write",
+                "required_evidence_prefixes": ["provider_graph_signal_rollups:"],
                 "report_uri": format!("{root}/provider-graph/{{as_of_date}}/provider_graph_signal_rollup_report.json"),
                 "api_path": "/api/v1/ops/providers/graph-signal-rollups"
             },
@@ -364,6 +368,7 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-peer-benchmark",
                 "source_input": "customer_claim_history_grouped_by_specialty_region_service_segment",
                 "required_permission": "ops:providers:write",
+                "required_evidence_prefixes": ["peer_benchmarks:"],
                 "report_uri": format!("{root}/peer-benchmark/{{benchmark_month}}/peer_percentile_benchmark.json"),
                 "api_path": "/api/v1/ops/providers/peer-benchmarks"
             },
@@ -374,6 +379,7 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-episode-aggregation",
                 "source_input": "customer_member_provider_claim_history",
                 "required_permission": "ops:providers:write",
+                "required_evidence_prefixes": ["episode_rollups:"],
                 "report_uri": format!("{root}/episodes/{{as_of_date}}/episode_aggregation_report.json"),
                 "api_path": "/api/v1/ops/providers/episode-rollups"
             },
@@ -384,6 +390,7 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-clinical-compatibility-reference",
                 "source_input": "customer_approved_icd_cpt_or_medical_policy_reference",
                 "required_permission": "ops:datasets:write",
+                "required_evidence_prefixes": ["clinical_compatibility_references:"],
                 "report_uri": format!("{root}/clinical-compatibility/{{reference_version}}/clinical_compatibility_reference_report.json"),
                 "api_path": "/api/v1/ops/clinical-compatibility-references"
             },
@@ -395,6 +402,7 @@ pub fn build_worker_data_pipeline_plan(
                 "source_input": "customer_approved_unbundling_rule_pack_plus_episode_procedure_codes",
                 "depends_on": ["episode_aggregation"],
                 "required_permission": "ops:datasets:write",
+                "required_evidence_prefixes": ["unbundling_comparator_candidates:"],
                 "report_uri": format!("{root}/unbundling/{{as_of_date}}/unbundling_comparator_report.json"),
                 "api_path": "/api/v1/ops/unbundling-comparator-candidates"
             },
@@ -411,6 +419,13 @@ pub fn build_worker_data_pipeline_plan(
                     "unbundling_comparator"
                 ],
                 "required_permission": "ops:datasets:write",
+                "required_evidence_prefixes": [
+                    "scoring_feature_contexts:",
+                    "episode_rollups:",
+                    "peer_benchmarks:",
+                    "clinical_compatibility:",
+                    "unbundling_candidates:"
+                ],
                 "report_uri": format!("{root}/scoring-contexts/{{as_of_date}}/scoring_feature_context_report.json"),
                 "api_path": "/api/v1/ops/scoring-feature-context-materializations"
             },
@@ -421,6 +436,7 @@ pub fn build_worker_data_pipeline_plan(
                 "submit_command": "submit-probability-calibration-report",
                 "source_input": "customer_labeled_holdout_predictions",
                 "required_permission": "ops:models:review",
+                "required_evidence_prefixes": ["probability_calibration_reports:"],
                 "report_uri": format!("{root}/probability-calibration/{{benchmark_month}}/probability_calibration_report.json"),
                 "api_path": "/api/v1/ops/models/{model_key}/probability-calibration-reports"
             }

@@ -56,6 +56,16 @@ fn builds_worker_data_pipeline_readiness_input_template() {
         "/api/v1/ops/providers/sanctions-sync-reports"
     );
     assert_eq!(checks[1]["required_permission"], "ops:providers:write");
+    assert_eq!(
+        checks[8]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_feature_contexts:",
+            "episode_rollups:",
+            "peer_benchmarks:",
+            "clinical_compatibility:",
+            "unbundling_candidates:"
+        ])
+    );
     assert!(output_dir
         .join("worker_data_pipeline_readiness_input_template.json")
         .exists());
@@ -103,6 +113,10 @@ fn readiness_input_template_remains_blocked_until_customer_evidence_is_filled() 
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("missing_evidence_refs")));
+    assert!(first_job["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("missing_required_evidence_prefixes")));
     assert!(first_job["blockers"]
         .as_array()
         .unwrap()
@@ -244,6 +258,20 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
         .iter()
         .map(|job| {
             let job_kind = job["job_kind"].as_str().unwrap();
+            let evidence_refs = job["required_evidence_prefixes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|prefix| {
+                    format!(
+                        "{}s3://nwfwa-production-artifacts/readiness/{job_kind}.json",
+                        prefix.as_str().unwrap()
+                    )
+                })
+                .chain(std::iter::once(format!(
+                    "customer_approval:{job_kind}:2026-06-14"
+                )))
+                .collect::<Vec<_>>();
             serde_json::json!({
                 "job_kind": job_kind,
                 "artifact_uri": format!("s3://nwfwa-production-artifacts/readiness/{job_kind}.json"),
@@ -254,7 +282,7 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
                 "data_quality_status": "passed",
                 "coverage_window_days": if job_kind == "peer_percentile_benchmark" { 365 } else { 90 },
                 "source_freshness_status": "fresh",
-                "evidence_refs": [format!("customer_approval:{job_kind}:2026-06-14")]
+                "evidence_refs": evidence_refs
             })
         })
         .collect::<Vec<_>>();

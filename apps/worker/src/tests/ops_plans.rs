@@ -182,6 +182,16 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("peer_percentile_benchmark")));
+    assert_eq!(
+        jobs[8]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_feature_contexts:",
+            "episode_rollups:",
+            "peer_benchmarks:",
+            "clinical_compatibility:",
+            "unbundling_candidates:"
+        ])
+    );
     assert_eq!(jobs[9]["job_kind"], "probability_calibration_evidence");
     assert_eq!(jobs[9]["required_permission"], "ops:models:review");
     assert_eq!(

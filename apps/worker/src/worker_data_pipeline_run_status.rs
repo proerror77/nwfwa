@@ -41,6 +41,10 @@ pub fn build_worker_data_pipeline_run_status_template(
                 "planned_report_uri": json_string(job, "report_uri"),
                 "submit_command": json_string(job, "submit_command"),
                 "api_path": json_string(job, "api_path"),
+                "required_evidence_prefixes": job
+                    .get("required_evidence_prefixes")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "status": "scheduled_pending_customer_execution",
                 "artifact_uri": serde_json::Value::Null,
                 "evidence_refs": [],
