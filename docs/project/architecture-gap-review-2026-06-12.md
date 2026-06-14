@@ -225,6 +225,9 @@ As of the P1/P2 remediation commits after this review:
   optional review-task `required_permission` scopes, including endpoint-family
   matching when a review task carries an `api_path`, before persisting scheduler
   evidence.
+- Worker-generated readiness/execution review tasks now carry the planned
+  `api_path` alongside `required_permission`, so operator review evidence and
+  API permission validation use the same endpoint-family contract.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
 execution, official OIG/SAM feed configuration and credentials, customer
