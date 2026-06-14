@@ -158,6 +158,10 @@ CAPABILITIES = [
                 "apps/api-server/src/routes/claims.rs",
                 "latest_episode_rollup_for_member_provider",
             ),
+            (
+                "apps/api-server/src/routes/claims.rs",
+                "latest_unbundling_comparator_candidates_for_member_provider",
+            ),
             ("apps/api-server/src/routes/ops_models_mlops.rs", "submit_probability_calibration_report"),
             ("apps/api-server/src/repository/trait.rs", "save_scoring_feature_context_materialization"),
             ("apps/api-server/src/repository/trait.rs", "latest_scoring_feature_context_for_claim"),
@@ -172,6 +176,10 @@ CAPABILITIES = [
             (
                 "apps/api-server/src/repository/trait.rs",
                 "latest_episode_rollup_for_member_provider",
+            ),
+            (
+                "apps/api-server/src/repository/trait.rs",
+                "latest_unbundling_comparator_candidates_for_member_provider",
             ),
             ("apps/api-server/src/repository/trait.rs", "save_unbundling_comparator_candidates"),
             ("apps/api-server/src/repository/trait.rs", "save_probability_calibration_report"),

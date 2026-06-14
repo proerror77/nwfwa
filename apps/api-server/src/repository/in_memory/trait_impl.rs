@@ -500,6 +500,20 @@ impl DatasetsRepository for InMemoryScoringRepository {
             .await
     }
 
+    async fn latest_unbundling_comparator_candidates_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        self.in_memory_latest_unbundling_comparator_candidates_for_member_provider(
+            member_id,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn save_worker_data_pipeline_readiness_report(
         &self,
         input: SaveWorkerDataPipelineReadinessReportInput,

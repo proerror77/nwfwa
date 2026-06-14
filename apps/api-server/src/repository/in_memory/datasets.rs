@@ -437,6 +437,48 @@ impl InMemoryScoringRepository {
         Ok(saved)
     }
 
+    pub(super) async fn in_memory_latest_unbundling_comparator_candidates_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        let member_id = member_id.trim();
+        let provider_id = provider_id.trim();
+        let records = self.unbundling_comparator_candidates.lock().await;
+        let latest_as_of_date = records
+            .values()
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .filter(|record| record.member_id == member_id && record.provider_id == provider_id)
+            .map(|record| record.as_of_date.as_str())
+            .max()
+            .map(ToOwned::to_owned);
+        let Some(latest_as_of_date) = latest_as_of_date else {
+            return Ok(Vec::new());
+        };
+
+        let mut candidates = records
+            .values()
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .filter(|record| {
+                record.member_id == member_id
+                    && record.provider_id == provider_id
+                    && record.as_of_date == latest_as_of_date
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        candidates.sort_by(|left, right| left.candidate_id.cmp(&right.candidate_id));
+        Ok(candidates)
+    }
+
     pub(super) async fn in_memory_save_worker_data_pipeline_readiness_report(
         &self,
         input: SaveWorkerDataPipelineReadinessReportInput,

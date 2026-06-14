@@ -1,5 +1,6 @@
 use super::dataset_rows::load_dataset_record;
 use super::*;
+use sqlx::Row;
 
 pub(super) async fn register_dataset(
     repository: &PostgresScoringRepository,
@@ -845,6 +846,60 @@ pub(super) async fn save_unbundling_comparator_candidates(
     }
     tx.commit().await?;
     Ok(saved)
+}
+
+pub(super) async fn latest_unbundling_comparator_candidates_for_member_provider(
+    repository: &PostgresScoringRepository,
+    member_id: &str,
+    provider_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+    let rows = sqlx::query(
+        "SELECT customer_scope_id, candidate_id, as_of_date, rule_id, episode_key, member_id, provider_id, window_days, bundled_code, matched_component_codes, claim_ids, policy_authority_ref, evidence_refs, recommended_review, source_report_uri, submitted_by, notes
+         FROM unbundling_comparator_candidates
+         WHERE ($1::text IS NULL OR customer_scope_id = $1)
+           AND member_id = $2
+           AND provider_id = $3
+           AND as_of_date = (
+             SELECT max(as_of_date)
+             FROM unbundling_comparator_candidates
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+               AND member_id = $2
+               AND provider_id = $3
+           )
+         ORDER BY candidate_id",
+    )
+    .bind(customer_scope_id)
+    .bind(member_id.trim())
+    .bind(provider_id.trim())
+    .fetch_all(&repository.pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let window_days: i32 = row.try_get("window_days")?;
+            Ok(UnbundlingComparatorCandidateRecord {
+                customer_scope_id: row.try_get("customer_scope_id")?,
+                candidate_id: row.try_get("candidate_id")?,
+                as_of_date: row.try_get("as_of_date")?,
+                rule_id: row.try_get("rule_id")?,
+                episode_key: row.try_get("episode_key")?,
+                member_id: row.try_get("member_id")?,
+                provider_id: row.try_get("provider_id")?,
+                window_days: window_days.max(0) as u16,
+                bundled_code: row.try_get("bundled_code")?,
+                matched_component_codes: row.try_get("matched_component_codes")?,
+                claim_ids: row.try_get("claim_ids")?,
+                policy_authority_ref: row.try_get("policy_authority_ref")?,
+                evidence_refs: row.try_get("evidence_refs")?,
+                recommended_review: row.try_get("recommended_review")?,
+                source_report_uri: row.try_get("source_report_uri")?,
+                submitted_by: row.try_get("submitted_by")?,
+                notes: row.try_get("notes")?,
+            })
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()?)
 }
 
 pub(super) async fn save_worker_data_pipeline_readiness_report(

@@ -348,6 +348,13 @@ pub trait DatasetsRepository: Send + Sync {
         input: SaveUnbundlingComparatorCandidatesInput,
     ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>>;
 
+    async fn latest_unbundling_comparator_candidates_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>>;
+
     async fn save_worker_data_pipeline_readiness_report(
         &self,
         input: SaveWorkerDataPipelineReadinessReportInput,

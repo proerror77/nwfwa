@@ -16,7 +16,10 @@ use crate::{
     app::AppState,
     auth::AuthenticatedApiPrincipal,
     error::ApiError,
-    repository::{EpisodeRollupRecord, PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery},
+    repository::{
+        EpisodeRollupRecord, PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery,
+        UnbundlingComparatorCandidateRecord,
+    },
 };
 use axum::{extract::State, Json};
 use fwa_anomaly::detect_anomaly;
@@ -229,7 +232,7 @@ async fn resolve_episode_utilization_context(
         }));
     }
 
-    let Some(record) = state
+    let episode_rollup = state
         .repository
         .latest_episode_rollup_for_member_provider(
             &claim_context.member.external_member_id,
@@ -237,25 +240,48 @@ async fn resolve_episode_utilization_context(
             Some(&actor.customer_scope_id),
         )
         .await
-        .map_err(internal_error("EPISODE_ROLLUP_LOAD_FAILED"))?
-    else {
+        .map_err(internal_error("EPISODE_ROLLUP_LOAD_FAILED"))?;
+    let unbundling_candidates = state
+        .repository
+        .latest_unbundling_comparator_candidates_for_member_provider(
+            &claim_context.member.external_member_id,
+            &claim_context.provider.external_provider_id,
+            Some(&actor.customer_scope_id),
+        )
+        .await
+        .map_err(internal_error("UNBUNDLING_COMPARATOR_LOAD_FAILED"))?;
+    let unbundling_candidate_count = unbundling_candidates.len() as u32;
+
+    let mut context = episode_rollup
+        .as_ref()
+        .map(episode_utilization_context_from_rollup)
+        .transpose()?
+        .flatten();
+    if let Some(context) = &mut context {
+        context.unbundling_candidate_count = Some(unbundling_candidate_count);
+    } else if unbundling_candidate_count > 0 {
+        context = Some(EpisodeUtilizationFeatureContext {
+            member_provider_claim_count_30d: None,
+            duplicate_claim_similarity_score: None,
+            procedure_frequency_peer_percentile: None,
+            unbundling_candidate_count: Some(unbundling_candidate_count),
+            data_source: Some("worker.unbundling_comparator".into()),
+        });
+    }
+    let Some(context) = context else {
         return Ok(None);
     };
-    let Some(context) = episode_utilization_context_from_rollup(&record)? else {
-        return Ok(None);
-    };
-    let evidence_refs = record
-        .evidence_refs
-        .iter()
-        .cloned()
-        .chain([
-            format!("episode_rollups:{}", record.source_report_uri),
-            format!(
-                "episode_rollup:{}:{}",
-                record.episode_key, record.as_of_date
-            ),
-        ])
-        .collect::<BTreeSet<_>>()
+    let mut evidence_ref_strings = BTreeSet::new();
+    if let Some(record) = &episode_rollup {
+        evidence_ref_strings.extend(record.evidence_refs.iter().cloned());
+        evidence_ref_strings.insert(format!("episode_rollups:{}", record.source_report_uri));
+        evidence_ref_strings.insert(format!(
+            "episode_rollup:{}:{}",
+            record.episode_key, record.as_of_date
+        ));
+    }
+    evidence_ref_strings.extend(unbundling_evidence_refs(&unbundling_candidates));
+    let evidence_refs = evidence_ref_strings
         .into_iter()
         .map(serde_json::Value::String)
         .collect();
@@ -264,6 +290,26 @@ async fn resolve_episode_utilization_context(
         context,
         evidence_refs,
     }))
+}
+
+fn unbundling_evidence_refs(candidates: &[UnbundlingComparatorCandidateRecord]) -> Vec<String> {
+    candidates
+        .iter()
+        .flat_map(|candidate| {
+            candidate.evidence_refs.iter().cloned().chain([
+                candidate.policy_authority_ref.clone(),
+                format!("unbundling:{}", candidate.episode_key),
+                format!(
+                    "unbundling_comparator_candidates:{}",
+                    candidate.source_report_uri
+                ),
+                format!(
+                    "unbundling_comparator_candidate:{}:{}",
+                    candidate.candidate_id, candidate.as_of_date
+                ),
+            ])
+        })
+        .collect()
 }
 
 fn inline_scoring_feature_context_from_request(

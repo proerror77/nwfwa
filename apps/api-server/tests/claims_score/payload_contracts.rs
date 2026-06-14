@@ -955,3 +955,134 @@ async fn scores_full_payload_with_persisted_episode_rollup() {
         "episode_rollup:MBR-EPISODE-1|PRV-EPISODE-1:2026-06-14"
     )));
 }
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_unbundling_candidates() {
+    let app = build_app(test_config()).unwrap();
+
+    let unbundling_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/unbundling-comparator-candidates")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-unbundling-comparator",
+              "notes": "customer-approved unbundling comparator candidates",
+              "source_report_uri": "local://artifacts/unbundling/unbundling_comparator_report.json",
+              "report_kind": "unbundling_comparator",
+              "as_of_date": "2026-06-13",
+              "source_uri": "local://inputs/unbundling-reference.json",
+              "rule_count": 1,
+              "episode_count": 1,
+              "candidate_count": 1,
+              "candidates": [
+                {
+                  "candidate_id": "unbundling:UNBUNDLE-KNEE-001:MBR-UNB-1|PRV-UNB-1",
+                  "rule_id": "UNBUNDLE-KNEE-001",
+                  "episode_key": "MBR-UNB-1|PRV-UNB-1",
+                  "member_id": "MBR-UNB-1",
+                  "provider_id": "PRV-UNB-1",
+                  "window_days": 30,
+                  "bundled_code": "BUNDLE-900",
+                  "matched_component_codes": ["COMP-100", "COMP-200"],
+                  "claim_ids": ["CLM-UNB-1", "CLM-UNB-2"],
+                  "policy_authority_ref": "policy:unbundling:BUNDLE-900",
+                  "evidence_refs": ["policy:unbundling:BUNDLE-900", "claims:CLM-UNB-1", "claims:CLM-UNB-2"],
+                  "recommended_review": "medical_review_candidate"
+                }
+              ],
+              "evidence_refs": [
+                "unbundling_comparator_candidates:local://artifacts/unbundling/unbundling_comparator_report.json",
+                "unbundling_comparator_input:local://inputs/unbundling-reference.json"
+              ],
+              "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
+            }"#,
+        ))
+        .unwrap();
+    let unbundling_response = app.clone().oneshot(unbundling_request).await.unwrap();
+    assert_eq!(unbundling_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-UNBUNDLING",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "M17"
+              },
+              "items": [
+                {
+                  "item_code": "COMP-100",
+                  "item_type": "procedure",
+                  "description": "Component procedure",
+                  "quantity": 1,
+                  "unit_amount": "4000",
+                  "total_amount": "4000"
+                },
+                {
+                  "item_code": "COMP-200",
+                  "item_type": "procedure",
+                  "description": "Component procedure",
+                  "quantity": 1,
+                  "unit_amount": "4000",
+                  "total_amount": "4000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-UNB-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-UNBUNDLING",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-UNB-1",
+                "name": "Persisted Unbundling Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let unbundling_feature = feature_values
+        .iter()
+        .find(|feature| feature["name"] == "unbundling_candidate_count")
+        .expect("unbundling feature should be present");
+
+    assert_eq!(unbundling_feature["value"], serde_json::json!(1));
+    assert_eq!(
+        unbundling_feature["data_source"],
+        "worker.unbundling_comparator"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!("unbundling:MBR-UNB-1|PRV-UNB-1")));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "unbundling_comparator_candidates:local://artifacts/unbundling/unbundling_comparator_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "unbundling_comparator_candidate:unbundling:UNBUNDLE-KNEE-001:MBR-UNB-1|PRV-UNB-1:2026-06-13"
+    )));
+}
