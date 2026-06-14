@@ -127,8 +127,12 @@ MODEL_SERVING_SLO_ACCEPTANCE_CHECKS = [
         "description": "Fallback serving path is healthy and rollback readiness is true.",
     },
     {
+        "check_id": "calibrated_probability_serving_active",
+        "description": "Model serving evidence shows calibrated probability serving is active with a passing calibration report reference.",
+    },
+    {
         "check_id": "model_serving_evidence_refs_present",
-        "description": "Model serving evidence includes model serving and model artifact evidence refs.",
+        "description": "Model serving evidence includes model serving, model artifact, and probability calibration evidence refs.",
     },
 ]
 

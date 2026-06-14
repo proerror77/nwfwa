@@ -192,7 +192,8 @@ As of the P1/P2 remediation commits after this review:
   automated destruction.
 - The production readiness validator now deep-checks model-serving SLO
   evidence for model identity, p95 latency, error rate, checksum/signature
-  verification, fallback health, rollback readiness, and evidence refs.
+  verification, fallback health, rollback readiness, active calibrated-
+  probability serving, and calibration evidence refs.
 - The production readiness validator now deep-checks customer-data governance
   evidence for approved dataset provenance, label provenance, holdout split,
   shadow-traffic plan, positive validation sample counts, and evidence refs.

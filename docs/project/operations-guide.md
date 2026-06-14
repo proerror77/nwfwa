@@ -769,8 +769,9 @@ archive storage, completed legal-hold reconciliation, human approval before
 destruction, automated destruction disabled, and policy evidence refs.
 The model-serving SLO gate requires `model_serving_slo_report.json` to show the
 served model identity, p95 latency and error rate within declared SLOs,
-checksum/signature verification, healthy fallback, rollback readiness, and
-model-serving plus model-artifact evidence refs.
+checksum/signature verification, healthy fallback, rollback readiness,
+calibrated probability serving active, and model-serving, model-artifact, plus
+probability-calibration evidence refs.
 The OCR/vector/analytics gate requires
 `ocr_vector_analytics_execution_report.json` to show completed OCR,
 embedding/vector, retrieval ranking, ClickHouse export, dashboard access, and

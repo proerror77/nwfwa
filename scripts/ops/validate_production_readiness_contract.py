@@ -99,6 +99,7 @@ MODEL_SERVING_SLO_ACCEPTANCE_CHECK_IDS = {
     "latency_and_error_slos_passed",
     "artifact_integrity_verified",
     "fallback_and_rollback_ready",
+    "calibrated_probability_serving_active",
     "model_serving_evidence_refs_present",
 }
 
@@ -494,12 +495,20 @@ def validate_model_serving_slo_evidence(report: dict) -> None:
         report.get("rollback_ready") is True,
         "model serving SLO evidence rollback_ready must be true",
     )
+    require(
+        report.get("probability_calibration_status") == "calibrated",
+        "model serving SLO evidence probability_calibration_status must be calibrated",
+    )
+    require(
+        report.get("calibrated_probability_serving_active") is True,
+        "model serving SLO evidence must activate calibrated probability serving",
+    )
     evidence_refs = report.get("evidence_refs")
     require(
         isinstance(evidence_refs, list) and evidence_refs,
         "model serving SLO evidence must include evidence_refs",
     )
-    for prefix in ("model_serving:", "model_artifact:"):
+    for prefix in ("model_serving:", "model_artifact:", "probability_calibration_reports:"):
         require(
             any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
             f"model serving SLO evidence_refs missing {prefix}",

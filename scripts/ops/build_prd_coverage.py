@@ -191,6 +191,10 @@ CAPABILITIES = [
                 "fallback_and_rollback_ready",
             ),
             (
+                "scripts/ops/build_production_readiness_contract.py",
+                "calibrated_probability_serving_active",
+            ),
+            (
                 "scripts/ops/validate_production_readiness_contract.py",
                 "validate_model_serving_slo_evidence",
             ),
