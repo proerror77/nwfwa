@@ -167,6 +167,18 @@ pub fn build_clinical_compatibility_reference_submission(
     if report.records.is_empty() {
         bail!("clinical compatibility reference requires records before API submission");
     }
+    for required_ref in [
+        format!("clinical_compatibility_reference:{}", report.source_uri),
+        format!("clinical_policy_authority:{}", report.source_authority),
+    ] {
+        if !report
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == required_ref)
+        {
+            bail!("clinical compatibility reference requires {required_ref} evidence");
+        }
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("clinical_compatibility_references:{report_uri}"));
     evidence_refs.sort();

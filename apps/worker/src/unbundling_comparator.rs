@@ -144,6 +144,14 @@ pub fn build_unbundling_comparator_submission(
     if report.candidates.is_empty() {
         bail!("unbundling comparator requires candidates before API submission");
     }
+    let required_ref = format!("unbundling_comparator_input:{}", report.source_uri);
+    if !report
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == required_ref)
+    {
+        bail!("unbundling comparator requires {required_ref} evidence");
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("unbundling_comparator_candidates:{report_uri}"));
     evidence_refs.sort();

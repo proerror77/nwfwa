@@ -3,6 +3,21 @@ use rust_decimal::Decimal;
 
 use super::*;
 
+fn validate_required_evidence_ref(
+    evidence_refs: &[String],
+    expected_ref: &str,
+    code: &'static str,
+    message: String,
+) -> Result<(), ApiError> {
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
 pub(super) fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiError> {
     if request.external_field.trim().is_empty()
         || request.canonical_target.trim().is_empty()
@@ -489,6 +504,20 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
             format!("clinical compatibility evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_source_ref = format!("clinical_compatibility_reference:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+        format!("clinical compatibility evidence_refs must include {expected_source_ref}"),
+    )?;
+    let expected_authority_ref = format!("clinical_policy_authority:{}", request.source_authority);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_authority_ref,
+        "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+        format!("clinical compatibility evidence_refs must include {expected_authority_ref}"),
+    )?;
     for record in &request.records {
         if record.compatibility_key.trim().is_empty()
             || record.diagnosis_code_prefix.trim().is_empty()
@@ -629,6 +658,13 @@ pub(super) fn validate_unbundling_comparator_submission(
             format!("unbundling comparator evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_source_ref = format!("unbundling_comparator_input:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_UNBUNDLING_COMPARATOR_REPORT_EVIDENCE",
+        format!("unbundling comparator evidence_refs must include {expected_source_ref}"),
+    )?;
     for candidate in &request.candidates {
         if candidate.candidate_id.trim().is_empty()
             || candidate.rule_id.trim().is_empty()
