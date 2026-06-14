@@ -1,6 +1,10 @@
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
 
 use crate::{api_url, read_json_report, required_non_empty, write_json};
 
@@ -72,8 +76,11 @@ pub fn build_peer_percentile_benchmark(
     if input.benchmark_month.trim().is_empty() {
         bail!("peer benchmark input requires benchmark_month");
     }
-    let mut groups = BTreeMap::<String, (String, String, String, Vec<f64>)>::new();
+    let mut groups = BTreeMap::<String, (String, String, String, Vec<(String, f64)>)>::new();
     for claim in input.claims {
+        if claim.claim_id.trim().is_empty() {
+            bail!("peer benchmark claim missing claim_id");
+        }
         if claim.claim_amount < 0.0 || !claim.claim_amount.is_finite() {
             bail!("claim {} has invalid claim_amount", claim.claim_id);
         }
@@ -86,14 +93,26 @@ pub fn build_peer_percentile_benchmark(
             .entry(key)
             .or_insert_with(|| (specialty, region, service_segment, Vec::new()))
             .3
-            .push(claim.claim_amount);
+            .push((claim.claim_id.trim().into(), claim.claim_amount));
     }
 
     let peer_groups = groups
         .into_iter()
         .map(
-            |(peer_group_key, (specialty, region, service_segment, mut amounts))| {
+            |(peer_group_key, (specialty, region, service_segment, claims))| {
+                let mut amounts = claims.iter().map(|(_, amount)| *amount).collect::<Vec<_>>();
                 amounts.sort_by(|left, right| left.total_cmp(right));
+                let evidence_refs =
+                    BTreeSet::from([format!("peer_benchmark_groups:{peer_group_key}")])
+                        .into_iter()
+                        .chain(
+                            claims
+                                .iter()
+                                .map(|(claim_id, _)| format!("claims:{claim_id}")),
+                        )
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect::<Vec<_>>();
                 PeerBenchmarkGroup {
                     peer_group_key: peer_group_key.clone(),
                     specialty,
@@ -105,7 +124,7 @@ pub fn build_peer_percentile_benchmark(
                     p75: percentile(&amounts, 0.75),
                     p90: percentile(&amounts, 0.90),
                     p99: percentile(&amounts, 0.99),
-                    evidence_refs: vec![format!("peer_benchmark_groups:{peer_group_key}")],
+                    evidence_refs,
                 }
             },
         )

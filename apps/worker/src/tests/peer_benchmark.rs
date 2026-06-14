@@ -38,6 +38,11 @@ fn builds_peer_percentile_benchmark_by_specialty_region_segment() {
     assert_eq!(dental.p75, 400.0);
     assert_eq!(dental.p90, 500.0);
     assert_eq!(dental.p99, 500.0);
+    assert!(dental
+        .evidence_refs
+        .contains(&"peer_benchmark_groups:dental|SH|outpatient".to_string()));
+    assert!(dental.evidence_refs.contains(&"claims:C1".to_string()));
+    assert!(dental.evidence_refs.contains(&"claims:C5".to_string()));
     assert!(output_dir.join("peer_percentile_benchmark.json").exists());
     assert!(output_dir.join("peer_benchmark_groups.json").exists());
 }

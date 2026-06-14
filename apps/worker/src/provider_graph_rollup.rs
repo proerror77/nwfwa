@@ -98,6 +98,9 @@ pub fn build_provider_graph_signal_rollup(
 
     let mut claims_by_provider = BTreeMap::<String, Vec<ProviderGraphClaimInput>>::new();
     for claim in input.claims {
+        if claim.claim_id.trim().is_empty() {
+            bail!("provider graph claim missing claim_id");
+        }
         if claim.provider_id.trim().is_empty() {
             bail!(
                 "provider graph claim {} missing provider_id",
@@ -154,7 +157,7 @@ pub fn build_provider_graph_signal_rollup(
                 network_component_risk_score: provider_risks
                     .get(provider_id)
                     .and_then(|risk| risk.network_component_risk_score),
-                evidence_refs: vec![format!("provider_graph_rollups:{provider_id}")],
+                evidence_refs: provider_graph_evidence_refs(provider_id, claims, &neighbor_ids),
             }
         })
         .collect::<Vec<_>>();
@@ -259,6 +262,25 @@ pub async fn submit_provider_graph_signal_rollup(
         .json::<serde_json::Value>()
         .await
         .context("parse provider graph signal rollup response")
+}
+
+fn provider_graph_evidence_refs(
+    provider_id: &str,
+    claims: &[ProviderGraphClaimInput],
+    neighbor_ids: &[String],
+) -> Vec<String> {
+    let mut evidence_refs = BTreeSet::from([format!("provider_graph_rollups:{provider_id}")]);
+    evidence_refs.extend(
+        claims
+            .iter()
+            .map(|claim| format!("claims:{}", claim.claim_id.trim())),
+    );
+    evidence_refs.extend(
+        neighbor_ids
+            .iter()
+            .map(|neighbor_id| format!("provider_graph_neighbor:{neighbor_id}")),
+    );
+    evidence_refs.into_iter().collect()
 }
 
 fn shared_member_neighbor_ids(

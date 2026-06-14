@@ -55,6 +55,12 @@ fn builds_provider_graph_signal_rollup_contract() {
     assert!(provider_a
         .evidence_refs
         .contains(&"provider_graph_rollups:PRV-A".to_string()));
+    assert!(provider_a
+        .evidence_refs
+        .contains(&"claims:CLM-A1".to_string()));
+    assert!(provider_a
+        .evidence_refs
+        .contains(&"provider_graph_neighbor:PRV-B".to_string()));
     let provider_b = report
         .provider_relationships
         .iter()
