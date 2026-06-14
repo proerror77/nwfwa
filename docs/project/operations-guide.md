@@ -759,6 +759,12 @@ is attached for deployment apply, smoke, observability, secrets/access,
 backup/restore, rollback, alert delivery, retention/legal hold, customer data
 governance, worker data-pipeline scheduler execution, model serving SLO, and
 OCR/vector/analytics execution.
+The worker data-pipeline gate requires the customer
+`worker_data_pipeline_execution_report.json` to pass the contract acceptance
+checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
+zero review tasks, all governed worker job kinds completed, plan, run-status,
+and readiness evidence refs present, and the no-adjudication governance boundary
+preserved.
 
 Generate local pilot foundation evidence without customer data:
 

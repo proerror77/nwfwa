@@ -16,6 +16,54 @@ from pathlib import Path
 
 DEFAULT_OUTPUT_DIR = Path("artifacts/production-readiness")
 
+WORKER_DATA_PIPELINE_JOB_KINDS = [
+    "oig_sam_sanctions_snapshot_fetch",
+    "oig_sam_sanctions_sync",
+    "provider_profile_window_rollup",
+    "provider_graph_signal_rollup",
+    "peer_percentile_benchmark",
+    "episode_aggregation",
+    "clinical_compatibility_reference",
+    "unbundling_comparator",
+    "scoring_feature_context_materialization",
+    "probability_calibration_evidence",
+]
+
+WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
+    {
+        "check_id": "report_kind_is_worker_data_pipeline_execution_report",
+        "description": "Execution evidence artifact has report_kind = worker_data_pipeline_execution_report.",
+    },
+    {
+        "check_id": "readiness_gate_status_ready",
+        "description": "Execution evidence references a readiness report and has readiness_gate_status = ready.",
+    },
+    {
+        "check_id": "scheduler_status_completed",
+        "description": "Customer scheduler report has scheduler_status = completed.",
+    },
+    {
+        "check_id": "pending_or_failed_job_count_zero",
+        "description": "Execution evidence has pending_or_failed_job_count = 0.",
+    },
+    {
+        "check_id": "review_task_count_zero",
+        "description": "Execution evidence has review_task_count = 0.",
+    },
+    {
+        "check_id": "required_job_kinds_completed",
+        "description": "Every required worker data-pipeline job kind is present in job_executions with execution_status = completed.",
+    },
+    {
+        "check_id": "evidence_refs_include_plan_run_status_and_readiness",
+        "description": "Execution evidence_refs include worker data-pipeline plan, run-status, and readiness report references.",
+    },
+    {
+        "check_id": "governance_boundary_no_adjudication",
+        "description": "Execution evidence preserves the no claim scoring, label assignment, denial, model activation, or routing-policy-change boundary.",
+    },
+]
+
 REQUIRED_EVIDENCE = [
     {
         "gate_id": "production_deployment_apply",
@@ -66,6 +114,8 @@ REQUIRED_EVIDENCE = [
         "gate_id": "worker_data_pipeline_execution",
         "required_artifact": "worker_data_pipeline_execution_report.json",
         "description": "Customer scheduler executed the governed worker data pipeline with readiness evidence, run-status evidence, artifact submit/write evidence, and dependency-blocker review for sanctions, provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling, scoring contexts, and probability calibration.",
+        "required_job_kinds": WORKER_DATA_PIPELINE_JOB_KINDS,
+        "acceptance_checks": WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS,
     },
     {
         "gate_id": "model_serving_slo",

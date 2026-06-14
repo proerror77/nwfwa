@@ -243,7 +243,10 @@ writes, approved destruction workflow execution, and live routing-impact
 validation on customer data. The production readiness contract now includes a
 dedicated `worker_data_pipeline_execution` gate so customer scheduler evidence
 for the governed worker write paths is required before production readiness can
-be claimed.
+be claimed; that gate now carries acceptance checks for ready readiness status,
+completed scheduler status, zero pending or failed jobs, zero review tasks,
+completed governed job kinds, required evidence refs, and the no-adjudication
+boundary.
 
 ## A. Scoring Layer Gaps
 

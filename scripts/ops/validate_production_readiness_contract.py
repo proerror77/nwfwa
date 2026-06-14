@@ -30,6 +30,30 @@ CUSTOMER_DATA_REQUIRED_GATE_IDS = {
     "ocr_vector_analytics_execution",
 }
 
+WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS = {
+    "oig_sam_sanctions_snapshot_fetch",
+    "oig_sam_sanctions_sync",
+    "provider_profile_window_rollup",
+    "provider_graph_signal_rollup",
+    "peer_percentile_benchmark",
+    "episode_aggregation",
+    "clinical_compatibility_reference",
+    "unbundling_comparator",
+    "scoring_feature_context_materialization",
+    "probability_calibration_evidence",
+}
+
+WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_worker_data_pipeline_execution_report",
+    "readiness_gate_status_ready",
+    "scheduler_status_completed",
+    "pending_or_failed_job_count_zero",
+    "review_task_count_zero",
+    "required_job_kinds_completed",
+    "evidence_refs_include_plan_run_status_and_readiness",
+    "governance_boundary_no_adjudication",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -68,6 +92,31 @@ def validate_contract(contract: dict) -> None:
             == (gate.get("gate_id") in CUSTOMER_DATA_REQUIRED_GATE_IDS),
             f"gate {gate.get('gate_id')} has wrong customer_data_required flag",
         )
+        if gate.get("gate_id") == "worker_data_pipeline_execution":
+            required_job_kinds = set(gate.get("required_job_kinds", []))
+            require(
+                required_job_kinds == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+                "worker data pipeline gate required_job_kinds changed unexpectedly",
+            )
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "worker data pipeline gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS,
+                "worker data pipeline gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"worker data pipeline acceptance check {check.get('check_id')} missing description",
+                )
 
 
 def main() -> int:

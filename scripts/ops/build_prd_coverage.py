@@ -150,6 +150,14 @@ CAPABILITIES = [
                 "scripts/ops/build_production_readiness_contract.py",
                 "worker_data_pipeline_execution",
             ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
+                "required_job_kinds_completed",
+            ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
+                "WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS",
+            ),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_sanctions"),
