@@ -93,7 +93,15 @@ fn builds_worker_data_pipeline_readiness_input_template() {
             "scoring_readback_reports:",
             "scoring_readback_inputs:",
             "scoring_readback_score_requests:",
-            "scoring_readback_score_responses:"
+            "scoring_readback_score_responses:",
+            "scoring_feature_contexts:",
+            "provider_profile_window_rollups:",
+            "sanctions_sync_reports:",
+            "provider_graph_signal_rollups:",
+            "peer_benchmarks:",
+            "episode_rollups:",
+            "clinical_compatibility:",
+            "unbundling_candidates:"
         ])
     );
     assert!(output_dir

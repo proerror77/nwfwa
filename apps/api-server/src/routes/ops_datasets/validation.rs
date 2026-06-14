@@ -3,6 +3,17 @@ use rust_decimal::Decimal;
 
 use super::*;
 
+const SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES: &[&str] = &[
+    "scoring_feature_contexts:",
+    "provider_profile_window_rollups:",
+    "sanctions_sync_reports:",
+    "provider_graph_signal_rollups:",
+    "peer_benchmarks:",
+    "episode_rollups:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+];
+
 fn validate_required_evidence_ref(
     evidence_refs: &[String],
     expected_ref: &str,
@@ -1070,6 +1081,24 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
                     "required_evidence_prefixes must contain no blank values",
                 ));
+            }
+            if job_kind == "scoring_online_readback" {
+                if let Some(required_prefix) = SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES
+                    .iter()
+                    .find(|required_prefix| {
+                        !required_evidence_prefixes
+                            .iter()
+                            .any(|prefix| prefix == *required_prefix)
+                    })
+                {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                        format!(
+                            "scoring_online_readback required_evidence_prefixes must include {required_prefix}"
+                        ),
+                    ));
+                }
             }
             let missing_required_evidence_prefix =
                 required_evidence_prefixes.iter().find(|prefix| {

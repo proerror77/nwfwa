@@ -1208,6 +1208,57 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_missing_req
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_full_scoring_readback_prefix_set() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["pending_or_failed_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_executions"] = serde_json::json!([
+        {
+            "job_kind": "scoring_online_readback",
+            "execution_status": "completed",
+            "reported_status": "succeeded",
+            "reported_artifact_uri": "local://artifacts/worker-data-pipeline/scoring_readback_report.json",
+            "required_evidence_prefixes": [
+                "scoring_readback_reports:",
+                "scoring_readback_inputs:",
+                "scoring_readback_score_requests:",
+                "scoring_readback_score_responses:"
+            ],
+            "evidence_refs": [
+                "scoring_readback_reports:local://artifacts/worker-data-pipeline/scoring_readback_report.json",
+                "scoring_readback_inputs:local://artifacts/worker-data-pipeline/scoring_readback_input.json",
+                "scoring_readback_score_requests:local://artifacts/worker-data-pipeline/score_request.json",
+                "scoring_readback_score_responses:local://artifacts/worker-data-pipeline/score_response.json"
+            ],
+            "blocked_dependencies": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("scoring_feature_contexts:"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_rejects_completed_job_without_success_status() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
