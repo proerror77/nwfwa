@@ -851,6 +851,36 @@ CREATE TABLE IF NOT EXISTS clinical_compatibility_references (
 CREATE INDEX IF NOT EXISTS clinical_compatibility_references_scope_codes_idx
   ON clinical_compatibility_references(customer_scope_id, diagnosis_code_prefix, procedure_code);
 
+CREATE TABLE IF NOT EXISTS unbundling_comparator_candidates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  candidate_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  rule_id TEXT NOT NULL,
+  episode_key TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  window_days INTEGER NOT NULL,
+  bundled_code TEXT NOT NULL,
+  matched_component_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  claim_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  policy_authority_ref TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recommended_review TEXT NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, candidate_id, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS unbundling_comparator_candidates_scope_provider_idx
+  ON unbundling_comparator_candidates(customer_scope_id, provider_id);
+
+CREATE INDEX IF NOT EXISTS unbundling_comparator_candidates_scope_episode_idx
+  ON unbundling_comparator_candidates(customer_scope_id, episode_key);
+
 CREATE TABLE IF NOT EXISTS provider_sanctions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   customer_scope_id TEXT NOT NULL,

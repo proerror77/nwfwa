@@ -184,8 +184,10 @@ pub use clinical_compatibility::{
 
 mod unbundling_comparator;
 pub use unbundling_comparator::{
-    build_unbundling_comparator_report, UnbundlingComparatorCandidate, UnbundlingComparatorInput,
-    UnbundlingComparatorReport, UnbundlingEpisodeInput, UnbundlingRuleInput,
+    build_unbundling_comparator_report, build_unbundling_comparator_submission,
+    submit_unbundling_comparator_candidates, UnbundlingComparatorCandidate,
+    UnbundlingComparatorInput, UnbundlingComparatorReport, UnbundlingComparatorSubmission,
+    UnbundlingEpisodeInput, UnbundlingRuleInput,
 };
 
 mod scoring_feature_context;

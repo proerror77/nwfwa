@@ -46,6 +46,7 @@ pub(crate) fn assert_paths_health_and_inbox_contract(schema: &serde_json::Value)
         "/api/v1/ops/scoring-feature-context-materializations",
         "/api/v1/ops/scoring-feature-context-materializations/{materialization_id}",
         "/api/v1/ops/clinical-compatibility-references",
+        "/api/v1/ops/unbundling-comparator-candidates",
         "/api/v1/ops/evidence/documents",
         "/api/v1/ops/evidence/documents/{document_id}",
         "/api/v1/ops/evidence/documents/{document_id}/chunks",

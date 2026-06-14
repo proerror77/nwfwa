@@ -513,6 +513,13 @@ impl DatasetsRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
         postgres_datasets::save_clinical_compatibility_references(self, input).await
     }
+
+    async fn save_unbundling_comparator_candidates(
+        &self,
+        input: SaveUnbundlingComparatorCandidatesInput,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        postgres_datasets::save_unbundling_comparator_candidates(self, input).await
+    }
 }
 
 #[async_trait]

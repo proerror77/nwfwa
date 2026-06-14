@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
-use crate::{read_json_report, write_json};
+use crate::{api_url, read_json_report, required_non_empty, write_json};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnbundlingComparatorInput {
@@ -66,6 +66,22 @@ pub struct UnbundlingComparatorReport {
     pub governance_boundary: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnbundlingComparatorSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uri: String,
+    pub rule_count: usize,
+    pub episode_count: usize,
+    pub candidate_count: usize,
+    pub candidates: Vec<UnbundlingComparatorCandidate>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
 pub fn build_unbundling_comparator_report(
     input_uri: &str,
     output_dir: impl AsRef<Path>,
@@ -110,6 +126,71 @@ pub fn build_unbundling_comparator_report(
         &report.candidates,
     )?;
     Ok(report)
+}
+
+pub fn build_unbundling_comparator_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<UnbundlingComparatorSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report: UnbundlingComparatorReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse unbundling comparator report")?;
+    if report.report_kind != "unbundling_comparator" {
+        bail!("report_kind must be unbundling_comparator");
+    }
+    if report.candidates.is_empty() {
+        bail!("unbundling comparator requires candidates before API submission");
+    }
+    let mut evidence_refs = report.evidence_refs;
+    evidence_refs.push(format!("unbundling_comparator_candidates:{report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    Ok(UnbundlingComparatorSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: report_uri.into(),
+        report_kind: report.report_kind,
+        as_of_date: report.as_of_date,
+        source_uri: report.source_uri,
+        rule_count: report.rule_count,
+        episode_count: report.episode_count,
+        candidate_count: report.candidate_count,
+        candidates: report.candidates,
+        evidence_refs,
+        governance_boundary: report.governance_boundary,
+    })
+}
+
+pub async fn submit_unbundling_comparator_candidates(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_unbundling_comparator_submission(report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/unbundling-comparator-candidates",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit unbundling comparator candidates")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit unbundling comparator candidates failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse unbundling comparator response")
 }
 
 fn normalize_rules(rules: Vec<UnbundlingRuleInput>) -> anyhow::Result<Vec<UnbundlingRuleInput>> {

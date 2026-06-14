@@ -324,6 +324,11 @@ pub trait DatasetsRepository: Send + Sync {
         &self,
         input: SaveClinicalCompatibilityReferencesInput,
     ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>>;
+
+    async fn save_unbundling_comparator_candidates(
+        &self,
+        input: SaveUnbundlingComparatorCandidatesInput,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>>;
 }
 
 // ---------------------------------------------------------------------------

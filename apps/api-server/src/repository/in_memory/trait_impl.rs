@@ -460,6 +460,14 @@ impl DatasetsRepository for InMemoryScoringRepository {
         self.in_memory_save_clinical_compatibility_references(input)
             .await
     }
+
+    async fn save_unbundling_comparator_candidates(
+        &self,
+        input: SaveUnbundlingComparatorCandidatesInput,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        self.in_memory_save_unbundling_comparator_candidates(input)
+            .await
+    }
 }
 
 // ---------------------------------------------------------------------------

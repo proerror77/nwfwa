@@ -7,6 +7,7 @@ use crate::{
         ModelEvaluationRecord, PersistedAuditEvent, RegisterDatasetInput, RegisterFeatureSetInput,
         RegisterModelDatasetInput, RegisterModelEvaluationInput,
         SaveClinicalCompatibilityReferencesInput, SaveScoringFeatureContextMaterializationInput,
+        SaveUnbundlingComparatorCandidatesInput,
     },
 };
 
@@ -29,7 +30,7 @@ use validation::{
     validate_clinical_compatibility_reference_submission, validate_dataset_contract,
     validate_feature_set_registration, validate_field_mapping, validate_model_dataset_registration,
     validate_model_evaluation_registration, validate_parquet_uri,
-    validate_scoring_feature_context_materialization,
+    validate_scoring_feature_context_materialization, validate_unbundling_comparator_submission,
 };
 
 pub async fn register_dataset(
@@ -471,6 +472,82 @@ pub async fn submit_clinical_compatibility_reference(
     .await
     .map_err(internal_error(
         "CLINICAL_COMPATIBILITY_REFERENCES_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_unbundling_comparator_candidates(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitUnbundlingComparatorCandidatesRequest>,
+) -> Result<Json<UnbundlingComparatorCandidatesSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_unbundling_comparator_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_unbundling_comparator_candidates(SaveUnbundlingComparatorCandidatesInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            as_of_date: request.as_of_date.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            candidates: request.candidates.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "UNBUNDLING_COMPARATOR_CANDIDATES_SAVE_FAILED",
+        ))?;
+    let response = UnbundlingComparatorCandidatesSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        as_of_date: request.as_of_date.clone(),
+        rule_count: request.rule_count,
+        episode_count: request.episode_count,
+        candidate_count: persisted.len(),
+        persisted_candidates: persisted,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        case_creation: false,
+        medical_review_replacement: false,
+        governance_boundary:
+            "unbundling comparator candidate submission writes medical-review candidates only; it must not score claims, assign fraud labels, deny claims, open cases, or replace medical review"
+                .into(),
+        audit_event_type: "unbundling_comparator.candidates.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "unbundling_comparator.candidates.submitted",
+            summary: "Unbundling comparator candidates submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "as_of_date": request.as_of_date,
+                "source_uri": request.source_uri,
+                "rule_count": request.rule_count,
+                "episode_count": request.episode_count,
+                "candidate_count": request.candidate_count,
+                "persisted_candidate_count": response.candidate_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "case_creation": response.case_creation,
+                "medical_review_replacement": response.medical_review_replacement,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "UNBUNDLING_COMPARATOR_CANDIDATES_AUDIT_SAVE_FAILED",
     ))?;
     Ok(Json(response))
 }

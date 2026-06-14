@@ -1,6 +1,7 @@
 use crate::repository::{
     ClinicalCompatibilityReferenceRecord, ClinicalCompatibilityReferenceUpsertInput, DatasetRecord,
     FieldMappingRecord, ModelEvaluationRecord, ScoringFeatureContextMaterializationRecord,
+    UnbundlingComparatorCandidateRecord, UnbundlingComparatorCandidateUpsertInput,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -97,6 +98,43 @@ pub struct ClinicalCompatibilityReferenceSubmissionResponse {
     pub claim_scoring: bool,
     pub label_assignment: bool,
     pub claim_denial: bool,
+    pub medical_review_replacement: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitUnbundlingComparatorCandidatesRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uri: String,
+    pub rule_count: usize,
+    pub episode_count: usize,
+    pub candidate_count: usize,
+    #[serde(default)]
+    pub candidates: Vec<UnbundlingComparatorCandidateUpsertInput>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UnbundlingComparatorCandidatesSubmissionResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub as_of_date: String,
+    pub rule_count: usize,
+    pub episode_count: usize,
+    pub candidate_count: usize,
+    pub persisted_candidates: Vec<UnbundlingComparatorCandidateRecord>,
+    pub active_scoring_policy_change: bool,
+    pub claim_scoring: bool,
+    pub label_assignment: bool,
+    pub claim_denial: bool,
+    pub case_creation: bool,
     pub medical_review_replacement: bool,
     pub governance_boundary: String,
     pub audit_event_type: String,

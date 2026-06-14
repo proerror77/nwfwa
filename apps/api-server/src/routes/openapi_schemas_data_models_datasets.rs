@@ -292,5 +292,102 @@ pub(super) fn dataset_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["clinical_compatibility.reference.submitted"] }
             }
         },
+        "UnbundlingComparatorCandidateUpsert": {
+            "type": "object",
+            "required": ["candidate_id", "rule_id", "episode_key", "member_id", "provider_id", "window_days", "bundled_code", "matched_component_codes", "claim_ids", "policy_authority_ref", "evidence_refs", "recommended_review"],
+            "properties": {
+                "candidate_id": { "type": "string", "minLength": 1 },
+                "rule_id": { "type": "string", "minLength": 1 },
+                "episode_key": { "type": "string", "minLength": 1 },
+                "member_id": { "type": "string", "minLength": 1 },
+                "provider_id": { "type": "string", "minLength": 1 },
+                "window_days": { "type": "integer", "enum": [30, 90, 365] },
+                "bundled_code": { "type": "string", "minLength": 1 },
+                "matched_component_codes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                },
+                "claim_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                },
+                "policy_authority_ref": { "type": "string", "minLength": 1 },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                },
+                "recommended_review": { "type": "string", "const": "medical_review_candidate" }
+            }
+        },
+        "UnbundlingComparatorCandidateRecord": {
+            "allOf": [
+                { "$ref": "#/components/schemas/UnbundlingComparatorCandidateUpsert" },
+                {
+                    "type": "object",
+                    "required": ["customer_scope_id", "as_of_date", "source_report_uri", "submitted_by", "notes"],
+                    "properties": {
+                        "customer_scope_id": { "type": "string" },
+                        "as_of_date": { "type": "string" },
+                        "source_report_uri": { "type": "string" },
+                        "submitted_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                }
+            ]
+        },
+        "UnbundlingComparatorCandidatesSubmissionRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "as_of_date", "source_uri", "rule_count", "episode_count", "candidate_count", "candidates", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "unbundling_comparator" },
+                "as_of_date": { "type": "string", "minLength": 1 },
+                "source_uri": { "type": "string", "minLength": 1 },
+                "rule_count": { "type": "integer" },
+                "episode_count": { "type": "integer" },
+                "candidate_count": { "type": "integer", "minimum": 1 },
+                "candidates": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/UnbundlingComparatorCandidateUpsert" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include unbundling_comparator_candidates:{source_report_uri}."
+                },
+                "governance_boundary": { "type": "string", "minLength": 1 }
+            }
+        },
+        "UnbundlingComparatorCandidatesSubmissionResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "as_of_date", "rule_count", "episode_count", "candidate_count", "persisted_candidates", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "case_creation", "medical_review_replacement", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "unbundling_comparator" },
+                "source_report_uri": { "type": "string" },
+                "as_of_date": { "type": "string" },
+                "rule_count": { "type": "integer" },
+                "episode_count": { "type": "integer" },
+                "candidate_count": { "type": "integer" },
+                "persisted_candidates": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/UnbundlingComparatorCandidateRecord" }
+                },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "claim_scoring": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "claim_denial": { "type": "boolean", "const": false },
+                "case_creation": { "type": "boolean", "const": false },
+                "medical_review_replacement": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["unbundling_comparator.candidates.submitted"] }
+            }
+        },
     })
 }

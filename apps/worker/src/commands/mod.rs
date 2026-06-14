@@ -50,6 +50,7 @@ mod submit_provider_graph_signal_rollup;
 mod submit_provider_profile_window_rollup;
 mod submit_sanctions_sync_report;
 mod submit_scoring_feature_contexts;
+mod submit_unbundling_comparator;
 mod sync_oig_sam_sanctions;
 mod verify_demo_automl_lifecycle;
 
@@ -103,6 +104,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         }
         "submit-scoring-feature-contexts" => submit_scoring_feature_contexts::run(args).await,
         "build-unbundling-comparator" => build_unbundling_comparator::run(args),
+        "submit-unbundling-comparator" => submit_unbundling_comparator::run(args).await,
         "submit-mlops-alert-delivery-tasks" => submit_mlops_alert_delivery_tasks::run(args).await,
         "submit-anomaly-clustering-report" => submit_anomaly_clustering_report::run(args).await,
         "submit-sanctions-sync-report" => submit_sanctions_sync_report::run(args).await,

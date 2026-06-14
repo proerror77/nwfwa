@@ -200,6 +200,35 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             false
         );
     }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/unbundling-comparator-candidates"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/UnbundlingComparatorCandidatesSubmissionRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/unbundling-comparator-candidates"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/UnbundlingComparatorCandidatesSubmissionResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["UnbundlingComparatorCandidateUpsert"]["properties"]
+            ["recommended_review"]["const"],
+        "medical_review_candidate"
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "claim_scoring",
+        "label_assignment",
+        "claim_denial",
+        "case_creation",
+        "medical_review_replacement",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["UnbundlingComparatorCandidatesSubmissionResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
     assert!(
         schema["components"]["schemas"]["ModelEvaluation"]["required"]
             .as_array()

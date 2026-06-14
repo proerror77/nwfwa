@@ -244,6 +244,53 @@ pub struct ClinicalCompatibilityReferenceRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnbundlingComparatorCandidateUpsertInput {
+    pub candidate_id: String,
+    pub rule_id: String,
+    pub episode_key: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub window_days: u16,
+    pub bundled_code: String,
+    pub matched_component_codes: Vec<String>,
+    pub claim_ids: Vec<String>,
+    pub policy_authority_ref: String,
+    pub evidence_refs: Vec<String>,
+    pub recommended_review: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveUnbundlingComparatorCandidatesInput {
+    pub customer_scope_id: String,
+    pub as_of_date: String,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub candidates: Vec<UnbundlingComparatorCandidateUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnbundlingComparatorCandidateRecord {
+    pub customer_scope_id: String,
+    pub candidate_id: String,
+    pub as_of_date: String,
+    pub rule_id: String,
+    pub episode_key: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub window_days: u16,
+    pub bundled_code: String,
+    pub matched_component_codes: Vec<String>,
+    pub claim_ids: Vec<String>,
+    pub policy_authority_ref: String,
+    pub evidence_refs: Vec<String>,
+    pub recommended_review: String,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterModelEvaluationInput {
     pub evaluation_run_id: String,
     pub model_key: String,

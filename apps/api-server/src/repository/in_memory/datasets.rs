@@ -324,6 +324,45 @@ impl InMemoryScoringRepository {
         }
         Ok(saved)
     }
+
+    pub(super) async fn in_memory_save_unbundling_comparator_candidates(
+        &self,
+        input: SaveUnbundlingComparatorCandidatesInput,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        let mut records = self.unbundling_comparator_candidates.lock().await;
+        let mut saved = Vec::with_capacity(input.candidates.len());
+        for upsert in input.candidates {
+            let record = UnbundlingComparatorCandidateRecord {
+                customer_scope_id: input.customer_scope_id.clone(),
+                candidate_id: upsert.candidate_id,
+                as_of_date: input.as_of_date.clone(),
+                rule_id: upsert.rule_id,
+                episode_key: upsert.episode_key,
+                member_id: upsert.member_id,
+                provider_id: upsert.provider_id,
+                window_days: upsert.window_days,
+                bundled_code: upsert.bundled_code,
+                matched_component_codes: upsert.matched_component_codes,
+                claim_ids: upsert.claim_ids,
+                policy_authority_ref: upsert.policy_authority_ref,
+                evidence_refs: upsert.evidence_refs,
+                recommended_review: upsert.recommended_review,
+                source_report_uri: input.source_report_uri.clone(),
+                submitted_by: input.submitted_by.clone(),
+                notes: input.notes.clone(),
+            };
+            records.insert(
+                unbundling_candidate_key(
+                    &record.customer_scope_id,
+                    &record.candidate_id,
+                    &record.as_of_date,
+                ),
+                record.clone(),
+            );
+            saved.push(record);
+        }
+        Ok(saved)
+    }
 }
 
 fn scoring_context_materialization_key(
@@ -339,4 +378,12 @@ fn clinical_compatibility_key(
     reference_version: &str,
 ) -> String {
     format!("{customer_scope_id}::{compatibility_key}::{reference_version}")
+}
+
+fn unbundling_candidate_key(
+    customer_scope_id: &str,
+    candidate_id: &str,
+    as_of_date: &str,
+) -> String {
+    format!("{customer_scope_id}::{candidate_id}::{as_of_date}")
 }

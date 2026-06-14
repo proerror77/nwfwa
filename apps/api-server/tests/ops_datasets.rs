@@ -163,6 +163,41 @@ fn clinical_compatibility_reference_payload() -> &'static str {
     }"#
 }
 
+fn unbundling_comparator_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-unbundling-comparator",
+      "notes": "customer-approved unbundling comparator candidates",
+      "source_report_uri": "local://artifacts/unbundling/unbundling_comparator_report.json",
+      "report_kind": "unbundling_comparator",
+      "as_of_date": "2026-06-13",
+      "source_uri": "local://inputs/unbundling-reference.json",
+      "rule_count": 1,
+      "episode_count": 1,
+      "candidate_count": 1,
+      "candidates": [
+        {
+          "candidate_id": "unbundling:rule-001:episode-001",
+          "rule_id": "rule-001",
+          "episode_key": "episode-001",
+          "member_id": "member-001",
+          "provider_id": "provider-001",
+          "window_days": 30,
+          "bundled_code": "BUNDLE-900",
+          "matched_component_codes": ["COMP-100", "COMP-200"],
+          "claim_ids": ["CLM-001", "CLM-002"],
+          "policy_authority_ref": "policy:unbundling:BUNDLE-900",
+          "evidence_refs": ["policy:unbundling:BUNDLE-900", "claims:CLM-001", "claims:CLM-002"],
+          "recommended_review": "medical_review_candidate"
+        }
+      ],
+      "evidence_refs": [
+        "unbundling_comparator_candidates:local://artifacts/unbundling/unbundling_comparator_report.json",
+        "unbundling_comparator_input:local://inputs/unbundling-reference.json"
+      ],
+      "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
+    }"#
+}
+
 fn renewal_dataset_payload(storage_format: &str) -> String {
     format!(
         r#"{{
@@ -277,6 +312,57 @@ async fn clinical_compatibility_reference_requires_dataset_write_permission() {
         "POST",
         "/api/v1/ops/clinical-compatibility-references",
         clinical_compatibility_reference_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn submits_unbundling_comparator_candidates() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        unbundling_comparator_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "unbundling_comparator");
+    assert_eq!(body["as_of_date"], "2026-06-13");
+    assert_eq!(body["candidate_count"], 1);
+    assert_eq!(
+        body["persisted_candidates"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_candidates"][0]["candidate_id"],
+        "unbundling:rule-001:episode-001"
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["case_creation"], false);
+    assert_eq!(body["medical_review_replacement"], false);
+}
+
+#[tokio::test]
+async fn unbundling_comparator_candidates_require_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        unbundling_comparator_payload(),
         "dataset-read-secret",
     )
     .await;

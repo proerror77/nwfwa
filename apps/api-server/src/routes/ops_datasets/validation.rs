@@ -427,6 +427,163 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
     Ok(())
 }
 
+pub(super) fn validate_unbundling_comparator_submission(
+    request: &SubmitUnbundlingComparatorCandidatesRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "unbundling_comparator" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_KIND",
+            "report_kind must be unbundling_comparator",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+            "source_report_uri must point to a JSON unbundling comparator report",
+        ));
+    }
+    if request.candidates.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_UNBUNDLING_COMPARATOR_CANDIDATES",
+            "candidates are required",
+        ));
+    }
+    if request.candidate_count != request.candidates.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_CANDIDATE_COUNT",
+            "candidate_count must match candidates length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "unbundling_comparator_candidates:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_UNBUNDLING_COMPARATOR_REPORT_EVIDENCE",
+            format!("unbundling comparator evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    for candidate in &request.candidates {
+        if candidate.candidate_id.trim().is_empty()
+            || candidate.rule_id.trim().is_empty()
+            || candidate.episode_key.trim().is_empty()
+            || candidate.member_id.trim().is_empty()
+            || candidate.provider_id.trim().is_empty()
+            || candidate.bundled_code.trim().is_empty()
+            || candidate.policy_authority_ref.trim().is_empty()
+            || candidate.recommended_review.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_CANDIDATE",
+                "candidate_id, rule_id, episode_key, member_id, provider_id, bundled_code, policy_authority_ref, and recommended_review are required",
+            ));
+        }
+        if !matches!(candidate.window_days, 30 | 90 | 365) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_WINDOW",
+                "window_days must be 30, 90, or 365",
+            ));
+        }
+        if candidate.recommended_review != "medical_review_candidate" {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_REVIEW",
+                "recommended_review must be medical_review_candidate",
+            ));
+        }
+        if candidate.matched_component_codes.is_empty()
+            || candidate
+                .matched_component_codes
+                .iter()
+                .any(|value| value.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_COMPONENT_CODES",
+                "matched_component_codes must be non-empty and contain no blank values",
+            ));
+        }
+        if candidate.claim_ids.is_empty()
+            || candidate
+                .claim_ids
+                .iter()
+                .any(|value| value.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_CLAIMS",
+                "claim_ids must be non-empty and contain no blank values",
+            ));
+        }
+        if candidate.evidence_refs.is_empty()
+            || candidate
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                "unbundling candidates require non-empty evidence_refs",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_unit_interval_metric(
     metric_name: &'static str,
     metric: &Option<Decimal>,

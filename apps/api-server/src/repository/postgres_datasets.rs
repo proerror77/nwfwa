@@ -660,3 +660,74 @@ pub(super) async fn save_clinical_compatibility_references(
     tx.commit().await?;
     Ok(saved)
 }
+
+pub(super) async fn save_unbundling_comparator_candidates(
+    repository: &PostgresScoringRepository,
+    input: SaveUnbundlingComparatorCandidatesInput,
+) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+    let mut saved = Vec::with_capacity(input.candidates.len());
+    let mut tx = repository.pool.begin().await?;
+    for candidate in input.candidates {
+        sqlx::query(
+            "INSERT INTO unbundling_comparator_candidates
+                 (customer_scope_id, candidate_id, as_of_date, rule_id, episode_key, member_id, provider_id, window_days, bundled_code, matched_component_codes, claim_ids, policy_authority_ref, evidence_refs, recommended_review, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                 ON CONFLICT (customer_scope_id, candidate_id, as_of_date) DO UPDATE
+                 SET rule_id = EXCLUDED.rule_id,
+                     episode_key = EXCLUDED.episode_key,
+                     member_id = EXCLUDED.member_id,
+                     provider_id = EXCLUDED.provider_id,
+                     window_days = EXCLUDED.window_days,
+                     bundled_code = EXCLUDED.bundled_code,
+                     matched_component_codes = EXCLUDED.matched_component_codes,
+                     claim_ids = EXCLUDED.claim_ids,
+                     policy_authority_ref = EXCLUDED.policy_authority_ref,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     recommended_review = EXCLUDED.recommended_review,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&candidate.candidate_id)
+        .bind(&input.as_of_date)
+        .bind(&candidate.rule_id)
+        .bind(&candidate.episode_key)
+        .bind(&candidate.member_id)
+        .bind(&candidate.provider_id)
+        .bind(candidate.window_days as i32)
+        .bind(&candidate.bundled_code)
+        .bind(string_values(&candidate.matched_component_codes))
+        .bind(string_values(&candidate.claim_ids))
+        .bind(&candidate.policy_authority_ref)
+        .bind(string_values(&candidate.evidence_refs))
+        .bind(&candidate.recommended_review)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(UnbundlingComparatorCandidateRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            candidate_id: candidate.candidate_id,
+            as_of_date: input.as_of_date.clone(),
+            rule_id: candidate.rule_id,
+            episode_key: candidate.episode_key,
+            member_id: candidate.member_id,
+            provider_id: candidate.provider_id,
+            window_days: candidate.window_days,
+            bundled_code: candidate.bundled_code,
+            matched_component_codes: candidate.matched_component_codes,
+            claim_ids: candidate.claim_ids,
+            policy_authority_ref: candidate.policy_authority_ref,
+            evidence_refs: candidate.evidence_refs,
+            recommended_review: candidate.recommended_review,
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}
