@@ -939,7 +939,19 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             ));
         };
         match readiness_status {
-            "ready" => ready_jobs += 1,
+            "ready" => {
+                let has_blockers = readiness.get("blockers").is_some_and(|value| {
+                    value.as_array().is_none_or(|blockers| !blockers.is_empty())
+                });
+                if has_blockers {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS",
+                        "ready job readiness records must not include blockers",
+                    ));
+                }
+                ready_jobs += 1;
+            }
             "blocked" => {
                 blocked_jobs += 1;
                 let has_blockers = readiness

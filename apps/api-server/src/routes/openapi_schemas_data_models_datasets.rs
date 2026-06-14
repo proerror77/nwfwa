@@ -504,7 +504,7 @@ pub(super) fn dataset_schemas() -> Value {
                             "blockers": {
                                 "type": "array",
                                 "items": { "type": "string", "minLength": 1 },
-                                "description": "Required and non-empty when readiness_status is blocked."
+                                "description": "Required and non-empty when readiness_status is blocked; omit or leave empty when readiness_status is ready."
                             }
                         }
                     }
