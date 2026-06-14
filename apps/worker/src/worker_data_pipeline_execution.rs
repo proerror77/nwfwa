@@ -77,6 +77,10 @@ pub fn build_worker_data_pipeline_execution_report(
                 "planned_report_uri": json_string(job, "report_uri"),
                 "reported_status": reported.and_then(|status| json_string(status, "status")),
                 "reported_artifact_uri": reported.and_then(|status| json_string(status, "artifact_uri")),
+                "evidence_refs": reported
+                    .and_then(|status| status.get("evidence_refs"))
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "submitted": reported
                     .and_then(|status| status.get("submitted"))
                     .and_then(|value| value.as_bool())

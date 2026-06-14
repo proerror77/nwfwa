@@ -270,7 +270,8 @@ completed scheduler status, zero pending or failed jobs, zero review tasks,
 completed governed job kinds, submitted governed write jobs, source snapshot
 artifact evidence, scheduler-reported job success without dependency blockers,
 expected API paths and permission scopes, required execution URIs, required
-evidence refs, and the no-adjudication boundary, and the production readiness
+per-completed-job artifact URI/evidence refs, required evidence refs, and the
+no-adjudication boundary, and the production readiness
 validator can execute those checks when given the customer evidence directory.
 
 ## A. Scoring Layer Gaps

@@ -26,18 +26,21 @@ fn builds_worker_data_pipeline_execution_report() {
                     "job_kind": "oig_sam_sanctions_snapshot_fetch",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/oig_sam_sanctions_snapshot.json",
+                    "evidence_refs": ["oig_sam_snapshot:2026-06-14"],
                     "submitted": false
                 },
                 {
                     "job_kind": "oig_sam_sanctions_sync",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/sanctions_sync_report.json",
+                    "evidence_refs": ["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"],
                     "submitted": true
                 },
                 {
                     "job_kind": "provider_profile_window_rollup",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/provider-profile/2026-06-14/provider_profile_window_rollup_report.json",
+                    "evidence_refs": ["worker_job_artifacts:provider_profile_window_rollup:2026-06-14"],
                     "submitted": false
                 },
                 {
@@ -79,6 +82,14 @@ fn builds_worker_data_pipeline_execution_report() {
     );
     assert_eq!(executions[1]["execution_status"], "completed");
     assert_eq!(executions[1]["required_permission"], "ops:providers:write");
+    assert_eq!(
+        executions[1]["reported_artifact_uri"],
+        "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/sanctions_sync_report.json"
+    );
+    assert_eq!(
+        executions[1]["evidence_refs"],
+        serde_json::json!(["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"])
+    );
     assert_eq!(
         executions[2]["execution_status"],
         "artifact_pending_submission"
@@ -140,6 +151,7 @@ fn blocks_worker_data_pipeline_job_when_dependency_is_not_completed() {
                     "job_kind": "oig_sam_sanctions_sync",
                     "status": "succeeded",
                     "artifact_uri": "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/2026-06-14/sanctions_sync_report.json",
+                    "evidence_refs": ["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"],
                     "submitted": true
                 }
             ]
@@ -213,6 +225,7 @@ fn builds_worker_data_pipeline_execution_report_with_ready_gate() {
                 "job_kind": job_kind,
                 "status": "succeeded",
                 "artifact_uri": format!("s3://nwfwa-production-artifacts/{job_kind}.json"),
+                "evidence_refs": [format!("worker_job_artifacts:{job_kind}:2026-06-14")],
                 "submitted": true
             })
         })
@@ -289,6 +302,7 @@ fn builds_worker_data_pipeline_execution_report_with_blocked_gate() {
                 "job_kind": job_kind,
                 "status": "succeeded",
                 "artifact_uri": format!("s3://nwfwa-production-artifacts/{job_kind}.json"),
+                "evidence_refs": [format!("worker_job_artifacts:{job_kind}:2026-06-14")],
                 "submitted": true
             })
         })

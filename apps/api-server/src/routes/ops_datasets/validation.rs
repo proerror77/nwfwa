@@ -791,6 +791,36 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
         }
         if execution_status != "completed" {
             pending_or_failed_jobs += 1;
+        } else {
+            let has_reported_artifact_uri = execution
+                .get("reported_artifact_uri")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| !value.trim().is_empty());
+            if !has_reported_artifact_uri {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT",
+                    "completed job executions require non-empty reported_artifact_uri",
+                ));
+            }
+            let has_evidence_refs = execution
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .is_some_and(|references| {
+                    !references.is_empty()
+                        && references.iter().all(|reference| {
+                            reference
+                                .as_str()
+                                .is_some_and(|value| !value.trim().is_empty())
+                        })
+                });
+            if !has_evidence_refs {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job executions require non-empty evidence_refs",
+                ));
+            }
         }
         if let Some(required_permission) = execution.get("required_permission") {
             validate_worker_data_pipeline_required_permission(

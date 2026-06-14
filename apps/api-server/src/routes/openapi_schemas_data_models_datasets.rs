@@ -453,6 +453,16 @@ pub(super) fn dataset_schemas() -> Value {
                                 "items": { "type": "string", "minLength": 1 },
                                 "description": "Required and non-empty when execution_status is dependency_not_completed."
                             },
+                            "reported_artifact_uri": {
+                                "type": ["string", "null"],
+                                "minLength": 1,
+                                "description": "Required and non-empty when execution_status is completed; points to the scheduler-reported job artifact."
+                            },
+                            "evidence_refs": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Required and non-empty when execution_status is completed; references the source evidence proving the job artifact was produced."
+                            },
                             "required_permission": {
                                 "type": ["string", "null"],
                                 "enum": [

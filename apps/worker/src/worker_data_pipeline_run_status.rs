@@ -43,6 +43,7 @@ pub fn build_worker_data_pipeline_run_status_template(
                 "api_path": json_string(job, "api_path"),
                 "status": "scheduled_pending_customer_execution",
                 "artifact_uri": serde_json::Value::Null,
+                "evidence_refs": [],
                 "submitted": false
             })
         })
