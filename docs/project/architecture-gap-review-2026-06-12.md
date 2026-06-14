@@ -61,6 +61,10 @@ As of the P1/P2 remediation commits after this review:
   member-provider revisit counts, duplicate-claim similarity, procedure
   frequency peer percentile, and unbundling candidate counts; these signals
   contribute to L5 only when worker-owned context is supplied.
+- The worker now has a scoring feature context materialization contract that
+  maps episode rollups, peer benchmarks, clinical compatibility records, and
+  unbundling candidates into claim-level contexts suitable for online scoring
+  integration without writing production state.
 - `ServingManifestModelScorer` now caches the parsed serving manifest, removing
   avoidable per-score manifest file reads while preserving request-time
   identity and feature-order validation.
@@ -94,7 +98,8 @@ feature lineage/source mappings, calibrated-probability serving activation, and
 replacement of the L3 heuristic anomaly scorer with a validated statistical
 baseline. Audit retention still needs customer-environment partitioning, archive
 storage, legal-hold reconciliation writes, approved destruction workflow
-execution, and production plumbing from worker artifacts into online scoring.
+execution, and production API/repository activation of materialized worker
+scoring contexts.
 
 ## A. Scoring Layer Gaps
 
@@ -107,7 +112,7 @@ execution, and production plumbing from worker artifacts into online scoring.
 | A-5 | Seven-layer weights are hard-coded and do not renormalize when data is missing. | Represent layer values as data-present vs. actual zero and renormalize across available layers. |
 | A-6 | Provider history counts use max-window behavior in places where weighted windows are more appropriate. | Prefer 30/90/365 weighted aggregation or expose window-specific counters for downstream routing. |
 | A-7 | L3 anomaly baseline has a comment but no quantified upgrade trigger. | Add a measurable threshold, e.g. upgrade evaluation after at least 500 confirmed FWA labels or poor 30-day recall. |
-| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, but production wiring from worker outputs remains open. | Connect worker-owned episode, peer, and unbundling artifacts to online scoring before treating these schemes as production-covered. |
+| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs and a worker materialization contract, but API/repository activation remains open. | Wire materialized worker scoring contexts into approved online scoring ingestion before treating these schemes as production-covered. |
 
 ## B. Feature Engineering And Data Quality Gaps
 
