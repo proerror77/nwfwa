@@ -156,7 +156,7 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         "submit commands persist governed artifacts only; no claim scoring, label assignment, claim denial, routing-policy change, model activation, or case creation"
     );
     let jobs = plan["jobs"].as_array().expect("jobs");
-    assert_eq!(jobs.len(), 10);
+    assert_eq!(jobs.len(), 11);
     assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
     assert_eq!(jobs[0]["build_command"], "fetch-oig-sam-sanctions-snapshot");
     assert_eq!(jobs[0]["artifact_kind"], "source_snapshot");
@@ -230,14 +230,30 @@ fn builds_scheduled_worker_data_pipeline_plan() {
             "unbundling_candidates:"
         ])
     );
-    assert_eq!(jobs[9]["job_kind"], "probability_calibration_evidence");
-    assert_eq!(jobs[9]["required_permission"], "ops:models:review");
+    assert_eq!(jobs[9]["job_kind"], "scoring_online_readback");
+    assert_eq!(jobs[9]["build_command"], "build-scoring-readback-report");
+    assert_eq!(jobs[9]["artifact_kind"], "online_scoring_readback");
     assert_eq!(
-        jobs[9]["api_path"],
-        "/api/v1/ops/models/{model_key}/probability-calibration-reports"
+        jobs[9]["depends_on"][0],
+        "scoring_feature_context_materialization"
     );
     assert_eq!(
         jobs[9]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_readback_reports:",
+            "scoring_readback_inputs:",
+            "scoring_readback_score_requests:",
+            "scoring_readback_score_responses:"
+        ])
+    );
+    assert_eq!(jobs[10]["job_kind"], "probability_calibration_evidence");
+    assert_eq!(jobs[10]["required_permission"], "ops:models:review");
+    assert_eq!(
+        jobs[10]["api_path"],
+        "/api/v1/ops/models/{model_key}/probability-calibration-reports"
+    );
+    assert_eq!(
+        jobs[10]["required_evidence_prefixes"],
         serde_json::json!([
             "probability_calibration_reports:",
             "probability_calibration_input:",

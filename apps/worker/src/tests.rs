@@ -21,6 +21,7 @@ mod provider_profile_rollup;
 mod rule_candidates;
 mod sanctions;
 mod scoring_feature_context;
+mod scoring_readback;
 mod training_handoff;
 mod training_output_enrichment;
 mod unbundling_comparator;

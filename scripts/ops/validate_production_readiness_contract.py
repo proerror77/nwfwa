@@ -40,11 +40,13 @@ WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS = {
     "clinical_compatibility_reference",
     "unbundling_comparator",
     "scoring_feature_context_materialization",
+    "scoring_online_readback",
     "probability_calibration_evidence",
 }
 
 WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS = (
-    WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS - {"oig_sam_sanctions_snapshot_fetch"}
+    WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS
+    - {"oig_sam_sanctions_snapshot_fetch", "scoring_online_readback"}
 )
 
 WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS = {
@@ -85,6 +87,13 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES = {
 
 WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX = "oig_sam_snapshot:"
 
+WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES = (
+    "scoring_readback_reports:",
+    "scoring_readback_inputs:",
+    "scoring_readback_score_requests:",
+    "scoring_readback_score_responses:",
+)
+
 WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
     "provider_profile_window_rollup": ("provider_profile_claim_snapshot:",),
     "provider_graph_signal_rollup": ("provider_graph_claim_snapshot:",),
@@ -123,6 +132,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "governed_submit_jobs_submitted",
     "governed_submit_jobs_include_write_evidence_refs",
     "source_snapshot_artifact_reported",
+    "scoring_online_readback_artifact_reported",
     "evidence_refs_include_plan_run_status_and_readiness",
     "governance_boundary_no_adjudication",
 }
@@ -480,6 +490,12 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         ),
         f"worker data pipeline source snapshot job evidence_refs missing {WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX}",
     )
+    readback_job = jobs_by_kind["scoring_online_readback"]
+    for prefix in WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES:
+        require(
+            evidence_refs_include_prefix(readback_job, prefix),
+            f"worker data pipeline scoring readback job evidence_refs missing {prefix}",
+        )
     evidence_refs = report.get("evidence_refs")
     require(
         isinstance(evidence_refs, list) and evidence_refs,

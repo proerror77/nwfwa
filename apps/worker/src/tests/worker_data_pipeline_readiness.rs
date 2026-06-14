@@ -27,7 +27,7 @@ fn builds_worker_data_pipeline_readiness_input_template() {
     );
     assert_eq!(template["template_only"], true);
     let checks = template["checks"].as_array().expect("checks");
-    assert_eq!(checks.len(), 10);
+    assert_eq!(checks.len(), 11);
     assert_eq!(checks[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
     assert_eq!(
         checks[0]["build_command"],
@@ -82,6 +82,16 @@ fn builds_worker_data_pipeline_readiness_input_template() {
             "unbundling_candidates:"
         ])
     );
+    assert_eq!(checks[9]["job_kind"], "scoring_online_readback");
+    assert_eq!(
+        checks[9]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_readback_reports:",
+            "scoring_readback_inputs:",
+            "scoring_readback_score_requests:",
+            "scoring_readback_score_responses:"
+        ])
+    );
     assert!(output_dir
         .join("worker_data_pipeline_readiness_input_template.json")
         .exists());
@@ -115,7 +125,7 @@ fn readiness_input_template_remains_blocked_until_customer_evidence_is_filled() 
 
     assert_eq!(report["readiness_status"], "blocked");
     assert_eq!(report["ready_job_count"], 0);
-    assert_eq!(report["blocked_job_count"], 10);
+    assert_eq!(report["blocked_job_count"], 11);
     let first_job = &report["job_readiness"].as_array().expect("jobs")[0];
     assert!(first_job["blockers"]
         .as_array()
@@ -202,9 +212,9 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         "worker_data_pipeline_readiness_report"
     );
     assert_eq!(report["readiness_status"], "blocked");
-    assert_eq!(report["job_count"], 10);
+    assert_eq!(report["job_count"], 11);
     assert_eq!(report["ready_job_count"], 0);
-    assert_eq!(report["blocked_job_count"], 10);
+    assert_eq!(report["blocked_job_count"], 11);
     let jobs = report["job_readiness"].as_array().expect("jobs");
     assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
     assert_eq!(jobs[0]["api_path"], serde_json::Value::Null);
@@ -238,7 +248,7 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("missing_customer_readiness_check")));
-    assert_eq!(report["review_task_count"], 10);
+    assert_eq!(report["review_task_count"], 11);
     assert!(report["review_tasks"]
         .as_array()
         .expect("review tasks")
@@ -317,7 +327,7 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
     .expect("readiness report");
 
     assert_eq!(report["readiness_status"], "ready");
-    assert_eq!(report["ready_job_count"], 10);
+    assert_eq!(report["ready_job_count"], 11);
     assert_eq!(report["blocked_job_count"], 0);
     assert_eq!(report["review_task_count"], 0);
 }

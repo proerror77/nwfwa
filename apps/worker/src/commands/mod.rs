@@ -20,6 +20,7 @@ mod build_probability_calibration_report;
 mod build_provider_graph_signals;
 mod build_provider_profile_windows;
 mod build_scoring_feature_contexts;
+mod build_scoring_readback_report;
 mod build_training_handoff;
 mod build_unbundling_comparator;
 mod build_worker_data_pipeline_execution_report;
@@ -111,6 +112,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
             submit_provider_graph_signal_rollup::run(args).await
         }
         "build-scoring-feature-contexts" => build_scoring_feature_contexts::run(args),
+        "build-scoring-readback-report" => build_scoring_readback_report::run(args),
         "submit-provider-profile-window-rollup" => {
             submit_provider_profile_window_rollup::run(args).await
         }

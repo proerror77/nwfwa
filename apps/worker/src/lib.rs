@@ -219,6 +219,12 @@ pub use scoring_feature_context::{
     ScoringFeatureContextSourceUris,
 };
 
+mod scoring_readback;
+pub use scoring_readback::{
+    build_scoring_readback_report, ScoringReadbackCheck, ScoringReadbackInput,
+    ScoringReadbackReport, ScoringReadbackReviewTask,
+};
+
 mod parquet_utils;
 pub(crate) use parquet_utils::{
     column_value_at, column_values, ensure_parquet_path, resolve_parquet_files,

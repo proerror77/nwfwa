@@ -103,12 +103,13 @@ CAPABILITIES = [
     {
         "capability": "worker_data_pipeline_productionization",
         "status": "implemented_with_customer_validation_boundary",
-        "summary": "Worker-owned customer-data rollups, governed artifact submit commands, API write paths, readiness gates, run-status templates, and execution evidence contracts exist for sanctions, provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling, scoring contexts, and probability calibration.",
+        "summary": "Worker-owned customer-data rollups, governed artifact submit commands, API write paths, readiness gates, run-status templates, execution evidence contracts, and score-response readback artifacts exist for sanctions, provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling, scoring contexts, and probability calibration.",
         "evidence": [
             "apps/worker/src/commands/mod.rs",
             "apps/worker/src/worker_data_pipeline_readiness.rs",
             "apps/worker/src/worker_data_pipeline_run_status.rs",
             "apps/worker/src/worker_data_pipeline_execution.rs",
+            "apps/worker/src/scoring_readback.rs",
             "apps/api-server/src/routes/ops_providers.rs",
             "apps/api-server/src/routes/ops_datasets.rs",
             "apps/api-server/src/routes/claims.rs",
@@ -131,7 +132,11 @@ CAPABILITIES = [
             ("apps/worker/src/commands/mod.rs", "submit-clinical-compatibility-reference"),
             ("apps/worker/src/commands/mod.rs", "submit-unbundling-comparator"),
             ("apps/worker/src/commands/mod.rs", "submit-scoring-feature-contexts"),
+            ("apps/worker/src/commands/mod.rs", "build-scoring-readback-report"),
             ("apps/worker/src/commands/mod.rs", "submit-probability-calibration-report"),
+            ("apps/worker/src/ops_plans.rs", "scoring_online_readback"),
+            ("apps/worker/src/scoring_readback.rs", "build_scoring_readback_report"),
+            ("apps/worker/src/scoring_readback.rs", "scoring_readback_score_responses"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "readiness_gate_status"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "blocked_dependencies"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "reported_artifact_uri"),
@@ -172,6 +177,10 @@ CAPABILITIES = [
             (
                 "scripts/ops/build_production_readiness_contract.py",
                 "required_job_kinds_completed",
+            ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
+                "scoring_online_readback_artifact_reported",
             ),
             (
                 "scripts/ops/build_production_readiness_contract.py",
@@ -463,7 +472,7 @@ def build_report() -> dict:
         "remaining_boundary": [
             "real customer labels and label provenance",
             "customer holdout validation and live shadow traffic",
-            "live customer worker data-pipeline scheduler execution and customer-approved source claim history/reference data",
+            "live customer worker data-pipeline scheduler execution, customer-approved source claim history/reference data, and score-response readback evidence",
             "customer-approved production deployment, secrets, retention, observability, OCR/vector workers, and analytics execution",
             "customer-executed live restore, rollback, alert, and operational drills beyond the staging drill contract",
         ],

@@ -26,13 +26,14 @@ WORKER_DATA_PIPELINE_JOB_KINDS = [
     "clinical_compatibility_reference",
     "unbundling_comparator",
     "scoring_feature_context_materialization",
+    "scoring_online_readback",
     "probability_calibration_evidence",
 ]
 
 WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS = [
     job_kind
     for job_kind in WORKER_DATA_PIPELINE_JOB_KINDS
-    if job_kind != "oig_sam_sanctions_snapshot_fetch"
+    if job_kind not in {"oig_sam_sanctions_snapshot_fetch", "scoring_online_readback"}
 ]
 
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
@@ -91,6 +92,10 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     {
         "check_id": "source_snapshot_artifact_reported",
         "description": "The artifact-only OIG/SAM source snapshot job reports a non-empty artifact URI and source snapshot evidence reference.",
+    },
+    {
+        "check_id": "scoring_online_readback_artifact_reported",
+        "description": "The artifact-only online scoring readback job reports a production artifact URI plus score request, score response, and readback evidence references.",
     },
     {
         "check_id": "evidence_refs_include_plan_run_status_and_readiness",
@@ -249,7 +254,7 @@ REQUIRED_EVIDENCE = [
     {
         "gate_id": "worker_data_pipeline_execution",
         "required_artifact": "worker_data_pipeline_execution_report.json",
-        "description": "Customer scheduler executed the governed worker data pipeline with readiness evidence, run-status evidence, artifact submit/write evidence, and dependency-blocker review for sanctions, provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling, scoring contexts, and probability calibration.",
+        "description": "Customer scheduler executed the governed worker data pipeline with readiness evidence, run-status evidence, artifact submit/write evidence, scoring readback evidence, and dependency-blocker review for sanctions, provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling, scoring contexts, and probability calibration.",
         "required_job_kinds": WORKER_DATA_PIPELINE_JOB_KINDS,
         "governed_submit_job_kinds": WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
         "acceptance_checks": WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS,

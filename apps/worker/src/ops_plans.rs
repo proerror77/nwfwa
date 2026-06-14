@@ -450,6 +450,21 @@ pub fn build_worker_data_pipeline_plan(
                 "api_path": "/api/v1/ops/scoring-feature-context-materializations"
             },
             {
+                "job_kind": "scoring_online_readback",
+                "cadence": "daily",
+                "build_command": "build-scoring-readback-report",
+                "source_input": "score_response_artifact_from_api_v1_claims_score_after_governed_worker_writes",
+                "depends_on": ["scoring_feature_context_materialization"],
+                "artifact_kind": "online_scoring_readback",
+                "required_evidence_prefixes": [
+                    "scoring_readback_reports:",
+                    "scoring_readback_inputs:",
+                    "scoring_readback_score_requests:",
+                    "scoring_readback_score_responses:"
+                ],
+                "report_uri": format!("{root}/scoring-readback/{{as_of_date}}/scoring_readback_report.json")
+            },
+            {
                 "job_kind": "probability_calibration_evidence",
                 "cadence": "monthly",
                 "build_command": "build-probability-calibration-report",

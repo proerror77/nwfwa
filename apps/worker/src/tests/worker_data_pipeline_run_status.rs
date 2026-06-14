@@ -29,7 +29,7 @@ fn builds_worker_data_pipeline_run_status_template() {
     assert_eq!(report["customer_scope_id"], "production-customer");
     assert_eq!(report["run_id"], "wdp_2026_06_14");
     assert_eq!(report["execution_date"], "2026-06-14");
-    assert_eq!(report["job_count"], 10);
+    assert_eq!(report["job_count"], 11);
     assert_eq!(
         report["readiness_report_uri"],
         "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/readiness/2026-06-14/worker_data_pipeline_readiness_report.json"
@@ -98,6 +98,16 @@ fn builds_worker_data_pipeline_run_status_template() {
             "peer_benchmarks:",
             "clinical_compatibility:",
             "unbundling_candidates:"
+        ])
+    );
+    assert_eq!(job_statuses[9]["job_kind"], "scoring_online_readback");
+    assert_eq!(
+        job_statuses[9]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_readback_reports:",
+            "scoring_readback_inputs:",
+            "scoring_readback_score_requests:",
+            "scoring_readback_score_responses:"
         ])
     );
     assert!(report["evidence_refs"]

@@ -9,6 +9,7 @@ import unittest
 from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+    WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
@@ -56,6 +57,11 @@ def worker_execution_report(include_snapshot_evidence: bool = True) -> dict:
         if job_kind == "oig_sam_sanctions_snapshot_fetch" and include_snapshot_evidence:
             evidence_refs.append(
                 "oig_sam_snapshot:s3://customer-prod-artifacts/oig_sam_snapshot.json"
+            )
+        if job_kind == "scoring_online_readback":
+            evidence_refs.extend(
+                f"{prefix}s3://customer-prod-artifacts/scoring_readback.json"
+                for prefix in WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES
             )
         jobs.append(job)
 
@@ -130,6 +136,24 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         ]
 
         with self.assertRaisesRegex(AssertionError, "calibration_labels:"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
+    def test_worker_execution_requires_scoring_readback_response_lineage(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        readback_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "scoring_online_readback"
+        )
+        readback_job["evidence_refs"] = [
+            reference
+            for reference in readback_job["evidence_refs"]
+            if not reference.startswith("scoring_readback_score_responses:")
+        ]
+
+        with self.assertRaisesRegex(
+            AssertionError, "scoring_readback_score_responses:"
+        ):
             validate_worker_data_pipeline_execution_evidence(report)
 
 

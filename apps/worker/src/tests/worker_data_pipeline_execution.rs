@@ -86,7 +86,7 @@ fn builds_worker_data_pipeline_execution_report() {
     );
     assert_eq!(report["customer_scope_id"], "production-customer");
     assert_eq!(report["run_id"], "wdp_2026_06_14");
-    assert_eq!(report["job_count"], 10);
+    assert_eq!(report["job_count"], 11);
     assert_eq!(
         report["scheduler_status"],
         "completed_with_pending_or_failed_jobs"
@@ -119,7 +119,12 @@ fn builds_worker_data_pipeline_execution_report() {
         executions[4]["execution_status"],
         "scheduled_pending_customer_execution"
     );
-    assert_eq!(report["review_task_count"], 9);
+    assert_eq!(executions[9]["job_kind"], "scoring_online_readback");
+    assert_eq!(
+        executions[9]["execution_status"],
+        "dependency_not_completed"
+    );
+    assert_eq!(report["review_task_count"], 10);
     assert!(report["review_tasks"]
         .as_array()
         .expect("review tasks")

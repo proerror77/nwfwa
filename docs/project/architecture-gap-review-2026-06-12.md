@@ -270,6 +270,12 @@ As of the P1/P2 remediation commits after this review:
   feature contexts, and worker data-pipeline readiness/execution reports all
   enforce the same source-lineage evidence refs expected by their API write
   paths.
+- The worker data-pipeline plan now includes an artifact-only
+  `scoring_online_readback` job after scoring context materialization, and
+  `build-scoring-readback-report` validates captured `/api/v1/claims/score`
+  response artifacts for expected worker evidence prefixes. Missing response
+  artifacts or missing prefixes remain blocked review tasks, not production
+  proof.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
 execution, official OIG/SAM feed configuration and credentials, customer
@@ -291,11 +297,11 @@ completed governed job kinds, submitted governed write jobs, source snapshot
 artifact and lineage evidence, scheduler-reported job success without dependency
 blockers, expected API paths and permission scopes, required execution URIs,
 required per-completed-job artifact URI/evidence refs, required evidence refs,
-and the no-adjudication boundary. It also checks scoring-context materialization source
-lineage against the same episode, peer, clinical, and unbundling evidence refs
-required by the API submit path. Worker-generated plan/readiness/run-status
-templates now surface those required evidence prefixes before scheduler
-execution, and the production readiness
+scoring online readback evidence, and the no-adjudication boundary. It also
+checks scoring-context materialization source lineage against the same episode,
+peer, clinical, and unbundling evidence refs required by the API submit path.
+Worker-generated plan/readiness/run-status templates now surface those required
+evidence prefixes before scheduler execution, and the production readiness
 validator can execute those checks when given the customer evidence directory.
 Worker submit builders now mirror those source-evidence requirements locally,
 so malformed reports fail before any governed write request is sent.
