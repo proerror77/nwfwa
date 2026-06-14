@@ -44,6 +44,71 @@ pub struct WorkerDataPipelineReadinessReportSubmission {
     pub governance_boundary: String,
 }
 
+pub fn build_worker_data_pipeline_readiness_input_template(
+    plan_uri: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let plan_uri = required_non_empty("plan_uri", plan_uri)?;
+    let plan = read_json_report(plan_uri)?;
+    if json_string(&plan, "plan_kind").as_deref() != Some("scheduled_worker_data_pipeline") {
+        bail!(
+            "worker data pipeline readiness input template requires a scheduled_worker_data_pipeline plan"
+        );
+    }
+    let customer_scope_id = json_string(&plan, "customer_scope_id")
+        .context("worker data pipeline plan requires customer_scope_id")?;
+    let jobs = plan
+        .get("jobs")
+        .and_then(|value| value.as_array())
+        .context("worker data pipeline plan requires jobs")?;
+    let checks = jobs
+        .iter()
+        .map(|job| {
+            let job_kind = json_string(job, "job_kind").unwrap_or_else(|| "unknown".into());
+            serde_json::json!({
+                "job_kind": job_kind,
+                "cadence": json_string(job, "cadence"),
+                "build_command": json_string(job, "build_command"),
+                "source_input": json_string(job, "source_input"),
+                "depends_on": job
+                    .get("depends_on")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
+                "artifact_uri": json_string(job, "report_uri"),
+                "customer_approved": false,
+                "external_fetch_configured": false,
+                "row_count": serde_json::Value::Null,
+                "minimum_row_count": 1,
+                "data_quality_status": "pending_customer_validation",
+                "evidence_refs": []
+            })
+        })
+        .collect::<Vec<_>>();
+    let template = serde_json::json!({
+        "report_kind": "worker_data_pipeline_readiness_input_template",
+        "report_version": 1,
+        "template_only": true,
+        "plan_uri": plan_uri,
+        "customer_scope_id": customer_scope_id,
+        "checks": checks,
+        "governance_boundary": "readiness input templates collect customer prerequisite evidence only; they must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy"
+    });
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create worker data pipeline readiness input template output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("worker_data_pipeline_readiness_input_template.json"),
+        &template,
+    )?;
+    Ok(template)
+}
+
 pub fn build_worker_data_pipeline_readiness_report(
     plan_uri: &str,
     readiness_input_uri: &str,

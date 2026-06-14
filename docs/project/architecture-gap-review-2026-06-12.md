@@ -150,6 +150,10 @@ As of the P1/P2 remediation commits after this review:
   scheduler run-status artifacts can reference the readiness report, execution
   evidence records `ready`/`blocked`/`missing`, and missing or blocked readiness
   creates an operations review task instead of silently allowing downstream use.
+- The worker now emits a readiness input template from the scheduled plan so
+  customer operators can fill artifact URIs, approvals, row counts, quality
+  status, external-fetch configuration, and evidence refs without inventing the
+  schema; the generated template remains blocked until that evidence is filled.
 - The worker also emits a run-status template contract so customer schedulers
   can start from the planned job list, readiness report URI, build commands,
   source inputs, dependency list, artifact-only markers, and planned targets
@@ -199,7 +203,9 @@ As of the P1/P2 remediation commits after this review:
   snapshot into the sanctions sync submit path.
 - The worker now has a data-pipeline readiness report that checks customer-
   approved artifact URIs, minimum row counts, data-quality status, evidence
-  refs, and external OIG/SAM fetch configuration before scheduled writes.
+  refs, and external OIG/SAM fetch configuration before scheduled writes. A
+  generated readiness input template gives customer operators the exact evidence
+  fields to fill while preserving a default blocked state.
 - The worker data-pipeline readiness report now has a permission-gated API
   submit path that persists prerequisite evidence and records governance audit
   lineage while explicitly avoiding external fetch execution or artifact

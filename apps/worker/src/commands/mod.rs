@@ -24,6 +24,7 @@ mod build_training_handoff;
 mod build_unbundling_comparator;
 mod build_worker_data_pipeline_execution_report;
 mod build_worker_data_pipeline_plan;
+mod build_worker_data_pipeline_readiness_input_template;
 mod build_worker_data_pipeline_readiness_report;
 mod build_worker_data_pipeline_run_status_template;
 mod check_pilot_readiness;
@@ -147,6 +148,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
             build_worker_data_pipeline_execution_report::run(args)
         }
         "build-worker-data-pipeline-plan" => build_worker_data_pipeline_plan::run(args),
+        "build-worker-data-pipeline-readiness-input-template" => {
+            build_worker_data_pipeline_readiness_input_template::run(args)
+        }
         "build-worker-data-pipeline-readiness-report" => {
             build_worker_data_pipeline_readiness_report::run(args)
         }

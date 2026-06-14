@@ -149,6 +149,7 @@ pub use worker_data_pipeline_run_status::build_worker_data_pipeline_run_status_t
 
 mod worker_data_pipeline_readiness;
 pub use worker_data_pipeline_readiness::{
+    build_worker_data_pipeline_readiness_input_template,
     build_worker_data_pipeline_readiness_report, build_worker_data_pipeline_readiness_submission,
     submit_worker_data_pipeline_readiness_report, WorkerDataPipelineReadinessCheck,
     WorkerDataPipelineReadinessInput, WorkerDataPipelineReadinessReportSubmission,

@@ -1,6 +1,99 @@
 use super::*;
 
 #[test]
+fn builds_worker_data_pipeline_readiness_input_template() {
+    let root = temp_root("worker-data-pipeline-readiness-input-template");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+
+    let template = build_worker_data_pipeline_readiness_input_template(
+        &plan_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect("readiness input template");
+
+    assert_eq!(
+        template["report_kind"],
+        "worker_data_pipeline_readiness_input_template"
+    );
+    assert_eq!(template["template_only"], true);
+    let checks = template["checks"].as_array().expect("checks");
+    assert_eq!(checks.len(), 10);
+    assert_eq!(checks[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
+    assert_eq!(
+        checks[0]["build_command"],
+        "fetch-oig-sam-sanctions-snapshot"
+    );
+    assert_eq!(
+        checks[0]["artifact_uri"],
+        "s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/sanctions/{as_of_date}/oig_sam_sanctions_snapshot.json"
+    );
+    assert_eq!(checks[0]["customer_approved"], false);
+    assert_eq!(checks[0]["external_fetch_configured"], false);
+    assert_eq!(checks[0]["minimum_row_count"], 1);
+    assert_eq!(
+        checks[1]["depends_on"],
+        serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
+    );
+    assert!(output_dir
+        .join("worker_data_pipeline_readiness_input_template.json")
+        .exists());
+}
+
+#[test]
+fn readiness_input_template_remains_blocked_until_customer_evidence_is_filled() {
+    let root = temp_root("worker-data-pipeline-readiness-template-blocked");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let template_dir = root.join("template");
+    let report_dir = root.join("report");
+    let template_uri = template_dir.join("worker_data_pipeline_readiness_input_template.json");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    build_worker_data_pipeline_readiness_input_template(&plan_uri.to_string_lossy(), &template_dir)
+        .expect("readiness input template");
+
+    let report = build_worker_data_pipeline_readiness_report(
+        &plan_uri.to_string_lossy(),
+        &template_uri.to_string_lossy(),
+        &report_dir,
+    )
+    .expect("readiness report from template");
+
+    assert_eq!(report["readiness_status"], "blocked");
+    assert_eq!(report["ready_job_count"], 0);
+    assert_eq!(report["blocked_job_count"], 10);
+    let first_job = &report["job_readiness"].as_array().expect("jobs")[0];
+    assert!(first_job["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("customer_approval_missing")));
+    assert!(first_job["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("row_count_below_minimum")));
+    assert!(first_job["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("missing_evidence_refs")));
+}
+
+#[test]
 fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
     let root = temp_root("worker-data-pipeline-readiness-blocked");
     let plan_uri = root.join("worker_data_pipeline_plan.json");
