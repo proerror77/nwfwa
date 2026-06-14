@@ -1,14 +1,16 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent,
-        ProviderRiskSummaryRecord,
+        ProviderRiskSummaryRecord, ProviderSanctionRecord, ProviderSanctionUpsertInput,
+        SaveProviderSanctionsInput,
     },
 };
 use axum::{extract::State, Json};
 use fwa_audit::ActorContext;
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,6 +20,7 @@ mod validation;
 
 use validation::{
     validate_anomaly_candidate_review, validate_anomaly_clustering_report_submission,
+    validate_sanctions_sync_report_submission,
 };
 
 pub async fn provider_risk_summary(
@@ -105,6 +108,38 @@ pub struct SubmitAnomalyClusteringReportResponse {
     pub audit_event_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SubmitSanctionsSyncReportRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub run_date: String,
+    pub source_uri: String,
+    pub source_date: Option<String>,
+    pub sync_status: String,
+    pub governance_boundary: String,
+    #[serde(default)]
+    pub provider_upserts: Vec<ProviderSanctionUpsertInput>,
+    #[serde(default)]
+    pub review_tasks: Vec<Value>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitSanctionsSyncReportResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub provider_upsert_count: usize,
+    pub review_task_count: usize,
+    pub persisted_provider_sanctions: Vec<ProviderSanctionRecord>,
+    pub active_scoring_policy_change: bool,
+    pub label_assignment: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AnomalyReviewQueueResponse {
     pub tasks: Vec<AnomalyReviewQueueTask>,
@@ -154,6 +189,43 @@ pub async fn submit_anomaly_clustering_report(
     record_anomaly_clustering_report_audit(&state, &actor, &request, &response)
         .await
         .map_err(internal_error("ANOMALY_CLUSTERING_REPORT_AUDIT_FAILED"))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_sanctions_sync_report(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitSanctionsSyncReportRequest>,
+) -> Result<Json<SubmitSanctionsSyncReportResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:providers:write")?;
+    validate_sanctions_sync_report_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_provider_sanctions(SaveProviderSanctionsInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            provider_upserts: request.provider_upserts.clone(),
+        })
+        .await
+        .map_err(internal_error("PROVIDER_SANCTIONS_SAVE_FAILED"))?;
+    let response = SubmitSanctionsSyncReportResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        provider_upsert_count: persisted.len(),
+        review_task_count: request.review_tasks.len(),
+        persisted_provider_sanctions: persisted,
+        active_scoring_policy_change: false,
+        label_assignment: false,
+        governance_boundary:
+            "sanctions sync submission writes provider sanctions only; it must not change scoring policy, assign fraud labels, or adjudicate claims"
+                .into(),
+        audit_event_type: "provider.sanctions_sync.submitted".into(),
+    };
+    record_sanctions_sync_report_audit(&state, &actor, &request, &response)
+        .await
+        .map_err(internal_error("PROVIDER_SANCTIONS_AUDIT_FAILED"))?;
     Ok(Json(response))
 }
 
@@ -251,6 +323,54 @@ async fn record_anomaly_clustering_report_audit(
                 "model_activation": response.model_activation,
                 "label_assignment": response.label_assignment,
                 "case_creation": response.case_creation,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_sanctions_sync_report_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    request: &SubmitSanctionsSyncReportRequest,
+    response: &SubmitSanctionsSyncReportResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: response.audit_event_type.clone(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "Provider sanctions sync report submitted: {}",
+                request.source_report_uri
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "run_date": request.run_date,
+                "source_uri": request.source_uri,
+                "source_date": request.source_date,
+                "sync_status": request.sync_status,
+                "provider_upsert_count": response.provider_upsert_count,
+                "review_task_count": response.review_task_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "label_assignment": response.label_assignment,
             }),
             evidence_refs: request
                 .evidence_refs
@@ -461,4 +581,18 @@ fn queue_key(source_report_uri: &str, candidate_kind: &str, candidate_id: &str) 
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            axum::http::StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

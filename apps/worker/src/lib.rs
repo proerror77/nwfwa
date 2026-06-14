@@ -137,8 +137,10 @@ pub use ops_plans::{
 
 mod sanctions;
 pub use sanctions::{
-    build_sanctions_sync_report, SanctionsProviderUpsert, SanctionsSourceRecord,
-    SanctionsSourceSnapshot, SanctionsSyncReport, SanctionsSyncReviewTask,
+    build_sanctions_sync_report, build_sanctions_sync_report_submission,
+    submit_sanctions_sync_report, SanctionsProviderUpsert, SanctionsSourceRecord,
+    SanctionsSourceSnapshot, SanctionsSyncReport, SanctionsSyncReportSubmission,
+    SanctionsSyncReviewTask,
 };
 
 mod provider_profile_rollup;

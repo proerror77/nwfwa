@@ -264,6 +264,10 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             post(ops_providers::submit_anomaly_clustering_report),
         )
         .route(
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            post(ops_providers::submit_sanctions_sync_report),
+        )
+        .route(
             "/api/v1/ops/providers/anomaly-review-queue",
             get(ops_providers::anomaly_review_queue),
         )

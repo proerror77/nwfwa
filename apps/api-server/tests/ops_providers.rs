@@ -25,17 +25,50 @@ fn test_config() -> AppConfig {
     }
 }
 
+fn test_config_with_provider_actors() -> AppConfig {
+    AppConfig {
+        api_key: "legacy-secret".into(),
+        api_key_principals: vec![
+            "provider-read-secret|provider-reader|operations_reviewer|ops-studio|demo-customer|ops:providers:read,audit:read".into(),
+            "provider-write-secret|provider-writer|fwa_operator|ops-studio|demo-customer|ops:providers:read,ops:providers:write,audit:read".into(),
+        ],
+        source_system: "tpa-demo".into(),
+        database_url: "postgres://unused".into(),
+        model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    }
+}
+
 async fn json_request(
     app: axum::Router,
     method: &str,
     uri: &str,
     body: &str,
 ) -> (StatusCode, serde_json::Value) {
+    json_request_with_key(app, method, uri, body, "dev-secret").await
+}
+
+async fn json_request_with_key(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+    api_key: &str,
+) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .header("x-api-key", "dev-secret")
+        .header("x-api-key", api_key)
         .body(Body::from(body.to_string()))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -43,6 +76,90 @@ async fn json_request(
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
     (status, body)
+}
+
+fn sanctions_sync_report_payload() -> &'static str {
+    r#"{
+      "actor": "worker:sync-oig-sam-sanctions",
+      "notes": "daily sanctions sync report",
+      "source_report_uri": "local://artifacts/sanctions/sanctions_sync_report.json",
+      "report_kind": "oig_sam_sanctions_sync_report",
+      "run_date": "2026-06-14",
+      "source_uri": "local://inputs/oig-sam-snapshot.json",
+      "source_date": "2026-06-13",
+      "sync_status": "ready_to_apply",
+      "provider_upserts": [
+        {
+          "sanction_key": "OIG:PRV-SANCTIONED-1",
+          "list": "OIG",
+          "provider_id": "PRV-SANCTIONED-1",
+          "npi": null,
+          "provider_name": "Excluded Provider Group",
+          "sanction_type": "exclusion",
+          "effective_date": "2026-06-01",
+          "source_ref": "oig:2026-06:PRV-SANCTIONED-1",
+          "risk_feature": "provider_sanctions_excluded",
+          "risk_score": 100
+        }
+      ],
+      "review_tasks": [],
+      "evidence_refs": [
+        "sanctions_sync_reports:local://artifacts/sanctions/sanctions_sync_report.json",
+        "sanctions_source_snapshot:local://inputs/oig-sam-snapshot.json"
+      ],
+      "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+    }"#
+}
+
+#[tokio::test]
+async fn submits_provider_sanctions_sync_report() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/sanctions-sync-reports",
+        sanctions_sync_report_payload(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "oig_sam_sanctions_sync_report");
+    assert_eq!(body["provider_upsert_count"], 1);
+    assert_eq!(body["review_task_count"], 0);
+    assert_eq!(
+        body["persisted_provider_sanctions"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_provider_sanctions"][0]["sanction_key"],
+        "OIG:PRV-SANCTIONED-1"
+    );
+    assert_eq!(
+        body["persisted_provider_sanctions"][0]["risk_feature"],
+        "provider_sanctions_excluded"
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["label_assignment"], false);
+}
+
+#[tokio::test]
+async fn provider_sanctions_sync_requires_provider_write_permission() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/sanctions-sync-reports",
+        sanctions_sync_report_payload(),
+        "provider-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:providers:write");
 }
 
 #[tokio::test]

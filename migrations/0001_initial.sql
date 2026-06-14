@@ -826,6 +826,30 @@ CREATE TABLE IF NOT EXISTS scoring_feature_context_materializations (
 CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_scope_date_idx
   ON scoring_feature_context_materializations(customer_scope_id, as_of_date);
 
+CREATE TABLE IF NOT EXISTS provider_sanctions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  sanction_key TEXT NOT NULL,
+  list TEXT NOT NULL,
+  provider_id TEXT,
+  npi TEXT,
+  provider_name TEXT NOT NULL,
+  sanction_type TEXT,
+  effective_date TEXT,
+  source_ref TEXT,
+  risk_feature TEXT NOT NULL,
+  risk_score INTEGER NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, sanction_key)
+);
+
+CREATE INDEX IF NOT EXISTS provider_sanctions_scope_provider_idx
+  ON provider_sanctions(customer_scope_id, provider_id);
+
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

@@ -679,6 +679,13 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::provider_risk_summary(self).await
     }
 
+    async fn save_provider_sanctions(
+        &self,
+        input: SaveProviderSanctionsInput,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        postgres_providers::save_provider_sanctions(self, input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         postgres_knowledge::list_knowledge_cases(self).await
     }

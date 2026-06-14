@@ -9,6 +9,7 @@ mod evidence;
 mod knowledge_agents;
 mod models;
 mod outcomes;
+mod providers;
 mod routing;
 mod rules;
 mod trait_impl;
@@ -50,6 +51,7 @@ pub struct InMemoryScoringRepository {
     model_retraining_jobs: Mutex<HashMap<String, ModelRetrainingJobRecord>>,
     model_retraining_job_sequence: Mutex<u64>,
     model_statuses: Mutex<HashMap<String, String>>,
+    provider_sanctions: Mutex<HashMap<String, ProviderSanctionRecord>>,
     routing_policies: Mutex<Vec<RoutingPolicyRecord>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,

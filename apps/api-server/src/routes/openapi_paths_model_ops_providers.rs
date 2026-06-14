@@ -50,6 +50,39 @@ pub(super) fn provider_paths() -> Value {
                 }
             }
         },
+        "/api/v1/ops/providers/sanctions-sync-reports": {
+            "post": {
+                "summary": "Submit OIG/SAM sanctions sync report provider upserts",
+                "description": "Persists provider sanctions from a worker-generated sync report. This writes provider sanctions only; it does not change scoring policy, assign fraud labels, or adjudicate claims.",
+                "security": [{ "ApiKeyAuth": [] }],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": { "$ref": "#/components/schemas/SubmitSanctionsSyncReportRequest" }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Persisted provider sanctions upserts",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitSanctionsSyncReportResponse" }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Requires ops:providers:write permission",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ops/providers/anomaly-review-queue": {
             "get": {
                 "summary": "List anomaly candidates derived from submitted clustering reports",

@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-use crate::{read_json_report, write_json};
+use crate::{api_url, read_json_report, required_non_empty, write_json};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SanctionsSourceSnapshot {
@@ -63,6 +63,22 @@ pub struct SanctionsSyncReport {
     pub governance_boundary: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SanctionsSyncReportSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub run_date: String,
+    pub source_uri: String,
+    pub source_date: Option<String>,
+    pub sync_status: String,
+    pub provider_upserts: Vec<SanctionsProviderUpsert>,
+    pub review_tasks: Vec<serde_json::Value>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
 pub fn build_sanctions_sync_report(
     source_uri: &str,
     output_dir: impl AsRef<Path>,
@@ -70,7 +86,9 @@ pub fn build_sanctions_sync_report(
     dry_run: bool,
 ) -> anyhow::Result<SanctionsSyncReport> {
     if !dry_run {
-        bail!("sanctions sync currently supports --dry-run only; repository writes are not implemented");
+        bail!(
+            "direct sanctions sync currently supports --dry-run only; use submit-sanctions-sync-report for approved API writes"
+        );
     }
     if run_date.trim().is_empty() {
         bail!("run_date is required");
@@ -142,6 +160,75 @@ pub fn build_sanctions_sync_report(
         &report.provider_upserts,
     )?;
     Ok(report)
+}
+
+pub fn build_sanctions_sync_report_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<SanctionsSyncReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report: SanctionsSyncReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse sanctions sync report")?;
+    if report.report_kind != "oig_sam_sanctions_sync_report" {
+        bail!("report_kind must be oig_sam_sanctions_sync_report");
+    }
+    if report.provider_upserts.is_empty() {
+        bail!("sanctions sync report requires provider_upserts before API submission");
+    }
+    let mut evidence_refs = report.evidence_refs;
+    evidence_refs.push(format!("sanctions_sync_reports:{report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    Ok(SanctionsSyncReportSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: report_uri.into(),
+        report_kind: report.report_kind,
+        run_date: report.run_date,
+        source_uri: report.source_uri,
+        source_date: report.source_date,
+        sync_status: report.sync_status,
+        provider_upserts: report.provider_upserts,
+        review_tasks: report
+            .review_tasks
+            .into_iter()
+            .map(serde_json::to_value)
+            .collect::<Result<Vec<_>, _>>()?,
+        evidence_refs,
+        governance_boundary: report.governance_boundary,
+    })
+}
+
+pub async fn submit_sanctions_sync_report(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_sanctions_sync_report_submission(report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/providers/sanctions-sync-reports",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit sanctions sync report")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit sanctions sync report failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse sanctions sync report response")
 }
 
 fn sanctions_record_validation_error(record: &SanctionsSourceRecord) -> Option<String> {

@@ -649,6 +649,13 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_provider_risk_summary().await
     }
 
+    async fn save_provider_sanctions(
+        &self,
+        input: SaveProviderSanctionsInput,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        self.in_memory_save_provider_sanctions(input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         self.in_memory_list_knowledge_cases().await
     }

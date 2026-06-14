@@ -87,6 +87,89 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["provider.anomaly_clustering.report_submitted"] }
             }
         },
+        "ProviderSanctionUpsert": {
+            "type": "object",
+            "required": ["sanction_key", "list", "provider_name", "risk_feature", "risk_score"],
+            "properties": {
+                "sanction_key": { "type": "string", "minLength": 1 },
+                "list": { "type": "string", "enum": ["OIG", "SAM"] },
+                "provider_id": { "type": ["string", "null"] },
+                "npi": { "type": ["string", "null"] },
+                "provider_name": { "type": "string", "minLength": 1 },
+                "sanction_type": { "type": ["string", "null"] },
+                "effective_date": { "type": ["string", "null"] },
+                "source_ref": { "type": ["string", "null"] },
+                "risk_feature": { "type": "string", "const": "provider_sanctions_excluded" },
+                "risk_score": { "type": "integer", "const": 100 }
+            }
+        },
+        "ProviderSanctionRecord": {
+            "allOf": [
+                { "$ref": "#/components/schemas/ProviderSanctionUpsert" },
+                {
+                    "type": "object",
+                    "required": ["customer_scope_id", "source_report_uri", "submitted_by", "notes"],
+                    "properties": {
+                        "customer_scope_id": { "type": "string" },
+                        "source_report_uri": { "type": "string" },
+                        "submitted_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                }
+            ]
+        },
+        "SubmitSanctionsSyncReportRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "run_date", "source_uri", "sync_status", "provider_upserts", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "oig_sam_sanctions_sync_report" },
+                "run_date": { "type": "string", "minLength": 1 },
+                "source_uri": { "type": "string", "minLength": 1 },
+                "source_date": { "type": ["string", "null"] },
+                "sync_status": { "type": "string", "minLength": 1 },
+                "provider_upserts": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/ProviderSanctionUpsert" }
+                },
+                "review_tasks": {
+                    "type": "array",
+                    "items": { "type": "object" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include sanctions_sync_reports:{source_report_uri}."
+                },
+                "governance_boundary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Source worker report boundary. Submission writes provider sanctions only."
+                }
+            }
+        },
+        "SubmitSanctionsSyncReportResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "provider_upsert_count", "review_task_count", "persisted_provider_sanctions", "active_scoring_policy_change", "label_assignment", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "oig_sam_sanctions_sync_report" },
+                "source_report_uri": { "type": "string" },
+                "provider_upsert_count": { "type": "integer" },
+                "review_task_count": { "type": "integer" },
+                "persisted_provider_sanctions": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/ProviderSanctionRecord" }
+                },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["provider.sanctions_sync.submitted"] }
+            }
+        },
         "AnomalyReviewQueueTask": {
             "type": "object",
             "required": ["candidate_kind", "candidate_id", "task_kind", "review_queue", "required_review", "decision_options", "source_report_uri", "report_kind", "dataset_key", "dataset_version", "label_policy", "governance_boundary", "review_status", "candidate_payload", "evidence_refs"],

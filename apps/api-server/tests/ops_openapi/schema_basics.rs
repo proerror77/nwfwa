@@ -54,6 +54,7 @@ pub(crate) fn assert_paths_health_and_inbox_contract(schema: &serde_json::Value)
         "/api/v1/ops/dashboard/summary",
         "/api/v1/ops/providers/risk-summary",
         "/api/v1/ops/providers/anomaly-clustering-reports",
+        "/api/v1/ops/providers/sanctions-sync-reports",
         "/api/v1/ops/providers/anomaly-review-queue",
         "/api/v1/ops/providers/anomaly-candidate-reviews",
         "/api/v1/ops/webhook-events",

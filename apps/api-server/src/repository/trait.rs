@@ -458,6 +458,11 @@ pub trait KnowledgeRepository: Send + Sync {
 
     async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord>;
 
+    async fn save_provider_sanctions(
+        &self,
+        input: SaveProviderSanctionsInput,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>>;
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
     async fn save_knowledge_case(

@@ -143,6 +143,33 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
         );
     }
     assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/sanctions-sync-reports"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitSanctionsSyncReportRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/sanctions-sync-reports"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitSanctionsSyncReportResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderSanctionUpsert"]["properties"]["risk_feature"]
+            ["const"],
+        "provider_sanctions_excluded"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderSanctionUpsert"]["properties"]["risk_score"]
+            ["const"],
+        100
+    );
+    for field in ["active_scoring_policy_change", "label_assignment"] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitSanctionsSyncReportResponse"]["properties"]
+                [field]["const"],
+            false
+        );
+    }
+    assert_eq!(
         schema["components"]["schemas"]["AnomalyReviewQueueResponse"]["properties"]["tasks"]
             ["items"]["$ref"],
         "#/components/schemas/AnomalyReviewQueueTask"
