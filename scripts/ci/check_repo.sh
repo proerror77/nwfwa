@@ -640,6 +640,81 @@ python3 scripts/ops/build_production_deployment_package.py \
 python3 scripts/ops/validate_production_deployment_package.py --package-dir /tmp/nwfwa-production-deployment
 python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwfwa-production-readiness >/tmp/nwfwa-production-readiness.json
 python3 scripts/ops/validate_production_readiness_contract.py --contract-dir /tmp/nwfwa-production-readiness
+python3 - <<'PY'
+import importlib.util
+from pathlib import Path
+
+module_path = Path("scripts/ops/validate_production_readiness_contract.py")
+spec = importlib.util.spec_from_file_location("readiness_validator", module_path)
+validator = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(validator)
+
+
+def worker_execution_report(artifact_uri, include_write_refs=True):
+    jobs = []
+    for job_kind in sorted(validator.WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS):
+        evidence_refs = [f"worker_job_artifacts:{job_kind}:2026-06-14"]
+        write_prefix = validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES.get(job_kind)
+        if include_write_refs and write_prefix:
+            evidence_refs.append(f"{write_prefix}s3://nwfwa-production-artifacts/{job_kind}.json")
+        if job_kind == "oig_sam_sanctions_snapshot_fetch":
+            evidence_refs.append("oig_sam_snapshot:2026-06-14")
+        jobs.append(
+            {
+                "job_kind": job_kind,
+                "execution_status": "completed",
+                "reported_status": "succeeded",
+                "reported_artifact_uri": artifact_uri,
+                "evidence_refs": evidence_refs,
+                "submitted": job_kind in validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
+                "blocked_dependencies": [],
+                "api_path": validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS.get(job_kind),
+                "required_permission": validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS.get(job_kind),
+            }
+        )
+    return {
+        "report_kind": "worker_data_pipeline_execution_report",
+        "readiness_gate_status": "ready",
+        "plan_uri": "s3://nwfwa-production-artifacts/worker-data-pipeline/plan.json",
+        "run_status_uri": "s3://nwfwa-production-artifacts/worker-data-pipeline/run-status.json",
+        "readiness_report_uri": "s3://nwfwa-production-artifacts/worker-data-pipeline/readiness.json",
+        "run_id": "wdp_2026_06_14",
+        "execution_date": "2026-06-14",
+        "scheduler_status": "completed",
+        "pending_or_failed_job_count": 0,
+        "review_task_count": 0,
+        "job_count": len(jobs),
+        "job_executions": jobs,
+        "evidence_refs": [
+            "worker_data_pipeline_plans:s3://nwfwa-production-artifacts/worker-data-pipeline/plan.json",
+            "worker_data_pipeline_run_status:s3://nwfwa-production-artifacts/worker-data-pipeline/run-status.json",
+            "worker_data_pipeline_readiness_reports:s3://nwfwa-production-artifacts/worker-data-pipeline/readiness.json",
+        ],
+        "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
+    }
+
+
+def assert_rejected(report, label):
+    try:
+        validator.validate_worker_data_pipeline_execution_evidence(report)
+    except AssertionError:
+        return
+    raise AssertionError(f"production readiness validator accepted invalid worker evidence: {label}")
+
+
+assert_rejected(worker_execution_report("local://worker-data-pipeline/report.json"), "local artifact URI")
+assert_rejected(
+    worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/{as_of_date}/report.json"),
+    "template artifact URI",
+)
+assert_rejected(
+    worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json", include_write_refs=False),
+    "missing governed write evidence refs",
+)
+validator.validate_worker_data_pipeline_execution_evidence(
+    worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json")
+)
+PY
 python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
 python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation >/tmp/nwfwa-ai-evidence-foundation.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
