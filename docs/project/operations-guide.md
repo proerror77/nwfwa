@@ -781,8 +781,8 @@ The worker data-pipeline gate requires the customer
 `worker_data_pipeline_execution_report.json` to pass the contract acceptance
 checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
 zero review tasks, all governed worker job kinds completed, required execution
-URIs present, plan/run-status/readiness evidence refs present, and the
-no-adjudication governance boundary preserved. Every job must show
+URIs present as production artifact URIs, plan/run-status/readiness evidence
+refs present, and the no-adjudication governance boundary preserved. Every job must show
 `reported_status = succeeded` and no blocked dependencies. Every completed job
 must report a production artifact URI rather than a local dry-run URI or
 template placeholder. All governed submit jobs must also show

@@ -703,6 +703,9 @@ def assert_rejected(report, label):
 
 
 assert_rejected(worker_execution_report("local://worker-data-pipeline/report.json"), "local artifact URI")
+local_plan_report = worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json")
+local_plan_report["plan_uri"] = "local://worker-data-pipeline/plan.json"
+assert_rejected(local_plan_report, "local plan URI")
 assert_rejected(
     worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/{as_of_date}/report.json"),
     "template artifact URI",

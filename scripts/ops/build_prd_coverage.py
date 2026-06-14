@@ -170,6 +170,10 @@ CAPABILITIES = [
             ),
             (
                 "scripts/ops/build_production_readiness_contract.py",
+                "required_execution_uris_are_production_uris",
+            ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
                 "governed_submit_jobs_submitted",
             ),
             (

@@ -87,6 +87,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "report_kind_is_worker_data_pipeline_execution_report",
     "readiness_gate_status_ready",
     "required_execution_uris_and_run_identity_present",
+    "required_execution_uris_are_production_uris",
     "scheduler_status_completed",
     "pending_or_failed_job_count_zero",
     "review_task_count_zero",
@@ -339,6 +340,11 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         require(
             isinstance(report.get(field_name), str) and report[field_name].strip(),
             f"worker data pipeline execution evidence must include {field_name}",
+        )
+    for field_name in ("plan_uri", "run_status_uri", "readiness_report_uri"):
+        require(
+            is_production_artifact_uri(report.get(field_name)),
+            f"worker data pipeline execution evidence {field_name} must be a production artifact URI, not a local dry-run or template URI",
         )
     require(
         report.get("scheduler_status") == "completed",

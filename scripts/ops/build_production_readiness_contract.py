@@ -49,6 +49,10 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
         "description": "Execution evidence includes non-empty plan_uri, run_status_uri, readiness_report_uri, run_id, and execution_date.",
     },
     {
+        "check_id": "required_execution_uris_are_production_uris",
+        "description": "Execution evidence plan_uri, run_status_uri, and readiness_report_uri are customer-environment production artifact URIs, not local dry-run or template placeholders.",
+    },
+    {
         "check_id": "scheduler_status_completed",
         "description": "Customer scheduler report has scheduler_status = completed.",
     },
