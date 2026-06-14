@@ -55,6 +55,29 @@ pub struct InvestigationPackage {
     pub evidence_refs_by_type: EvidenceReferenceBuckets,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InvestigationCancellationError {
+    pub checkpoint: String,
+    pub reason: String,
+}
+
+pub trait InvestigationCancellation {
+    fn is_cancelled(&self, checkpoint: &str) -> bool;
+
+    fn cancellation_reason(&self) -> Option<&str> {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NoopInvestigationCancellation;
+
+impl InvestigationCancellation for NoopInvestigationCancellation {
+    fn is_cancelled(&self, _checkpoint: &str) -> bool {
+        false
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SpecialistAgentTask {
     pub agent_kind: String,
@@ -70,6 +93,12 @@ pub trait InvestigationOrchestrator {
     fn specialist_plan(&self, request: &InvestigationRequest) -> Vec<SpecialistAgentTask>;
 
     fn orchestrate(&self, request: InvestigationRequest) -> InvestigationPackage;
+
+    fn orchestrate_with_cancellation(
+        &self,
+        request: InvestigationRequest,
+        cancellation: &(dyn InvestigationCancellation + Sync),
+    ) -> Result<InvestigationPackage, InvestigationCancellationError>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -77,8 +106,19 @@ pub struct DeterministicInvestigator;
 
 impl DeterministicInvestigator {
     pub fn investigate(self, request: InvestigationRequest) -> InvestigationPackage {
+        self.investigate_with_cancellation(request, &NoopInvestigationCancellation)
+            .expect("noop cancellation cannot cancel")
+    }
+
+    pub fn investigate_with_cancellation(
+        self,
+        request: InvestigationRequest,
+        cancellation: &(dyn InvestigationCancellation + Sync),
+    ) -> Result<InvestigationPackage, InvestigationCancellationError> {
+        check_cancellation(cancellation, "investigation.start")?;
         let agent_run_id = format!("agent_{}", Ulid::new());
         let findings = build_findings(&request);
+        check_cancellation(cancellation, "investigation.findings_built")?;
         let mut evidence_refs = findings
             .iter()
             .flat_map(|finding| finding.evidence_refs.clone())
@@ -90,10 +130,12 @@ impl DeterministicInvestigator {
         evidence_refs.sort();
         evidence_refs.dedup();
         let evidence_refs_by_type = bucket_evidence_refs(&evidence_refs);
+        check_cancellation(cancellation, "investigation.evidence_refs_bucketed")?;
 
         let evidence_sufficiency = build_evidence_sufficiency(&request);
+        check_cancellation(cancellation, "investigation.evidence_sufficiency_built")?;
 
-        InvestigationPackage {
+        Ok(InvestigationPackage {
             agent_run_id,
             decision_boundary: "assistive_only".into(),
             risk_summary: format!(
@@ -113,7 +155,7 @@ impl DeterministicInvestigator {
             evidence_sufficiency,
             evidence_refs,
             evidence_refs_by_type,
-        }
+        })
     }
 }
 
@@ -128,6 +170,14 @@ impl InvestigationOrchestrator for DeterministicInvestigator {
 
     fn orchestrate(&self, request: InvestigationRequest) -> InvestigationPackage {
         self.investigate(request)
+    }
+
+    fn orchestrate_with_cancellation(
+        &self,
+        request: InvestigationRequest,
+        cancellation: &(dyn InvestigationCancellation + Sync),
+    ) -> Result<InvestigationPackage, InvestigationCancellationError> {
+        self.investigate_with_cancellation(request, cancellation)
     }
 }
 
@@ -157,6 +207,23 @@ fn build_findings(request: &InvestigationRequest) -> Vec<InvestigationFinding> {
         });
     }
     findings
+}
+
+fn check_cancellation(
+    cancellation: &(dyn InvestigationCancellation + Sync),
+    checkpoint: &'static str,
+) -> Result<(), InvestigationCancellationError> {
+    if cancellation.is_cancelled(checkpoint) {
+        Err(InvestigationCancellationError {
+            checkpoint: checkpoint.into(),
+            reason: cancellation
+                .cancellation_reason()
+                .unwrap_or("investigation cancelled")
+                .into(),
+        })
+    } else {
+        Ok(())
+    }
 }
 
 fn build_evidence_sufficiency(request: &InvestigationRequest) -> EvidenceSufficiency {
@@ -425,6 +492,61 @@ mod tests {
         }));
         assert_eq!(package.decision_boundary, "assistive_only");
         assert!(package.agent_run_id.starts_with("agent_"));
+    }
+
+    #[test]
+    fn deterministic_orchestrator_supports_noop_cancellation_signal() {
+        let request = InvestigationRequest {
+            claim_id: "CLM-0287".into(),
+            risk_score: 87,
+            rag: "RED".into(),
+            scheme_family: "provider_peer_outlier".into(),
+            top_reasons: vec!["Provider peer outlier".into()],
+            similar_cases: vec![],
+        };
+
+        let orchestrator: &dyn InvestigationOrchestrator = &DeterministicInvestigator;
+        let package = orchestrator
+            .orchestrate_with_cancellation(request, &NoopInvestigationCancellation)
+            .expect("noop cancellation should not stop investigation");
+
+        assert_eq!(package.decision_boundary, "assistive_only");
+        assert!(package.agent_run_id.starts_with("agent_"));
+    }
+
+    #[test]
+    fn deterministic_orchestrator_stops_at_cancelled_checkpoint() {
+        struct CancelAt(&'static str);
+
+        impl InvestigationCancellation for CancelAt {
+            fn is_cancelled(&self, checkpoint: &str) -> bool {
+                checkpoint == self.0
+            }
+
+            fn cancellation_reason(&self) -> Option<&str> {
+                Some("operator kill-switch requested")
+            }
+        }
+
+        let request = InvestigationRequest {
+            claim_id: "CLM-0287".into(),
+            risk_score: 87,
+            rag: "RED".into(),
+            scheme_family: "provider_peer_outlier".into(),
+            top_reasons: vec!["Provider peer outlier".into()],
+            similar_cases: vec![],
+        };
+
+        let orchestrator: &dyn InvestigationOrchestrator = &DeterministicInvestigator;
+        let error = orchestrator
+            .orchestrate_with_cancellation(
+                request,
+                &CancelAt("investigation.evidence_refs_bucketed"),
+            )
+            .expect_err("cancelled checkpoint should stop investigation");
+
+        assert_eq!(error.checkpoint, "investigation.evidence_refs_bucketed");
+        assert_eq!(error.reason, "operator kill-switch requested");
     }
 
     #[test]
