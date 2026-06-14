@@ -734,6 +734,15 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_provider_sanctions(self, input).await
     }
 
+    async fn provider_sanctions_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        postgres_providers::provider_sanctions_for_provider(self, provider_id, customer_scope_id)
+            .await
+    }
+
     async fn save_provider_profile_windows(
         &self,
         input: SaveProviderProfileWindowsInput,

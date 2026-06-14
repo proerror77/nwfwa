@@ -33,6 +33,32 @@ impl InMemoryScoringRepository {
         Ok(saved)
     }
 
+    pub(super) async fn in_memory_provider_sanctions_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        let mut records = self
+            .provider_sanctions
+            .lock()
+            .await
+            .values()
+            .filter(|record| record.provider_id.as_deref() == Some(provider_id))
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| {
+            left.list
+                .cmp(&right.list)
+                .then_with(|| left.sanction_key.cmp(&right.sanction_key))
+        });
+        Ok(records)
+    }
+
     pub(super) async fn in_memory_save_provider_profile_windows(
         &self,
         input: SaveProviderProfileWindowsInput,

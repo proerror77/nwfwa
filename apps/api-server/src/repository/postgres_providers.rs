@@ -138,6 +138,76 @@ pub(super) async fn save_provider_profile_windows(
     Ok(saved)
 }
 
+pub(super) async fn provider_sanctions_for_provider(
+    repository: &PostgresScoringRepository,
+    provider_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+    let rows: Vec<(
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        String,
+        i32,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT customer_scope_id, sanction_key, list, provider_id, npi, provider_name, sanction_type, effective_date, source_ref, risk_feature, risk_score, source_report_uri, submitted_by, notes
+             FROM provider_sanctions
+             WHERE provider_id = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)
+             ORDER BY list ASC, sanction_key ASC",
+    )
+    .bind(provider_id)
+    .bind(customer_scope_id)
+    .fetch_all(&repository.pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(
+                customer_scope_id,
+                sanction_key,
+                list,
+                provider_id,
+                npi,
+                provider_name,
+                sanction_type,
+                effective_date,
+                source_ref,
+                risk_feature,
+                risk_score,
+                source_report_uri,
+                submitted_by,
+                notes,
+            )| ProviderSanctionRecord {
+                customer_scope_id,
+                sanction_key,
+                list,
+                provider_id,
+                npi,
+                provider_name,
+                sanction_type,
+                effective_date,
+                source_ref,
+                risk_feature,
+                risk_score: risk_score as u8,
+                source_report_uri,
+                submitted_by,
+                notes,
+            },
+        )
+        .collect())
+}
+
 pub(super) async fn latest_provider_profile_windows_for_provider(
     repository: &PostgresScoringRepository,
     provider_id: &str,

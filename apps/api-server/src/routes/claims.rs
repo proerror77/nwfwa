@@ -179,49 +179,88 @@ async fn resolve_provider_profile_input(
     provider_id: &str,
     inline_profile: Option<ProviderProfileInput>,
 ) -> Result<(Option<ProviderProfileInput>, Vec<serde_json::Value>), ApiError> {
-    if inline_profile.is_some() {
-        return Ok((inline_profile, Vec::new()));
+    let mut profile = inline_profile;
+    let mut evidence_refs = Vec::new();
+
+    if profile.is_none() {
+        if let Some(record) = state
+            .repository
+            .latest_provider_profile_windows_for_provider(
+                provider_id,
+                Some(&actor.customer_scope_id),
+            )
+            .await
+            .map_err(internal_error("PROVIDER_PROFILE_LOAD_FAILED"))?
+        {
+            let windows = serde_json::from_value::<Vec<ProviderProfileWindowPayload>>(
+                serde_json::Value::Array(record.windows),
+            )
+            .map_err(internal_error("PROVIDER_PROFILE_PARSE_FAILED"))?;
+            profile = Some(ProviderProfileInput::from(ProviderProfilePayload {
+                specialty: record.specialty,
+                network_status: record.network_status,
+                oig_excluded: None,
+                sam_debarred: None,
+                windows,
+            }));
+            evidence_refs.extend(
+                record
+                    .evidence_refs
+                    .into_iter()
+                    .chain([
+                        format!(
+                            "provider_profile_windows:{}:{}",
+                            record.provider_id, record.as_of_date
+                        ),
+                        format!(
+                            "provider_profile_window_rollups:{}",
+                            record.source_report_uri
+                        ),
+                    ])
+                    .map(serde_json::Value::String),
+            );
+        }
     }
 
-    let Some(record) = state
+    let sanctions = state
         .repository
-        .latest_provider_profile_windows_for_provider(provider_id, Some(&actor.customer_scope_id))
+        .provider_sanctions_for_provider(provider_id, Some(&actor.customer_scope_id))
         .await
-        .map_err(internal_error("PROVIDER_PROFILE_LOAD_FAILED"))?
-    else {
-        return Ok((None, Vec::new()));
-    };
+        .map_err(internal_error("PROVIDER_SANCTIONS_LOAD_FAILED"))?;
+    let oig_excluded = sanctions
+        .iter()
+        .any(|record| record.list.eq_ignore_ascii_case("OIG"));
+    let sam_debarred = sanctions
+        .iter()
+        .any(|record| record.list.eq_ignore_ascii_case("SAM"));
+    if oig_excluded || sam_debarred {
+        let profile = profile.get_or_insert_with(|| ProviderProfileInput {
+            specialty: None,
+            network_status: None,
+            oig_excluded: None,
+            sam_debarred: None,
+            windows: Vec::new(),
+        });
+        if oig_excluded {
+            profile.oig_excluded = Some(true);
+        }
+        if sam_debarred {
+            profile.sam_debarred = Some(true);
+        }
+        evidence_refs.extend(sanctions.into_iter().flat_map(|record| {
+            [
+                serde_json::Value::String(format!("provider_sanctions:{}", record.sanction_key)),
+                serde_json::Value::String(format!(
+                    "sanctions_sync_reports:{}",
+                    record.source_report_uri
+                )),
+            ]
+        }));
+    }
 
-    let windows = serde_json::from_value::<Vec<ProviderProfileWindowPayload>>(
-        serde_json::Value::Array(record.windows),
-    )
-    .map_err(internal_error("PROVIDER_PROFILE_PARSE_FAILED"))?;
-    let profile = ProviderProfileInput::from(ProviderProfilePayload {
-        specialty: record.specialty,
-        network_status: record.network_status,
-        oig_excluded: None,
-        sam_debarred: None,
-        windows,
-    });
-    let mut evidence_refs = record
-        .evidence_refs
-        .into_iter()
-        .chain([
-            format!(
-                "provider_profile_windows:{}:{}",
-                record.provider_id, record.as_of_date
-            ),
-            format!(
-                "provider_profile_window_rollups:{}",
-                record.source_report_uri
-            ),
-        ])
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .map(serde_json::Value::String)
-        .collect::<Vec<_>>();
     evidence_refs.sort_by_key(|value| value.to_string());
-    Ok((Some(profile), evidence_refs))
+    evidence_refs.dedup();
+    Ok((profile, evidence_refs))
 }
 
 async fn resolve_provider_relationships_input(

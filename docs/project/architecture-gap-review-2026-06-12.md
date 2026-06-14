@@ -94,6 +94,9 @@ As of the P1/P2 remediation commits after this review:
   sanctions sync report submit path and worker command that persist provider
   sanctions from an approved report while explicitly avoiding scoring-policy
   changes, fraud-label assignment, or claim adjudication.
+- Claims scoring can now load persisted provider sanctions by provider and
+  merge OIG/SAM hits into the provider profile input, including sanctions-only
+  provider review when no inline `provider_profile` payload is supplied.
 - The provider profile 30/90/365 window rollup now has a separate
   permission-gated submit path and worker command that persist provider profile
   windows from an approved rollup report while explicitly avoiding scoring-

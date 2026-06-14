@@ -494,6 +494,12 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SaveProviderSanctionsInput,
     ) -> anyhow::Result<Vec<ProviderSanctionRecord>>;
 
+    async fn provider_sanctions_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>>;
+
     async fn save_provider_profile_windows(
         &self,
         input: SaveProviderProfileWindowsInput,

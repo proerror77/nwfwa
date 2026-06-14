@@ -533,6 +533,126 @@ async fn returns_provider_sanctions_evidence_for_excluded_provider() {
 }
 
 #[tokio::test]
+async fn returns_persisted_provider_sanctions_for_excluded_provider() {
+    let app = build_app(test_config()).unwrap();
+
+    let sanctions_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/sanctions-sync-reports")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:sync-oig-sam-sanctions",
+              "notes": "claims scoring sanctions test",
+              "source_report_uri": "local://artifacts/sanctions/sanctions_sync_report.json",
+              "report_kind": "oig_sam_sanctions_sync_report",
+              "run_date": "2026-06-14",
+              "source_uri": "local://inputs/oig-sam-snapshot.json",
+              "source_date": "2026-06-13",
+              "sync_status": "ready_to_apply",
+              "provider_upserts": [
+                {
+                  "sanction_key": "OIG:PRV-PERSISTED-SANCTIONED",
+                  "list": "OIG",
+                  "provider_id": "PRV-PERSISTED-SANCTIONED",
+                  "npi": null,
+                  "provider_name": "Persisted Sanctioned Provider",
+                  "sanction_type": "exclusion",
+                  "effective_date": "2026-06-01",
+                  "source_ref": "oig:2026-06:PRV-PERSISTED-SANCTIONED",
+                  "risk_feature": "provider_sanctions_excluded",
+                  "risk_score": 100
+                }
+              ],
+              "review_tasks": [],
+              "evidence_refs": [
+                "sanctions_sync_reports:local://artifacts/sanctions/sanctions_sync_report.json",
+                "sanctions_source_snapshot:local://inputs/oig-sam-snapshot.json"
+              ],
+              "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+            }"#,
+        ))
+        .unwrap();
+    let sanctions_response = app.clone().oneshot(sanctions_request).await.unwrap();
+    assert_eq!(sanctions_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-SANCTIONS-1",
+                "claim_amount": "2500",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "CONSULT-001",
+                  "item_type": "procedure",
+                  "description": "Consultation",
+                  "quantity": 1,
+                  "unit_amount": "2500",
+                  "total_amount": "2500"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-SANCTIONS"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-SANCTIONS",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "20000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-SANCTIONED",
+                "name": "Persisted Sanctioned Provider",
+                "provider_type": "clinic",
+                "region": "SH",
+                "risk_tier": "Low"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let profile = &body["provider_profile"];
+
+    assert_eq!(profile["risk_score"], 100);
+    assert_eq!(profile["review_route"], "provider_sanctions_review");
+    assert_eq!(profile["oig_excluded"], true);
+    assert_eq!(profile["sam_debarred"], false);
+    assert!(profile["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "provider_sanctions:PRV-PERSISTED-SANCTIONED:oig"
+        )));
+
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "provider_sanctions:OIG:PRV-PERSISTED-SANCTIONED"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "sanctions_sync_reports:local://artifacts/sanctions/sanctions_sync_report.json"
+    )));
+}
+
+#[tokio::test]
 async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
     let app = build_app(test_config()).unwrap();
 
