@@ -171,6 +171,10 @@ CAPABILITIES = [
                 "scheduler_reported_jobs_succeeded_without_dependency_blockers",
             ),
             (
+                "scripts/ops/build_production_readiness_contract.py",
+                "completed_job_artifact_and_evidence_refs_present",
+            ),
+            (
                 "scripts/ops/validate_production_readiness_contract.py",
                 "WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS",
             ),

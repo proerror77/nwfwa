@@ -69,6 +69,10 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
         "description": "Every worker data-pipeline job has reported_status = succeeded and no blocked_dependencies.",
     },
     {
+        "check_id": "completed_job_artifact_and_evidence_refs_present",
+        "description": "Every completed worker data-pipeline job has a non-empty reported artifact URI and per-job evidence refs.",
+    },
+    {
         "check_id": "governed_submit_jobs_submitted",
         "description": "Every governed worker data-pipeline submit job has submitted = true, expected API path and permission scope, and a non-empty reported artifact URI.",
     },

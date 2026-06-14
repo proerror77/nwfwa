@@ -80,6 +80,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "review_task_count_zero",
     "required_job_kinds_completed",
     "scheduler_reported_jobs_succeeded_without_dependency_blockers",
+    "completed_job_artifact_and_evidence_refs_present",
     "governed_submit_jobs_submitted",
     "source_snapshot_artifact_reported",
     "evidence_refs_include_plan_run_status_and_readiness",
@@ -351,6 +352,21 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         require(
             not blocked_dependencies,
             f"worker data pipeline job {job_kind} must not have blocked_dependencies",
+        )
+        require(
+            isinstance(job.get("reported_artifact_uri"), str)
+            and job["reported_artifact_uri"].strip(),
+            f"worker data pipeline job {job_kind} must report artifact URI",
+        )
+        job_evidence_refs = job.get("evidence_refs")
+        require(
+            isinstance(job_evidence_refs, list)
+            and job_evidence_refs
+            and all(
+                isinstance(reference, str) and reference.strip()
+                for reference in job_evidence_refs
+            ),
+            f"worker data pipeline job {job_kind} must include non-empty evidence_refs",
         )
     for job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
         job = jobs_by_kind[job_kind]
