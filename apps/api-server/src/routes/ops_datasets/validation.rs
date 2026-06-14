@@ -1134,6 +1134,33 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             format!("worker data pipeline evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_plan_ref = format!("worker_data_pipeline_plans:{}", request.plan_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_plan_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_plan_ref}"),
+        ));
+    }
+    let expected_input_ref = format!(
+        "worker_data_pipeline_readiness_inputs:{}",
+        request.readiness_input_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_input_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_READINESS_INPUT_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_input_ref}"),
+        ));
+    }
     let mut ready_jobs = 0usize;
     let mut blocked_jobs = 0usize;
     let mut blocked_job_kinds = Vec::new();

@@ -1267,6 +1267,65 @@ async fn submits_worker_data_pipeline_readiness_report() {
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_plan_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE");
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_input_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_readiness_inputs:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_WORKER_DATA_PIPELINE_READINESS_INPUT_EVIDENCE"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_readiness_report_requires_blocker_details() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
