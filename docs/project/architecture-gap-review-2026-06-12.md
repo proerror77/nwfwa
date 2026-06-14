@@ -20,8 +20,9 @@ The production gaps cluster in three areas:
   windows, peer percentile benchmarks, graph signals, episode aggregation, PSI
   actions, and rule hit-rate trending are not all implemented as autonomous
   worker commands;
-- agentic control plane: database and audit concepts exist, but specialist
-  orchestration and execution-time cancellation checks remain incomplete.
+- agentic control plane: database, audit, specialist-plan, and crate-level
+  cancellation checkpoint concepts exist, but runtime multi-agent dispatch and
+  long-running tool-call cancellation integration remain incomplete.
 
 ## Post-Review Implementation Notes
 
@@ -46,6 +47,9 @@ As of the P1/P2 remediation commits after this review:
 - `fwa-agent` now exposes an `InvestigationOrchestrator` trait and deterministic
   specialist-plan contract for intake triage, evidence review, and network
   analysis slots while preserving the assistive-only boundary.
+- `fwa-agent` now exposes an investigation cancellation signal contract and
+  deterministic execution checkpoints so future long-running/specialist agents
+  can stop safely at named boundaries.
 - `fwa-features` now has a `ClinicalCompatibilityFeatureContext` input path so
   governed ICD-10/CPT compatibility scores can replace the
   `diagnosis_procedure_match_score` heuristic without treating fallback values
@@ -94,11 +98,11 @@ As of the P1/P2 remediation commits after this review:
   insufficient.
 
 Remaining boundaries after those commits are production scheduling, DB write
-paths for customer rollups, customer claim/history data, execution-time
-cancellation checks inside long-running/specialist agents, multi-agent runtime
-dispatch/tool mediation, customer-approved ICD-10/CPT or medical-policy
-reference data, customer-approved unbundling rule packs, customer-approved
-feature lineage/source mappings, calibrated-probability serving activation, and
+paths for customer rollups, customer claim/history data, runtime multi-agent
+dispatch/tool mediation, wiring long-running/tool-using agents into the
+cancellation signal, customer-approved ICD-10/CPT or medical-policy reference
+data, customer-approved unbundling rule packs, customer-approved feature
+lineage/source mappings, calibrated-probability serving activation, and
 replacement of the L3 heuristic anomaly scorer with a validated statistical
 baseline. Audit retention still needs customer-environment partitioning, archive
 storage, legal-hold reconciliation writes, approved destruction workflow
@@ -134,7 +138,7 @@ routing-impact validation on customer data.
 | C-1 | Agent identity registry is missing as a runtime authority. | Add `agent_registry` with identity, kind, version, capability scope, PHI field allowlist, status, registration, and deprovision timestamps. |
 | C-2 | No independent `investigations` entity groups multiple agent runs for the same claim. | Add `investigations` and make agent audit events reference a stable investigation id instead of a run-derived string. |
 | C-3 | PHI field access is not enforced by registry policy, and accessed fields can be empty in audit events. | Enforce field allowlists at investigation/tool boundaries and persist actual PHI field names without values. |
-| C-4 | Kill-switch behavior is partially implemented as a cancellation control plane, but execution-time cancellation checks are still missing. | Add cancellable agent execution and safe cancellation checks before tool calls or long steps. |
+| C-4 | Kill-switch behavior now includes an API control plane plus crate-level deterministic cancellation checkpoints, but no long-running/tool-using agent runtime is wired to the signal yet. | Wire runtime specialist dispatch and tool calls through the cancellation signal before adding LLM-backed or long-running agents. |
 | C-5 | Deterministic investigation now has an orchestrator trait and specialist-plan contract, but not a multi-agent runtime dispatcher. | Add runtime specialist dispatch, tool mediation, and LLM-backed investigators only after governance checks are stable. |
 
 ## D. ML Lifecycle And Governance Gaps
