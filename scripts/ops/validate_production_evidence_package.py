@@ -121,6 +121,37 @@ REQUIRED_RUNBOOK_SUBMIT_COMMANDS = {
     "submit-probability-calibration-report",
     "submit-worker-data-pipeline-execution-report",
 }
+REQUIRED_RUNBOOK_SUBMIT_OUTPUTS = {
+    "submit_readiness_report": "api:/api/v1/ops/worker-data-pipeline-readiness",
+    "submit_sanctions_sync_report": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['oig_sam_sanctions_sync']}"
+    ),
+    "submit_provider_profile_window_rollup": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['provider_profile_window_rollup']}"
+    ),
+    "submit_provider_graph_signal_rollup": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['provider_graph_signal_rollup']}"
+    ),
+    "submit_peer_benchmark": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['peer_percentile_benchmark']}"
+    ),
+    "submit_episode_aggregation": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['episode_aggregation']}"
+    ),
+    "submit_clinical_compatibility_reference": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['clinical_compatibility_reference']}"
+    ),
+    "submit_unbundling_comparator": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['unbundling_comparator']}"
+    ),
+    "submit_scoring_feature_contexts": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['scoring_feature_context_materialization']}"
+    ),
+    "submit_probability_calibration_report": (
+        f"api:{WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS['probability_calibration_evidence']}"
+    ),
+    "submit_execution_report": "api:/api/v1/ops/worker-data-pipeline-executions",
+}
 REQUIRED_RUNBOOK_COMMAND_PATHS = {
     "artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json",
     "artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_input.json",
@@ -592,6 +623,13 @@ def validate_runbook(package_dir: Path) -> None:
         require(
             submit_command in command_text,
             f"runbook submit commands missing {submit_command}",
+        )
+    for step, expected_output in REQUIRED_RUNBOOK_SUBMIT_OUTPUTS.items():
+        command = commands_by_step.get(step)
+        require(command is not None, f"runbook missing submit step {step}")
+        require(
+            command.get("output") == expected_output,
+            f"runbook step {step} output must be {expected_output}",
         )
     validate_command_includes_package_validator(runbook.get("validation_command"), "runbook")
 
