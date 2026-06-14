@@ -693,6 +693,89 @@ pub(super) async fn save_clinical_compatibility_references(
     Ok(saved)
 }
 
+pub(super) async fn clinical_compatibility_reference_for_claim(
+    repository: &PostgresScoringRepository,
+    diagnosis_code: &str,
+    procedure_codes: &[String],
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ClinicalCompatibilityReferenceRecord>> {
+    let normalized_diagnosis_code = diagnosis_code.trim().to_ascii_uppercase();
+    let normalized_procedure_codes = procedure_codes
+        .iter()
+        .map(|code| code.trim().to_ascii_uppercase())
+        .collect::<Vec<_>>();
+    if normalized_diagnosis_code.is_empty() || normalized_procedure_codes.is_empty() {
+        return Ok(None);
+    }
+
+    let row: Option<(
+        String,
+        String,
+        String,
+        String,
+        f64,
+        String,
+        String,
+        String,
+        Value,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT customer_scope_id, compatibility_key, diagnosis_code_prefix, procedure_code, diagnosis_procedure_match_score, data_source, policy_authority_ref, rationale, evidence_refs, reference_version, effective_date, source_authority, source_report_uri, submitted_by, notes
+             FROM clinical_compatibility_references
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+               AND $2 LIKE upper(diagnosis_code_prefix) || '%'
+               AND upper(procedure_code) = ANY($3::text[])
+             ORDER BY diagnosis_procedure_match_score ASC, effective_date DESC, reference_version DESC
+             LIMIT 1",
+    )
+    .bind(customer_scope_id)
+    .bind(&normalized_diagnosis_code)
+    .bind(&normalized_procedure_codes)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            customer_scope_id,
+            compatibility_key,
+            diagnosis_code_prefix,
+            procedure_code,
+            diagnosis_procedure_match_score,
+            data_source,
+            policy_authority_ref,
+            rationale,
+            evidence_refs,
+            reference_version,
+            effective_date,
+            source_authority,
+            source_report_uri,
+            submitted_by,
+            notes,
+        )| ClinicalCompatibilityReferenceRecord {
+            customer_scope_id,
+            compatibility_key,
+            diagnosis_code_prefix,
+            procedure_code,
+            diagnosis_procedure_match_score,
+            data_source,
+            policy_authority_ref,
+            rationale,
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            reference_version,
+            effective_date,
+            source_authority,
+            source_report_uri,
+            submitted_by,
+            notes,
+        },
+    ))
+}
+
 pub(super) async fn save_unbundling_comparator_candidates(
     repository: &PostgresScoringRepository,
     input: SaveUnbundlingComparatorCandidatesInput,

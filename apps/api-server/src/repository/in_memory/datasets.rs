@@ -363,6 +363,41 @@ impl InMemoryScoringRepository {
         Ok(saved)
     }
 
+    pub(super) async fn in_memory_clinical_compatibility_reference_for_claim(
+        &self,
+        diagnosis_code: &str,
+        procedure_codes: &[String],
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ClinicalCompatibilityReferenceRecord>> {
+        let diagnosis_code = diagnosis_code.trim().to_ascii_uppercase();
+        let procedure_codes = procedure_codes
+            .iter()
+            .map(|code| code.trim().to_ascii_uppercase())
+            .collect::<std::collections::BTreeSet<_>>();
+        let record = self
+            .clinical_compatibility_references
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .filter(|record| {
+                diagnosis_code.starts_with(&record.diagnosis_code_prefix.to_ascii_uppercase())
+            })
+            .filter(|record| {
+                procedure_codes.contains(&record.procedure_code.trim().to_ascii_uppercase())
+            })
+            .min_by(|left, right| {
+                left.diagnosis_procedure_match_score
+                    .total_cmp(&right.diagnosis_procedure_match_score)
+            })
+            .cloned();
+        Ok(record)
+    }
+
     pub(super) async fn in_memory_save_unbundling_comparator_candidates(
         &self,
         input: SaveUnbundlingComparatorCandidatesInput,

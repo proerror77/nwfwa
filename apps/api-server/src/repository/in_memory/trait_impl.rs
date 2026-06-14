@@ -478,6 +478,20 @@ impl DatasetsRepository for InMemoryScoringRepository {
             .await
     }
 
+    async fn clinical_compatibility_reference_for_claim(
+        &self,
+        diagnosis_code: &str,
+        procedure_codes: &[String],
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ClinicalCompatibilityReferenceRecord>> {
+        self.in_memory_clinical_compatibility_reference_for_claim(
+            diagnosis_code,
+            procedure_codes,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn save_unbundling_comparator_candidates(
         &self,
         input: SaveUnbundlingComparatorCandidatesInput,

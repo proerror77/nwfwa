@@ -148,6 +148,11 @@ CAPABILITIES = [
             ("apps/api-server/src/routes/claims.rs", "latest_provider_profile_windows_for_provider"),
             ("apps/api-server/src/routes/claims.rs", "resolve_provider_relationships_input"),
             ("apps/api-server/src/routes/claims.rs", "latest_provider_graph_signal_for_provider"),
+            ("apps/api-server/src/routes/claims.rs", "resolve_clinical_compatibility_context"),
+            (
+                "apps/api-server/src/routes/claims.rs",
+                "clinical_compatibility_reference_for_claim",
+            ),
             ("apps/api-server/src/routes/ops_models_mlops.rs", "submit_probability_calibration_report"),
             ("apps/api-server/src/repository/trait.rs", "save_scoring_feature_context_materialization"),
             ("apps/api-server/src/repository/trait.rs", "latest_scoring_feature_context_for_claim"),
@@ -155,6 +160,10 @@ CAPABILITIES = [
             ("apps/api-server/src/repository/trait.rs", "latest_provider_profile_windows_for_provider"),
             ("apps/api-server/src/repository/trait.rs", "latest_provider_graph_signal_for_provider"),
             ("apps/api-server/src/repository/trait.rs", "save_clinical_compatibility_references"),
+            (
+                "apps/api-server/src/repository/trait.rs",
+                "clinical_compatibility_reference_for_claim",
+            ),
             ("apps/api-server/src/repository/trait.rs", "save_unbundling_comparator_candidates"),
             ("apps/api-server/src/repository/trait.rs", "save_probability_calibration_report"),
             ("apps/api-server/src/repository/trait.rs", "save_worker_data_pipeline_readiness_report"),

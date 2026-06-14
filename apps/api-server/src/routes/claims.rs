@@ -43,6 +43,12 @@ struct ResolvedScoringFeatureContext {
     evidence_refs: Vec<serde_json::Value>,
 }
 
+#[derive(Debug, Clone)]
+struct ResolvedClinicalCompatibilityContext {
+    context: ClinicalCompatibilityFeatureContext,
+    evidence_refs: Vec<serde_json::Value>,
+}
+
 fn peer_feature_context_from_request(
     request: &ScoreClaimRequest,
     scoring_feature_context: Option<&ScoringFeatureContextPayload>,
@@ -88,6 +94,68 @@ fn clinical_compatibility_context_from_request(
                 }
             })
         })
+}
+
+async fn resolve_clinical_compatibility_context(
+    state: &AppState,
+    actor: &ActorContext,
+    claim_context: &ClaimContext,
+    scoring_feature_context: Option<&ScoringFeatureContextPayload>,
+) -> Result<Option<ResolvedClinicalCompatibilityContext>, ApiError> {
+    if let Some(context) = clinical_compatibility_context_from_request(scoring_feature_context) {
+        return Ok(Some(ResolvedClinicalCompatibilityContext {
+            context,
+            evidence_refs: Vec::new(),
+        }));
+    }
+
+    let procedure_codes = claim_context
+        .items
+        .iter()
+        .map(|item| item.item_code.clone())
+        .collect::<Vec<_>>();
+    let Some(record) = state
+        .repository
+        .clinical_compatibility_reference_for_claim(
+            &claim_context.claim.diagnosis_code,
+            &procedure_codes,
+            Some(&actor.customer_scope_id),
+        )
+        .await
+        .map_err(internal_error(
+            "CLINICAL_COMPATIBILITY_REFERENCE_LOAD_FAILED",
+        ))?
+    else {
+        return Ok(None);
+    };
+
+    let evidence_refs = record
+        .evidence_refs
+        .iter()
+        .cloned()
+        .chain([
+            format!(
+                "clinical_compatibility_references:{}",
+                record.source_report_uri
+            ),
+            format!(
+                "clinical_compatibility_reference:{}:{}",
+                record.compatibility_key, record.reference_version
+            ),
+            record.policy_authority_ref.clone(),
+        ])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(serde_json::Value::String)
+        .collect();
+
+    Ok(Some(ResolvedClinicalCompatibilityContext {
+        context: ClinicalCompatibilityFeatureContext {
+            diagnosis_procedure_match_score: Some(record.diagnosis_procedure_match_score),
+            data_source: Some(record.data_source),
+        },
+        evidence_refs,
+    }))
 }
 
 fn episode_utilization_context_from_request(
@@ -533,8 +601,12 @@ pub async fn score_claim(
         .map(|context| &context.payload);
     let peer_feature_context =
         peer_feature_context_from_request(&request, scoring_feature_context)?;
-    let clinical_compatibility_context =
-        clinical_compatibility_context_from_request(scoring_feature_context);
+    let resolved_clinical_compatibility_context =
+        resolve_clinical_compatibility_context(&state, &actor, &context, scoring_feature_context)
+            .await?;
+    let clinical_compatibility_context = resolved_clinical_compatibility_context
+        .as_ref()
+        .map(|resolved| &resolved.context);
     let episode_utilization_context =
         episode_utilization_context_from_request(scoring_feature_context);
     let run_id = ScoringRunId::new();
@@ -562,7 +634,7 @@ pub async fn score_claim(
         &context,
         peer_feature_context.as_ref(),
         Some(&provider_profile_feature_context),
-        clinical_compatibility_context.as_ref(),
+        clinical_compatibility_context,
         episode_utilization_context.as_ref(),
     );
     let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
@@ -583,6 +655,9 @@ pub async fn score_claim(
         .collect::<Vec<_>>();
     evidence_refs.extend(request_evidence_refs);
     if let Some(context) = &resolved_scoring_feature_context {
+        evidence_refs.extend(context.evidence_refs.clone());
+    }
+    if let Some(context) = &resolved_clinical_compatibility_context {
         evidence_refs.extend(context.evidence_refs.clone());
     }
     evidence_refs.extend(provider_profile_materialization_evidence_refs);

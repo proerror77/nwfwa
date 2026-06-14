@@ -678,3 +678,135 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
         "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json"
     )));
 }
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
+    let app = build_app(test_config()).unwrap();
+
+    let clinical_reference_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/clinical-compatibility-references")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-clinical-compatibility-reference",
+              "notes": "customer policy board approved clinical reference",
+              "source_report_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
+              "report_kind": "clinical_compatibility_reference",
+              "reference_version": "clinical-policy-2026-06",
+              "effective_date": "2026-06-01",
+              "source_authority": "customer-medical-policy-board",
+              "source_uri": "local://inputs/clinical-reference.json",
+              "record_count": 1,
+              "records": [
+                {
+                  "compatibility_key": "J|IMG-900",
+                  "diagnosis_code_prefix": "J",
+                  "procedure_code": "IMG-900",
+                  "diagnosis_procedure_match_score": 0.25,
+                  "data_source": "worker.icd_cpt_compatibility_reference:clinical-policy-2026-06",
+                  "policy_authority_ref": "policy:clinical:J:IMG-900",
+                  "rationale": "Respiratory diagnosis requires additional support for this imaging procedure.",
+                  "evidence_refs": ["policy:clinical:J:IMG-900", "medical_policy:v2026-06"]
+                }
+              ],
+              "review_tasks": [
+                {
+                  "task_type": "clinical_policy_review_candidate",
+                  "compatibility_key": "J|IMG-900",
+                  "reason": "low compatibility score should be reviewed before production activation",
+                  "evidence_refs": ["policy:clinical:J:IMG-900"]
+                }
+              ],
+              "evidence_refs": [
+                "clinical_compatibility_references:local://artifacts/clinical/clinical_compatibility_reference_report.json",
+                "clinical_policy_authority:customer-medical-policy-board"
+              ],
+              "governance_boundary": "clinical compatibility reference data can feed ClinicalCompatibilityFeatureContext; it must not deny claims or replace medical review without customer-approved policy authority"
+            }"#,
+        ))
+        .unwrap();
+    let clinical_reference_response = app
+        .clone()
+        .oneshot(clinical_reference_request)
+        .await
+        .unwrap();
+    assert_eq!(clinical_reference_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-CLINICAL-REF",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-900",
+                  "item_type": "procedure",
+                  "description": "Imaging bundle",
+                  "quantity": 1,
+                  "unit_amount": "8000",
+                  "total_amount": "8000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-CLINICAL-REF"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-CLINICAL-REF",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-CLINICAL-REF",
+                "name": "Persisted Clinical Reference Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let clinical_feature = feature_values
+        .iter()
+        .find(|feature| feature["name"] == "diagnosis_procedure_match_score")
+        .expect("clinical compatibility feature should be present");
+
+    assert_eq!(clinical_feature["value"], serde_json::json!(0.25));
+    assert_eq!(clinical_feature["is_proxy"], false);
+    assert_eq!(
+        clinical_feature["data_source"],
+        "worker.icd_cpt_compatibility_reference:clinical-policy-2026-06"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "clinical_compatibility_references:local://artifacts/clinical/clinical_compatibility_reference_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "clinical_compatibility_reference:J|IMG-900:clinical-policy-2026-06"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!("policy:clinical:J:IMG-900")));
+}
