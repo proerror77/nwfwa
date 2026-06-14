@@ -224,7 +224,11 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
           "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
           "required_permission": "ops:providers:write",
           "reported_artifact_uri": "local://artifacts/worker-data-pipeline/sanctions_sync_report.json",
-          "evidence_refs": ["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"],
+          "required_evidence_prefixes": ["sanctions_sync_reports:"],
+          "evidence_refs": [
+            "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
+            "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+          ],
           "submitted": true,
           "blocked_dependencies": []
         },
@@ -552,7 +556,11 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
             "execution_status": "completed",
             "reported_status": "succeeded",
             "reported_artifact_uri": "local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
-            "evidence_refs": ["worker_job_artifacts:provider_profile_window_rollup:2026-06-14"],
+            "required_evidence_prefixes": ["provider_profile_window_rollups:"],
+            "evidence_refs": [
+                "worker_job_artifacts:provider_profile_window_rollup:2026-06-14",
+                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+            ],
             "submitted": true,
             "blocked_dependencies": []
         }
@@ -1045,6 +1053,37 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_without_evi
         body["code"],
         "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
     );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_without_required_evidence_prefixes(
+) {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_evidence_prefixes");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_evidence_prefixes"));
 }
 
 #[tokio::test]

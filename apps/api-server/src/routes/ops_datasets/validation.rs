@@ -953,6 +953,13 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 .flatten()
                 .filter_map(|value| value.as_str())
                 .collect::<Vec<_>>();
+            if required_evidence_prefixes.is_empty() {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job executions require non-empty required_evidence_prefixes",
+                ));
+            }
             if required_evidence_prefixes
                 .iter()
                 .any(|prefix| prefix.trim().is_empty())

@@ -493,8 +493,9 @@ pub(super) fn dataset_schemas() -> Value {
                             },
                             "required_evidence_prefixes": {
                                 "type": "array",
+                                "minItems": 1,
                                 "items": { "type": "string", "minLength": 1 },
-                                "description": "Worker-plan prefixes that scheduler-provided evidence_refs must satisfy for this job, including scoring context source lineage prefixes when applicable."
+                                "description": "Required and non-empty when execution_status is completed. Worker-plan prefixes that scheduler-provided evidence_refs must satisfy for this job, including scoring context source lineage prefixes when applicable."
                             },
                             "required_permission": {
                                 "type": ["string", "null"],
