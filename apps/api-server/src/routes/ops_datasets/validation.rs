@@ -3,7 +3,51 @@ use rust_decimal::Decimal;
 
 use super::*;
 
-const SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES: &[&str] = &[
+const OIG_SAM_SANCTIONS_SNAPSHOT_FETCH_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &["oig_sam_snapshot:"];
+
+const OIG_SAM_SANCTIONS_SYNC_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &["sanctions_sync_reports:"];
+
+const PROVIDER_PROFILE_WINDOW_ROLLUP_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "provider_profile_window_rollups:",
+    "provider_profile_claim_snapshot:",
+];
+
+const PROVIDER_GRAPH_SIGNAL_ROLLUP_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "provider_graph_signal_rollups:",
+    "provider_graph_claim_snapshot:",
+];
+
+const PEER_PERCENTILE_BENCHMARK_REQUIRED_EVIDENCE_PREFIXES: &[&str] =
+    &["peer_benchmarks:", "peer_benchmark_claim_snapshot:"];
+
+const EPISODE_AGGREGATION_REQUIRED_EVIDENCE_PREFIXES: &[&str] =
+    &["episode_rollups:", "episode_claim_snapshot:"];
+
+const CLINICAL_COMPATIBILITY_REFERENCE_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "clinical_compatibility_references:",
+    "clinical_compatibility_reference:",
+    "clinical_policy_authority:",
+];
+
+const UNBUNDLING_COMPARATOR_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "unbundling_comparator_candidates:",
+    "unbundling_comparator_input:",
+];
+
+const SCORING_FEATURE_CONTEXT_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "scoring_feature_contexts:",
+    "scoring_feature_context_claim_snapshot:",
+    "episode_rollups:",
+    "peer_benchmarks:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+];
+
+const SCORING_READBACK_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "scoring_readback_reports:",
+    "scoring_readback_inputs:",
+    "scoring_readback_score_requests:",
+    "scoring_readback_score_responses:",
     "scoring_feature_contexts:",
     "provider_profile_window_rollups:",
     "sanctions_sync_reports:",
@@ -22,7 +66,26 @@ const PROBABILITY_CALIBRATION_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
 
 fn required_worker_data_pipeline_prefixes(job_kind: &str) -> Option<&'static [&'static str]> {
     match job_kind {
-        "scoring_online_readback" => Some(SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES),
+        "oig_sam_sanctions_snapshot_fetch" => {
+            Some(OIG_SAM_SANCTIONS_SNAPSHOT_FETCH_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "oig_sam_sanctions_sync" => Some(OIG_SAM_SANCTIONS_SYNC_REQUIRED_EVIDENCE_PREFIXES),
+        "provider_profile_window_rollup" => {
+            Some(PROVIDER_PROFILE_WINDOW_ROLLUP_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "provider_graph_signal_rollup" => {
+            Some(PROVIDER_GRAPH_SIGNAL_ROLLUP_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "peer_percentile_benchmark" => Some(PEER_PERCENTILE_BENCHMARK_REQUIRED_EVIDENCE_PREFIXES),
+        "episode_aggregation" => Some(EPISODE_AGGREGATION_REQUIRED_EVIDENCE_PREFIXES),
+        "clinical_compatibility_reference" => {
+            Some(CLINICAL_COMPATIBILITY_REFERENCE_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "unbundling_comparator" => Some(UNBUNDLING_COMPARATOR_REQUIRED_EVIDENCE_PREFIXES),
+        "scoring_feature_context_materialization" => {
+            Some(SCORING_FEATURE_CONTEXT_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "scoring_online_readback" => Some(SCORING_READBACK_REQUIRED_EVIDENCE_PREFIXES),
         "probability_calibration_evidence" => {
             Some(PROBABILITY_CALIBRATION_REQUIRED_EVIDENCE_PREFIXES)
         }

@@ -290,11 +290,13 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
           "job_kind": "oig_sam_sanctions_sync",
           "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
           "required_permission": "ops:providers:write",
-          "required_evidence_prefixes": ["source_freshness:oig_sam_sanctions_sync:"],
+          "required_evidence_prefixes": ["sanctions_sync_reports:"],
           "coverage_window_days": 1,
           "source_freshness_status": "fresh",
           "readiness_status": "ready",
-          "evidence_refs": ["source_freshness:oig_sam_sanctions_sync:2026-06-14"]
+          "evidence_refs": [
+            "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+          ]
         },
         {
           "job_kind": "provider_profile_window_rollup",
@@ -649,10 +651,14 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
             "api_path": "/api/v1/ops/providers/profile-window-rollups",
             "required_permission": "ops:providers:write",
             "reported_artifact_uri": "local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
-            "required_evidence_prefixes": ["provider_profile_window_rollups:"],
+            "required_evidence_prefixes": [
+                "provider_profile_window_rollups:",
+                "provider_profile_claim_snapshot:"
+            ],
             "evidence_refs": [
                 "worker_job_artifacts:provider_profile_window_rollup:2026-06-14",
-                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+                "provider_profile_claim_snapshot:local://artifacts/worker-data-pipeline/provider_profile_claims.json"
             ],
             "submitted": true,
             "blocked_dependencies": []
@@ -1304,6 +1310,54 @@ async fn worker_data_pipeline_execution_report_requires_probability_calibration_
         .as_str()
         .unwrap()
         .contains("probability_calibration_input:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_provider_profile_lineage_prefixes() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["pending_or_failed_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_executions"] = serde_json::json!([
+        {
+            "job_kind": "provider_profile_window_rollup",
+            "execution_status": "completed",
+            "reported_status": "succeeded",
+            "api_path": "/api/v1/ops/providers/profile-window-rollups",
+            "required_permission": "ops:providers:write",
+            "reported_artifact_uri": "local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+            "required_evidence_prefixes": [
+                "provider_profile_window_rollups:"
+            ],
+            "evidence_refs": [
+                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+            ],
+            "submitted": true,
+            "blocked_dependencies": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("provider_profile_claim_snapshot:"));
 }
 
 #[tokio::test]
@@ -2108,6 +2162,55 @@ async fn worker_data_pipeline_readiness_report_requires_probability_calibration_
         .as_str()
         .unwrap()
         .contains("probability_calibration_input:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_provider_profile_lineage_prefixes() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["ready_job_count"] = serde_json::json!(1);
+    payload["blocked_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_readiness"] = serde_json::json!([
+        {
+            "job_kind": "provider_profile_window_rollup",
+            "readiness_status": "ready",
+            "api_path": "/api/v1/ops/providers/profile-window-rollups",
+            "required_permission": "ops:providers:write",
+            "coverage_window_days": 30,
+            "source_freshness_status": "fresh",
+            "data_quality_status": "ready",
+            "required_evidence_prefixes": [
+                "provider_profile_window_rollups:"
+            ],
+            "evidence_refs": [
+                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+            ],
+            "blockers": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("provider_profile_claim_snapshot:"));
 }
 
 #[tokio::test]
