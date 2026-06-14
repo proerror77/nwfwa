@@ -443,6 +443,124 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
 }
 
 #[tokio::test]
+async fn nonpassing_probability_calibration_blocks_model_activation() {
+    let app = build_app(test_config()).unwrap();
+    let candidate_version = register_activation_candidate(app.clone()).await;
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        &format!(
+            r#"{{
+              "decision": "approved",
+              "reviewer": "model-governance",
+              "notes": "Approved exact candidate version pending calibration evidence.",
+              "evidence_refs": ["model_versions:baseline_fwa:{candidate_version}"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(review["model_version"], candidate_version);
+
+    let (status, calibration) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &format!(
+            r#"{{
+              "actor": "worker:build-probability-calibration-report",
+              "notes": "non-passing holdout calibration evidence",
+              "report_uri": "data/model-artifacts/baseline_fwa/{candidate_version}/calibration/probability_calibration_report.json",
+              "report_kind": "probability_calibration_report",
+              "model_version": "{candidate_version}",
+              "as_of_date": "2026-06-14",
+              "row_count": 100,
+              "minimum_calibration_rows": 100,
+              "bin_count": 2,
+              "expected_calibration_error": 0.08,
+              "max_expected_calibration_error": 0.05,
+              "brier_score": 0.18,
+              "max_brier_score": 0.20,
+              "calibration_status": "needs_calibration_review",
+              "bins": [
+                {{
+                  "bin_index": 0,
+                  "lower_bound": 0.0,
+                  "upper_bound": 0.5,
+                  "row_count": 50,
+                  "average_predicted_probability": 0.2,
+                  "observed_positive_rate": 0.12,
+                  "calibration_error": 0.08
+                }},
+                {{
+                  "bin_index": 1,
+                  "lower_bound": 0.5,
+                  "upper_bound": 1.0,
+                  "row_count": 50,
+                  "average_predicted_probability": 0.82,
+                  "observed_positive_rate": 0.74,
+                  "calibration_error": 0.08
+                }}
+              ],
+              "review_tasks": [
+                {{
+                  "task_kind": "probability_calibration_review",
+                  "severity": "blocker",
+                  "summary": "ECE exceeds calibrated probability activation threshold."
+                }}
+              ],
+              "evidence_refs": [
+                "model_versions:baseline_fwa:{candidate_version}",
+                "probability_calibration_reports:data/model-artifacts/baseline_fwa/{candidate_version}/calibration/probability_calibration_report.json",
+                "probability_calibration_input:s3://customer-prod-artifacts/baseline_fwa/{candidate_version}/calibration/holdout-predictions.json",
+                "calibration_labels:s3://customer-prod-artifacts/baseline_fwa/{candidate_version}/calibration/holdout-labels.json"
+              ],
+              "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        calibration["calibration_status"],
+        "needs_calibration_review"
+    );
+    assert_eq!(calibration["active_calibration_change"], false);
+    assert_eq!(
+        calibration["calibrated_probability_serving_activation"],
+        false
+    );
+
+    let gates_uri =
+        format!("/api/v1/ops/models/baseline_fwa/versions/{candidate_version}/promotion-gates");
+    let (status, gates) = get_json(app.clone(), &gates_uri).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(gates["decision"], "routing_blocked");
+    assert!(gates["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("probability calibration failed")));
+
+    let activate_uri =
+        format!("/api/v1/ops/models/baseline_fwa/versions/{candidate_version}/activate");
+    let (status, body) = json_request(
+        app,
+        "POST",
+        &activate_uri,
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "MODEL_PROMOTION_GATES_BLOCKED");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("probability calibration failed"));
+}
+
+#[tokio::test]
 async fn model_promotion_and_activation_are_version_scoped() {
     let app = build_app(test_config()).unwrap();
     let candidate_version = register_activation_candidate(app.clone()).await;
