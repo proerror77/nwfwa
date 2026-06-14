@@ -740,6 +740,7 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             ));
         }
     }
+    let mut pending_or_failed_jobs = 0usize;
     for execution in &request.job_executions {
         let Some(job_kind) = execution.get("job_kind").and_then(|value| value.as_str()) else {
             return Err(ApiError::new(
@@ -779,6 +780,9 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 "execution_status must be completed, artifact_pending_submission, failed, scheduled_pending_customer_execution, or dependency_not_completed",
             ));
         }
+        if execution_status != "completed" {
+            pending_or_failed_jobs += 1;
+        }
         if execution_status == "dependency_not_completed" {
             let has_blocked_dependencies = execution
                 .get("blocked_dependencies")
@@ -799,6 +803,13 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 ));
             }
         }
+    }
+    if pending_or_failed_jobs != request.pending_or_failed_job_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PENDING_COUNT",
+            "pending_or_failed_job_count must equal the number of non-completed job executions",
+        ));
     }
     Ok(())
 }

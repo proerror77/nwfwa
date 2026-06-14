@@ -591,6 +591,29 @@ async fn worker_data_pipeline_execution_report_requires_dependency_blocker_detai
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_pending_count_consistency() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["pending_or_failed_job_count"] = serde_json::json!(0);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PENDING_COUNT"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_readiness_evidence_when_uri_supplied() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
