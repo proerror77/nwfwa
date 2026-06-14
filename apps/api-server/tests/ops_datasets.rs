@@ -217,11 +217,13 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
         {
           "job_kind": "oig_sam_sanctions_sync",
           "execution_status": "completed",
+          "reported_status": "succeeded",
           "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
           "required_permission": "ops:providers:write",
           "reported_artifact_uri": "local://artifacts/worker-data-pipeline/sanctions_sync_report.json",
           "evidence_refs": ["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"],
-          "submitted": true
+          "submitted": true,
+          "blocked_dependencies": []
         },
         {
           "job_kind": "provider_profile_window_rollup",
@@ -544,9 +546,11 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
         {
             "job_kind": "provider_profile_window_rollup",
             "execution_status": "completed",
+            "reported_status": "succeeded",
             "reported_artifact_uri": "local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
             "evidence_refs": ["worker_job_artifacts:provider_profile_window_rollup:2026-06-14"],
-            "submitted": true
+            "submitted": true,
+            "blocked_dependencies": []
         }
     ]);
     payload["review_tasks"] = serde_json::json!([
@@ -1036,6 +1040,76 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_without_evi
     assert_eq!(
         body["code"],
         "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_without_success_status() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["reported_status"] = serde_json::json!("failed");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORTED_STATUS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_with_blocked_dependencies() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["blocked_dependencies"] =
+        serde_json::json!(["oig_sam_sanctions_snapshot_fetch"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_submit_job_not_submitted() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["submitted"] = serde_json::json!(false);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_SUBMISSION"
     );
 }
 

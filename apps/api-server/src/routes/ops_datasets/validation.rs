@@ -843,6 +843,45 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "completed job executions require non-empty evidence_refs",
                 ));
             }
+            if execution
+                .get("reported_status")
+                .and_then(|value| value.as_str())
+                != Some("succeeded")
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORTED_STATUS",
+                    "completed job executions require reported_status succeeded",
+                ));
+            }
+            let has_blocked_dependencies = execution
+                .get("blocked_dependencies")
+                .and_then(|value| value.as_array())
+                .is_some_and(|dependencies| !dependencies.is_empty());
+            if has_blocked_dependencies {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES",
+                    "completed job executions must not include blocked_dependencies",
+                ));
+            }
+            let is_governed_submit_job = execution
+                .get("api_path")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| !value.trim().is_empty())
+                || execution
+                    .get("required_permission")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(|value| !value.trim().is_empty());
+            if is_governed_submit_job
+                && execution.get("submitted").and_then(|value| value.as_bool()) != Some(true)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_SUBMISSION",
+                    "completed governed submit job executions require submitted true",
+                ));
+            }
         }
         if let Some(required_permission) = execution.get("required_permission") {
             validate_worker_data_pipeline_required_permission(

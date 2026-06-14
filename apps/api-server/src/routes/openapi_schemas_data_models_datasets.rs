@@ -452,7 +452,20 @@ pub(super) fn dataset_schemas() -> Value {
                             "blocked_dependencies": {
                                 "type": "array",
                                 "items": { "type": "string", "minLength": 1 },
-                                "description": "Required and non-empty when execution_status is dependency_not_completed."
+                                "description": "Required and non-empty when execution_status is dependency_not_completed; must be empty or omitted when execution_status is completed."
+                            },
+                            "reported_status": {
+                                "type": ["string", "null"],
+                                "enum": ["succeeded", "failed", "pending", null],
+                                "description": "Scheduler-reported job status. Required to be succeeded when execution_status is completed."
+                            },
+                            "submitted": {
+                                "type": "boolean",
+                                "description": "Must be true for completed governed submit jobs that carry api_path or required_permission."
+                            },
+                            "api_path": {
+                                "type": ["string", "null"],
+                                "description": "Governed API path used to submit the job artifact; null for artifact-only jobs."
                             },
                             "reported_artifact_uri": {
                                 "type": ["string", "null"],
