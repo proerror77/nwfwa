@@ -584,6 +584,129 @@ pub(super) fn validate_unbundling_comparator_submission(
     Ok(())
 }
 
+pub(super) fn validate_worker_data_pipeline_execution_report_submission(
+    request: &SubmitWorkerDataPipelineExecutionReportRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.plan_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PLAN_URI",
+            "plan_uri is required",
+        ),
+        (
+            request.run_status_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS_URI",
+            "run_status_uri is required",
+        ),
+        (
+            request.run_id.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_RUN_ID",
+            "run_id is required",
+        ),
+        (
+            request.execution_date.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DATE",
+            "execution_date is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "worker_data_pipeline_execution_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_KIND",
+            "report_kind must be worker_data_pipeline_execution_report",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_URI",
+            "source_report_uri must point to a JSON worker data pipeline execution report",
+        ));
+    }
+    if request.job_count == 0 || request.job_count != request.job_executions.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_COUNT",
+            "job_count must match job_executions length and be greater than zero",
+        ));
+    }
+    if request.review_task_count != request.review_tasks.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_COUNT",
+            "review_task_count must match review_tasks length",
+        ));
+    }
+    if request.pending_or_failed_job_count > request.job_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PENDING_COUNT",
+            "pending_or_failed_job_count must not exceed job_count",
+        ));
+    }
+    let expected_report_ref = format!(
+        "worker_data_pipeline_execution_reports:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_EXECUTION_REPORT_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    for execution in &request.job_executions {
+        let Some(job_kind) = execution.get("job_kind").and_then(|value| value.as_str()) else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                "each job execution must include job_kind",
+            ));
+        };
+        if job_kind.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                "job_kind must not be blank",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_unit_interval_metric(
     metric_name: &'static str,
     metric: &Option<Decimal>,

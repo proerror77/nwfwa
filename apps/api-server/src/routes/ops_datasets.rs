@@ -31,6 +31,7 @@ use validation::{
     validate_feature_set_registration, validate_field_mapping, validate_model_dataset_registration,
     validate_model_evaluation_registration, validate_parquet_uri,
     validate_scoring_feature_context_materialization, validate_unbundling_comparator_submission,
+    validate_worker_data_pipeline_execution_report_submission,
 };
 
 pub async fn register_dataset(
@@ -548,6 +549,69 @@ pub async fn submit_unbundling_comparator_candidates(
     .await
     .map_err(internal_error(
         "UNBUNDLING_COMPARATOR_CANDIDATES_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_worker_data_pipeline_execution_report(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitWorkerDataPipelineExecutionReportRequest>,
+) -> Result<Json<WorkerDataPipelineExecutionReportSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_worker_data_pipeline_execution_report_submission(&request)?;
+    let response = WorkerDataPipelineExecutionReportSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        run_id: request.run_id.clone(),
+        execution_date: request.execution_date.clone(),
+        job_count: request.job_count,
+        pending_or_failed_job_count: request.pending_or_failed_job_count,
+        review_task_count: request.review_task_count,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        model_activation: false,
+        routing_policy_change: false,
+        governance_boundary:
+            "worker data pipeline execution report submission records scheduler evidence only; it must not score claims, assign labels, deny claims, activate models, or change routing policy"
+                .into(),
+        audit_event_type: "worker_data_pipeline.execution_report.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "worker_data_pipeline.execution_report.submitted",
+            summary: "Worker data pipeline execution report submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "plan_uri": request.plan_uri,
+                "run_status_uri": request.run_status_uri,
+                "run_id": request.run_id,
+                "execution_date": request.execution_date,
+                "job_count": request.job_count,
+                "pending_or_failed_job_count": request.pending_or_failed_job_count,
+                "review_task_count": request.review_task_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "model_activation": response.model_activation,
+                "routing_policy_change": response.routing_policy_change,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "WORKER_DATA_PIPELINE_EXECUTION_REPORT_AUDIT_SAVE_FAILED",
     ))?;
     Ok(Json(response))
 }

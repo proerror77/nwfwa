@@ -25,6 +25,7 @@ pub(super) const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "model.activation.completed",
     "model.rollback.completed",
     "model.probability_calibration.report_submitted",
+    "worker_data_pipeline.execution_report.submitted",
     "clinical_compatibility.reference.submitted",
     "unbundling_comparator.candidates.submitted",
     "provider.sanctions_sync.submitted",

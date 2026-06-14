@@ -140,6 +140,47 @@ pub struct UnbundlingComparatorCandidatesSubmissionResponse {
     pub audit_event_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SubmitWorkerDataPipelineExecutionReportRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub run_status_uri: String,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: usize,
+    pub pending_or_failed_job_count: usize,
+    pub review_task_count: usize,
+    #[serde(default)]
+    pub job_executions: Vec<Value>,
+    #[serde(default)]
+    pub review_tasks: Vec<Value>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkerDataPipelineExecutionReportSubmissionResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: usize,
+    pub pending_or_failed_job_count: usize,
+    pub review_task_count: usize,
+    pub active_scoring_policy_change: bool,
+    pub claim_scoring: bool,
+    pub label_assignment: bool,
+    pub claim_denial: bool,
+    pub model_activation: bool,
+    pub routing_policy_change: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ModelEvaluationLineageRecord {
     pub evaluation_run_id: String,

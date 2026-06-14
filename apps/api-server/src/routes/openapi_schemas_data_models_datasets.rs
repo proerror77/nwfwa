@@ -389,5 +389,59 @@ pub(super) fn dataset_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["unbundling_comparator.candidates.submitted"] }
             }
         },
+        "WorkerDataPipelineExecutionReportSubmissionRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "plan_uri", "run_status_uri", "run_id", "execution_date", "job_count", "pending_or_failed_job_count", "review_task_count", "job_executions", "review_tasks", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "worker_data_pipeline_execution_report" },
+                "plan_uri": { "type": "string", "minLength": 1 },
+                "run_status_uri": { "type": "string", "minLength": 1 },
+                "run_id": { "type": "string", "minLength": 1 },
+                "execution_date": { "type": "string", "minLength": 1 },
+                "job_count": { "type": "integer", "minimum": 1 },
+                "pending_or_failed_job_count": { "type": "integer", "minimum": 0 },
+                "review_task_count": { "type": "integer", "minimum": 0 },
+                "job_executions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "object" }
+                },
+                "review_tasks": {
+                    "type": "array",
+                    "items": { "type": "object" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include worker_data_pipeline_execution_reports:{source_report_uri}."
+                },
+                "governance_boundary": { "type": "string", "minLength": 1 }
+            }
+        },
+        "WorkerDataPipelineExecutionReportSubmissionResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "run_id", "execution_date", "job_count", "pending_or_failed_job_count", "review_task_count", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "model_activation", "routing_policy_change", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "worker_data_pipeline_execution_report" },
+                "source_report_uri": { "type": "string" },
+                "run_id": { "type": "string" },
+                "execution_date": { "type": "string" },
+                "job_count": { "type": "integer" },
+                "pending_or_failed_job_count": { "type": "integer" },
+                "review_task_count": { "type": "integer" },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "claim_scoring": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "claim_denial": { "type": "boolean", "const": false },
+                "model_activation": { "type": "boolean", "const": false },
+                "routing_policy_change": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["worker_data_pipeline.execution_report.submitted"] }
+            }
+        },
     })
 }

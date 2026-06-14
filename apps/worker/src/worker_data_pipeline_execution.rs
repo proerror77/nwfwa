@@ -1,7 +1,27 @@
 use anyhow::{bail, Context};
+use serde::Serialize;
 use std::{collections::BTreeMap, fs, path::Path};
 
-use crate::{json_string, read_json_report, required_non_empty, write_json};
+use crate::{api_url, json_string, read_json_report, required_non_empty, write_json};
+
+#[derive(Debug, Serialize)]
+pub struct WorkerDataPipelineExecutionReportSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub run_status_uri: String,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: usize,
+    pub pending_or_failed_job_count: usize,
+    pub review_task_count: usize,
+    pub job_executions: Vec<serde_json::Value>,
+    pub review_tasks: Vec<serde_json::Value>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
 
 pub fn build_worker_data_pipeline_execution_report(
     plan_uri: &str,
@@ -118,6 +138,103 @@ pub fn build_worker_data_pipeline_execution_report(
         &report["review_tasks"],
     )?;
     Ok(report)
+}
+
+pub fn build_worker_data_pipeline_execution_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<WorkerDataPipelineExecutionReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report = read_json_report(report_uri)?;
+    if json_string(&report, "report_kind").as_deref()
+        != Some("worker_data_pipeline_execution_report")
+    {
+        bail!("report_kind must be worker_data_pipeline_execution_report");
+    }
+    let job_executions = report
+        .get("job_executions")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .context("worker data pipeline execution report requires job_executions")?;
+    let review_tasks = report
+        .get("review_tasks")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut evidence_refs = report
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    evidence_refs.push(format!(
+        "worker_data_pipeline_execution_reports:{report_uri}"
+    ));
+    Ok(WorkerDataPipelineExecutionReportSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: report_uri.into(),
+        report_kind: "worker_data_pipeline_execution_report".into(),
+        plan_uri: json_string(&report, "plan_uri")
+            .context("worker data pipeline execution report requires plan_uri")?,
+        run_status_uri: json_string(&report, "run_status_uri")
+            .context("worker data pipeline execution report requires run_status_uri")?,
+        run_id: json_string(&report, "run_id")
+            .context("worker data pipeline execution report requires run_id")?,
+        execution_date: json_string(&report, "execution_date")
+            .context("worker data pipeline execution report requires execution_date")?,
+        job_count: report
+            .get("job_count")
+            .and_then(|value| value.as_u64())
+            .context("worker data pipeline execution report requires job_count")?
+            as usize,
+        pending_or_failed_job_count: report
+            .get("pending_or_failed_job_count")
+            .and_then(|value| value.as_u64())
+            .context("worker data pipeline execution report requires pending_or_failed_job_count")?
+            as usize,
+        review_task_count: report
+            .get("review_task_count")
+            .and_then(|value| value.as_u64())
+            .context("worker data pipeline execution report requires review_task_count")?
+            as usize,
+        job_executions,
+        review_tasks,
+        evidence_refs,
+        governance_boundary: json_string(&report, "governance_boundary")
+            .context("worker data pipeline execution report requires governance_boundary")?,
+    })
+}
+
+pub async fn submit_worker_data_pipeline_execution_report(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_worker_data_pipeline_execution_submission(report_uri, actor, notes)?;
+    let client = reqwest::Client::new();
+    let response = client
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/worker-data-pipeline-executions",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit worker data pipeline execution report")?;
+    let status = response.status();
+    let body = response.text().await.context("read submit response")?;
+    if !status.is_success() {
+        bail!("submit worker data pipeline execution report failed with {status}: {body}");
+    }
+    serde_json::from_str(&body).context("parse worker data pipeline execution response")
 }
 
 fn reported_job_statuses(run_status: &serde_json::Value) -> BTreeMap<String, serde_json::Value> {

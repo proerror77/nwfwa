@@ -198,6 +198,46 @@ fn unbundling_comparator_payload() -> &'static str {
     }"#
 }
 
+fn worker_data_pipeline_execution_payload() -> &'static str {
+    r#"{
+      "actor": "worker:worker-data-pipeline-scheduler",
+      "notes": "daily worker data pipeline execution evidence",
+      "source_report_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+      "report_kind": "worker_data_pipeline_execution_report",
+      "plan_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+      "run_status_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+      "run_id": "wdp_2026_06_14",
+      "execution_date": "2026-06-14",
+      "job_count": 2,
+      "pending_or_failed_job_count": 1,
+      "review_task_count": 1,
+      "job_executions": [
+        {
+          "job_kind": "oig_sam_sanctions_sync",
+          "execution_status": "completed",
+          "submitted": true
+        },
+        {
+          "job_kind": "provider_profile_window_rollup",
+          "execution_status": "artifact_pending_submission",
+          "submitted": false
+        }
+      ],
+      "review_tasks": [
+        {
+          "task_kind": "worker_data_pipeline_execution_review",
+          "job_kind": "provider_profile_window_rollup"
+        }
+      ],
+      "evidence_refs": [
+        "worker_data_pipeline_execution_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+        "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+        "worker_data_pipeline_run_status:local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
+      ],
+      "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy"
+    }"#
+}
+
 fn renewal_dataset_payload(storage_format: &str) -> String {
     format!(
         r#"{{
@@ -363,6 +403,59 @@ async fn unbundling_comparator_candidates_require_dataset_write_permission() {
         "POST",
         "/api/v1/ops/unbundling-comparator-candidates",
         unbundling_comparator_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn submits_worker_data_pipeline_execution_report() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        worker_data_pipeline_execution_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "worker_data_pipeline_execution_report");
+    assert_eq!(
+        body["source_report_uri"],
+        "local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
+    );
+    assert_eq!(body["run_id"], "wdp_2026_06_14");
+    assert_eq!(body["job_count"], 2);
+    assert_eq!(body["pending_or_failed_job_count"], 1);
+    assert_eq!(body["review_task_count"], 1);
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["model_activation"], false);
+    assert_eq!(body["routing_policy_change"], false);
+    assert_eq!(
+        body["audit_event_type"],
+        "worker_data_pipeline.execution_report.submitted"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        worker_data_pipeline_execution_payload(),
         "dataset-read-secret",
     )
     .await;

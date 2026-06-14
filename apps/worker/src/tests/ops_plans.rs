@@ -185,6 +185,10 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         plan["api_contract"]["unbundling_comparator_path"],
         "/api/v1/ops/unbundling-comparator-candidates"
     );
+    assert_eq!(
+        plan["api_contract"]["worker_data_pipeline_execution_path"],
+        "/api/v1/ops/worker-data-pipeline-executions"
+    );
     assert!(plan["readiness_gates"]
         .as_array()
         .unwrap()

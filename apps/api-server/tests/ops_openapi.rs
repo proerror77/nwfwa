@@ -210,6 +210,12 @@ async fn openapi_includes_operations_paths() {
         .unwrap()
         .iter()
         .any(|field| field == "customer_scope_id"));
+    assert!(schema["paths"]["/api/v1/ops/worker-data-pipeline-executions"].is_object());
+    assert!(
+        schema["components"]["schemas"]["WorkerDataPipelineExecutionReportSubmissionResponse"]
+            ["properties"]["claim_scoring"]["const"]
+            == false
+    );
     assert_eq!(
         schema["components"]["schemas"]["WebhookEvent"]["properties"]["delivery_status"]["enum"][1],
         "retry_wait"

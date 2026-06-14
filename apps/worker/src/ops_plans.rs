@@ -306,7 +306,8 @@ pub fn build_worker_data_pipeline_plan(
             "clinical_compatibility_path": "/api/v1/ops/clinical-compatibility-references",
             "unbundling_comparator_path": "/api/v1/ops/unbundling-comparator-candidates",
             "scoring_context_path": "/api/v1/ops/scoring-feature-context-materializations",
-            "probability_calibration_path": "/api/v1/ops/models/{model_key}/probability-calibration-reports"
+            "probability_calibration_path": "/api/v1/ops/models/{model_key}/probability-calibration-reports",
+            "worker_data_pipeline_execution_path": "/api/v1/ops/worker-data-pipeline-executions"
         },
         "schedule": {
             "daily_cron": daily_cron,
