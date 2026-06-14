@@ -666,6 +666,15 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             "review_task_count must match review_tasks length",
         ));
     }
+    for review_task in &request.review_tasks {
+        if let Some(required_permission) = review_task.get("required_permission") {
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
+                review_task.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION",
+            )?;
+        }
+    }
     if request.pending_or_failed_job_count > request.job_count {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -784,42 +793,11 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             pending_or_failed_jobs += 1;
         }
         if let Some(required_permission) = execution.get("required_permission") {
-            if required_permission
-                .as_str()
-                .is_some_and(|value| value.trim().is_empty())
-            {
-                return Err(ApiError::new(
-                    StatusCode::BAD_REQUEST,
-                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
-                    "required_permission must not be blank when supplied",
-                ));
-            }
-            if required_permission
-                .as_str()
-                .is_some_and(|value| !is_worker_data_pipeline_permission(value))
-            {
-                return Err(ApiError::new(
-                    StatusCode::BAD_REQUEST,
-                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
-                    "required_permission must be a supported worker data pipeline permission scope",
-                ));
-            }
-            if let (Some(api_path), Some(required_permission)) = (
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
                 execution.get("api_path").and_then(|value| value.as_str()),
-                required_permission.as_str(),
-            ) {
-                if let Some(expected_permission) =
-                    worker_data_pipeline_permission_for_api_path(api_path)
-                {
-                    if required_permission != expected_permission {
-                        return Err(ApiError::new(
-                            StatusCode::BAD_REQUEST,
-                            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
-                            "required_permission must match api_path",
-                        ));
-                    }
-                }
-            }
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
+            )?;
         }
         if execution_status == "dependency_not_completed" {
             let has_blocked_dependencies = execution
@@ -934,6 +912,15 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             "review_task_count must match review_tasks length",
         ));
     }
+    for review_task in &request.review_tasks {
+        if let Some(required_permission) = review_task.get("required_permission") {
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
+                review_task.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION",
+            )?;
+        }
+    }
     let expected_report_ref = format!(
         "worker_data_pipeline_readiness_reports:{}",
         request.source_report_uri
@@ -967,26 +954,11 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             ));
         }
         if let Some(required_permission) = readiness.get("required_permission") {
-            if required_permission
-                .as_str()
-                .is_some_and(|value| value.trim().is_empty())
-            {
-                return Err(ApiError::new(
-                    StatusCode::BAD_REQUEST,
-                    "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
-                    "required_permission must not be blank when supplied",
-                ));
-            }
-            if required_permission
-                .as_str()
-                .is_some_and(|value| !is_worker_data_pipeline_permission(value))
-            {
-                return Err(ApiError::new(
-                    StatusCode::BAD_REQUEST,
-                    "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
-                    "required_permission must be a supported worker data pipeline permission scope",
-                ));
-            }
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
+                readiness.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
+            )?;
         }
         let Some(readiness_status) = readiness
             .get("readiness_status")
@@ -1057,6 +1029,49 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             "INVALID_WORKER_DATA_PIPELINE_READINESS_STATUS",
             "readiness_status must match whether any job readiness record is blocked",
         ));
+    }
+    Ok(())
+}
+
+fn validate_worker_data_pipeline_required_permission(
+    required_permission: &serde_json::Value,
+    api_path: Option<&str>,
+    error_code: &'static str,
+) -> Result<(), ApiError> {
+    let Some(required_permission) = required_permission.as_str() else {
+        if required_permission.is_null() {
+            return Ok(());
+        }
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            "required_permission must be a supported worker data pipeline permission scope",
+        ));
+    };
+    if required_permission.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            "required_permission must not be blank when supplied",
+        ));
+    }
+    if !is_worker_data_pipeline_permission(required_permission) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            "required_permission must be a supported worker data pipeline permission scope",
+        ));
+    }
+    if let Some(expected_permission) =
+        api_path.and_then(worker_data_pipeline_permission_for_api_path)
+    {
+        if required_permission != expected_permission {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                error_code,
+                "required_permission must match api_path",
+            ));
+        }
     }
     Ok(())
 }

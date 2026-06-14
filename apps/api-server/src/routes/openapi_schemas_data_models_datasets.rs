@@ -259,7 +259,26 @@ pub(super) fn dataset_schemas() -> Value {
                 },
                 "review_tasks": {
                     "type": "array",
-                    "items": { "type": "object" }
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "required_permission": {
+                                "type": ["string", "null"],
+                                "enum": [
+                                    "ops:providers:write",
+                                    "ops:datasets:write",
+                                    "ops:models:review",
+                                    null
+                                ],
+                                "minLength": 1,
+                                "description": "Optional API permission scope required to resolve this worker pipeline review task. When api_path is supplied, this scope must match the endpoint family."
+                            },
+                            "api_path": {
+                                "type": ["string", "null"],
+                                "description": "Optional API path associated with the review task."
+                            }
+                        }
+                    }
                 },
                 "evidence_refs": {
                     "type": "array",
@@ -450,7 +469,26 @@ pub(super) fn dataset_schemas() -> Value {
                 },
                 "review_tasks": {
                     "type": "array",
-                    "items": { "type": "object" }
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "required_permission": {
+                                "type": ["string", "null"],
+                                "enum": [
+                                    "ops:providers:write",
+                                    "ops:datasets:write",
+                                    "ops:models:review",
+                                    null
+                                ],
+                                "minLength": 1,
+                                "description": "Optional API permission scope required to resolve this worker pipeline readiness review task. When api_path is supplied, this scope must match the endpoint family."
+                            },
+                            "api_path": {
+                                "type": ["string", "null"],
+                                "description": "Optional API path associated with the review task."
+                            }
+                        }
+                    }
                 },
                 "evidence_refs": {
                     "type": "array",

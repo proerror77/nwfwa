@@ -666,6 +666,54 @@ async fn worker_data_pipeline_execution_report_rejects_permission_api_path_misma
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_review_task_unknown_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["required_permission"] = serde_json::json!("ops:unknown:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_review_task_permission_api_path_mismatch() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["api_path"] =
+        serde_json::json!("/api/v1/ops/providers/profile-window-rollups");
+    payload["review_tasks"][0]["required_permission"] = serde_json::json!("ops:datasets:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_pending_count_consistency() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -848,6 +896,29 @@ async fn worker_data_pipeline_readiness_report_rejects_unknown_required_permissi
     assert_eq!(
         body["code"],
         "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_review_task_unknown_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["required_permission"] = serde_json::json!("ops:unknown:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION"
     );
 }
 
