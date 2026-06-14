@@ -95,3 +95,141 @@ fn opens_probability_calibration_review_when_raw_probabilities_are_miscalibrated
         .governance_boundary
         .contains("must not relabel outcomes"));
 }
+
+#[test]
+fn builds_probability_calibration_submission() {
+    let root = temp_root("probability-calibration-submission");
+    let report_uri = root.join("probability_calibration_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "probability_calibration_report",
+            "report_version": 1,
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/probability-calibration.json",
+            "label_source_uri": "local://labels/holdout.json",
+            "row_count": 100,
+            "minimum_calibration_rows": 100,
+            "bin_count": 1,
+            "expected_calibration_error": 0.02,
+            "max_expected_calibration_error": 0.05,
+            "brier_score": 0.12,
+            "max_brier_score": 0.20,
+            "calibration_status": "passed",
+            "bins": [
+                {
+                    "bin_index": 0,
+                    "lower_bound": 0.0,
+                    "upper_bound": 1.0,
+                    "row_count": 100,
+                    "average_predicted_probability": 0.3,
+                    "observed_positive_rate": 0.28,
+                    "calibration_error": 0.02
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": ["probability_calibration_input:local://inputs/probability-calibration.json"],
+            "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
+        }),
+    )
+    .unwrap();
+
+    let (model_key, submission) = build_probability_calibration_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-probability-calibration-report",
+        "labeled holdout calibration evidence",
+    )
+    .expect("probability calibration submission");
+
+    assert_eq!(model_key, "baseline_fwa");
+    assert_eq!(submission.report_kind, "probability_calibration_report");
+    assert_eq!(submission.model_version, "0.2.0-rust");
+    assert_eq!(submission.bin_count, 1);
+    assert!(submission
+        .evidence_refs
+        .contains(&"model_versions:baseline_fwa:0.2.0-rust".into()));
+    assert!(submission.evidence_refs.contains(&format!(
+        "probability_calibration_reports:{}",
+        report_uri.to_string_lossy()
+    )));
+}
+
+#[tokio::test]
+async fn submits_probability_calibration_report_to_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("probability-calibration-submit-api");
+    let report_uri = root.join("probability_calibration_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "probability_calibration_report",
+            "report_version": 1,
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/probability-calibration.json",
+            "label_source_uri": "local://labels/holdout.json",
+            "row_count": 100,
+            "minimum_calibration_rows": 100,
+            "bin_count": 1,
+            "expected_calibration_error": 0.02,
+            "max_expected_calibration_error": 0.05,
+            "brier_score": 0.12,
+            "max_brier_score": 0.20,
+            "calibration_status": "passed",
+            "bins": [
+                {
+                    "bin_index": 0,
+                    "lower_bound": 0.0,
+                    "upper_bound": 1.0,
+                    "row_count": 100,
+                    "average_predicted_probability": 0.3,
+                    "observed_positive_rate": 0.28,
+                    "calibration_error": 0.02
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": ["probability_calibration_input:local://inputs/probability-calibration.json"],
+            "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
+        }),
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "calibration_status": "passed"
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = submit_probability_calibration_report(
+        &api_url,
+        "model-review-secret",
+        &report_uri.to_string_lossy(),
+        "worker:build-probability-calibration-report",
+        "labeled holdout calibration evidence",
+    )
+    .await
+    .expect("submit probability calibration report");
+
+    assert_eq!(response["model_key"], "baseline_fwa");
+    let request = server.await.unwrap();
+    assert!(request.starts_with(
+        "POST /api/v1/ops/models/baseline_fwa/probability-calibration-reports HTTP/1.1"
+    ));
+    assert!(request.contains("x-api-key: model-review-secret"));
+    assert!(request.contains(r#""report_kind":"probability_calibration_report""#));
+    assert!(request.contains("probability_calibration_reports:"));
+}

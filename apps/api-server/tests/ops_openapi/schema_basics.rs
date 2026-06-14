@@ -27,6 +27,7 @@ pub(crate) fn assert_paths_health_and_inbox_contract(schema: &serde_json::Value)
         "/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates",
         "/api/v1/ops/models/{model_key}/retraining-readiness",
         "/api/v1/ops/models/{model_key}/retraining-jobs",
+        "/api/v1/ops/models/{model_key}/probability-calibration-reports",
         "/api/v1/ops/model-retraining-jobs/{job_id}/status",
         "/api/v1/ops/model-retraining-jobs/claim-next",
         "/api/v1/ops/model-retraining-jobs/{job_id}/output",

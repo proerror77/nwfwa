@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-use crate::{read_json_report, round4, write_json};
+use crate::{api_url, read_json_report, required_non_empty, round4, write_json};
 
 const DEFAULT_BIN_COUNT: usize = 10;
 const MIN_CALIBRATION_ROWS: usize = 100;
@@ -54,6 +54,28 @@ pub struct ProbabilityCalibrationReport {
     pub as_of_date: String,
     pub source_uri: String,
     pub label_source_uri: Option<String>,
+    pub row_count: usize,
+    pub minimum_calibration_rows: usize,
+    pub bin_count: usize,
+    pub expected_calibration_error: f64,
+    pub max_expected_calibration_error: f64,
+    pub brier_score: f64,
+    pub max_brier_score: f64,
+    pub calibration_status: String,
+    pub bins: Vec<ProbabilityCalibrationBin>,
+    pub review_tasks: Vec<ProbabilityCalibrationReviewTask>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbabilityCalibrationSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub model_version: String,
+    pub as_of_date: String,
     pub row_count: usize,
     pub minimum_calibration_rows: usize,
     pub bin_count: usize,
@@ -201,6 +223,83 @@ pub fn build_probability_calibration_report(
         &report.review_tasks,
     )?;
     Ok(report)
+}
+
+pub fn build_probability_calibration_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<(String, ProbabilityCalibrationSubmission)> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report: ProbabilityCalibrationReport =
+        serde_json::from_value(read_json_report(report_uri)?)
+            .context("parse probability calibration report")?;
+    if report.report_kind != "probability_calibration_report" {
+        bail!("report_kind must be probability_calibration_report");
+    }
+    let mut evidence_refs = report.evidence_refs;
+    evidence_refs.push(format!(
+        "model_versions:{}:{}",
+        report.model_key, report.model_version
+    ));
+    evidence_refs.push(format!("probability_calibration_reports:{report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    let model_key = report.model_key.clone();
+    Ok((
+        model_key,
+        ProbabilityCalibrationSubmission {
+            actor: actor.into(),
+            notes: notes.into(),
+            report_uri: report_uri.into(),
+            report_kind: report.report_kind,
+            model_version: report.model_version,
+            as_of_date: report.as_of_date,
+            row_count: report.row_count,
+            minimum_calibration_rows: report.minimum_calibration_rows,
+            bin_count: report.bin_count,
+            expected_calibration_error: report.expected_calibration_error,
+            max_expected_calibration_error: report.max_expected_calibration_error,
+            brier_score: report.brier_score,
+            max_brier_score: report.max_brier_score,
+            calibration_status: report.calibration_status,
+            bins: report.bins,
+            review_tasks: report.review_tasks,
+            evidence_refs,
+            governance_boundary: report.governance_boundary,
+        },
+    ))
+}
+
+pub async fn submit_probability_calibration_report(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let (model_key, payload) = build_probability_calibration_submission(report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            &format!("/api/v1/ops/models/{model_key}/probability-calibration-reports"),
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit probability calibration report")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit probability calibration report failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse probability calibration response")
 }
 
 fn calibration_bins(

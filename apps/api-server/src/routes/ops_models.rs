@@ -30,7 +30,7 @@ use fwa_auth::AuthenticatedPrincipal;
 pub use super::ops_models_mlops::{
     mlops_alert_delivery_queue, model_monitoring_review_queue, submit_mlops_alert_delivery,
     submit_mlops_alert_delivery_task_review, submit_mlops_monitoring_report,
-    submit_model_monitoring_review_task_review,
+    submit_model_monitoring_review_task_review, submit_probability_calibration_report,
 };
 pub use super::ops_models_types::*;
 

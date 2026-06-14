@@ -139,6 +139,9 @@ As of the P1/P2 remediation commits after this review:
   ECE and Brier score from labeled holdout predictions and opens calibration
   review tasks when raw probabilities are miscalibrated or sample size is
   insufficient.
+- Probability calibration reports now have a model-governance submit path and
+  worker command that record calibration evidence while explicitly avoiding
+  calibrated serving activation, threshold changes, or label assignment.
 
 Remaining boundaries after those commits are production scheduling, live
 external OIG/SAM fetch, customer claim/history data, LLM-backed specialist

@@ -68,6 +68,76 @@ pub(super) fn retraining_schemas() -> Value {
                 "governance_boundary": { "type": "string" }
             }
         },
+        "SubmitProbabilityCalibrationReportRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "report_uri", "report_kind", "model_version", "as_of_date", "row_count", "minimum_calibration_rows", "bin_count", "expected_calibration_error", "max_expected_calibration_error", "brier_score", "max_brier_score", "calibration_status", "bins", "review_tasks", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Calibration notes must not contain PII."
+                },
+                "report_uri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "URI of probability_calibration_report.json."
+                },
+                "report_kind": { "type": "string", "const": "probability_calibration_report" },
+                "model_version": { "type": "string", "minLength": 1 },
+                "as_of_date": { "type": "string", "minLength": 1 },
+                "row_count": { "type": "integer", "minimum": 1 },
+                "minimum_calibration_rows": { "type": "integer", "minimum": 1 },
+                "bin_count": { "type": "integer", "minimum": 1 },
+                "expected_calibration_error": { "type": "number", "minimum": 0, "maximum": 1 },
+                "max_expected_calibration_error": { "type": "number", "minimum": 0, "maximum": 1 },
+                "brier_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                "max_brier_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                "calibration_status": {
+                    "type": "string",
+                    "enum": ["passed", "needs_calibration_review", "insufficient_sample"]
+                },
+                "bins": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "object", "minProperties": 1 }
+                },
+                "review_tasks": {
+                    "type": "array",
+                    "description": "Human review tasks opened by calibration evidence; task content must not contain PII.",
+                    "items": { "type": "object", "minProperties": 1 }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include model_versions:{model_key}:{model_version} and probability_calibration_reports:{report_uri}."
+                },
+                "governance_boundary": { "type": "string", "minLength": 1 }
+            }
+        },
+        "SubmitProbabilityCalibrationReportResponse": {
+            "type": "object",
+            "required": ["model_key", "model_version", "report_uri", "calibration_status", "row_count", "expected_calibration_error", "brier_score", "review_task_count", "active_calibration_change", "calibrated_probability_serving_activation", "threshold_change", "label_assignment", "governance_boundary"],
+            "properties": {
+                "model_key": { "type": "string" },
+                "model_version": { "type": "string" },
+                "report_uri": { "type": "string" },
+                "calibration_status": {
+                    "type": "string",
+                    "enum": ["passed", "needs_calibration_review", "insufficient_sample"]
+                },
+                "row_count": { "type": "integer" },
+                "expected_calibration_error": { "type": "number" },
+                "brier_score": { "type": "number" },
+                "review_task_count": { "type": "integer" },
+                "active_calibration_change": { "type": "boolean", "const": false },
+                "calibrated_probability_serving_activation": { "type": "boolean", "const": false },
+                "threshold_change": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" }
+            }
+        },
         "SubmitMlopsAlertDeliveryRequest": {
             "type": "object",
             "required": ["actor", "notes", "scheduler_execution_report_uri", "report_kind", "model_version", "alert_delivery_status", "alert_delivery_tasks", "evidence_refs"],

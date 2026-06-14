@@ -15,6 +15,8 @@ pub(super) use self::lifecycle::{
 pub(super) use self::monitoring::{
     validate_mlops_monitoring_report_request, validate_monitoring_report_evidence,
     validate_monitoring_review_task_evidence, validate_monitoring_review_task_review_request,
+    validate_probability_calibration_report_evidence,
+    validate_probability_calibration_report_request,
 };
 pub(super) use self::retraining_output::{
     retraining_metrics_with_artifacts, validate_json_artifact_uri, validate_json_report_uri,

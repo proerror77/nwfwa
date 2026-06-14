@@ -165,6 +165,45 @@ pub struct SubmitMlopsMonitoringReportResponse {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct SubmitProbabilityCalibrationReportRequest {
+    pub actor: String,
+    pub notes: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub model_version: String,
+    pub as_of_date: String,
+    pub row_count: usize,
+    pub minimum_calibration_rows: usize,
+    pub bin_count: usize,
+    pub expected_calibration_error: f64,
+    pub max_expected_calibration_error: f64,
+    pub brier_score: f64,
+    pub max_brier_score: f64,
+    pub calibration_status: String,
+    pub bins: Vec<Value>,
+    pub review_tasks: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitProbabilityCalibrationReportResponse {
+    pub model_key: String,
+    pub model_version: String,
+    pub report_uri: String,
+    pub calibration_status: String,
+    pub row_count: usize,
+    pub expected_calibration_error: f64,
+    pub brier_score: f64,
+    pub review_task_count: usize,
+    pub active_calibration_change: bool,
+    pub calibrated_probability_serving_activation: bool,
+    pub threshold_change: bool,
+    pub label_assignment: bool,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct SubmitMlopsAlertDeliveryRequest {
     pub actor: String,
     pub notes: String,

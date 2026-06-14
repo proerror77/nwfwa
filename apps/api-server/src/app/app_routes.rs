@@ -345,6 +345,10 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             post(ops_models::submit_mlops_monitoring_report),
         )
         .route(
+            "/api/v1/ops/models/:model_key/probability-calibration-reports",
+            post(ops_models::submit_probability_calibration_report),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/mlops-alert-deliveries",
             post(ops_models::submit_mlops_alert_delivery),
         )

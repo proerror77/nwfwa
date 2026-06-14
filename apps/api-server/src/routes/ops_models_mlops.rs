@@ -2,6 +2,7 @@ use super::ops_models::{ensure_model_exists, internal_error, require_permission}
 use super::ops_models_audit::{
     record_mlops_alert_delivery_audit, record_mlops_alert_delivery_task_review_audit,
     record_mlops_monitoring_audit, record_mlops_monitoring_review_task_audit,
+    record_probability_calibration_audit,
 };
 use super::ops_models_mlops_tasks::{
     alert_delivery_tasks_from_events, build_mlops_alert_delivery_response,
@@ -13,7 +14,8 @@ use super::ops_models_validation::{
     validate_alert_delivery_task_review_request, validate_mlops_alert_delivery_request,
     validate_mlops_monitoring_report_request, validate_monitoring_report_evidence,
     validate_monitoring_review_task_evidence, validate_monitoring_review_task_review_request,
-    validate_target_model_version_evidence,
+    validate_probability_calibration_report_evidence,
+    validate_probability_calibration_report_request, validate_target_model_version_evidence,
 };
 use crate::{
     app::AppState,
@@ -152,6 +154,58 @@ pub async fn submit_mlops_monitoring_report(
     record_mlops_monitoring_audit(&state, &actor, &model, &request, &response)
         .await
         .map_err(internal_error("MLOPS_MONITORING_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_probability_calibration_report(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(model_key): Path<String>,
+    Json(request): Json<SubmitProbabilityCalibrationReportRequest>,
+) -> Result<Json<SubmitProbabilityCalibrationReportResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:models:review")?;
+    validate_probability_calibration_report_request(&request)?;
+    let model = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == model_key && model.version == request.model_version)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_VERSION_NOT_FOUND",
+                "model version not found",
+            )
+        })?;
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &model.model_key,
+        &model.version,
+        "probability calibration report",
+    )?;
+    validate_probability_calibration_report_evidence(&request)?;
+    let response = SubmitProbabilityCalibrationReportResponse {
+        model_key: model.model_key.clone(),
+        model_version: model.version.clone(),
+        report_uri: request.report_uri.clone(),
+        calibration_status: request.calibration_status.clone(),
+        row_count: request.row_count,
+        expected_calibration_error: request.expected_calibration_error,
+        brier_score: request.brier_score,
+        review_task_count: request.review_tasks.len(),
+        active_calibration_change: false,
+        calibrated_probability_serving_activation: false,
+        threshold_change: false,
+        label_assignment: false,
+        governance_boundary:
+            "probability calibration report submission records model-governance evidence only; it must not activate calibrated serving, change thresholds, or assign labels"
+                .into(),
+    };
+    record_probability_calibration_audit(&state, &actor, &model, &request, &response)
+        .await
+        .map_err(internal_error("PROBABILITY_CALIBRATION_AUDIT_SAVE_FAILED"))?;
     Ok(Json(response))
 }
 

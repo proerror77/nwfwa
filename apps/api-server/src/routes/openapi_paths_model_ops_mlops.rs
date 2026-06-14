@@ -160,6 +160,47 @@ pub(super) fn mlops_paths() -> Value {
                 }
             }
         },
+        "/api/v1/ops/models/{model_key}/probability-calibration-reports": {
+            "post": {
+                "summary": "Submit probability calibration evidence into model governance audit",
+                "description": "Records probability calibration evidence from labeled holdout predictions. This does not activate calibrated serving, change thresholds, assign labels, or alter model routing.",
+                "security": [{ "ApiKeyAuth": [] }],
+                "parameters": [
+                    {
+                        "name": "model_key",
+                        "in": "path",
+                        "required": true,
+                        "schema": { "type": "string" }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": { "$ref": "#/components/schemas/SubmitProbabilityCalibrationReportRequest" }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Recorded probability calibration governance event",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitProbabilityCalibrationReportResponse" }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid probability calibration submission",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ops/models/{model_key}/mlops-alert-delivery-queue": {
             "get": {
                 "summary": "List alert delivery tasks opened by submitted MLOps scheduler reports",

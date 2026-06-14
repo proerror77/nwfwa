@@ -5,6 +5,7 @@ use crate::{
         ops_models::{
             ModelMonitoringReviewTask, SubmitMlopsMonitoringReportRequest,
             SubmitModelMonitoringReviewTaskReviewRequest,
+            SubmitProbabilityCalibrationReportRequest,
         },
         pii,
     },
@@ -160,6 +161,190 @@ pub(in crate::routes) fn validate_monitoring_report_evidence(
             StatusCode::BAD_REQUEST,
             "MISSING_MLOPS_MONITORING_EVIDENCE",
             format!("MLOps monitoring evidence_refs must include {expected_ref}"),
+        ))
+    }
+}
+
+pub(in crate::routes) fn validate_probability_calibration_report_request(
+    request: &SubmitProbabilityCalibrationReportRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_PROBABILITY_CALIBRATION_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_PROBABILITY_CALIBRATION_NOTES",
+            "notes are required",
+        ),
+        (
+            request.report_uri.as_str(),
+            "INVALID_PROBABILITY_CALIBRATION_REPORT_URI",
+            "report_uri is required",
+        ),
+        (
+            request.model_version.as_str(),
+            "INVALID_PROBABILITY_CALIBRATION_MODEL_VERSION",
+            "model_version is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_PROBABILITY_CALIBRATION_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_PROBABILITY_CALIBRATION_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "probability_calibration_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_REPORT_KIND",
+            "report_kind must be probability_calibration_report",
+        ));
+    }
+    if !matches!(
+        request.calibration_status.as_str(),
+        "passed" | "needs_calibration_review" | "insufficient_sample"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_STATUS",
+            "calibration_status must be passed, needs_calibration_review, or insufficient_sample",
+        ));
+    }
+    validate_json_artifact_uri(
+        &request.report_uri,
+        "INVALID_PROBABILITY_CALIBRATION_REPORT_URI",
+        "probability calibration report_uri must point to a JSON report",
+    )?;
+    if request.row_count == 0 || request.minimum_calibration_rows == 0 || request.bin_count == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_COUNTS",
+            "row_count, minimum_calibration_rows, and bin_count must be greater than zero",
+        ));
+    }
+    for (name, value) in [
+        (
+            "expected_calibration_error",
+            request.expected_calibration_error,
+        ),
+        (
+            "max_expected_calibration_error",
+            request.max_expected_calibration_error,
+        ),
+        ("brier_score", request.brier_score),
+        ("max_brier_score", request.max_brier_score),
+    ] {
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROBABILITY_CALIBRATION_METRIC",
+                format!("{name} must be between 0 and 1"),
+            ));
+        }
+    }
+    if request.bins.len() != request.bin_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_BIN_COUNT",
+            "bin_count must match bins length",
+        ));
+    }
+    if request.bins.iter().any(|bin| match bin.as_object() {
+        Some(object) => object.is_empty(),
+        None => true,
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_BIN",
+            "bins must be non-empty objects",
+        ));
+    }
+    if request
+        .review_tasks
+        .iter()
+        .any(|task| match task.as_object() {
+            Some(object) => object.is_empty(),
+            None => true,
+        })
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_REVIEW_TASK",
+            "review_tasks must be non-empty objects",
+        ));
+    }
+    if request.calibration_status != "passed" && request.review_tasks.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROBABILITY_CALIBRATION_REVIEW_TASK",
+            "non-passing calibration reports require review_tasks",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROBABILITY_CALIBRATION_EVIDENCE",
+            "probability calibration evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.actor.as_str())
+            .chain(std::iter::once(request.notes.as_str()))
+            .chain(std::iter::once(request.report_uri.as_str()))
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_PROBABILITY_CALIBRATION_REPORT",
+            "probability calibration actor, notes, report_uri, and evidence_refs must not contain PII",
+        ));
+    }
+    let review_task_text = request
+        .review_tasks
+        .iter()
+        .map(Value::to_string)
+        .collect::<Vec<_>>();
+    if pii::contains_pii(review_task_text.iter().map(String::as_str)) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_PROBABILITY_CALIBRATION_REVIEW_TASK",
+            "probability calibration review_tasks must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
+pub(in crate::routes) fn validate_probability_calibration_report_evidence(
+    request: &SubmitProbabilityCalibrationReportRequest,
+) -> Result<(), ApiError> {
+    let expected_ref = format!("probability_calibration_reports:{}", request.report_uri);
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROBABILITY_CALIBRATION_EVIDENCE",
+            format!("probability calibration evidence_refs must include {expected_ref}"),
         ))
     }
 }

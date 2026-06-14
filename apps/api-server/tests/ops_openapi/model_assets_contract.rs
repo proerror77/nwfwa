@@ -229,6 +229,33 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             false
         );
     }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/models/{model_key}/probability-calibration-reports"]["post"]
+            ["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProbabilityCalibrationReportRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/models/{model_key}/probability-calibration-reports"]["post"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProbabilityCalibrationReportResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitProbabilityCalibrationReportRequest"]["properties"]
+            ["report_kind"]["const"],
+        "probability_calibration_report"
+    );
+    for field in [
+        "active_calibration_change",
+        "calibrated_probability_serving_activation",
+        "threshold_change",
+        "label_assignment",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitProbabilityCalibrationReportResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
     assert!(
         schema["components"]["schemas"]["ModelEvaluation"]["required"]
             .as_array()

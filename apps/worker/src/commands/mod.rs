@@ -46,6 +46,7 @@ mod submit_episode_aggregation;
 mod submit_mlops_alert_delivery_tasks;
 mod submit_mlops_monitoring_report;
 mod submit_peer_benchmark;
+mod submit_probability_calibration_report;
 mod submit_provider_graph_signal_rollup;
 mod submit_provider_profile_window_rollup;
 mod submit_sanctions_sync_report;
@@ -93,6 +94,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-peer-benchmarks" => build_peer_benchmarks::run(args),
         "submit-peer-benchmark" => submit_peer_benchmark::run(args).await,
         "build-probability-calibration-report" => build_probability_calibration_report::run(args),
+        "submit-probability-calibration-report" => {
+            submit_probability_calibration_report::run(args).await
+        }
         "build-provider-graph-signals" => build_provider_graph_signals::run(args),
         "build-provider-profile-windows" => build_provider_profile_windows::run(args),
         "submit-provider-graph-signal-rollup" => {

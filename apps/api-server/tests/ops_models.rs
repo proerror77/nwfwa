@@ -13,6 +13,8 @@ mod lifecycle;
 mod mlops_monitoring;
 #[path = "ops_models/performance.rs"]
 mod performance;
+#[path = "ops_models/probability_calibration.rs"]
+mod probability_calibration;
 #[path = "ops_models/promotion_gates.rs"]
 mod promotion_gates;
 #[path = "ops_models/retraining_jobs.rs"]

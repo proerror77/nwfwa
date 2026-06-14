@@ -95,8 +95,10 @@ pub use audit_retention::{
 
 mod probability_calibration;
 pub use probability_calibration::{
-    build_probability_calibration_report, ProbabilityCalibrationBin, ProbabilityCalibrationInput,
+    build_probability_calibration_report, build_probability_calibration_submission,
+    submit_probability_calibration_report, ProbabilityCalibrationBin, ProbabilityCalibrationInput,
     ProbabilityCalibrationReport, ProbabilityCalibrationReviewTask, ProbabilityCalibrationRow,
+    ProbabilityCalibrationSubmission,
 };
 
 mod model_artifact_evaluation;

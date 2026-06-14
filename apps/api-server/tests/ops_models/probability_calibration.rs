@@ -1,0 +1,92 @@
+use api_server::app::build_app;
+use axum::http::StatusCode;
+
+use super::support::{json_request, test_config};
+
+fn probability_calibration_payload(evidence_refs: &str) -> String {
+    format!(
+        r#"{{
+          "actor": "worker:build-probability-calibration-report",
+          "notes": "labeled holdout calibration evidence",
+          "report_uri": "data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+          "report_kind": "probability_calibration_report",
+          "model_version": "0.1.0",
+          "as_of_date": "2026-06-14",
+          "row_count": 100,
+          "minimum_calibration_rows": 100,
+          "bin_count": 2,
+          "expected_calibration_error": 0.02,
+          "max_expected_calibration_error": 0.05,
+          "brier_score": 0.12,
+          "max_brier_score": 0.20,
+          "calibration_status": "passed",
+          "bins": [
+            {{
+              "bin_index": 0,
+              "lower_bound": 0.0,
+              "upper_bound": 0.5,
+              "row_count": 50,
+              "average_predicted_probability": 0.1,
+              "observed_positive_rate": 0.1,
+              "calibration_error": 0.0
+            }},
+            {{
+              "bin_index": 1,
+              "lower_bound": 0.5,
+              "upper_bound": 1.0,
+              "row_count": 50,
+              "average_predicted_probability": 0.8,
+              "observed_positive_rate": 0.76,
+              "calibration_error": 0.04
+            }}
+          ],
+          "review_tasks": [],
+          "evidence_refs": [{evidence_refs}],
+          "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
+        }}"#
+    )
+}
+
+#[tokio::test]
+async fn submits_probability_calibration_report_as_review_only_governance_event() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, missing_report_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &probability_calibration_payload(r#""model_versions:baseline_fwa:0.1.0""#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        missing_report_evidence["code"],
+        "MISSING_PROBABILITY_CALIBRATION_EVIDENCE"
+    );
+
+    let (status, response) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &probability_calibration_payload(
+            r#""model_versions:baseline_fwa:0.1.0",
+            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json""#,
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response["model_key"], "baseline_fwa");
+    assert_eq!(response["model_version"], "0.1.0");
+    assert_eq!(response["calibration_status"], "passed");
+    assert_eq!(response["row_count"], 100);
+    assert_eq!(response["review_task_count"], 0);
+    assert_eq!(response["active_calibration_change"], false);
+    assert_eq!(response["calibrated_probability_serving_activation"], false);
+    assert_eq!(response["threshold_change"], false);
+    assert_eq!(response["label_assignment"], false);
+    assert!(response["governance_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("must not activate calibrated serving"));
+}
