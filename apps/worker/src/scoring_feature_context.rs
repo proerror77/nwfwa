@@ -195,6 +195,8 @@ pub fn build_scoring_feature_context_materialization_submission(
     if report.evidence_refs.is_empty() {
         bail!("scoring feature context materialization requires evidence_refs");
     }
+    let mut evidence_refs = report.evidence_refs;
+    evidence_refs.push(format!("scoring_feature_contexts:{report_uri}"));
 
     Ok(ScoringFeatureContextMaterializationSubmission {
         materialization_id: materialization_id.into(),
@@ -211,7 +213,7 @@ pub fn build_scoring_feature_context_materialization_submission(
             .into_iter()
             .map(serde_json::to_value)
             .collect::<Result<Vec<_>, _>>()?,
-        evidence_refs: report.evidence_refs,
+        evidence_refs,
         governance_boundary: report.governance_boundary,
     })
 }

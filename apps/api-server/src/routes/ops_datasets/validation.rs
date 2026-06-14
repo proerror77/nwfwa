@@ -246,6 +246,26 @@ pub(super) fn validate_scoring_feature_context_materialization(
             "source_uris must be an object",
         ));
     }
+    for source_key in [
+        "claims_uri",
+        "episode_rollups_uri",
+        "peer_benchmarks_uri",
+        "clinical_compatibility_uri",
+        "unbundling_candidates_uri",
+    ] {
+        if request
+            .source_uris
+            .get(source_key)
+            .and_then(|value| value.as_str())
+            .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI",
+                format!("source_uris.{source_key} is required"),
+            ));
+        }
+    }
     if request.context_count != request.contexts.len() as u64 {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -272,6 +292,46 @@ pub(super) fn validate_scoring_feature_context_materialization(
             "evidence_refs must be non-empty and contain no blank values",
         ));
     }
+    let required_evidence_refs = [
+        format!("scoring_feature_contexts:{}", request.report_uri),
+        format!(
+            "episode_rollups:{}",
+            request.source_uris["episode_rollups_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
+            "peer_benchmarks:{}",
+            request.source_uris["peer_benchmarks_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
+            "clinical_compatibility:{}",
+            request.source_uris["clinical_compatibility_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
+            "unbundling_candidates:{}",
+            request.source_uris["unbundling_candidates_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+    ];
+    for expected_ref in required_evidence_refs {
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_SCORING_FEATURE_CONTEXT_SOURCE_EVIDENCE",
+                format!("scoring feature context evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
     for context in &request.contexts {
         let Some(claim_id) = context.get("claim_id").and_then(|value| value.as_str()) else {
             return Err(ApiError::new(
@@ -285,6 +345,24 @@ pub(super) fn validate_scoring_feature_context_materialization(
                 StatusCode::BAD_REQUEST,
                 "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
                 "context claim_id must not be blank",
+            ));
+        }
+        let has_context_evidence_refs = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .is_some_and(|references| {
+                !references.is_empty()
+                    && references.iter().all(|reference| {
+                        reference
+                            .as_str()
+                            .is_some_and(|value| !value.trim().is_empty())
+                    })
+            });
+        if !has_context_evidence_refs {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                "each context must include non-empty evidence_refs",
             ));
         }
     }

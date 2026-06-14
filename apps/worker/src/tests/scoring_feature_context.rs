@@ -213,7 +213,13 @@ fn builds_scoring_feature_context_materialization_submission_payload() {
                     "missing_contexts": []
                 }
             ],
-            "evidence_refs": ["scoring_feature_contexts:local://claims.json"],
+            "evidence_refs": [
+                "scoring_feature_context_claim_snapshot:local://claims.json",
+                "episode_rollups:local://episode.json",
+                "peer_benchmarks:local://peer.json",
+                "clinical_compatibility:local://clinical.json",
+                "unbundling_candidates:local://unbundling.json"
+            ],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
         }),
     )
@@ -235,6 +241,22 @@ fn builds_scoring_feature_context_materialization_submission_payload() {
     assert_eq!(submission.context_count, 1);
     assert_eq!(submission.contexts[0]["claim_id"], "CLM-1");
     assert_eq!(submission.source_uris["claims_uri"], "local://claims.json");
+    assert!(submission.evidence_refs.contains(&format!(
+        "scoring_feature_contexts:{}",
+        report_uri.to_string_lossy()
+    )));
+    assert!(submission
+        .evidence_refs
+        .contains(&"episode_rollups:local://episode.json".to_string()));
+    assert!(submission
+        .evidence_refs
+        .contains(&"peer_benchmarks:local://peer.json".to_string()));
+    assert!(submission
+        .evidence_refs
+        .contains(&"clinical_compatibility:local://clinical.json".to_string()));
+    assert!(submission
+        .evidence_refs
+        .contains(&"unbundling_candidates:local://unbundling.json".to_string()));
     assert!(submission
         .governance_boundary
         .contains("must not assign fraud labels"));
@@ -274,7 +296,13 @@ async fn submits_scoring_feature_context_materialization_to_api() {
                     "missing_contexts": []
                 }
             ],
-            "evidence_refs": ["scoring_feature_contexts:local://claims.json"],
+            "evidence_refs": [
+                "scoring_feature_context_claim_snapshot:local://claims.json",
+                "episode_rollups:local://episode.json",
+                "peer_benchmarks:local://peer.json",
+                "clinical_compatibility:local://clinical.json",
+                "unbundling_candidates:local://unbundling.json"
+            ],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
         }),
     )
@@ -320,4 +348,12 @@ async fn submits_scoring_feature_context_materialization_to_api() {
     assert!(request.contains("x-api-key: dataset-write-secret"));
     assert!(request.contains(r#""materialization_id":"sfc-mat-1""#));
     assert!(request.contains(r#""claim_id":"CLM-1""#));
+    assert!(request.contains(&format!(
+        r#""scoring_feature_contexts:{}""#,
+        report_uri.to_string_lossy()
+    )));
+    assert!(request.contains(r#""episode_rollups:local://episode.json""#));
+    assert!(request.contains(r#""peer_benchmarks:local://peer.json""#));
+    assert!(request.contains(r#""clinical_compatibility:local://clinical.json""#));
+    assert!(request.contains(r#""unbundling_candidates:local://unbundling.json""#));
 }
