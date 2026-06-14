@@ -41,6 +41,9 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
         self.assertIn("model_key", model_slo)
         self.assertIn("latency_slo_ms", model_slo)
         self.assertIn("checksum_verified", model_slo)
+        retention = artifacts["retention_legal_hold_report.json"]
+        self.assertIn("destruction_workflow", retention)
+        self.assertNotIn("destruction_requires_human_approval", retention)
 
     def test_template_does_not_validate_as_customer_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

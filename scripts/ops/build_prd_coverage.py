@@ -252,6 +252,14 @@ CAPABILITIES = [
                 "validate_retention_legal_hold_evidence",
             ),
             (
+                "scripts/ops/build_retention_legal_hold_report.py",
+                "retention_legal_hold_report",
+            ),
+            (
+                "scripts/ops/build_retention_legal_hold_report.py",
+                "human_approval_required_before_destroy",
+            ),
+            (
                 "scripts/ops/build_production_readiness_contract.py",
                 "fallback_and_rollback_ready",
             ),

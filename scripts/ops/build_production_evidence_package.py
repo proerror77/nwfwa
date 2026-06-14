@@ -198,7 +198,7 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                 "legal_hold_policy_id": "",
                 "archive_storage_uri": "local://template/archive-storage",
                 "legal_hold_reconciliation_status": "pending",
-                "destruction_requires_human_approval": True,
+                "destruction_workflow": "pending_customer_approval",
                 "automated_destruction_enabled": False,
             },
         )

@@ -795,6 +795,16 @@ The retention/legal-hold gate requires `retention_legal_hold_report.json` to
 show at least six retention years, explicit retention and legal-hold policy ids,
 archive storage, completed legal-hold reconciliation, human approval before
 destruction, automated destruction disabled, and policy evidence refs.
+Render approved retention/legal-hold controls into the required report shape:
+
+```bash
+python3 scripts/ops/build_retention_legal_hold_report.py \
+  --source-uri artifacts/production-evidence-package/retention-legal-hold-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder produces evidence only. It does not archive, delete, or mutate
+customer records, and incomplete retention/legal-hold controls remain blocked.
 The model-serving SLO gate requires `model_serving_slo_report.json` to show the
 served model identity, p95 latency and error rate within declared SLOs,
 checksum/signature verification, healthy fallback, rollback readiness,
