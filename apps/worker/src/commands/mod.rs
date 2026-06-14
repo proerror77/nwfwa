@@ -36,6 +36,7 @@ mod cluster_provider_peers;
 mod deliver_mlops_alert_receiver_webhook;
 mod evaluate_model_artifact;
 mod fetch_oig_sam_sanctions_snapshot;
+mod fetch_scoring_readback_response;
 mod health;
 mod mine_rule_candidates;
 mod profile_parquet;
@@ -138,6 +139,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "rank-automl-candidates" => rank_automl_candidates::run(args),
         "evaluate-model-artifact" => evaluate_model_artifact::run(args).await,
         "fetch-oig-sam-sanctions-snapshot" => fetch_oig_sam_sanctions_snapshot::run(args).await,
+        "fetch-scoring-readback-response" => fetch_scoring_readback_response::run(args).await,
         "mine-rule-candidates" => mine_rule_candidates::run(args),
         "run-rule-candidate-backtest" => run_rule_candidate_backtest::run(args),
         "cluster-provider-peers" => cluster_provider_peers::run(args),

@@ -71,6 +71,7 @@ pub fn build_worker_data_pipeline_readiness_input_template(
                 "job_kind": job_kind,
                 "cadence": json_string(job, "cadence"),
                 "build_command": json_string(job, "build_command"),
+                "score_response_capture_command": json_string(job, "score_response_capture_command"),
                 "source_input": json_string(job, "source_input"),
                 "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),

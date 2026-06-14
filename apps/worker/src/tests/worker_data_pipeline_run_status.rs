@@ -102,6 +102,10 @@ fn builds_worker_data_pipeline_run_status_template() {
     );
     assert_eq!(job_statuses[9]["job_kind"], "scoring_online_readback");
     assert_eq!(
+        job_statuses[9]["score_response_capture_command"],
+        "fetch-scoring-readback-response"
+    );
+    assert_eq!(
         job_statuses[9]["required_evidence_prefixes"],
         serde_json::json!([
             "scoring_readback_reports:",

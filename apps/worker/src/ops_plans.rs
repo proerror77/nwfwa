@@ -453,6 +453,7 @@ pub fn build_worker_data_pipeline_plan(
                 "job_kind": "scoring_online_readback",
                 "cadence": "daily",
                 "build_command": "build-scoring-readback-report",
+                "score_response_capture_command": "fetch-scoring-readback-response",
                 "source_input": "score_response_artifact_from_api_v1_claims_score_after_governed_worker_writes",
                 "depends_on": ["scoring_feature_context_materialization"],
                 "artifact_kind": "online_scoring_readback",

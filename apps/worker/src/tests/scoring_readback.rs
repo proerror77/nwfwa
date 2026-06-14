@@ -1,5 +1,60 @@
 use super::*;
 
+#[tokio::test]
+async fn fetches_scoring_readback_response_from_claims_score_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("scoring-readback-fetch");
+    let request_uri = root.join("score_request.json");
+    let output_dir = root.join("out");
+    write_json(
+        request_uri.clone(),
+        &serde_json::json!({
+            "source_system": "customer-prod-readback",
+            "claim_id": "CLM-READBACK-1"
+        }),
+    )
+    .unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "claim_id": "CLM-READBACK-1",
+                "evidence_refs": [
+                    "scoring_feature_contexts:s3://customer-prod-artifacts/scoring-context/report.json"
+                ]
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = fetch_scoring_readback_response(
+        &api_url,
+        "customer-prod-api-key",
+        &request_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .await
+    .expect("scoring readback response");
+    let request = server.await.unwrap();
+
+    assert_eq!(response["claim_id"], "CLM-READBACK-1");
+    assert!(request.starts_with("POST /api/v1/claims/score HTTP/1.1"));
+    assert!(request.contains("x-api-key: customer-prod-api-key"));
+    assert!(request.contains(r#""claim_id":"CLM-READBACK-1""#));
+    let saved_response: serde_json::Value = serde_json::from_value(
+        read_json_report(&output_dir.join("score_response.json").to_string_lossy()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(saved_response["claim_id"], "CLM-READBACK-1");
+    assert!(!request.contains("score_response.json"));
+}
+
 #[test]
 fn verifies_scoring_readback_response_evidence_prefixes() {
     let root = temp_root("scoring-readback");

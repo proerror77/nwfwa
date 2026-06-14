@@ -31,6 +31,7 @@ pub fn build_worker_data_pipeline_run_status_template(
                 "job_kind": json_string(job, "job_kind").unwrap_or_else(|| "unknown".into()),
                 "cadence": json_string(job, "cadence"),
                 "build_command": json_string(job, "build_command"),
+                "score_response_capture_command": json_string(job, "score_response_capture_command"),
                 "source_input": json_string(job, "source_input"),
                 "required_permission": json_string(job, "required_permission"),
                 "depends_on": job

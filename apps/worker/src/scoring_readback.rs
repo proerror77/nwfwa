@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
-use crate::{read_json_report, required_non_empty, write_json};
+use crate::{api_url, read_json_report, required_non_empty, write_json};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoringReadbackInput {
@@ -53,6 +53,40 @@ pub struct ScoringReadbackReport {
     pub review_tasks: Vec<ScoringReadbackReviewTask>,
     pub evidence_refs: Vec<String>,
     pub governance_boundary: String,
+}
+
+pub async fn fetch_scoring_readback_response(
+    api_base_url: &str,
+    api_key: &str,
+    score_request_uri: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let api_base_url = required_non_empty("api_base_url", api_base_url)?;
+    let api_key = required_non_empty("api_key", api_key)?;
+    let score_request_uri = required_non_empty("score_request_uri", score_request_uri)?;
+    let score_request = read_json_report(score_request_uri)
+        .with_context(|| format!("read scoring readback request {score_request_uri}"))?;
+    let response = reqwest::Client::new()
+        .post(api_url(api_base_url, "/api/v1/claims/score"))
+        .header("x-api-key", api_key)
+        .json(&score_request)
+        .send()
+        .await
+        .context("submit scoring readback request")?
+        .error_for_status()
+        .context("scoring readback request failed")?
+        .json::<serde_json::Value>()
+        .await
+        .context("parse scoring readback response")?;
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create scoring readback response output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(output_dir.as_ref().join("score_response.json"), &response)?;
+    Ok(response)
 }
 
 pub fn build_scoring_readback_report(

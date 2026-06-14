@@ -132,6 +132,7 @@ CAPABILITIES = [
             ("apps/worker/src/commands/mod.rs", "submit-clinical-compatibility-reference"),
             ("apps/worker/src/commands/mod.rs", "submit-unbundling-comparator"),
             ("apps/worker/src/commands/mod.rs", "submit-scoring-feature-contexts"),
+            ("apps/worker/src/commands/mod.rs", "fetch-scoring-readback-response"),
             ("apps/worker/src/commands/mod.rs", "build-scoring-readback-report"),
             ("apps/worker/src/commands/mod.rs", "submit-probability-calibration-report"),
             ("apps/worker/src/ops_plans.rs", "scoring_online_readback"),

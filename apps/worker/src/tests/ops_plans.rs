@@ -232,6 +232,10 @@ fn builds_scheduled_worker_data_pipeline_plan() {
     );
     assert_eq!(jobs[9]["job_kind"], "scoring_online_readback");
     assert_eq!(jobs[9]["build_command"], "build-scoring-readback-report");
+    assert_eq!(
+        jobs[9]["score_response_capture_command"],
+        "fetch-scoring-readback-response"
+    );
     assert_eq!(jobs[9]["artifact_kind"], "online_scoring_readback");
     assert_eq!(
         jobs[9]["depends_on"][0],
