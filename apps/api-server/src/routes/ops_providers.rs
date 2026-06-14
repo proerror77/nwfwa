@@ -4,9 +4,10 @@ use crate::{
     error::ApiError,
     repository::{
         AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent,
-        ProviderProfileWindowRecord, ProviderProfileWindowUpsertInput, ProviderRiskSummaryRecord,
-        ProviderSanctionRecord, ProviderSanctionUpsertInput, SaveProviderProfileWindowsInput,
-        SaveProviderSanctionsInput,
+        ProviderGraphSignalRecord, ProviderGraphSignalUpsertInput, ProviderProfileWindowRecord,
+        ProviderProfileWindowUpsertInput, ProviderRiskSummaryRecord, ProviderSanctionRecord,
+        ProviderSanctionUpsertInput, SaveProviderGraphSignalsInput,
+        SaveProviderProfileWindowsInput, SaveProviderSanctionsInput,
     },
 };
 use axum::{extract::State, Json};
@@ -21,6 +22,7 @@ mod validation;
 
 use validation::{
     validate_anomaly_candidate_review, validate_anomaly_clustering_report_submission,
+    validate_provider_graph_signal_rollup_submission,
     validate_provider_profile_window_rollup_submission, validate_sanctions_sync_report_submission,
 };
 
@@ -171,6 +173,37 @@ pub struct SubmitProviderProfileWindowRollupResponse {
     pub audit_event_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SubmitProviderGraphSignalRollupRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uri: String,
+    pub provider_count: usize,
+    pub claim_count: usize,
+    #[serde(default)]
+    pub provider_relationships: Vec<ProviderGraphSignalUpsertInput>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitProviderGraphSignalRollupResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub provider_relationship_count: usize,
+    pub claim_count: usize,
+    pub persisted_provider_relationships: Vec<ProviderGraphSignalRecord>,
+    pub active_scoring_policy_change: bool,
+    pub label_assignment: bool,
+    pub case_creation: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AnomalyReviewQueueResponse {
     pub tasks: Vec<AnomalyReviewQueueTask>,
@@ -295,6 +328,45 @@ pub async fn submit_provider_profile_window_rollup(
     record_provider_profile_window_rollup_audit(&state, &actor, &request, &response)
         .await
         .map_err(internal_error("PROVIDER_PROFILE_WINDOWS_AUDIT_FAILED"))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_provider_graph_signal_rollup(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitProviderGraphSignalRollupRequest>,
+) -> Result<Json<SubmitProviderGraphSignalRollupResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:providers:write")?;
+    validate_provider_graph_signal_rollup_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_provider_graph_signals(SaveProviderGraphSignalsInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            as_of_date: request.as_of_date.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            provider_relationships: request.provider_relationships.clone(),
+        })
+        .await
+        .map_err(internal_error("PROVIDER_GRAPH_SIGNALS_SAVE_FAILED"))?;
+    let response = SubmitProviderGraphSignalRollupResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        provider_relationship_count: persisted.len(),
+        claim_count: request.claim_count,
+        persisted_provider_relationships: persisted,
+        active_scoring_policy_change: false,
+        label_assignment: false,
+        case_creation: false,
+        governance_boundary:
+            "provider graph signal rollup submission writes provider relationship signals only; it must not change scoring policy, assign fraud labels, open cases, or adjudicate claims"
+                .into(),
+        audit_event_type: "provider.graph_signals.submitted".into(),
+    };
+    record_provider_graph_signal_rollup_audit(&state, &actor, &request, &response)
+        .await
+        .map_err(internal_error("PROVIDER_GRAPH_SIGNALS_AUDIT_FAILED"))?;
     Ok(Json(response))
 }
 
@@ -487,6 +559,54 @@ async fn record_provider_profile_window_rollup_audit(
                 "source_governance_boundary": request.governance_boundary,
                 "active_scoring_policy_change": response.active_scoring_policy_change,
                 "label_assignment": response.label_assignment,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_provider_graph_signal_rollup_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    request: &SubmitProviderGraphSignalRollupRequest,
+    response: &SubmitProviderGraphSignalRollupResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: response.audit_event_type.clone(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "Provider graph signal rollup submitted: {}",
+                request.source_report_uri
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "as_of_date": request.as_of_date,
+                "source_uri": request.source_uri,
+                "provider_count": request.provider_count,
+                "claim_count": request.claim_count,
+                "persisted_provider_relationship_count": response.provider_relationship_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "label_assignment": response.label_assignment,
+                "case_creation": response.case_creation,
             }),
             evidence_refs: request
                 .evidence_refs

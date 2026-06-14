@@ -693,6 +693,13 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_provider_profile_windows(self, input).await
     }
 
+    async fn save_provider_graph_signals(
+        &self,
+        input: SaveProviderGraphSignalsInput,
+    ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>> {
+        postgres_providers::save_provider_graph_signals(self, input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         postgres_knowledge::list_knowledge_cases(self).await
     }

@@ -153,8 +153,10 @@ pub use provider_profile_rollup::{
 
 mod provider_graph_rollup;
 pub use provider_graph_rollup::{
-    build_provider_graph_signal_rollup, ProviderGraphClaimInput, ProviderGraphRollupInput,
-    ProviderGraphSignalRollup, ProviderGraphSignalRollupReport, ProviderReferralInput,
+    build_provider_graph_signal_rollup, build_provider_graph_signal_rollup_submission,
+    submit_provider_graph_signal_rollup, ProviderGraphClaimInput, ProviderGraphRollupInput,
+    ProviderGraphSignalRollup, ProviderGraphSignalRollupReport,
+    ProviderGraphSignalRollupSubmission, ProviderReferralInput,
 };
 
 mod peer_benchmark;

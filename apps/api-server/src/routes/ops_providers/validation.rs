@@ -3,8 +3,8 @@ use axum::http::StatusCode;
 
 use super::{
     AnomalyClusteringReviewTaskInput, ReviewAnomalyCandidateRequest,
-    SubmitAnomalyClusteringReportRequest, SubmitProviderProfileWindowRollupRequest,
-    SubmitSanctionsSyncReportRequest,
+    SubmitAnomalyClusteringReportRequest, SubmitProviderGraphSignalRollupRequest,
+    SubmitProviderProfileWindowRollupRequest, SubmitSanctionsSyncReportRequest,
 };
 
 pub(super) fn validate_anomaly_clustering_report_submission(
@@ -391,6 +391,121 @@ fn validate_provider_profile_window(window: &serde_json::Value) -> Result<(), Ap
                     StatusCode::BAD_REQUEST,
                     "INVALID_PROVIDER_PROFILE_WINDOW",
                     format!("{field} must be between 0 and 100"),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_provider_graph_signal_rollup_submission(
+    request: &SubmitProviderGraphSignalRollupRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "provider_graph_signal_rollup" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_GRAPH_ROLLUP_KIND",
+            "report_kind must be provider_graph_signal_rollup",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+            "source_report_uri must point to a JSON provider graph signal rollup report",
+        ));
+    }
+    if request.provider_relationships.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_GRAPH_SIGNALS",
+            "provider_relationships are required",
+        ));
+    }
+    if request.provider_count != request.provider_relationships.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_GRAPH_ROLLUP_PROVIDER_COUNT",
+            "provider_count must match provider_relationships length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "provider_graph_signal_rollups:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+            format!("provider graph rollup evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    for relationship in &request.provider_relationships {
+        if relationship.provider_id.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_GRAPH_SIGNAL",
+                "provider_id is required",
+            ));
+        }
+        if !(0.0..=1.0).contains(&relationship.temporal_co_billing_frequency_7d) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_GRAPH_SIGNAL",
+                "temporal_co_billing_frequency_7d must be between 0 and 1",
+            ));
+        }
+        if let Some(entropy) = relationship.referral_concentration_entropy {
+            if !(0.0..=1.0).contains(&entropy) {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_GRAPH_SIGNAL",
+                    "referral_concentration_entropy must be between 0 and 1",
                 ));
             }
         }

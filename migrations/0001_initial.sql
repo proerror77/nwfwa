@@ -870,6 +870,27 @@ CREATE TABLE IF NOT EXISTS provider_profile_windows (
 CREATE INDEX IF NOT EXISTS provider_profile_windows_scope_provider_idx
   ON provider_profile_windows(customer_scope_id, provider_id);
 
+CREATE TABLE IF NOT EXISTS provider_graph_signals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  billing_ring_membership BOOLEAN NOT NULL DEFAULT false,
+  temporal_co_billing_frequency_7d DOUBLE PRECISION NOT NULL DEFAULT 0,
+  referral_concentration_entropy DOUBLE PRECISION,
+  shared_member_provider_count INTEGER NOT NULL DEFAULT 0,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, provider_id, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS provider_graph_signals_scope_provider_idx
+  ON provider_graph_signals(customer_scope_id, provider_id);
+
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

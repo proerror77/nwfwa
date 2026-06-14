@@ -64,6 +64,39 @@ impl InMemoryScoringRepository {
         }
         Ok(saved)
     }
+
+    pub(super) async fn in_memory_save_provider_graph_signals(
+        &self,
+        input: SaveProviderGraphSignalsInput,
+    ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>> {
+        let mut records = self.provider_graph_signals.lock().await;
+        let mut saved = Vec::with_capacity(input.provider_relationships.len());
+        for relationship in input.provider_relationships {
+            let record = ProviderGraphSignalRecord {
+                customer_scope_id: input.customer_scope_id.clone(),
+                provider_id: relationship.provider_id,
+                as_of_date: input.as_of_date.clone(),
+                billing_ring_membership: relationship.billing_ring_membership,
+                temporal_co_billing_frequency_7d: relationship.temporal_co_billing_frequency_7d,
+                referral_concentration_entropy: relationship.referral_concentration_entropy,
+                shared_member_provider_count: relationship.shared_member_provider_count,
+                evidence_refs: relationship.evidence_refs,
+                source_report_uri: input.source_report_uri.clone(),
+                submitted_by: input.submitted_by.clone(),
+                notes: input.notes.clone(),
+            };
+            records.insert(
+                provider_signal_key(
+                    &record.customer_scope_id,
+                    &record.provider_id,
+                    &record.as_of_date,
+                ),
+                record.clone(),
+            );
+            saved.push(record);
+        }
+        Ok(saved)
+    }
 }
 
 fn provider_sanction_key(customer_scope_id: &str, sanction_key: &str) -> String {
@@ -75,5 +108,9 @@ fn provider_profile_window_key(
     provider_id: &str,
     as_of_date: &str,
 ) -> String {
+    format!("{customer_scope_id}::{provider_id}::{as_of_date}")
+}
+
+fn provider_signal_key(customer_scope_id: &str, provider_id: &str, as_of_date: &str) -> String {
     format!("{customer_scope_id}::{provider_id}::{as_of_date}")
 }

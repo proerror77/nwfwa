@@ -34,7 +34,8 @@ As of the P1/P2 remediation commits after this review:
   actioning, and rule hit-rate trending are tracked as implemented in
   `docs/project/prd-coverage.md`;
 - provider graph signal rollups for billing-ring membership, temporal
-  co-billing, and referral entropy are implemented as local worker contracts;
+  co-billing, and referral entropy are implemented as local worker contracts
+  with a permission-gated submit/write path;
 - peer percentile benchmark and member-provider episode aggregation are
   implemented as local worker contracts;
 - `agent_registry` and `investigations` now exist as additive schema/runtime
@@ -88,6 +89,11 @@ As of the P1/P2 remediation commits after this review:
   permission-gated submit path and worker command that persist provider profile
   windows from an approved rollup report while explicitly avoiding scoring-
   policy changes, fraud-label assignment, or claim adjudication.
+- The provider graph signal rollup now has a separate permission-gated submit
+  path and worker command that persist billing-ring, temporal co-billing, and
+  referral-entropy signals from an approved rollup report while explicitly
+  avoiding scoring-policy changes, fraud-label assignment, case creation, or
+  claim adjudication.
 - The claims scoring API now accepts those materialized worker contexts and
   passes peer, clinical compatibility, and episode-utilization inputs into
   online feature calculation while preserving the assistive-only scoring
@@ -118,17 +124,18 @@ As of the P1/P2 remediation commits after this review:
 
 Remaining boundaries after those commits are production scheduling, DB write
 paths for customer rollups outside the scoring-context materialization,
-provider-sanctions, and provider-profile-window submit paths, live external
-OIG/SAM fetch, customer claim/history data, LLM-backed specialist execution,
-real external tool-call runtime mediation, wiring long-running/tool-using agents
-into the cancellation signal, customer-approved ICD-10/CPT or medical-policy
-reference data, customer-approved unbundling rule packs, customer-approved
-feature lineage/source mappings, calibrated-probability serving activation, and
-replacement of the L3 heuristic anomaly scorer with a validated statistical
-baseline. Audit retention still needs customer-environment partitioning,
-archive storage, legal-hold reconciliation writes, approved destruction workflow
-execution, production scheduling/DB write paths for remaining worker artifacts,
-and live routing-impact validation on customer data.
+provider-sanctions, provider-profile-window, and provider-graph-signal submit
+paths, live external OIG/SAM fetch, customer claim/history data, LLM-backed
+specialist execution, real external tool-call runtime mediation, wiring long-
+running/tool-using agents into the cancellation signal, customer-approved
+ICD-10/CPT or medical-policy reference data, customer-approved unbundling rule
+packs, customer-approved feature lineage/source mappings, calibrated-probability
+serving activation, and replacement of the L3 heuristic anomaly scorer with a
+validated statistical baseline. Audit retention still needs customer-environment
+partitioning, archive storage, legal-hold reconciliation writes, approved
+destruction workflow execution, production scheduling/DB write paths for
+remaining worker artifacts, and live routing-impact validation on customer
+data.
 
 ## A. Scoring Layer Gaps
 

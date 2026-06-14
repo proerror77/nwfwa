@@ -137,3 +137,64 @@ pub(super) async fn save_provider_profile_windows(
     tx.commit().await?;
     Ok(saved)
 }
+
+pub(super) async fn save_provider_graph_signals(
+    repository: &PostgresScoringRepository,
+    input: SaveProviderGraphSignalsInput,
+) -> anyhow::Result<Vec<ProviderGraphSignalRecord>> {
+    let mut saved = Vec::with_capacity(input.provider_relationships.len());
+    let mut tx = repository.pool.begin().await?;
+    for relationship in input.provider_relationships {
+        let evidence_refs = serde_json::Value::Array(
+            relationship
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+        sqlx::query(
+            "INSERT INTO provider_graph_signals
+                 (customer_scope_id, provider_id, as_of_date, billing_ring_membership, temporal_co_billing_frequency_7d, referral_concentration_entropy, shared_member_provider_count, evidence_refs, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                 ON CONFLICT (customer_scope_id, provider_id, as_of_date) DO UPDATE
+                 SET billing_ring_membership = EXCLUDED.billing_ring_membership,
+                     temporal_co_billing_frequency_7d = EXCLUDED.temporal_co_billing_frequency_7d,
+                     referral_concentration_entropy = EXCLUDED.referral_concentration_entropy,
+                     shared_member_provider_count = EXCLUDED.shared_member_provider_count,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&relationship.provider_id)
+        .bind(&input.as_of_date)
+        .bind(relationship.billing_ring_membership)
+        .bind(relationship.temporal_co_billing_frequency_7d)
+        .bind(relationship.referral_concentration_entropy)
+        .bind(relationship.shared_member_provider_count as i32)
+        .bind(&evidence_refs)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(ProviderGraphSignalRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            provider_id: relationship.provider_id,
+            as_of_date: input.as_of_date.clone(),
+            billing_ring_membership: relationship.billing_ring_membership,
+            temporal_co_billing_frequency_7d: relationship.temporal_co_billing_frequency_7d,
+            referral_concentration_entropy: relationship.referral_concentration_entropy,
+            shared_member_provider_count: relationship.shared_member_provider_count,
+            evidence_refs: relationship.evidence_refs,
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}

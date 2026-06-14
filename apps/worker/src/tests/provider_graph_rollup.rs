@@ -58,3 +58,116 @@ fn builds_provider_graph_signal_rollup_contract() {
         .join("provider_relationship_inputs.json")
         .exists());
 }
+
+#[test]
+fn builds_provider_graph_signal_rollup_submission() {
+    let root = temp_root("provider-graph-rollup-submission");
+    let report_uri = root.join("provider_graph_signal_rollup.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_graph_signal_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-graph-input.json",
+            "provider_count": 1,
+            "claim_count": 3,
+            "provider_relationships": [
+                {
+                    "provider_id": "PRV-GRAPH-1",
+                    "billing_ring_membership": true,
+                    "temporal_co_billing_frequency_7d": 0.67,
+                    "referral_concentration_entropy": 0.22,
+                    "shared_member_provider_count": 2,
+                    "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+                }
+            ],
+            "evidence_refs": ["provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"],
+            "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }),
+    )
+    .unwrap();
+
+    let submission = build_provider_graph_signal_rollup_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-provider-graph-signals",
+        "daily graph rollup",
+    )
+    .expect("provider graph submission");
+
+    assert_eq!(submission.report_kind, "provider_graph_signal_rollup");
+    assert_eq!(submission.provider_count, 1);
+    assert_eq!(
+        submission.provider_relationships[0].provider_id,
+        "PRV-GRAPH-1"
+    );
+    assert!(submission.evidence_refs.contains(&format!(
+        "provider_graph_signal_rollups:{}",
+        report_uri.to_string_lossy()
+    )));
+}
+
+#[tokio::test]
+async fn submits_provider_graph_signal_rollup_to_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("provider-graph-rollup-submit-api");
+    let report_uri = root.join("provider_graph_signal_rollup.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_graph_signal_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-graph-input.json",
+            "provider_count": 1,
+            "claim_count": 3,
+            "provider_relationships": [
+                {
+                    "provider_id": "PRV-GRAPH-1",
+                    "billing_ring_membership": true,
+                    "temporal_co_billing_frequency_7d": 0.67,
+                    "referral_concentration_entropy": 0.22,
+                    "shared_member_provider_count": 2,
+                    "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+                }
+            ],
+            "evidence_refs": ["provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"],
+            "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }),
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "report_kind": "provider_graph_signal_rollup",
+                "provider_relationship_count": 1
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = submit_provider_graph_signal_rollup(
+        &api_url,
+        "provider-write-secret",
+        &report_uri.to_string_lossy(),
+        "worker:build-provider-graph-signals",
+        "daily graph rollup",
+    )
+    .await
+    .expect("submit provider graph signal rollup");
+
+    assert_eq!(response["provider_relationship_count"], 1);
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /api/v1/ops/providers/graph-signal-rollups HTTP/1.1"));
+    assert!(request.contains("x-api-key: provider-write-secret"));
+    assert!(request.contains(r#""provider_id":"PRV-GRAPH-1""#));
+    assert!(request.contains("provider_graph_signal_rollups:"));
+}

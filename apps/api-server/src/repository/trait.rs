@@ -468,6 +468,11 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SaveProviderProfileWindowsInput,
     ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>>;
 
+    async fn save_provider_graph_signals(
+        &self,
+        input: SaveProviderGraphSignalsInput,
+    ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>>;
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
     async fn save_knowledge_case(

@@ -43,6 +43,7 @@ mod serve_mlops_alert_router;
 mod submit_anomaly_clustering_report;
 mod submit_mlops_alert_delivery_tasks;
 mod submit_mlops_monitoring_report;
+mod submit_provider_graph_signal_rollup;
 mod submit_provider_profile_window_rollup;
 mod submit_sanctions_sync_report;
 mod submit_scoring_feature_contexts;
@@ -85,6 +86,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-probability-calibration-report" => build_probability_calibration_report::run(args),
         "build-provider-graph-signals" => build_provider_graph_signals::run(args),
         "build-provider-profile-windows" => build_provider_profile_windows::run(args),
+        "submit-provider-graph-signal-rollup" => {
+            submit_provider_graph_signal_rollup::run(args).await
+        }
         "build-scoring-feature-contexts" => build_scoring_feature_contexts::run(args),
         "submit-provider-profile-window-rollup" => {
             submit_provider_profile_window_rollup::run(args).await

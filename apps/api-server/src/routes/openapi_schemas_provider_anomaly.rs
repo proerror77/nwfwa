@@ -252,6 +252,94 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "audit_event_type": { "type": "string", "enum": ["provider.profile_windows.submitted"] }
             }
         },
+        "ProviderGraphSignalUpsert": {
+            "type": "object",
+            "required": ["provider_id", "billing_ring_membership", "temporal_co_billing_frequency_7d", "shared_member_provider_count", "evidence_refs"],
+            "properties": {
+                "provider_id": { "type": "string", "minLength": 1 },
+                "billing_ring_membership": { "type": "boolean" },
+                "temporal_co_billing_frequency_7d": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "referral_concentration_entropy": {
+                    "type": ["number", "null"],
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "shared_member_provider_count": { "type": "integer", "minimum": 0 },
+                "evidence_refs": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                }
+            }
+        },
+        "ProviderGraphSignalRecord": {
+            "allOf": [
+                { "$ref": "#/components/schemas/ProviderGraphSignalUpsert" },
+                {
+                    "type": "object",
+                    "required": ["customer_scope_id", "as_of_date", "source_report_uri", "submitted_by", "notes"],
+                    "properties": {
+                        "customer_scope_id": { "type": "string" },
+                        "as_of_date": { "type": "string" },
+                        "source_report_uri": { "type": "string" },
+                        "submitted_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                }
+            ]
+        },
+        "SubmitProviderGraphSignalRollupRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "as_of_date", "source_uri", "provider_count", "claim_count", "provider_relationships", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "provider_graph_signal_rollup" },
+                "as_of_date": { "type": "string", "minLength": 1 },
+                "source_uri": { "type": "string", "minLength": 1 },
+                "provider_count": { "type": "integer", "minimum": 1 },
+                "claim_count": { "type": "integer", "minimum": 0 },
+                "provider_relationships": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/ProviderGraphSignalUpsert" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include provider_graph_signal_rollups:{source_report_uri}."
+                },
+                "governance_boundary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Source worker report boundary. Submission writes provider graph signals only."
+                }
+            }
+        },
+        "SubmitProviderGraphSignalRollupResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "provider_relationship_count", "claim_count", "persisted_provider_relationships", "active_scoring_policy_change", "label_assignment", "case_creation", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "provider_graph_signal_rollup" },
+                "source_report_uri": { "type": "string" },
+                "provider_relationship_count": { "type": "integer" },
+                "claim_count": { "type": "integer" },
+                "persisted_provider_relationships": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/ProviderGraphSignalRecord" }
+                },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "case_creation": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["provider.graph_signals.submitted"] }
+            }
+        },
         "AnomalyReviewQueueTask": {
             "type": "object",
             "required": ["candidate_kind", "candidate_id", "task_kind", "review_queue", "required_review", "decision_options", "source_report_uri", "report_kind", "dataset_key", "dataset_version", "label_policy", "governance_boundary", "review_status", "candidate_payload", "evidence_refs"],

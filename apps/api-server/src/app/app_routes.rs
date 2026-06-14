@@ -272,6 +272,10 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             post(ops_providers::submit_provider_profile_window_rollup),
         )
         .route(
+            "/api/v1/ops/providers/graph-signal-rollups",
+            post(ops_providers::submit_provider_graph_signal_rollup),
+        )
+        .route(
             "/api/v1/ops/providers/anomaly-review-queue",
             get(ops_providers::anomaly_review_queue),
         )

@@ -74,3 +74,38 @@ pub struct ProviderProfileWindowRecord {
     pub submitted_by: String,
     pub notes: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderGraphSignalUpsertInput {
+    pub provider_id: String,
+    pub billing_ring_membership: bool,
+    pub temporal_co_billing_frequency_7d: f64,
+    pub referral_concentration_entropy: Option<f64>,
+    pub shared_member_provider_count: usize,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveProviderGraphSignalsInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub as_of_date: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub provider_relationships: Vec<ProviderGraphSignalUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderGraphSignalRecord {
+    pub customer_scope_id: String,
+    pub provider_id: String,
+    pub as_of_date: String,
+    pub billing_ring_membership: bool,
+    pub temporal_co_billing_frequency_7d: f64,
+    pub referral_concentration_entropy: Option<f64>,
+    pub shared_member_provider_count: usize,
+    pub evidence_refs: Vec<String>,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}

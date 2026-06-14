@@ -192,6 +192,32 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
         );
     }
     assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/graph-signal-rollups"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProviderGraphSignalRollupRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/graph-signal-rollups"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProviderGraphSignalRollupResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["temporal_co_billing_frequency_7d"]["maximum"],
+        1
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "label_assignment",
+        "case_creation",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitProviderGraphSignalRollupResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
+    assert_eq!(
         schema["components"]["schemas"]["AnomalyReviewQueueResponse"]["properties"]["tasks"]
             ["items"]["$ref"],
         "#/components/schemas/AnomalyReviewQueueTask"

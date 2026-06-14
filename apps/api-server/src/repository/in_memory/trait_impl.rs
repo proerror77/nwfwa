@@ -663,6 +663,13 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_provider_profile_windows(input).await
     }
 
+    async fn save_provider_graph_signals(
+        &self,
+        input: SaveProviderGraphSignalsInput,
+    ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>> {
+        self.in_memory_save_provider_graph_signals(input).await
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         self.in_memory_list_knowledge_cases().await
     }

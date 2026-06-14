@@ -175,6 +175,34 @@ fn provider_profile_window_rollup_payload() -> &'static str {
     }"#
 }
 
+fn provider_graph_signal_rollup_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-provider-graph-signals",
+      "notes": "daily provider graph signal rollup",
+      "source_report_uri": "local://artifacts/provider-graph/provider_graph_signal_rollup.json",
+      "report_kind": "provider_graph_signal_rollup",
+      "as_of_date": "2026-06-14",
+      "source_uri": "local://inputs/provider-graph-input.json",
+      "provider_count": 1,
+      "claim_count": 3,
+      "provider_relationships": [
+        {
+          "provider_id": "PRV-GRAPH-1",
+          "billing_ring_membership": true,
+          "temporal_co_billing_frequency_7d": 0.67,
+          "referral_concentration_entropy": 0.22,
+          "shared_member_provider_count": 2,
+          "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+        }
+      ],
+      "evidence_refs": [
+        "provider_graph_signal_rollups:local://artifacts/provider-graph/provider_graph_signal_rollup.json",
+        "provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"
+      ],
+      "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+    }"#
+}
+
 #[tokio::test]
 async fn submits_provider_sanctions_sync_report() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
@@ -239,6 +267,62 @@ async fn submits_provider_profile_window_rollup() {
     );
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["label_assignment"], false);
+}
+
+#[tokio::test]
+async fn submits_provider_graph_signal_rollup() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/graph-signal-rollups",
+        provider_graph_signal_rollup_payload(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "provider_graph_signal_rollup");
+    assert_eq!(body["provider_relationship_count"], 1);
+    assert_eq!(body["claim_count"], 3);
+    assert_eq!(
+        body["persisted_provider_relationships"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_provider_relationships"][0]["provider_id"],
+        "PRV-GRAPH-1"
+    );
+    assert_eq!(
+        body["persisted_provider_relationships"][0]["billing_ring_membership"],
+        true
+    );
+    assert_eq!(
+        body["persisted_provider_relationships"][0]["temporal_co_billing_frequency_7d"],
+        0.67
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["case_creation"], false);
+}
+
+#[tokio::test]
+async fn provider_graph_signal_rollup_requires_provider_write_permission() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/graph-signal-rollups",
+        provider_graph_signal_rollup_payload(),
+        "provider-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:providers:write");
 }
 
 #[tokio::test]

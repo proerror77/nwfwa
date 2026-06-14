@@ -116,6 +116,39 @@ pub(super) fn provider_paths() -> Value {
                 }
             }
         },
+        "/api/v1/ops/providers/graph-signal-rollups": {
+            "post": {
+                "summary": "Submit provider graph signal rollups",
+                "description": "Persists provider relationship graph signals from a worker-generated rollup report. This writes provider graph signals only; it does not change scoring policy, assign fraud labels, open cases, or adjudicate claims.",
+                "security": [{ "ApiKeyAuth": [] }],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": { "$ref": "#/components/schemas/SubmitProviderGraphSignalRollupRequest" }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Persisted provider graph signal rollups",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitProviderGraphSignalRollupResponse" }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Requires ops:providers:write permission",
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ops/providers/anomaly-review-queue": {
             "get": {
                 "summary": "List anomaly candidates derived from submitted clustering reports",
