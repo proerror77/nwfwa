@@ -279,6 +279,18 @@ CAPABILITIES = [
                 "scripts/ops/validate_production_readiness_contract.py",
                 "validate_ocr_vector_analytics_execution_evidence",
             ),
+            (
+                "scripts/ops/build_production_evidence_package.py",
+                "production_readiness_evidence_package_template",
+            ),
+            (
+                "scripts/ops/build_production_evidence_package.py",
+                "blocked_until_customer_artifacts_are_filled",
+            ),
+            (
+                "scripts/ops/build_production_evidence_package.py",
+                "pending_customer_evidence",
+            ),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"),
