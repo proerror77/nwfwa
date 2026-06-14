@@ -153,7 +153,7 @@ artifacts, and live routing-impact validation on customer data.
 
 | ID | Gap | Required planning response |
 | --- | --- | --- |
-| D-1 | Serving manifest loading can perform avoidable per-score I/O. | Cache parsed serving manifests in the Rust runtime. |
+| D-1 | Serving manifest loading now caches parsed manifests after the first score request. | Keep customer deployment evidence focused on cache behavior under live serving load rather than reimplementing manifest parsing. |
 | D-2 | Poisoned ONNX/session mutexes can cause persistent scorer failure. | Recover poisoned locks with error logging and alerting instead of requiring process restart. |
 | D-3 | PSI calculation exists as a monitoring concept but must drive actions. | PSI above threshold must create monitoring alerts and compliance/model review tasks. |
 | D-4 | Rule hit-rate trending is defined as a plan but needs runtime computation. | Compute 7-day and 90-day hit-rate windows and trigger drift review when short-term rates collapse. |
