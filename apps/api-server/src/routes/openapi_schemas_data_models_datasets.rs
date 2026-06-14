@@ -443,7 +443,7 @@ pub(super) fn dataset_schemas() -> Value {
                                     null
                                 ],
                                 "minLength": 1,
-                                "description": "API permission scope required before submitting this job artifact; null for artifact-only jobs."
+                                "description": "API permission scope required before submitting this job artifact; null for artifact-only jobs. When api_path is supplied, this scope must match the endpoint family."
                             }
                         }
                     }

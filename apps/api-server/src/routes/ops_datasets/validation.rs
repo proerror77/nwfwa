@@ -804,6 +804,22 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "required_permission must be a supported worker data pipeline permission scope",
                 ));
             }
+            if let (Some(api_path), Some(required_permission)) = (
+                execution.get("api_path").and_then(|value| value.as_str()),
+                required_permission.as_str(),
+            ) {
+                if let Some(expected_permission) =
+                    worker_data_pipeline_permission_for_api_path(api_path)
+                {
+                    if required_permission != expected_permission {
+                        return Err(ApiError::new(
+                            StatusCode::BAD_REQUEST,
+                            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
+                            "required_permission must match api_path",
+                        ));
+                    }
+                }
+            }
         }
         if execution_status == "dependency_not_completed" {
             let has_blocked_dependencies = execution
@@ -1050,6 +1066,18 @@ fn is_worker_data_pipeline_permission(value: &str) -> bool {
         value,
         "ops:providers:write" | "ops:datasets:write" | "ops:models:review"
     )
+}
+
+fn worker_data_pipeline_permission_for_api_path(api_path: &str) -> Option<&'static str> {
+    if api_path.starts_with("/api/v1/ops/providers/") {
+        Some("ops:providers:write")
+    } else if api_path.starts_with("/api/v1/ops/models/") {
+        Some("ops:models:review")
+    } else if api_path.starts_with("/api/v1/ops/") {
+        Some("ops:datasets:write")
+    } else {
+        None
+    }
 }
 
 fn validate_unit_interval_metric(
