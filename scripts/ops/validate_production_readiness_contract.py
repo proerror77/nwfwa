@@ -23,6 +23,13 @@ REQUIRED_GATE_IDS = {
     "ocr_vector_analytics_execution",
 }
 
+CUSTOMER_DATA_REQUIRED_GATE_IDS = {
+    "customer_data_governance",
+    "worker_data_pipeline_execution",
+    "model_serving_slo",
+    "ocr_vector_analytics_execution",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -55,6 +62,11 @@ def validate_contract(contract: dict) -> None:
         require(
             gate.get("status") == "requires_customer_environment_evidence",
             f"gate {gate.get('gate_id')} must require customer environment evidence",
+        )
+        require(
+            bool(gate.get("customer_data_required"))
+            == (gate.get("gate_id") in CUSTOMER_DATA_REQUIRED_GATE_IDS),
+            f"gate {gate.get('gate_id')} has wrong customer_data_required flag",
         )
 
 
