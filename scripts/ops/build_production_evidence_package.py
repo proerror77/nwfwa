@@ -39,6 +39,22 @@ SOURCE_TEMPLATE_FILES = {
     "model_serving_slo": "model-serving-slo-source.json",
     "ocr_vector_analytics_execution": "ocr-vector-analytics-source.json",
 }
+WORKER_TEMPLATE_FILES = {
+    "score_request": "score_request.json",
+    "scoring_readback_input": "scoring_readback_input.json",
+    "worker_data_pipeline_readiness_input": "worker_data_pipeline_readiness_input.json",
+    "worker_data_pipeline_run_status": "worker_data_pipeline_run_status.json",
+}
+SCORING_READBACK_EXPECTED_SCORE_RESPONSE_PREFIXES = [
+    "scoring_feature_contexts:",
+    "provider_profile_window_rollups:",
+    "sanctions_sync_reports:",
+    "provider_graph_signal_rollups:",
+    "peer_benchmarks:",
+    "episode_rollups:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+]
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -98,6 +114,131 @@ def worker_job_template(job_kind: str) -> dict:
         job["api_path"] = WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS[job_kind]
         job["required_permission"] = WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind]
     return job
+
+
+def worker_required_evidence_prefixes(job_kind: str) -> list[str]:
+    prefixes = []
+    if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+        prefixes.append(WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES[job_kind])
+    if job_kind == "oig_sam_sanctions_snapshot_fetch":
+        prefixes.append(WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX)
+    if job_kind == "scoring_online_readback":
+        prefixes.extend(WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES)
+    prefixes.extend(WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(job_kind, ()))
+    return prefixes
+
+
+def worker_readiness_check_template(job_kind: str) -> dict:
+    return {
+        "job_kind": job_kind,
+        "artifact_uri": f"local://template/worker/{job_kind}.json",
+        "customer_approved": False,
+        "external_fetch_configured": False,
+        "row_count": None,
+        "minimum_row_count": 1,
+        "coverage_window_days": None,
+        "data_quality_status": "pending_customer_validation",
+        "source_freshness_status": "pending_customer_validation",
+        "required_evidence_prefixes": worker_required_evidence_prefixes(job_kind),
+        "evidence_refs": [
+            f"{prefix}local://template/worker/{job_kind}.json"
+            for prefix in worker_required_evidence_prefixes(job_kind)
+        ],
+    }
+
+
+def worker_run_status_job_template(job_kind: str) -> dict:
+    return {
+        "job_kind": job_kind,
+        "status": "scheduled_pending_customer_execution",
+        "artifact_uri": None,
+        "submitted": False,
+        "required_permission": WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS.get(job_kind),
+        "api_path": WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS.get(job_kind),
+        "required_evidence_prefixes": worker_required_evidence_prefixes(job_kind),
+        "evidence_refs": [],
+    }
+
+
+def worker_template(template_id: str, generated_at: str) -> dict:
+    base = {
+        "artifact_kind": "worker_data_pipeline_input_template",
+        "template_id": template_id,
+        "generated_at": generated_at,
+        "status": "pending_customer_input",
+        "readiness_claim": False,
+        "template_boundary": (
+            "Template only. Replace local://template values with customer-approved "
+            "production artifact URIs before using these inputs for readiness validation."
+        ),
+    }
+    if template_id == "score_request":
+        return {
+            **base,
+            "artifact_kind": "scoring_readback_score_request_template",
+            "source_system": "<customer-source-system>",
+            "claim_id": "<claim-id-with-governed-worker-context>",
+            "review_mode": "pre_payment",
+            "governance_boundary": (
+                "No API keys, PHI fields, or real patient/member identifiers belong in this "
+                "template. Use a customer-approved claim id whose worker-written evidence is "
+                "expected to appear in the score response."
+            ),
+        }
+    if template_id == "scoring_readback_input":
+        return {
+            **base,
+            "artifact_kind": "scoring_readback_input_template",
+            "customer_scope_id": "",
+            "as_of_date": "",
+            "score_request_uri": "artifacts/production-evidence-package/worker/score_request.json",
+            "score_response_uri": (
+                "artifacts/production-evidence-package/worker/scoring-readback/score_response.json"
+            ),
+            "expected_evidence_prefixes": SCORING_READBACK_EXPECTED_SCORE_RESPONSE_PREFIXES,
+            "evidence_refs": [
+                "worker_data_pipeline_executions:local://template/worker_data_pipeline_execution_report.json",
+                "scoring_readback_score_requests:local://template/worker/score_request.json",
+            ],
+        }
+    if template_id == "worker_data_pipeline_readiness_input":
+        return {
+            **base,
+            "artifact_kind": "worker_data_pipeline_readiness_input_template",
+            "checks": [
+                worker_readiness_check_template(job_kind)
+                for job_kind in sorted(WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS)
+            ],
+            "governance_boundary": (
+                "Readiness inputs collect customer prerequisite evidence only; they must not "
+                "fetch external data, submit artifacts, score claims, assign labels, activate "
+                "models, or change routing policy."
+            ),
+        }
+    if template_id == "worker_data_pipeline_run_status":
+        return {
+            **base,
+            "artifact_kind": "worker_data_pipeline_run_status_template",
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_status_template": True,
+            "plan_uri": "local://template/worker_data_pipeline_plan.json",
+            "readiness_report_uri": "local://template/worker_data_pipeline_readiness_report.json",
+            "run_id": "<customer-scheduler-run-id>",
+            "execution_date": "<yyyy-mm-dd>",
+            "job_statuses": [
+                worker_run_status_job_template(job_kind)
+                for job_kind in sorted(WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS)
+            ],
+            "evidence_refs": [
+                "worker_data_pipeline_plans:local://template/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_readiness_reports:local://template/worker_data_pipeline_readiness_report.json",
+            ],
+            "governance_boundary": (
+                "Run-status inputs report customer scheduler results only; they must not score "
+                "claims, assign labels, deny claims, activate models, or change routing policy."
+            ),
+        }
+    raise ValueError(f"unknown worker template id: {template_id}")
 
 
 def artifact_template(gate: dict, generated_at: str) -> dict:
@@ -459,10 +600,12 @@ def build_evidence_package(output_dir: Path) -> dict:
     contract_dir = output_dir / "contract"
     evidence_dir = output_dir / "evidence"
     source_dir = output_dir / "sources"
+    worker_dir = output_dir / "worker"
     runbook_dir = output_dir / "runbooks"
     contract = build_contract(contract_dir)
     artifacts = []
     sources = []
+    worker_templates = []
     for gate in contract["required_gates"]:
         artifact_name = gate["required_artifact"]
         gate_id = gate["gate_id"]
@@ -487,6 +630,16 @@ def build_evidence_package(output_dir: Path) -> dict:
                     "customer_data_required": gate["customer_data_required"],
                 }
             )
+    for template_id, template_name in WORKER_TEMPLATE_FILES.items():
+        write_json(worker_dir / template_name, worker_template(template_id, generated_at))
+        worker_templates.append(
+            {
+                "template_id": template_id,
+                "template": f"worker/{template_name}",
+                "status": "pending_customer_input",
+                "customer_data_required": True,
+            }
+        )
     write_json(
         runbook_dir / "worker-data-pipeline-commands.json",
         worker_pipeline_command_runbook(generated_at),
@@ -499,12 +652,15 @@ def build_evidence_package(output_dir: Path) -> dict:
         "contract_dir": "contract",
         "evidence_dir": "evidence",
         "source_dir": "sources",
+        "worker_dir": "worker",
         "runbook_dir": "runbooks",
         "artifact_count": len(artifacts),
         "source_template_count": len(sources),
+        "worker_template_count": len(worker_templates),
         "runbook_count": 1,
         "artifacts": artifacts,
         "source_templates": sources,
+        "worker_templates": worker_templates,
         "runbooks": [
             {
                 "runbook": "runbooks/worker-data-pipeline-commands.json",

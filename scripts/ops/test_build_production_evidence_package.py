@@ -29,6 +29,7 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
 
             self.assertEqual(package["artifact_count"], len(gates))
             self.assertEqual(package["source_template_count"], 4)
+            self.assertEqual(package["worker_template_count"], 4)
             self.assertEqual(package["runbook_count"], 1)
             self.assertEqual(
                 set(artifacts),
@@ -45,6 +46,20 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             )
             self.assertTrue(
                 (Path(temp_dir) / "sources" / "ocr-vector-analytics-source.json").exists()
+            )
+            self.assertTrue((Path(temp_dir) / "worker" / "score_request.json").exists())
+            self.assertTrue(
+                (Path(temp_dir) / "worker" / "scoring_readback_input.json").exists()
+            )
+            self.assertTrue(
+                (
+                    Path(temp_dir)
+                    / "worker"
+                    / "worker_data_pipeline_readiness_input.json"
+                ).exists()
+            )
+            self.assertTrue(
+                (Path(temp_dir) / "worker" / "worker_data_pipeline_run_status.json").exists()
             )
             runbook = _read_json(
                 Path(temp_dir) / "runbooks" / "worker-data-pipeline-commands.json"
@@ -72,6 +87,60 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             retention = artifacts["retention_legal_hold_report.json"]
             self.assertIn("destruction_workflow", retention)
             self.assertNotIn("destruction_requires_human_approval", retention)
+            scoring_readback_input = _read_json(
+                Path(temp_dir) / "worker" / "scoring_readback_input.json"
+            )
+            self.assertEqual(
+                scoring_readback_input["artifact_kind"],
+                "scoring_readback_input_template",
+            )
+            self.assertIn(
+                "scoring_feature_contexts:",
+                scoring_readback_input["expected_evidence_prefixes"],
+            )
+            self.assertIn(
+                "provider_graph_signal_rollups:",
+                scoring_readback_input["expected_evidence_prefixes"],
+            )
+            self.assertTrue(
+                scoring_readback_input["score_request_uri"].endswith(
+                    "worker/score_request.json"
+                )
+            )
+            score_request = _read_json(Path(temp_dir) / "worker" / "score_request.json")
+            score_request_text = (Path(temp_dir) / "worker" / "score_request.json").read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(
+                score_request["artifact_kind"],
+                "scoring_readback_score_request_template",
+            )
+            self.assertEqual(score_request["review_mode"], "pre_payment")
+            self.assertNotIn("api_key", score_request_text.lower())
+            self.assertNotIn("patientName", score_request_text)
+            self.assertNotIn("certificateNo", score_request_text)
+            self.assertNotIn("insuredName", score_request_text)
+            readiness_input = _read_json(
+                Path(temp_dir) / "worker" / "worker_data_pipeline_readiness_input.json"
+            )
+            self.assertEqual(
+                readiness_input["artifact_kind"],
+                "worker_data_pipeline_readiness_input_template",
+            )
+            self.assertEqual(len(readiness_input["checks"]), 11)
+            self.assertTrue(
+                any(
+                    check["job_kind"] == "scoring_online_readback"
+                    and "scoring_readback_score_responses:"
+                    in check["required_evidence_prefixes"]
+                    for check in readiness_input["checks"]
+                )
+            )
+            run_status = _read_json(
+                Path(temp_dir) / "worker" / "worker_data_pipeline_run_status.json"
+            )
+            self.assertEqual(run_status["report_kind"], "worker_data_pipeline_run_status")
+            self.assertEqual(len(run_status["job_statuses"]), 11)
 
     def test_template_does_not_validate_as_customer_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

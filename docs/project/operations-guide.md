@@ -792,6 +792,11 @@ worker commands for plan generation, readiness input/report, scheduler
 run-status, execution report, score-response capture, and scoring readback
 report generation. The runbook uses placeholders for runtime secrets and must
 not persist API keys.
+It also writes customer-fillable worker input templates under `worker/`,
+including `score_request.json`, `scoring_readback_input.json`,
+`worker_data_pipeline_readiness_input.json`, and
+`worker_data_pipeline_run_status.json`; these files remain templates until the
+customer replaces placeholder artifact URIs with production evidence.
 
 The customer-data governance gate requires
 `customer_data_governance_report.json` to show approved dataset provenance,
