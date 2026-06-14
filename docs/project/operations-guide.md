@@ -763,6 +763,10 @@ The retention/legal-hold gate requires `retention_legal_hold_report.json` to
 show at least six retention years, explicit retention and legal-hold policy ids,
 archive storage, completed legal-hold reconciliation, human approval before
 destruction, automated destruction disabled, and policy evidence refs.
+The model-serving SLO gate requires `model_serving_slo_report.json` to show the
+served model identity, p95 latency and error rate within declared SLOs,
+checksum/signature verification, healthy fallback, rollback readiness, and
+model-serving plus model-artifact evidence refs.
 The worker data-pipeline gate requires the customer
 `worker_data_pipeline_execution_report.json` to pass the contract acceptance
 checks: readiness gate ready, scheduler completed, zero pending or failed jobs,

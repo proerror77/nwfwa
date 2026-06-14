@@ -190,6 +190,9 @@ As of the P1/P2 remediation commits after this review:
   evidence for six-year retention, policy ids, archive storage, completed
   legal-hold reconciliation, human destruction approval, and disabled
   automated destruction.
+- The production readiness validator now deep-checks model-serving SLO
+  evidence for model identity, p95 latency, error rate, checksum/signature
+  verification, fallback health, rollback readiness, and evidence refs.
 - The worker now has a probability-calibration evidence report that computes
   ECE and Brier score from labeled holdout predictions and opens calibration
   review tasks when raw probabilities are miscalibrated or sample size is

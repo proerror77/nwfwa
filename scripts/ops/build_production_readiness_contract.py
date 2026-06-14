@@ -109,6 +109,29 @@ RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECKS = [
     },
 ]
 
+MODEL_SERVING_SLO_ACCEPTANCE_CHECKS = [
+    {
+        "check_id": "report_kind_is_model_serving_slo_report",
+        "description": "Model serving evidence artifact has artifact_kind = model_serving_slo_report.",
+    },
+    {
+        "check_id": "latency_and_error_slos_passed",
+        "description": "Model serving p95 latency and error rate are within the declared SLO thresholds.",
+    },
+    {
+        "check_id": "artifact_integrity_verified",
+        "description": "Model artifact checksum and signature verification both passed.",
+    },
+    {
+        "check_id": "fallback_and_rollback_ready",
+        "description": "Fallback serving path is healthy and rollback readiness is true.",
+    },
+    {
+        "check_id": "model_serving_evidence_refs_present",
+        "description": "Model serving evidence includes model serving and model artifact evidence refs.",
+    },
+]
+
 REQUIRED_EVIDENCE = [
     {
         "gate_id": "production_deployment_apply",
@@ -168,6 +191,7 @@ REQUIRED_EVIDENCE = [
         "gate_id": "model_serving_slo",
         "required_artifact": "model_serving_slo_report.json",
         "description": "ONNX/Rust model serving latency, error, fallback, checksum, signature, and rollback SLO evidence passed.",
+        "acceptance_checks": MODEL_SERVING_SLO_ACCEPTANCE_CHECKS,
     },
     {
         "gate_id": "ocr_vector_analytics_execution",

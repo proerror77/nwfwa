@@ -186,6 +186,14 @@ CAPABILITIES = [
                 "scripts/ops/validate_production_readiness_contract.py",
                 "validate_retention_legal_hold_evidence",
             ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
+                "fallback_and_rollback_ready",
+            ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
+                "validate_model_serving_slo_evidence",
+            ),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_sanctions"),

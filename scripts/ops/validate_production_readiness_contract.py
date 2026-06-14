@@ -94,6 +94,14 @@ RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECK_IDS = {
     "destruction_requires_human_approval",
 }
 
+MODEL_SERVING_SLO_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_model_serving_slo_report",
+    "latency_and_error_slos_passed",
+    "artifact_integrity_verified",
+    "fallback_and_rollback_ready",
+    "model_serving_evidence_refs_present",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -183,6 +191,26 @@ def validate_contract(contract: dict) -> list[dict]:
                 require(
                     check.get("description"),
                     f"retention legal hold acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "model_serving_slo":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "model serving SLO gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == MODEL_SERVING_SLO_ACCEPTANCE_CHECK_IDS,
+                "model serving SLO gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"model serving SLO acceptance check {check.get('check_id')} missing description",
                 )
     return gates
 
@@ -364,6 +392,64 @@ def validate_retention_legal_hold_evidence(report: dict) -> None:
         )
 
 
+def validate_model_serving_slo_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "model_serving_slo_report",
+        "model serving SLO evidence has wrong artifact_kind",
+    )
+    for field_name in ("model_key", "model_version"):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"model serving SLO evidence must include {field_name}",
+        )
+    latency_slo_ms = report.get("latency_slo_ms")
+    p95_latency_ms = report.get("p95_latency_ms")
+    require(
+        isinstance(latency_slo_ms, (int, float)) and latency_slo_ms > 0,
+        "model serving SLO evidence must include positive latency_slo_ms",
+    )
+    require(
+        isinstance(p95_latency_ms, (int, float)) and p95_latency_ms <= latency_slo_ms,
+        "model serving SLO evidence p95 latency must be within latency_slo_ms",
+    )
+    error_rate_slo = report.get("error_rate_slo")
+    error_rate = report.get("error_rate")
+    require(
+        isinstance(error_rate_slo, (int, float)) and 0 <= error_rate_slo <= 1,
+        "model serving SLO evidence must include error_rate_slo between 0 and 1",
+    )
+    require(
+        isinstance(error_rate, (int, float)) and 0 <= error_rate <= error_rate_slo,
+        "model serving SLO evidence error_rate must be within error_rate_slo",
+    )
+    require(
+        report.get("checksum_verified") is True,
+        "model serving SLO evidence must verify model checksum",
+    )
+    require(
+        report.get("signature_verified") is True,
+        "model serving SLO evidence must verify model signature",
+    )
+    require(
+        report.get("fallback_status") == "healthy",
+        "model serving SLO evidence fallback_status must be healthy",
+    )
+    require(
+        report.get("rollback_ready") is True,
+        "model serving SLO evidence rollback_ready must be true",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "model serving SLO evidence must include evidence_refs",
+    )
+    for prefix in ("model_serving:", "model_artifact:"):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"model serving SLO evidence_refs missing {prefix}",
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract-dir", default="artifacts/production-readiness")
@@ -382,6 +468,9 @@ def main() -> int:
         artifacts = validate_evidence_dir(evidence_dir, gates)
         validate_retention_legal_hold_evidence(
             artifacts["retention_legal_hold_report.json"]
+        )
+        validate_model_serving_slo_evidence(
+            artifacts["model_serving_slo_report.json"]
         )
         validate_worker_data_pipeline_execution_evidence(
             artifacts["worker_data_pipeline_execution_report.json"]
