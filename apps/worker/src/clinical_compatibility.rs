@@ -259,14 +259,12 @@ fn normalize_record(
             procedure_code
         );
     }
-    let evidence_refs = row
+    let mut evidence_refs = row
         .evidence_refs
         .into_iter()
         .map(|reference| reference.trim().to_string())
         .filter(|reference| !reference.is_empty())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
+        .collect::<BTreeSet<_>>();
     if evidence_refs.is_empty() {
         bail!(
             "clinical compatibility record {}|{} requires evidence_refs",
@@ -274,6 +272,8 @@ fn normalize_record(
             procedure_code
         );
     }
+    evidence_refs.insert(row.policy_authority_ref.trim().into());
+    let evidence_refs = evidence_refs.into_iter().collect::<Vec<_>>();
 
     let compatibility_key = format!("{diagnosis_code_prefix}|{procedure_code}");
     Ok(ClinicalCompatibilityRecord {

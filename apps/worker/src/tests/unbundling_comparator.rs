@@ -14,7 +14,7 @@ fn builds_unbundling_comparator_candidates_from_episode_codes() {
                     "bundled_code": " knee-bundle ",
                     "component_codes": ["scope-a", "scope-b"],
                     "policy_authority_ref": "policy:unbundling:knee:v1",
-                    "evidence_refs": ["policy:unbundling:knee:v1"]
+                    "evidence_refs": ["medical_policy:knee:v1"]
                 }
             ],
             "episodes": [

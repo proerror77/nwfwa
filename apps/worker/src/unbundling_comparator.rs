@@ -227,6 +227,15 @@ fn normalize_rules(rules: Vec<UnbundlingRuleInput>) -> anyhow::Result<Vec<Unbund
         if rule.evidence_refs.is_empty() {
             bail!("unbundling rule {} requires evidence_refs", rule.rule_id);
         }
+        if !rule
+            .evidence_refs
+            .iter()
+            .any(|reference| reference == &rule.policy_authority_ref)
+        {
+            rule.evidence_refs.push(rule.policy_authority_ref.clone());
+            rule.evidence_refs.sort();
+            rule.evidence_refs.dedup();
+        }
         if !seen.insert(rule.rule_id.clone()) {
             bail!("duplicate unbundling rule {}", rule.rule_id);
         }

@@ -25,7 +25,7 @@ fn builds_clinical_compatibility_reference_report() {
                     "compatibility_score": 0.85,
                     "policy_authority_ref": "policy:clinical:S:XR-100",
                     "rationale": "Trauma diagnosis generally supports X-ray review when documented.",
-                    "evidence_refs": ["policy:clinical:S:XR-100"]
+                    "evidence_refs": ["medical_policy:v2026-06"]
                 }
             ]
         }),
@@ -59,6 +59,14 @@ fn builds_clinical_compatibility_reference_report() {
         imaging.data_source,
         "worker.icd_cpt_compatibility_reference:clinical-policy-2026-06"
     );
+    let trauma = report
+        .records
+        .iter()
+        .find(|record| record.compatibility_key == "S|XR-100")
+        .expect("normalized trauma record");
+    assert!(trauma
+        .evidence_refs
+        .contains(&"policy:clinical:S:XR-100".into()));
     assert!(report
         .governance_boundary
         .contains("ClinicalCompatibilityFeatureContext"));
