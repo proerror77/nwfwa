@@ -71,7 +71,7 @@ pub(super) fn agent_investigation_schemas() -> Value {
         },
         "AgentInvestigationResponse": {
             "type": "object",
-            "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_sufficiency", "evidence_refs", "evidence_refs_by_type"],
+            "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_sufficiency", "evidence_refs", "evidence_refs_by_type", "specialist_executions"],
             "properties": {
                 "agent_run_id": { "type": "string" },
                 "decision_boundary": { "type": "string", "const": "assistive_only" },
@@ -82,7 +82,37 @@ pub(super) fn agent_investigation_schemas() -> Value {
                 "qa_opinion_draft": { "type": "string" },
                 "evidence_sufficiency": { "$ref": "#/components/schemas/EvidenceSufficiency" },
                 "evidence_refs": { "type": "array", "items": { "type": "string" } },
-                "evidence_refs_by_type": { "$ref": "#/components/schemas/EvidenceReferenceBuckets" }
+                "evidence_refs_by_type": { "$ref": "#/components/schemas/EvidenceReferenceBuckets" },
+                "specialist_executions": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/SpecialistAgentExecution" }
+                }
+            }
+        },
+        "SpecialistAgentExecution": {
+            "type": "object",
+            "required": ["agent_kind", "status", "responsibility", "decision_boundary", "phi_fields_allowed", "tool_calls", "evidence_refs", "summary"],
+            "properties": {
+                "agent_kind": { "type": "string" },
+                "status": { "type": "string" },
+                "responsibility": { "type": "string" },
+                "decision_boundary": { "type": "string", "const": "assistive_only" },
+                "phi_fields_allowed": { "type": "array", "items": { "type": "string" } },
+                "tool_calls": { "type": "array", "items": { "$ref": "#/components/schemas/MediatedToolCall" } },
+                "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                "summary": { "type": "string" }
+            }
+        },
+        "MediatedToolCall": {
+            "type": "object",
+            "required": ["tool_name", "purpose", "input_scope", "policy_check", "execution_mode", "decision_boundary"],
+            "properties": {
+                "tool_name": { "type": "string" },
+                "purpose": { "type": "string" },
+                "input_scope": { "type": "array", "items": { "type": "string" } },
+                "policy_check": { "type": "string" },
+                "execution_mode": { "type": "string", "const": "contract_only_not_executed" },
+                "decision_boundary": { "type": "string", "const": "assistive_only" }
             }
         },
         "EvidenceReferenceBuckets": {

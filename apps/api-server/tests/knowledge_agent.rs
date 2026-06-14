@@ -497,6 +497,26 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+    let specialist_executions = body["specialist_executions"].as_array().unwrap();
+    assert!(specialist_executions.len() >= 2);
+    assert!(specialist_executions
+        .iter()
+        .all(|execution| execution["decision_boundary"] == "assistive_only"));
+    let evidence_review = specialist_executions
+        .iter()
+        .find(|execution| execution["agent_kind"] == "evidence_review")
+        .expect("evidence review specialist should be dispatched");
+    let mediated_tool_call = evidence_review["tool_calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|call| call["tool_name"] == "knowledge.search_similar")
+        .expect("specialist should declare governed similar-case search");
+    assert_eq!(
+        mediated_tool_call["execution_mode"],
+        "contract_only_not_executed"
+    );
+    assert_eq!(mediated_tool_call["decision_boundary"], "assistive_only");
 }
 
 #[tokio::test]
@@ -769,6 +789,11 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert!(!context_snapshot["source_refs"]
         .to_string()
         .contains("CLM-AGENT-LOGS"));
+    assert!(run["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|step| step["step_name"] == "specialist_execution"));
     let tool_call = run["tool_calls"]
         .as_array()
         .unwrap()
@@ -776,6 +801,11 @@ async fn lists_agent_run_logs_for_governance_review() {
         .find(|call| call["tool_name"] == "knowledge.search_similar")
         .expect("similar-case search tool call should be audited");
     assert_eq!(tool_call["status"], "succeeded");
+    assert!(run["tool_calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|call| call["status"] != "contract_only_not_executed"));
     assert!(!tool_call["input_json"].as_object().unwrap().is_empty());
     assert!(!tool_call["input_json"]
         .to_string()
@@ -817,6 +847,11 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert!(!approval["evidence_refs"].as_array().unwrap().is_empty());
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
     assert!(run["output_json"]["evidence_sufficiency"].is_object());
+    assert!(run["output_json"]["specialist_executions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|execution| execution["agent_kind"] == "evidence_review"));
     assert!(!run["output_json"].to_string().contains("CLM-AGENT-LOGS"));
 }
 
@@ -924,6 +959,11 @@ async fn agent_investigation_audit_payload_traces_governance_controls() {
     );
     assert_eq!(event["payload"]["customer_scope_id"], "demo-customer");
     assert_eq!(event["payload"]["tool_name"], "knowledge.search_similar");
+    assert!(event["payload"]["specialist_executions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|execution| execution["decision_boundary"] == "assistive_only"));
     assert!(event["payload"]["policy_check_id"]
         .as_str()
         .unwrap()

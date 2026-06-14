@@ -318,10 +318,32 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
             .iter()
             .any(|field| field == "evidence_sufficiency")
     );
+    assert!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "specialist_executions")
+    );
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationResponse"]["properties"]
             ["evidence_sufficiency"]["$ref"],
         "#/components/schemas/EvidenceSufficiency"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["properties"]
+            ["specialist_executions"]["items"]["$ref"],
+        "#/components/schemas/SpecialistAgentExecution"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SpecialistAgentExecution"]["properties"]["tool_calls"]
+            ["items"]["$ref"],
+        "#/components/schemas/MediatedToolCall"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["MediatedToolCall"]["properties"]["execution_mode"]
+            ["const"],
+        "contract_only_not_executed"
     );
     assert!(schema["components"]["schemas"]["EvidenceSufficiency"].is_object());
     for field in ["population_definition", "reviewer", "assignment_queue"] {

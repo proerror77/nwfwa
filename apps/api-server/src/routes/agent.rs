@@ -12,7 +12,7 @@ use crate::{
 use axum::{extract::State, http::StatusCode, Json};
 use fwa_agent::{
     DeterministicInvestigator, EvidenceSufficiency, InvestigationOrchestrator,
-    InvestigationRequest, SimilarCaseInput,
+    InvestigationRequest, NoopInvestigationCancellation, SimilarCaseInput,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -51,6 +51,7 @@ pub struct AgentInvestigationResponse {
     pub evidence_sufficiency: EvidenceSufficiency,
     pub evidence_refs: Vec<String>,
     pub evidence_refs_by_type: fwa_agent::EvidenceReferenceBuckets,
+    pub specialist_executions: Vec<fwa_agent::SpecialistAgentExecution>,
 }
 
 pub async fn investigate_case(
@@ -176,22 +177,38 @@ pub async fn investigate_case(
         &context_json["canonical_claim_context_trace"]["source_refs"],
     ));
 
-    let package = DeterministicInvestigator.orchestrate(InvestigationRequest {
+    let investigation_request = InvestigationRequest {
         claim_id: masked_claim_ref,
         risk_score: request.risk_score,
         rag: request.rag,
         scheme_family,
         top_reasons: governed_top_reasons,
         similar_cases,
-    });
-    let output_json = serde_json::to_value(&package)
+    };
+    let specialist_executions = DeterministicInvestigator
+        .dispatch_specialists_with_cancellation(
+            &investigation_request,
+            &NoopInvestigationCancellation,
+        )
+        .map_err(|error| {
+            ApiError::internal("AGENT_SPECIALIST_DISPATCH_FAILED", format!("{error:?}"))
+        })?;
+    let package = DeterministicInvestigator.orchestrate(investigation_request);
+    let mut output_json = serde_json::to_value(&package)
         .map_err(|error| ApiError::internal("AGENT_ENCODE_FAILED", error))?;
+    if let Value::Object(payload) = &mut output_json {
+        payload.insert(
+            "specialist_executions".into(),
+            serde_json::to_value(&specialist_executions)
+                .map_err(|error| ApiError::internal("AGENT_ENCODE_FAILED", error))?,
+        );
+    }
     let evidence_refs = package
         .evidence_refs
         .iter()
         .map(|reference| Value::String(reference.clone()))
         .collect::<Vec<_>>();
-    let steps = package
+    let mut steps = package
         .findings
         .iter()
         .map(|finding| {
@@ -202,6 +219,15 @@ pub async fn investigate_case(
             })
         })
         .collect::<Vec<_>>();
+    steps.extend(specialist_executions.iter().map(|execution| {
+        serde_json::json!({
+            "step_name": "specialist_execution",
+            "agent_kind": execution.agent_kind,
+            "status": execution.status,
+            "decision_boundary": execution.decision_boundary,
+            "evidence_refs": execution.evidence_refs,
+        })
+    }));
     let audit_policy_check_id = policy_check.policy_check_id.clone();
     let audit_tool_call_id = tool_call_id.clone();
     let mut audit_payload = output_json.clone();
@@ -324,6 +350,7 @@ pub async fn investigate_case(
         evidence_sufficiency: package.evidence_sufficiency,
         evidence_refs: package.evidence_refs,
         evidence_refs_by_type: package.evidence_refs_by_type,
+        specialist_executions,
     }))
 }
 
