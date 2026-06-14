@@ -3,6 +3,8 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use parquet::arrow::ArrowWriter;
+use std::{fs::File, sync::Arc, time::SystemTime};
 use tower::ServiceExt;
 
 pub(super) fn test_config() -> AppConfig {
@@ -76,6 +78,75 @@ pub(super) async fn json_request_with_key(
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     (status, String::from_utf8(body.to_vec()).unwrap())
+}
+
+pub(super) fn public_mvp_parquet_fixture_uri(name: &str) -> String {
+    use arrow_array::{ArrayRef, BooleanArray, Float64Array, RecordBatch, StringArray};
+
+    let labels = [
+        true, true, true, true, true, true, true, true, true, true, true, true, true, false, false,
+        false, false, false,
+    ];
+    let amount_ratios = [
+        0.92, 0.88, 0.84, 0.81, 0.78, 0.75, 0.72, 0.69, 0.66, 0.63, 0.60, 0.57, 0.54, 0.18, 0.22,
+        0.26, 0.30, 0.34,
+    ];
+    let provider_scores = [
+        86.0, 84.0, 82.0, 80.0, 78.0, 76.0, 74.0, 72.0, 70.0, 68.0, 66.0, 64.0, 62.0, 28.0, 30.0,
+        32.0, 34.0, 36.0,
+    ];
+    let high_cost_ratios = [
+        0.72, 0.70, 0.68, 0.66, 0.64, 0.62, 0.60, 0.58, 0.56, 0.54, 0.52, 0.50, 0.48, 0.10, 0.12,
+        0.14, 0.16, 0.18,
+    ];
+    let claim_ids = (1..=18)
+        .map(|index| format!("PUB-CLM-{index:04}"))
+        .collect::<Vec<_>>();
+    let splits = vec!["train"; 18];
+
+    let batch = RecordBatch::try_from_iter([
+        (
+            "claim_id",
+            Arc::new(StringArray::from(claim_ids)) as ArrayRef,
+        ),
+        ("split", Arc::new(StringArray::from(splits)) as ArrayRef),
+        (
+            "claim_amount",
+            Arc::new(Float64Array::from(vec![
+                9200.0, 8800.0, 8400.0, 8100.0, 7800.0, 7500.0, 7200.0, 6900.0, 6600.0, 6300.0,
+                6000.0, 5700.0, 5400.0, 1800.0, 2200.0, 2600.0, 3000.0, 3400.0,
+            ])) as ArrayRef,
+        ),
+        (
+            "claim_amount_to_limit_ratio",
+            Arc::new(Float64Array::from(amount_ratios.to_vec())) as ArrayRef,
+        ),
+        (
+            "provider_profile_score",
+            Arc::new(Float64Array::from(provider_scores.to_vec())) as ArrayRef,
+        ),
+        (
+            "high_cost_item_ratio",
+            Arc::new(Float64Array::from(high_cost_ratios.to_vec())) as ArrayRef,
+        ),
+        (
+            "confirmed_fwa",
+            Arc::new(BooleanArray::from(labels.to_vec())) as ArrayRef,
+        ),
+    ])
+    .unwrap();
+
+    let mut path = std::env::temp_dir();
+    let unique = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    path.push(format!("nwfwa-{name}-{unique}.parquet"));
+    let file = File::create(&path).unwrap();
+    let mut writer = ArrowWriter::try_new(file, batch.schema(), None).unwrap();
+    writer.write(&batch).unwrap();
+    writer.close().unwrap();
+    path.to_string_lossy().into_owned()
 }
 
 pub(super) fn rule_lifecycle_payload(rule_id: &str, version: u32) -> String {

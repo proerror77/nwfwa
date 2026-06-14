@@ -196,7 +196,7 @@ jobs:
           ml_pid=$!
           DATABASE_URL="$DATABASE_URL" \
           FWA_API_KEY=dev-secret \
-          FWA_API_KEY_PRINCIPALS="dev-secret|demo-operator|fwa_operator|ops-studio|demo-customer|ops:*,tpa:*;rule-submit-secret|rule-submitter|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review;rule-approve-secret|rule-approver|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review" \
+          FWA_API_KEY_PRINCIPALS="dev-secret|demo-operator|fwa_operator|tpa-demo|demo-customer|ops:*,tpa:*;rule-submit-secret|rule-submitter|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review;rule-approve-secret|rule-approver|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review" \
           FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
           cargo run --locked -p api-server >/tmp/fwa-api-server.log 2>&1 &
           api_pid=$!

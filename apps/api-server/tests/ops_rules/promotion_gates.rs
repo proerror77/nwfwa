@@ -1,7 +1,9 @@
 use api_server::app::build_app;
 use axum::http::StatusCode;
 
-use super::support::{json_request, seed_rule_promotion_evidence, test_config};
+use super::support::{
+    json_request, public_mvp_parquet_fixture_uri, seed_rule_promotion_evidence, test_config,
+};
 
 #[tokio::test]
 async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
@@ -216,12 +218,8 @@ async fn backtests_candidate_rule_against_samples() {
 #[tokio::test]
 async fn backtests_dataset_mined_rule_against_parquet_dataset() {
     let app = build_app(test_config()).unwrap();
-
-    let (status, body) = json_request(
-        app,
-        "POST",
-        "/api/v1/ops/rules/backtest",
-        r#"{
+    let dataset_uri = public_mvp_parquet_fixture_uri("rule-backtest");
+    let payload = r#"{
           "rule": {
             "rule_id": "candidate_mined_claim_amount_to_limit_ratio_gte_0_8",
             "version": 1,
@@ -240,14 +238,15 @@ async fn backtests_dataset_mined_rule_against_parquet_dataset() {
               "reason": "数据集挖掘金额比例阈值"
             }
           },
-          "dataset_uri": "data/public-mvp/split=train/part-00000.parquet",
+          "dataset_uri": "__DATASET_URI__",
           "label_column": "confirmed_fwa",
           "claim_id_column": "claim_id",
           "samples": [],
           "expected_review_capacity": 20
-        }"#,
-    )
-    .await;
+        }"#
+    .replace("__DATASET_URI__", &dataset_uri);
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/rules/backtest", &payload).await;
 
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -258,9 +257,7 @@ async fn backtests_dataset_mined_rule_against_parquet_dataset() {
     assert!(body["evidence_refs"]
         .as_array()
         .unwrap()
-        .contains(&serde_json::json!(
-            "dataset:data/public-mvp/split=train/part-00000.parquet"
-        )));
+        .contains(&serde_json::json!(format!("dataset:{dataset_uri}"))));
 }
 
 #[tokio::test]

@@ -1,7 +1,7 @@
 use api_server::app::build_app;
 use axum::http::StatusCode;
 
-use super::support::{json_request, test_config};
+use super::support::{json_request, public_mvp_parquet_fixture_uri, test_config};
 
 #[tokio::test]
 async fn discovers_candidate_rules_from_labeled_samples() {
@@ -114,21 +114,18 @@ async fn discovers_candidate_rules_from_labeled_samples() {
 #[tokio::test]
 async fn discovers_candidate_rules_from_parquet_dataset() {
     let app = build_app(test_config()).unwrap();
-
-    let (status, body) = json_request(
-        app,
-        "POST",
-        "/api/v1/ops/rules/discover",
-        r#"{
+    let dataset_uri = public_mvp_parquet_fixture_uri("rule-discovery");
+    let payload = r#"{
           "min_support": 2,
-          "dataset_uri": "data/public-mvp/split=train/part-00000.parquet",
+          "dataset_uri": "__DATASET_URI__",
           "label_column": "confirmed_fwa",
           "claim_id_column": "claim_id",
           "candidate_feature_fields": ["claim_amount_to_limit_ratio"],
           "samples": []
-        }"#,
-    )
-    .await;
+        }"#
+    .replace("__DATASET_URI__", &dataset_uri);
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/rules/discover", &payload).await;
 
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -150,29 +147,24 @@ async fn discovers_candidate_rules_from_parquet_dataset() {
     assert!(candidate["evidence_refs"]
         .as_array()
         .unwrap()
-        .contains(&serde_json::json!(
-            "dataset:data/public-mvp/split=train/part-00000.parquet"
-        )));
+        .contains(&serde_json::json!(format!("dataset:{dataset_uri}"))));
 }
 
 #[tokio::test]
 async fn empty_candidate_feature_fields_discovers_all_parquet_features() {
     let app = build_app(test_config()).unwrap();
-
-    let (status, body) = json_request(
-        app,
-        "POST",
-        "/api/v1/ops/rules/discover",
-        r#"{
+    let dataset_uri = public_mvp_parquet_fixture_uri("rule-discovery-all-features");
+    let payload = r#"{
           "min_support": 2,
-          "dataset_uri": "data/public-mvp/split=train/part-00000.parquet",
+          "dataset_uri": "__DATASET_URI__",
           "label_column": "confirmed_fwa",
           "claim_id_column": "claim_id",
           "candidate_feature_fields": [],
           "samples": []
-        }"#,
-    )
-    .await;
+        }"#
+    .replace("__DATASET_URI__", &dataset_uri);
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/rules/discover", &payload).await;
 
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
