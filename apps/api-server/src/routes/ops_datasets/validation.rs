@@ -44,6 +44,81 @@ fn missing_required_worker_data_pipeline_prefix(
         })
 }
 
+fn worker_data_pipeline_submit_job_contract(
+    job_kind: &str,
+) -> Option<(&'static str, &'static str)> {
+    match job_kind {
+        "oig_sam_sanctions_sync" => Some((
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            "ops:providers:write",
+        )),
+        "provider_profile_window_rollup" => Some((
+            "/api/v1/ops/providers/profile-window-rollups",
+            "ops:providers:write",
+        )),
+        "provider_graph_signal_rollup" => Some((
+            "/api/v1/ops/providers/graph-signal-rollups",
+            "ops:providers:write",
+        )),
+        "peer_percentile_benchmark" => Some((
+            "/api/v1/ops/providers/peer-benchmarks",
+            "ops:providers:write",
+        )),
+        "episode_aggregation" => Some((
+            "/api/v1/ops/providers/episode-rollups",
+            "ops:providers:write",
+        )),
+        "clinical_compatibility_reference" => Some((
+            "/api/v1/ops/clinical-compatibility-references",
+            "ops:datasets:write",
+        )),
+        "unbundling_comparator" => Some((
+            "/api/v1/ops/unbundling-comparator-candidates",
+            "ops:datasets:write",
+        )),
+        "scoring_feature_context_materialization" => Some((
+            "/api/v1/ops/scoring-feature-context-materializations",
+            "ops:datasets:write",
+        )),
+        "probability_calibration_evidence" => Some((
+            "/api/v1/ops/models/{model_key}/probability-calibration-reports",
+            "ops:models:review",
+        )),
+        _ => None,
+    }
+}
+
+fn validate_worker_data_pipeline_submit_job_contract(
+    job_kind: &str,
+    job: &serde_json::Value,
+    error_code: &'static str,
+) -> Result<bool, ApiError> {
+    let Some((expected_api_path, expected_permission)) =
+        worker_data_pipeline_submit_job_contract(job_kind)
+    else {
+        return Ok(false);
+    };
+    if job.get("api_path").and_then(|value| value.as_str()) != Some(expected_api_path) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires api_path {expected_api_path}"),
+        ));
+    }
+    if job
+        .get("required_permission")
+        .and_then(|value| value.as_str())
+        != Some(expected_permission)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_permission {expected_permission}"),
+        ));
+    }
+    Ok(true)
+}
+
 fn validate_required_evidence_ref(
     evidence_refs: &[String],
     expected_ref: &str,
@@ -1163,7 +1238,11 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "completed job executions must not include blocked_dependencies",
                 ));
             }
-            let is_governed_submit_job = execution
+            let is_governed_submit_job = validate_worker_data_pipeline_submit_job_contract(
+                job_kind,
+                execution,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
+            )? || execution
                 .get("api_path")
                 .and_then(|value| value.as_str())
                 .is_some_and(|value| !value.trim().is_empty())
@@ -1558,6 +1637,11 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         ),
                     ));
                 }
+                validate_worker_data_pipeline_submit_job_contract(
+                    job_kind,
+                    readiness,
+                    "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
+                )?;
                 let missing_required_evidence_prefix =
                     required_evidence_prefixes.iter().find(|prefix| {
                         !readiness

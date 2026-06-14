@@ -288,6 +288,7 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
       "job_readiness": [
         {
           "job_kind": "oig_sam_sanctions_sync",
+          "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
           "required_permission": "ops:providers:write",
           "required_evidence_prefixes": ["source_freshness:oig_sam_sanctions_sync:"],
           "coverage_window_days": 1,
@@ -645,6 +646,8 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
             "job_kind": "provider_profile_window_rollup",
             "execution_status": "completed",
             "reported_status": "succeeded",
+            "api_path": "/api/v1/ops/providers/profile-window-rollups",
+            "required_permission": "ops:providers:write",
             "reported_artifact_uri": "local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
             "required_evidence_prefixes": ["provider_profile_window_rollups:"],
             "evidence_refs": [
@@ -1374,6 +1377,36 @@ async fn worker_data_pipeline_execution_report_rejects_completed_submit_job_not_
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_submit_job_api_path() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("api_path");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("/api/v1/ops/providers/sanctions-sync-reports"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_readiness_evidence_when_uri_supplied() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -1677,6 +1710,36 @@ async fn worker_data_pipeline_readiness_report_rejects_permission_api_path_misma
         body["code"],
         "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
     );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_ready_submit_job_api_path() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("api_path");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("/api/v1/ops/providers/sanctions-sync-reports"));
 }
 
 #[tokio::test]
