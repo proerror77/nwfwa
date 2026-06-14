@@ -19,6 +19,7 @@ REQUIRED_GATE_IDS = {
     "retention_legal_hold",
     "customer_data_governance",
     "worker_data_pipeline_execution",
+    "scoring_online_readback",
     "model_serving_slo",
     "ocr_vector_analytics_execution",
 }
@@ -26,6 +27,7 @@ REQUIRED_GATE_IDS = {
 CUSTOMER_DATA_REQUIRED_GATE_IDS = {
     "customer_data_governance",
     "worker_data_pipeline_execution",
+    "scoring_online_readback",
     "model_serving_slo",
     "ocr_vector_analytics_execution",
 }
@@ -135,6 +137,14 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "scoring_online_readback_artifact_reported",
     "evidence_refs_include_plan_run_status_and_readiness",
     "governance_boundary_no_adjudication",
+}
+
+SCORING_READBACK_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_scoring_readback_report",
+    "readback_status_verified",
+    "score_request_and_response_uris_present",
+    "expected_evidence_prefixes_matched",
+    "no_scoring_readback_review_tasks",
 }
 
 RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECK_IDS = {
@@ -299,6 +309,26 @@ def validate_contract(contract: dict) -> list[dict]:
                 require(
                     check.get("description"),
                     f"customer data governance acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "scoring_online_readback":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "scoring online readback gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == SCORING_READBACK_ACCEPTANCE_CHECK_IDS,
+                "scoring online readback gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"scoring online readback acceptance check {check.get('check_id')} missing description",
                 )
         if gate.get("gate_id") == "ocr_vector_analytics_execution":
             acceptance_checks = gate.get("acceptance_checks")
@@ -521,6 +551,77 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         require(
             forbidden_side_effect in governance_boundary,
             f"worker data pipeline governance boundary missing {forbidden_side_effect}",
+        )
+
+
+def validate_scoring_readback_evidence(report: dict) -> None:
+    require(
+        report.get("report_kind") == "scoring_readback_report",
+        "scoring readback evidence has wrong report_kind",
+    )
+    require(
+        report.get("readback_status") == "verified",
+        "scoring readback evidence must have readback_status verified",
+    )
+    require(
+        report.get("execution_mode") == "score_response_artifact_readback",
+        "scoring readback evidence must come from a score response artifact readback",
+    )
+    for field_name in ("input_uri", "score_request_uri", "score_response_uri"):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"scoring readback evidence must include {field_name}",
+        )
+    for field_name in ("score_request_uri", "score_response_uri"):
+        require(
+            is_production_artifact_uri(report.get(field_name)),
+            f"scoring readback evidence {field_name} must be a production artifact URI, not a local dry-run or template URI",
+        )
+    expected_count = report.get("expected_evidence_prefix_count")
+    matched_count = report.get("matched_evidence_prefix_count")
+    require(
+        isinstance(expected_count, int) and expected_count > 0,
+        "scoring readback evidence must include positive expected_evidence_prefix_count",
+    )
+    require(
+        matched_count == expected_count,
+        "scoring readback evidence must match every expected evidence prefix",
+    )
+    checks = report.get("checks")
+    require(
+        isinstance(checks, list) and len(checks) == expected_count,
+        "scoring readback evidence checks must match expected_evidence_prefix_count",
+    )
+    for check in checks:
+        require(
+            isinstance(check, dict) and check.get("matched") is True,
+            "scoring readback evidence check must be matched",
+        )
+        matched_refs = check.get("matched_evidence_refs")
+        require(
+            isinstance(matched_refs, list) and matched_refs,
+            "scoring readback evidence matched checks must include matched_evidence_refs",
+        )
+    require(
+        not report.get("blockers"),
+        "scoring readback evidence must have no blockers",
+    )
+    require(
+        report.get("review_task_count") == 0,
+        "scoring readback evidence must have zero review tasks",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "scoring readback evidence must include evidence_refs",
+    )
+    for prefix in WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES:
+        require(
+            any(
+                isinstance(reference, str) and reference.startswith(prefix)
+                for reference in evidence_refs
+            ),
+            f"scoring readback evidence_refs missing {prefix}",
         )
 
 
@@ -756,6 +857,7 @@ def main() -> int:
         validate_worker_data_pipeline_execution_evidence(
             artifacts["worker_data_pipeline_execution_report.json"]
         )
+        validate_scoring_readback_evidence(artifacts["scoring_readback_report.json"])
     print("production readiness contract validation passed")
     return 0
 

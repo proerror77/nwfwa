@@ -184,6 +184,14 @@ CAPABILITIES = [
             ),
             (
                 "scripts/ops/build_production_readiness_contract.py",
+                "readback_status_verified",
+            ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
+                "scoring_online_readback",
+            ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
                 "required_execution_uris_are_production_uris",
             ),
             (
@@ -225,6 +233,10 @@ CAPABILITIES = [
             (
                 "scripts/ops/validate_production_readiness_contract.py",
                 "validate_worker_data_pipeline_execution_evidence",
+            ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
+                "validate_scoring_readback_evidence",
             ),
             (
                 "scripts/ops/validate_production_readiness_contract.py",

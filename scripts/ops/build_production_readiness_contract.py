@@ -107,6 +107,29 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     },
 ]
 
+SCORING_READBACK_ACCEPTANCE_CHECKS = [
+    {
+        "check_id": "report_kind_is_scoring_readback_report",
+        "description": "Scoring readback evidence artifact has report_kind = scoring_readback_report.",
+    },
+    {
+        "check_id": "readback_status_verified",
+        "description": "Scoring readback status is verified, not blocked or contract-only.",
+    },
+    {
+        "check_id": "score_request_and_response_uris_present",
+        "description": "Scoring readback evidence includes production score request and score response artifact URIs.",
+    },
+    {
+        "check_id": "expected_evidence_prefixes_matched",
+        "description": "Every expected worker evidence prefix was observed in the captured score response.",
+    },
+    {
+        "check_id": "no_scoring_readback_review_tasks",
+        "description": "Scoring readback evidence has zero blockers and zero review tasks.",
+    },
+]
+
 RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECKS = [
     {
         "check_id": "report_kind_is_retention_legal_hold_report",
@@ -260,6 +283,12 @@ REQUIRED_EVIDENCE = [
         "acceptance_checks": WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS,
     },
     {
+        "gate_id": "scoring_online_readback",
+        "required_artifact": "scoring_readback_report.json",
+        "description": "Customer captured an online scoring response after governed worker writes and verified that expected worker evidence prefixes were present.",
+        "acceptance_checks": SCORING_READBACK_ACCEPTANCE_CHECKS,
+    },
+    {
         "gate_id": "model_serving_slo",
         "required_artifact": "model_serving_slo_report.json",
         "description": "ONNX/Rust model serving latency, error, fallback, checksum, signature, and rollback SLO evidence passed.",
@@ -290,6 +319,7 @@ def build_contract(output_dir: Path) -> dict:
                 "customer_data_required": item["gate_id"] in {
                     "customer_data_governance",
                     "worker_data_pipeline_execution",
+                    "scoring_online_readback",
                     "model_serving_slo",
                     "ocr_vector_analytics_execution",
                 },

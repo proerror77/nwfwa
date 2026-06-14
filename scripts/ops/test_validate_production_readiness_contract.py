@@ -14,6 +14,7 @@ from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
+    validate_scoring_readback_evidence,
     validate_worker_data_pipeline_execution_evidence,
 )
 
@@ -90,6 +91,51 @@ def worker_execution_report(include_snapshot_evidence: bool = True) -> dict:
     }
 
 
+def scoring_readback_report() -> dict:
+    return {
+        "report_kind": "scoring_readback_report",
+        "report_version": 1,
+        "customer_scope_id": "customer-prod",
+        "as_of_date": "2026-06-15",
+        "readback_status": "verified",
+        "execution_mode": "score_response_artifact_readback",
+        "input_uri": "s3://customer-prod-artifacts/scoring-readback/input.json",
+        "score_request_uri": "s3://customer-prod-artifacts/scoring-readback/request.json",
+        "score_response_uri": "s3://customer-prod-artifacts/scoring-readback/response.json",
+        "expected_evidence_prefix_count": 2,
+        "matched_evidence_prefix_count": 2,
+        "checks": [
+            {
+                "expected_evidence_prefix": "scoring_feature_contexts:",
+                "matched": True,
+                "matched_evidence_refs": [
+                    "scoring_feature_contexts:s3://customer-prod-artifacts/scoring-context/report.json"
+                ],
+            },
+            {
+                "expected_evidence_prefix": "peer_benchmarks:",
+                "matched": True,
+                "matched_evidence_refs": [
+                    "peer_benchmarks:s3://customer-prod-artifacts/peer/report.json"
+                ],
+            },
+        ],
+        "observed_evidence_refs": [
+            "scoring_feature_contexts:s3://customer-prod-artifacts/scoring-context/report.json",
+            "peer_benchmarks:s3://customer-prod-artifacts/peer/report.json",
+        ],
+        "blockers": [],
+        "review_task_count": 0,
+        "review_tasks": [],
+        "evidence_refs": [
+            "scoring_readback_reports:s3://customer-prod-artifacts/scoring-readback/report.json",
+            "scoring_readback_inputs:s3://customer-prod-artifacts/scoring-readback/input.json",
+            "scoring_readback_score_requests:s3://customer-prod-artifacts/scoring-readback/request.json",
+            "scoring_readback_score_responses:s3://customer-prod-artifacts/scoring-readback/response.json",
+        ],
+    }
+
+
 class ProductionReadinessContractValidationTests(unittest.TestCase):
     def test_worker_execution_requires_source_snapshot_evidence_prefix(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=False)
@@ -155,6 +201,21 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
             AssertionError, "scoring_readback_score_responses:"
         ):
             validate_worker_data_pipeline_execution_evidence(report)
+
+    def test_scoring_readback_accepts_verified_response_artifact(self) -> None:
+        validate_scoring_readback_evidence(scoring_readback_report())
+
+    def test_scoring_readback_rejects_blocked_contract_only_report(self) -> None:
+        report = scoring_readback_report()
+        report["readback_status"] = "blocked"
+        report["execution_mode"] = "contract_only_blocked"
+        report["score_response_uri"] = None
+        report["matched_evidence_prefix_count"] = 0
+        report["blockers"] = ["score_response_uri_missing"]
+        report["review_task_count"] = 1
+
+        with self.assertRaisesRegex(AssertionError, "readback_status verified"):
+            validate_scoring_readback_evidence(report)
 
 
 if __name__ == "__main__":

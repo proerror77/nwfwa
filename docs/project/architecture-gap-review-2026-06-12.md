@@ -300,6 +300,10 @@ required per-completed-job artifact URI/evidence refs, required evidence refs,
 scoring online readback evidence, and the no-adjudication boundary. It also
 checks scoring-context materialization source lineage against the same episode,
 peer, clinical, and unbundling evidence refs required by the API submit path.
+Production readiness now also requires the `scoring_readback_report.json`
+artifact itself, not only scheduler evidence refs, and validates that the
+readback is `verified`, uses production score request/response URIs, matches all
+expected prefixes, and has zero blockers or review tasks.
 Worker-generated plan/readiness/run-status templates now surface those required
 evidence prefixes before scheduler execution, and the production readiness
 validator can execute those checks when given the customer evidence directory.
