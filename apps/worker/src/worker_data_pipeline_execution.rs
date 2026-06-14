@@ -73,6 +73,7 @@ pub fn build_worker_data_pipeline_execution_report(
                 "build_command": json_string(job, "build_command"),
                 "submit_command": json_string(job, "submit_command"),
                 "api_path": json_string(job, "api_path"),
+                "required_permission": json_string(job, "required_permission"),
                 "planned_report_uri": json_string(job, "report_uri"),
                 "reported_status": reported.and_then(|status| json_string(status, "status")),
                 "reported_artifact_uri": reported.and_then(|status| json_string(status, "artifact_uri")),
@@ -108,6 +109,7 @@ pub fn build_worker_data_pipeline_execution_report(
                 "run_id": run_id,
                 "job_kind": execution["job_kind"].clone(),
                 "execution_status": execution["execution_status"].clone(),
+                "required_permission": execution["required_permission"].clone(),
                 "review_queue": "worker_data_pipeline_ops",
                 "required_review": "review missing, failed, or unsubmitted worker data pipeline artifact before downstream scoring use"
             })

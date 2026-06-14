@@ -783,6 +783,18 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
         if execution_status != "completed" {
             pending_or_failed_jobs += 1;
         }
+        if let Some(required_permission) = execution.get("required_permission") {
+            if required_permission
+                .as_str()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
+                    "required_permission must not be blank when supplied",
+                ));
+            }
+        }
         if execution_status == "dependency_not_completed" {
             let has_blocked_dependencies = execution
                 .get("blocked_dependencies")

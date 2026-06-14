@@ -73,17 +73,29 @@ fn builds_worker_data_pipeline_execution_report() {
     let executions = report["job_executions"].as_array().expect("executions");
     assert_eq!(executions[0]["execution_status"], "completed");
     assert_eq!(executions[0]["submit_command"], serde_json::Value::Null);
+    assert_eq!(
+        executions[0]["required_permission"],
+        serde_json::Value::Null
+    );
     assert_eq!(executions[1]["execution_status"], "completed");
+    assert_eq!(executions[1]["required_permission"], "ops:providers:write");
     assert_eq!(
         executions[2]["execution_status"],
         "artifact_pending_submission"
     );
+    assert_eq!(executions[2]["required_permission"], "ops:providers:write");
     assert_eq!(executions[3]["execution_status"], "failed");
     assert_eq!(
         executions[4]["execution_status"],
         "scheduled_pending_customer_execution"
     );
     assert_eq!(report["review_task_count"], 9);
+    assert!(report["review_tasks"]
+        .as_array()
+        .expect("review tasks")
+        .iter()
+        .any(|task| task["job_kind"] == "provider_profile_window_rollup"
+            && task["required_permission"] == "ops:providers:write"));
     assert!(report["review_tasks"]
         .as_array()
         .expect("review tasks")
@@ -155,12 +167,14 @@ fn blocks_worker_data_pipeline_job_when_dependency_is_not_completed() {
         executions[1]["blocked_dependencies"],
         serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
     );
+    assert_eq!(executions[1]["required_permission"], "ops:providers:write");
     assert!(report["review_tasks"]
         .as_array()
         .expect("review tasks")
         .iter()
         .any(|task| task["job_kind"] == "oig_sam_sanctions_sync"
-            && task["execution_status"] == "dependency_not_completed"));
+            && task["execution_status"] == "dependency_not_completed"
+            && task["required_permission"] == "ops:providers:write"));
 }
 
 #[test]

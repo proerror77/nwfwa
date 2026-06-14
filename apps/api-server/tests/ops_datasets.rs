@@ -217,11 +217,13 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
         {
           "job_kind": "oig_sam_sanctions_sync",
           "execution_status": "completed",
+          "required_permission": "ops:providers:write",
           "submitted": true
         },
         {
           "job_kind": "provider_profile_window_rollup",
           "execution_status": "artifact_pending_submission",
+          "required_permission": "ops:providers:write",
           "submitted": false
         }
       ],
@@ -587,6 +589,29 @@ async fn worker_data_pipeline_execution_report_requires_dependency_blocker_detai
     assert_eq!(
         body["code"],
         "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_blank_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["required_permission"] = serde_json::json!(" ");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
     );
 }
 
