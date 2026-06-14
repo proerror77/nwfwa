@@ -476,6 +476,22 @@ impl DatasetsRepository for InMemoryScoringRepository {
         self.in_memory_save_unbundling_comparator_candidates(input)
             .await
     }
+
+    async fn save_worker_data_pipeline_readiness_report(
+        &self,
+        input: SaveWorkerDataPipelineReadinessReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineReadinessReportRecord> {
+        self.in_memory_save_worker_data_pipeline_readiness_report(input)
+            .await
+    }
+
+    async fn save_worker_data_pipeline_execution_report(
+        &self,
+        input: SaveWorkerDataPipelineExecutionReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineExecutionReportRecord> {
+        self.in_memory_save_worker_data_pipeline_execution_report(input)
+            .await
+    }
 }
 
 // ---------------------------------------------------------------------------

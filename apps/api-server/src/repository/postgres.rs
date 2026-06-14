@@ -527,6 +527,20 @@ impl DatasetsRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
         postgres_datasets::save_unbundling_comparator_candidates(self, input).await
     }
+
+    async fn save_worker_data_pipeline_readiness_report(
+        &self,
+        input: SaveWorkerDataPipelineReadinessReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineReadinessReportRecord> {
+        postgres_datasets::save_worker_data_pipeline_readiness_report(self, input).await
+    }
+
+    async fn save_worker_data_pipeline_execution_report(
+        &self,
+        input: SaveWorkerDataPipelineExecutionReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineExecutionReportRecord> {
+        postgres_datasets::save_worker_data_pipeline_execution_report(self, input).await
+    }
 }
 
 #[async_trait]

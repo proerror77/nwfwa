@@ -363,6 +363,78 @@ impl InMemoryScoringRepository {
         }
         Ok(saved)
     }
+
+    pub(super) async fn in_memory_save_worker_data_pipeline_readiness_report(
+        &self,
+        input: SaveWorkerDataPipelineReadinessReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineReadinessReportRecord> {
+        let record = WorkerDataPipelineReadinessReportRecord {
+            customer_scope_id: input.customer_scope_id,
+            source_report_uri: input.source_report_uri,
+            report_kind: input.report_kind,
+            plan_uri: input.plan_uri,
+            readiness_input_uri: input.readiness_input_uri,
+            readiness_status: input.readiness_status,
+            job_count: input.job_count,
+            ready_job_count: input.ready_job_count,
+            blocked_job_count: input.blocked_job_count,
+            review_task_count: input.review_task_count,
+            job_readiness_json: input.job_readiness_json,
+            review_tasks_json: input.review_tasks_json,
+            evidence_refs: input.evidence_refs,
+            governance_boundary: input.governance_boundary,
+            submitted_by: input.submitted_by,
+            notes: input.notes,
+        };
+        self.worker_data_pipeline_readiness_reports
+            .lock()
+            .await
+            .insert(
+                worker_data_pipeline_report_key(
+                    &record.customer_scope_id,
+                    &record.source_report_uri,
+                ),
+                record.clone(),
+            );
+        Ok(record)
+    }
+
+    pub(super) async fn in_memory_save_worker_data_pipeline_execution_report(
+        &self,
+        input: SaveWorkerDataPipelineExecutionReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineExecutionReportRecord> {
+        let record = WorkerDataPipelineExecutionReportRecord {
+            customer_scope_id: input.customer_scope_id,
+            source_report_uri: input.source_report_uri,
+            report_kind: input.report_kind,
+            plan_uri: input.plan_uri,
+            run_status_uri: input.run_status_uri,
+            readiness_report_uri: input.readiness_report_uri,
+            readiness_gate_status: input.readiness_gate_status,
+            run_id: input.run_id,
+            execution_date: input.execution_date,
+            job_count: input.job_count,
+            pending_or_failed_job_count: input.pending_or_failed_job_count,
+            review_task_count: input.review_task_count,
+            job_executions_json: input.job_executions_json,
+            review_tasks_json: input.review_tasks_json,
+            evidence_refs: input.evidence_refs,
+            governance_boundary: input.governance_boundary,
+            submitted_by: input.submitted_by,
+            notes: input.notes,
+        };
+        self.worker_data_pipeline_execution_reports
+            .lock()
+            .await
+            .insert(
+                worker_data_pipeline_report_key(
+                    &record.customer_scope_id,
+                    &record.source_report_uri,
+                ),
+                record.clone(),
+            );
+        Ok(record)
+    }
 }
 
 fn scoring_context_materialization_key(
@@ -386,4 +458,8 @@ fn unbundling_candidate_key(
     as_of_date: &str,
 ) -> String {
     format!("{customer_scope_id}::{candidate_id}::{as_of_date}")
+}
+
+fn worker_data_pipeline_report_key(customer_scope_id: &str, source_report_uri: &str) -> String {
+    format!("{customer_scope_id}::{source_report_uri}")
 }

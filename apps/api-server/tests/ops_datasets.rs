@@ -482,6 +482,19 @@ async fn submits_worker_data_pipeline_execution_report() {
     assert_eq!(body["job_count"], 2);
     assert_eq!(body["pending_or_failed_job_count"], 1);
     assert_eq!(body["review_task_count"], 1);
+    assert_eq!(
+        body["persisted_report"]["source_report_uri"],
+        "local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
+    );
+    assert_eq!(body["persisted_report"]["run_id"], "wdp_2026_06_14");
+    assert_eq!(body["persisted_report"]["readiness_gate_status"], "ready");
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["claim_scoring"], false);
     assert_eq!(body["label_assignment"], false);
@@ -563,6 +576,18 @@ async fn submits_worker_data_pipeline_readiness_report() {
     assert_eq!(body["ready_job_count"], 1);
     assert_eq!(body["blocked_job_count"], 1);
     assert_eq!(body["review_task_count"], 1);
+    assert_eq!(
+        body["persisted_report"]["source_report_uri"],
+        "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
+    );
+    assert_eq!(body["persisted_report"]["readiness_status"], "blocked");
+    assert_eq!(
+        body["persisted_report"]["job_readiness_json"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     assert_eq!(body["claim_scoring"], false);
     assert_eq!(body["label_assignment"], false);
     assert_eq!(body["claim_denial"], false);

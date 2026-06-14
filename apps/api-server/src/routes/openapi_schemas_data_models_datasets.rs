@@ -431,7 +431,7 @@ pub(super) fn dataset_schemas() -> Value {
         },
         "WorkerDataPipelineExecutionReportSubmissionResponse": {
             "type": "object",
-            "required": ["report_kind", "source_report_uri", "run_id", "execution_date", "job_count", "pending_or_failed_job_count", "review_task_count", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "model_activation", "routing_policy_change", "governance_boundary", "audit_event_type"],
+            "required": ["report_kind", "source_report_uri", "run_id", "execution_date", "job_count", "pending_or_failed_job_count", "review_task_count", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "model_activation", "routing_policy_change", "persisted_report", "governance_boundary", "audit_event_type"],
             "properties": {
                 "report_kind": { "type": "string", "const": "worker_data_pipeline_execution_report" },
                 "source_report_uri": { "type": "string" },
@@ -448,6 +448,10 @@ pub(super) fn dataset_schemas() -> Value {
                 "claim_denial": { "type": "boolean", "const": false },
                 "model_activation": { "type": "boolean", "const": false },
                 "routing_policy_change": { "type": "boolean", "const": false },
+                "persisted_report": {
+                    "type": "object",
+                    "description": "Persisted scheduler execution evidence; it does not execute jobs or change scoring/routing/model state."
+                },
                 "governance_boundary": { "type": "string" },
                 "audit_event_type": { "type": "string", "enum": ["worker_data_pipeline.execution_report.submitted"] }
             }
@@ -487,7 +491,7 @@ pub(super) fn dataset_schemas() -> Value {
         },
         "WorkerDataPipelineReadinessReportSubmissionResponse": {
             "type": "object",
-            "required": ["report_kind", "source_report_uri", "readiness_status", "job_count", "ready_job_count", "blocked_job_count", "review_task_count", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "model_activation", "routing_policy_change", "external_fetch_execution", "artifact_submission", "governance_boundary", "audit_event_type"],
+            "required": ["report_kind", "source_report_uri", "readiness_status", "job_count", "ready_job_count", "blocked_job_count", "review_task_count", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "model_activation", "routing_policy_change", "external_fetch_execution", "artifact_submission", "persisted_report", "governance_boundary", "audit_event_type"],
             "properties": {
                 "report_kind": { "type": "string", "const": "worker_data_pipeline_readiness_report" },
                 "source_report_uri": { "type": "string" },
@@ -504,6 +508,10 @@ pub(super) fn dataset_schemas() -> Value {
                 "routing_policy_change": { "type": "boolean", "const": false },
                 "external_fetch_execution": { "type": "boolean", "const": false },
                 "artifact_submission": { "type": "boolean", "const": false },
+                "persisted_report": {
+                    "type": "object",
+                    "description": "Persisted customer-data readiness evidence; it does not fetch external data or submit artifacts."
+                },
                 "governance_boundary": { "type": "string" },
                 "audit_event_type": { "type": "string", "enum": ["worker_data_pipeline.readiness_report.submitted"] }
             }

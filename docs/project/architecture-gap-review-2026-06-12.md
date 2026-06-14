@@ -159,15 +159,16 @@ As of the P1/P2 remediation commits after this review:
   approved artifact URIs, minimum row counts, data-quality status, evidence
   refs, and external OIG/SAM fetch configuration before scheduled writes.
 - The worker data-pipeline readiness report now has a permission-gated API
-  submit path that records prerequisite evidence into governance audit while
-  explicitly avoiding external fetch execution or artifact submission.
+  submit path that persists prerequisite evidence and records governance audit
+  lineage while explicitly avoiding external fetch execution or artifact
+  submission.
 - The worker now has a data-pipeline execution report contract that converts a
   customer scheduler run-status artifact into per-job completion, pending,
   failed, and review-task evidence without running live customer jobs itself.
 - The worker data-pipeline execution report now has a permission-gated API
-  submit path that records scheduler evidence into governance audit while
-  explicitly avoiding claim scoring, label assignment, claim denial, model
-  activation, or routing-policy changes.
+  submit path that persists scheduler evidence and records governance audit
+  lineage while explicitly avoiding claim scoring, label assignment, claim
+  denial, model activation, or routing-policy changes.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
 execution, live external OIG/SAM fetch, customer claim/history data, LLM-backed

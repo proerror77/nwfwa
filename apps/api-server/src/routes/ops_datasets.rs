@@ -7,7 +7,8 @@ use crate::{
         ModelEvaluationRecord, PersistedAuditEvent, RegisterDatasetInput, RegisterFeatureSetInput,
         RegisterModelDatasetInput, RegisterModelEvaluationInput,
         SaveClinicalCompatibilityReferencesInput, SaveScoringFeatureContextMaterializationInput,
-        SaveUnbundlingComparatorCandidatesInput,
+        SaveUnbundlingComparatorCandidatesInput, SaveWorkerDataPipelineExecutionReportInput,
+        SaveWorkerDataPipelineReadinessReportInput,
     },
 };
 
@@ -561,6 +562,32 @@ pub async fn submit_worker_data_pipeline_execution_report(
 ) -> Result<Json<WorkerDataPipelineExecutionReportSubmissionResponse>, ApiError> {
     let actor = require_permission(principal, "ops:datasets:write")?;
     validate_worker_data_pipeline_execution_report_submission(&request)?;
+    let persisted_report = state
+        .repository
+        .save_worker_data_pipeline_execution_report(SaveWorkerDataPipelineExecutionReportInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            report_kind: request.report_kind.clone(),
+            plan_uri: request.plan_uri.clone(),
+            run_status_uri: request.run_status_uri.clone(),
+            readiness_report_uri: request.readiness_report_uri.clone(),
+            readiness_gate_status: request.readiness_gate_status.clone(),
+            run_id: request.run_id.clone(),
+            execution_date: request.execution_date.clone(),
+            job_count: request.job_count as u64,
+            pending_or_failed_job_count: request.pending_or_failed_job_count as u64,
+            review_task_count: request.review_task_count as u64,
+            job_executions_json: Value::Array(request.job_executions.clone()),
+            review_tasks_json: Value::Array(request.review_tasks.clone()),
+            evidence_refs: request.evidence_refs.clone(),
+            governance_boundary: request.governance_boundary.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "WORKER_DATA_PIPELINE_EXECUTION_REPORT_SAVE_FAILED",
+        ))?;
     let response = WorkerDataPipelineExecutionReportSubmissionResponse {
         report_kind: request.report_kind.clone(),
         source_report_uri: request.source_report_uri.clone(),
@@ -577,6 +604,7 @@ pub async fn submit_worker_data_pipeline_execution_report(
         claim_denial: false,
         model_activation: false,
         routing_policy_change: false,
+        persisted_report,
         governance_boundary:
             "worker data pipeline execution report submission records scheduler evidence only; it must not score claims, assign labels, deny claims, activate models, or change routing policy"
                 .into(),
@@ -628,6 +656,30 @@ pub async fn submit_worker_data_pipeline_readiness_report(
 ) -> Result<Json<WorkerDataPipelineReadinessReportSubmissionResponse>, ApiError> {
     let actor = require_permission(principal, "ops:datasets:write")?;
     validate_worker_data_pipeline_readiness_report_submission(&request)?;
+    let persisted_report = state
+        .repository
+        .save_worker_data_pipeline_readiness_report(SaveWorkerDataPipelineReadinessReportInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            report_kind: request.report_kind.clone(),
+            plan_uri: request.plan_uri.clone(),
+            readiness_input_uri: request.readiness_input_uri.clone(),
+            readiness_status: request.readiness_status.clone(),
+            job_count: request.job_count as u64,
+            ready_job_count: request.ready_job_count as u64,
+            blocked_job_count: request.blocked_job_count as u64,
+            review_task_count: request.review_task_count as u64,
+            job_readiness_json: Value::Array(request.job_readiness.clone()),
+            review_tasks_json: Value::Array(request.review_tasks.clone()),
+            evidence_refs: request.evidence_refs.clone(),
+            governance_boundary: request.governance_boundary.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "WORKER_DATA_PIPELINE_READINESS_REPORT_SAVE_FAILED",
+        ))?;
     let response = WorkerDataPipelineReadinessReportSubmissionResponse {
         report_kind: request.report_kind.clone(),
         source_report_uri: request.source_report_uri.clone(),
@@ -644,6 +696,7 @@ pub async fn submit_worker_data_pipeline_readiness_report(
         routing_policy_change: false,
         external_fetch_execution: false,
         artifact_submission: false,
+        persisted_report,
         governance_boundary:
             "worker data pipeline readiness report submission records prerequisite evidence only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy"
                 .into(),

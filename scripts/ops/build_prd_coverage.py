@@ -145,6 +145,8 @@ CAPABILITIES = [
             ("apps/api-server/src/repository/trait.rs", "save_clinical_compatibility_references"),
             ("apps/api-server/src/repository/trait.rs", "save_unbundling_comparator_candidates"),
             ("apps/api-server/src/repository/trait.rs", "save_probability_calibration_report"),
+            ("apps/api-server/src/repository/trait.rs", "save_worker_data_pipeline_readiness_report"),
+            ("apps/api-server/src/repository/trait.rs", "save_worker_data_pipeline_execution_report"),
         ],
         "customer_data_required": True,
     },

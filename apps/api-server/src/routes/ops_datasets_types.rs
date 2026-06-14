@@ -2,6 +2,7 @@ use crate::repository::{
     ClinicalCompatibilityReferenceRecord, ClinicalCompatibilityReferenceUpsertInput, DatasetRecord,
     FieldMappingRecord, ModelEvaluationRecord, ScoringFeatureContextMaterializationRecord,
     UnbundlingComparatorCandidateRecord, UnbundlingComparatorCandidateUpsertInput,
+    WorkerDataPipelineExecutionReportRecord, WorkerDataPipelineReadinessReportRecord,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -181,6 +182,7 @@ pub struct WorkerDataPipelineExecutionReportSubmissionResponse {
     pub claim_denial: bool,
     pub model_activation: bool,
     pub routing_policy_change: bool,
+    pub persisted_report: WorkerDataPipelineExecutionReportRecord,
     pub governance_boundary: String,
     pub audit_event_type: String,
 }
@@ -224,6 +226,7 @@ pub struct WorkerDataPipelineReadinessReportSubmissionResponse {
     pub routing_policy_change: bool,
     pub external_fetch_execution: bool,
     pub artifact_submission: bool,
+    pub persisted_report: WorkerDataPipelineReadinessReportRecord,
     pub governance_boundary: String,
     pub audit_event_type: String,
 }

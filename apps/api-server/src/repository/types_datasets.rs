@@ -291,6 +291,90 @@ pub struct UnbundlingComparatorCandidateRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveWorkerDataPipelineReadinessReportInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub readiness_input_uri: String,
+    pub readiness_status: String,
+    pub job_count: u64,
+    pub ready_job_count: u64,
+    pub blocked_job_count: u64,
+    pub review_task_count: u64,
+    pub job_readiness_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerDataPipelineReadinessReportRecord {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub readiness_input_uri: String,
+    pub readiness_status: String,
+    pub job_count: u64,
+    pub ready_job_count: u64,
+    pub blocked_job_count: u64,
+    pub review_task_count: u64,
+    pub job_readiness_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveWorkerDataPipelineExecutionReportInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub run_status_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: u64,
+    pub pending_or_failed_job_count: u64,
+    pub review_task_count: u64,
+    pub job_executions_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerDataPipelineExecutionReportRecord {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub run_status_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: u64,
+    pub pending_or_failed_job_count: u64,
+    pub review_task_count: u64,
+    pub job_executions_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterModelEvaluationInput {
     pub evaluation_run_id: String,
     pub model_key: String,

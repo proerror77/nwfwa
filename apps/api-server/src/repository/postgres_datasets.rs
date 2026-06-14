@@ -731,3 +731,141 @@ pub(super) async fn save_unbundling_comparator_candidates(
     tx.commit().await?;
     Ok(saved)
 }
+
+pub(super) async fn save_worker_data_pipeline_readiness_report(
+    repository: &PostgresScoringRepository,
+    input: SaveWorkerDataPipelineReadinessReportInput,
+) -> anyhow::Result<WorkerDataPipelineReadinessReportRecord> {
+    sqlx::query(
+        "INSERT INTO worker_data_pipeline_readiness_reports
+             (customer_scope_id, source_report_uri, report_kind, plan_uri, readiness_input_uri,
+              readiness_status, job_count, ready_job_count, blocked_job_count, review_task_count,
+              job_readiness_json, review_tasks_json, evidence_refs, governance_boundary,
+              submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+             ON CONFLICT (customer_scope_id, source_report_uri) DO UPDATE
+             SET report_kind = EXCLUDED.report_kind,
+                 plan_uri = EXCLUDED.plan_uri,
+                 readiness_input_uri = EXCLUDED.readiness_input_uri,
+                 readiness_status = EXCLUDED.readiness_status,
+                 job_count = EXCLUDED.job_count,
+                 ready_job_count = EXCLUDED.ready_job_count,
+                 blocked_job_count = EXCLUDED.blocked_job_count,
+                 review_task_count = EXCLUDED.review_task_count,
+                 job_readiness_json = EXCLUDED.job_readiness_json,
+                 review_tasks_json = EXCLUDED.review_tasks_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes,
+                 updated_at = now()",
+    )
+    .bind(&input.customer_scope_id)
+    .bind(&input.source_report_uri)
+    .bind(&input.report_kind)
+    .bind(&input.plan_uri)
+    .bind(&input.readiness_input_uri)
+    .bind(&input.readiness_status)
+    .bind(input.job_count as i64)
+    .bind(input.ready_job_count as i64)
+    .bind(input.blocked_job_count as i64)
+    .bind(input.review_task_count as i64)
+    .bind(&input.job_readiness_json)
+    .bind(&input.review_tasks_json)
+    .bind(serde_json::json!(input.evidence_refs.clone()))
+    .bind(&input.governance_boundary)
+    .bind(&input.submitted_by)
+    .bind(&input.notes)
+    .execute(&repository.pool)
+    .await?;
+    Ok(WorkerDataPipelineReadinessReportRecord {
+        customer_scope_id: input.customer_scope_id,
+        source_report_uri: input.source_report_uri,
+        report_kind: input.report_kind,
+        plan_uri: input.plan_uri,
+        readiness_input_uri: input.readiness_input_uri,
+        readiness_status: input.readiness_status,
+        job_count: input.job_count,
+        ready_job_count: input.ready_job_count,
+        blocked_job_count: input.blocked_job_count,
+        review_task_count: input.review_task_count,
+        job_readiness_json: input.job_readiness_json,
+        review_tasks_json: input.review_tasks_json,
+        evidence_refs: input.evidence_refs,
+        governance_boundary: input.governance_boundary,
+        submitted_by: input.submitted_by,
+        notes: input.notes,
+    })
+}
+
+pub(super) async fn save_worker_data_pipeline_execution_report(
+    repository: &PostgresScoringRepository,
+    input: SaveWorkerDataPipelineExecutionReportInput,
+) -> anyhow::Result<WorkerDataPipelineExecutionReportRecord> {
+    sqlx::query(
+        "INSERT INTO worker_data_pipeline_execution_reports
+             (customer_scope_id, source_report_uri, report_kind, plan_uri, run_status_uri,
+              readiness_report_uri, readiness_gate_status, run_id, execution_date, job_count,
+              pending_or_failed_job_count, review_task_count, job_executions_json,
+              review_tasks_json, evidence_refs, governance_boundary, submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+             ON CONFLICT (customer_scope_id, source_report_uri) DO UPDATE
+             SET report_kind = EXCLUDED.report_kind,
+                 plan_uri = EXCLUDED.plan_uri,
+                 run_status_uri = EXCLUDED.run_status_uri,
+                 readiness_report_uri = EXCLUDED.readiness_report_uri,
+                 readiness_gate_status = EXCLUDED.readiness_gate_status,
+                 run_id = EXCLUDED.run_id,
+                 execution_date = EXCLUDED.execution_date,
+                 job_count = EXCLUDED.job_count,
+                 pending_or_failed_job_count = EXCLUDED.pending_or_failed_job_count,
+                 review_task_count = EXCLUDED.review_task_count,
+                 job_executions_json = EXCLUDED.job_executions_json,
+                 review_tasks_json = EXCLUDED.review_tasks_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes,
+                 updated_at = now()",
+    )
+    .bind(&input.customer_scope_id)
+    .bind(&input.source_report_uri)
+    .bind(&input.report_kind)
+    .bind(&input.plan_uri)
+    .bind(&input.run_status_uri)
+    .bind(&input.readiness_report_uri)
+    .bind(&input.readiness_gate_status)
+    .bind(&input.run_id)
+    .bind(&input.execution_date)
+    .bind(input.job_count as i64)
+    .bind(input.pending_or_failed_job_count as i64)
+    .bind(input.review_task_count as i64)
+    .bind(&input.job_executions_json)
+    .bind(&input.review_tasks_json)
+    .bind(serde_json::json!(input.evidence_refs.clone()))
+    .bind(&input.governance_boundary)
+    .bind(&input.submitted_by)
+    .bind(&input.notes)
+    .execute(&repository.pool)
+    .await?;
+    Ok(WorkerDataPipelineExecutionReportRecord {
+        customer_scope_id: input.customer_scope_id,
+        source_report_uri: input.source_report_uri,
+        report_kind: input.report_kind,
+        plan_uri: input.plan_uri,
+        run_status_uri: input.run_status_uri,
+        readiness_report_uri: input.readiness_report_uri,
+        readiness_gate_status: input.readiness_gate_status,
+        run_id: input.run_id,
+        execution_date: input.execution_date,
+        job_count: input.job_count,
+        pending_or_failed_job_count: input.pending_or_failed_job_count,
+        review_task_count: input.review_task_count,
+        job_executions_json: input.job_executions_json,
+        review_tasks_json: input.review_tasks_json,
+        evidence_refs: input.evidence_refs,
+        governance_boundary: input.governance_boundary,
+        submitted_by: input.submitted_by,
+        notes: input.notes,
+    })
+}

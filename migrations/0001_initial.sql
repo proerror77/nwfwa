@@ -826,6 +826,60 @@ CREATE TABLE IF NOT EXISTS scoring_feature_context_materializations (
 CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_scope_date_idx
   ON scoring_feature_context_materializations(customer_scope_id, as_of_date);
 
+CREATE TABLE IF NOT EXISTS worker_data_pipeline_readiness_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  plan_uri TEXT NOT NULL,
+  readiness_input_uri TEXT NOT NULL,
+  readiness_status TEXT NOT NULL,
+  job_count BIGINT NOT NULL,
+  ready_job_count BIGINT NOT NULL,
+  blocked_job_count BIGINT NOT NULL,
+  review_task_count BIGINT NOT NULL,
+  job_readiness_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  review_tasks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, source_report_uri)
+);
+
+CREATE INDEX IF NOT EXISTS worker_data_pipeline_readiness_reports_scope_status_idx
+  ON worker_data_pipeline_readiness_reports(customer_scope_id, readiness_status);
+
+CREATE TABLE IF NOT EXISTS worker_data_pipeline_execution_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  plan_uri TEXT NOT NULL,
+  run_status_uri TEXT NOT NULL,
+  readiness_report_uri TEXT,
+  readiness_gate_status TEXT,
+  run_id TEXT NOT NULL,
+  execution_date TEXT NOT NULL,
+  job_count BIGINT NOT NULL,
+  pending_or_failed_job_count BIGINT NOT NULL,
+  review_task_count BIGINT NOT NULL,
+  job_executions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  review_tasks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, source_report_uri)
+);
+
+CREATE INDEX IF NOT EXISTS worker_data_pipeline_execution_reports_scope_run_idx
+  ON worker_data_pipeline_execution_reports(customer_scope_id, run_id);
+
 CREATE TABLE IF NOT EXISTS clinical_compatibility_references (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   customer_scope_id TEXT NOT NULL,

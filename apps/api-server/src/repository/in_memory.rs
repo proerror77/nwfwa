@@ -47,6 +47,10 @@ pub struct InMemoryScoringRepository {
         Mutex<HashMap<String, ScoringFeatureContextMaterializationRecord>>,
     clinical_compatibility_references: Mutex<HashMap<String, ClinicalCompatibilityReferenceRecord>>,
     unbundling_comparator_candidates: Mutex<HashMap<String, UnbundlingComparatorCandidateRecord>>,
+    worker_data_pipeline_readiness_reports:
+        Mutex<HashMap<String, WorkerDataPipelineReadinessReportRecord>>,
+    worker_data_pipeline_execution_reports:
+        Mutex<HashMap<String, WorkerDataPipelineExecutionReportRecord>>,
     model_versions: Mutex<HashMap<String, ModelVersionRecord>>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
