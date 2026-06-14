@@ -86,6 +86,14 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "governance_boundary_no_adjudication",
 }
 
+RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_retention_legal_hold_report",
+    "minimum_six_year_retention_configured",
+    "policy_and_archive_refs_present",
+    "legal_hold_reconciliation_completed",
+    "destruction_requires_human_approval",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -155,6 +163,26 @@ def validate_contract(contract: dict) -> list[dict]:
                 require(
                     check.get("description"),
                     f"worker data pipeline acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "retention_legal_hold":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "retention legal hold gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECK_IDS,
+                "retention legal hold gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"retention legal hold acceptance check {check.get('check_id')} missing description",
                 )
     return gates
 
@@ -293,6 +321,49 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         )
 
 
+def validate_retention_legal_hold_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "retention_legal_hold_report",
+        "retention legal-hold evidence has wrong artifact_kind",
+    )
+    require(
+        isinstance(report.get("retention_years"), int)
+        and report["retention_years"] >= 6,
+        "retention legal-hold evidence must configure at least six retention years",
+    )
+    for field_name in (
+        "retention_policy_id",
+        "legal_hold_policy_id",
+        "archive_storage_uri",
+    ):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"retention legal-hold evidence must include {field_name}",
+        )
+    require(
+        report.get("legal_hold_reconciliation_status") == "completed",
+        "retention legal-hold evidence must have completed legal-hold reconciliation",
+    )
+    require(
+        report.get("destruction_workflow") == "human_approval_required_before_destroy",
+        "retention legal-hold evidence must require human approval before destruction",
+    )
+    require(
+        report.get("automated_destruction_enabled") is False,
+        "retention legal-hold evidence must keep automated destruction disabled",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "retention legal-hold evidence must include evidence_refs",
+    )
+    for prefix in ("retention_policy:", "legal_hold_policy:"):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"retention legal-hold evidence_refs missing {prefix}",
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract-dir", default="artifacts/production-readiness")
@@ -309,6 +380,9 @@ def main() -> int:
     if args.evidence_dir:
         evidence_dir = Path(args.evidence_dir)
         artifacts = validate_evidence_dir(evidence_dir, gates)
+        validate_retention_legal_hold_evidence(
+            artifacts["retention_legal_hold_report.json"]
+        )
         validate_worker_data_pipeline_execution_evidence(
             artifacts["worker_data_pipeline_execution_report.json"]
         )

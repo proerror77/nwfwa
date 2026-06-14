@@ -186,6 +186,10 @@ As of the P1/P2 remediation commits after this review:
 - The worker now has an audit-retention dry-run scan contract that computes
   six-year cutoff candidates, legal-hold blocks, and destruction-review
   artifacts without deleting records.
+- The production readiness validator now deep-checks retention/legal-hold
+  evidence for six-year retention, policy ids, archive storage, completed
+  legal-hold reconciliation, human destruction approval, and disabled
+  automated destruction.
 - The worker now has a probability-calibration evidence report that computes
   ECE and Brier score from labeled holdout predictions and opens calibration
   review tasks when raw probabilities are miscalibrated or sample size is
@@ -302,7 +306,7 @@ validator can execute those checks when given the customer evidence directory.
 | E-2 | Canonical claim context and evidence responses now apply field-path PHI/PII masking at API response boundaries. | Confirm customer-specific raw payload adapters and PII field policies. |
 | E-3 | Routing policy lifecycle writes now require fine-grained permissions aligned with rule lifecycle governance. | Validate production role assignments and approval workflow. |
 | E-4 | Known PHI/PII fields are masked by field path instead of relying only on value-pattern detection. | Extend field-path maps for each customer payload schema. |
-| E-5 | Audit retention now has a dry-run scan contract; deletion/archive execution is still not performed locally. | Add customer-environment partitioning, cold archive, legal-hold reconciliation, and approved destruction execution. |
+| E-5 | Audit retention now has a dry-run scan contract, and production readiness validation deep-checks customer retention/legal-hold evidence; deletion/archive execution is still not performed locally. | Add customer-environment partitioning, cold archive, legal-hold reconciliation, and approved destruction execution. |
 
 ## F. Worker Data Pipeline Gaps
 

@@ -86,6 +86,29 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     },
 ]
 
+RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECKS = [
+    {
+        "check_id": "report_kind_is_retention_legal_hold_report",
+        "description": "Retention evidence artifact has artifact_kind = retention_legal_hold_report.",
+    },
+    {
+        "check_id": "minimum_six_year_retention_configured",
+        "description": "Retention evidence shows retention_years >= 6.",
+    },
+    {
+        "check_id": "policy_and_archive_refs_present",
+        "description": "Retention evidence includes retention policy id, legal-hold policy id, archive storage URI, and policy evidence refs.",
+    },
+    {
+        "check_id": "legal_hold_reconciliation_completed",
+        "description": "Legal-hold reconciliation status is completed before production readiness is claimed.",
+    },
+    {
+        "check_id": "destruction_requires_human_approval",
+        "description": "Destruction workflow requires human approval and automated destruction is disabled.",
+    },
+]
+
 REQUIRED_EVIDENCE = [
     {
         "gate_id": "production_deployment_apply",
@@ -126,6 +149,7 @@ REQUIRED_EVIDENCE = [
         "gate_id": "retention_legal_hold",
         "required_artifact": "retention_legal_hold_report.json",
         "description": "Retention windows, legal holds, masking, and human-approved destruction workflow were configured.",
+        "acceptance_checks": RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECKS,
     },
     {
         "gate_id": "customer_data_governance",

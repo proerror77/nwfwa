@@ -759,6 +759,10 @@ is attached for deployment apply, smoke, observability, secrets/access,
 backup/restore, rollback, alert delivery, retention/legal hold, customer data
 governance, worker data-pipeline scheduler execution, model serving SLO, and
 OCR/vector/analytics execution.
+The retention/legal-hold gate requires `retention_legal_hold_report.json` to
+show at least six retention years, explicit retention and legal-hold policy ids,
+archive storage, completed legal-hold reconciliation, human approval before
+destruction, automated destruction disabled, and policy evidence refs.
 The worker data-pipeline gate requires the customer
 `worker_data_pipeline_execution_report.json` to pass the contract acceptance
 checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
