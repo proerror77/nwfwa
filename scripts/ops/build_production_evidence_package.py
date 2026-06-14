@@ -554,6 +554,103 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                 "output": "worker/worker_data_pipeline_readiness_report.json",
             },
             {
+                "step": "fetch_oig_sam_sanctions_snapshot",
+                "command": (
+                    "cargo run --locked -p worker -- fetch-oig-sam-sanctions-snapshot "
+                    "--oig-url <customer-approved-oig-compatible-json-url> "
+                    "--sam-url <customer-approved-sam-compatible-json-url> "
+                    "--source-date <yyyy-mm-dd> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/oig_sam_sanctions_snapshot.json",
+            },
+            {
+                "step": "sync_oig_sam_sanctions",
+                "command": (
+                    "cargo run --locked -p worker -- sync-oig-sam-sanctions "
+                    "--source-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/oig_sam_sanctions_snapshot.json "
+                    "--run-date <as-of-date> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/sanctions_sync_report.json",
+            },
+            {
+                "step": "build_provider_profile_windows",
+                "command": (
+                    "cargo run --locked -p worker -- build-provider-profile-windows "
+                    "--claims-uri <customer-approved-provider-profile-claims-snapshot-uri> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json",
+            },
+            {
+                "step": "build_provider_graph_signals",
+                "command": (
+                    "cargo run --locked -p worker -- build-provider-graph-signals "
+                    "--graph-uri <customer-approved-provider-graph-snapshot-uri> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-graph/<as-of-date>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-graph/<as-of-date>/provider_graph_signal_rollup_report.json",
+            },
+            {
+                "step": "build_peer_benchmarks",
+                "command": (
+                    "cargo run --locked -p worker -- build-peer-benchmarks "
+                    "--claims-uri <customer-approved-peer-benchmark-claims-snapshot-uri> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json",
+            },
+            {
+                "step": "build_episode_aggregation",
+                "command": (
+                    "cargo run --locked -p worker -- build-episode-aggregation "
+                    "--claims-uri <customer-approved-episode-claims-snapshot-uri> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json",
+            },
+            {
+                "step": "build_clinical_compatibility_reference",
+                "command": (
+                    "cargo run --locked -p worker -- build-clinical-compatibility-reference "
+                    "--reference-uri <customer-approved-clinical-compatibility-reference-uri> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json",
+            },
+            {
+                "step": "build_unbundling_comparator",
+                "command": (
+                    "cargo run --locked -p worker -- build-unbundling-comparator "
+                    "--input-uri <customer-approved-unbundling-comparator-input-uri> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json",
+            },
+            {
+                "step": "build_scoring_feature_contexts",
+                "command": (
+                    "cargo run --locked -p worker -- build-scoring-feature-contexts "
+                    "--claims-uri <customer-approved-scoring-context-claims-snapshot-uri> "
+                    "--episode-rollups-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_rollups.json "
+                    "--peer-benchmarks-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_benchmarks.json "
+                    "--clinical-compatibility-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_references.json "
+                    "--unbundling-candidates-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_candidates.json "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json",
+            },
+            {
+                "step": "build_probability_calibration_report",
+                "command": (
+                    "cargo run --locked -p worker -- build-probability-calibration-report "
+                    "--source-uri <customer-labeled-holdout-predictions-uri> "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json",
+            },
+            {
                 "step": "submit_readiness_report",
                 "command": (
                     "cargo run --locked -p worker -- submit-worker-data-pipeline-readiness-report "

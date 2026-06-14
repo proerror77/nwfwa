@@ -108,6 +108,18 @@ REQUIRED_RUNBOOK_STEPS = {
         "evidence/scoring_readback_report.json",
     ),
 }
+REQUIRED_RUNBOOK_ARTIFACT_BUILD_COMMANDS = {
+    "fetch-oig-sam-sanctions-snapshot",
+    "sync-oig-sam-sanctions",
+    "build-provider-profile-windows",
+    "build-provider-graph-signals",
+    "build-peer-benchmarks",
+    "build-episode-aggregation",
+    "build-clinical-compatibility-reference",
+    "build-unbundling-comparator",
+    "build-scoring-feature-contexts",
+    "build-probability-calibration-report",
+}
 REQUIRED_RUNBOOK_SUBMIT_COMMANDS = {
     "submit-worker-data-pipeline-readiness-report",
     "submit-sanctions-sync-report",
@@ -619,6 +631,11 @@ def validate_runbook(package_dir: Path) -> None:
     )
     for path in REQUIRED_RUNBOOK_COMMAND_PATHS:
         require(path in command_text, f"runbook command paths missing {path}")
+    for build_command in REQUIRED_RUNBOOK_ARTIFACT_BUILD_COMMANDS:
+        require(
+            build_command in command_text,
+            f"runbook artifact build commands missing {build_command}",
+        )
     for submit_command in REQUIRED_RUNBOOK_SUBMIT_COMMANDS:
         require(
             submit_command in command_text,
