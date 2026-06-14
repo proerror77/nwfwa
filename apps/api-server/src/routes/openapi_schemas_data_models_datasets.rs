@@ -443,6 +443,7 @@ pub(super) fn dataset_schemas() -> Value {
                                 "enum": [
                                     "completed",
                                     "artifact_pending_submission",
+                                    "artifact_missing_evidence",
                                     "failed",
                                     "scheduled_pending_customer_execution",
                                     "dependency_not_completed"

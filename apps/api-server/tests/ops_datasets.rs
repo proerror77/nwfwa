@@ -606,6 +606,30 @@ async fn worker_data_pipeline_execution_report_requires_dependency_blocker_detai
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_accepts_missing_evidence_review_status() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["execution_status"] =
+        serde_json::json!("artifact_missing_evidence");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"][1]["execution_status"],
+        "artifact_missing_evidence"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_rejects_blank_required_permission() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =

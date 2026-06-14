@@ -779,6 +779,7 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             execution_status,
             "completed"
                 | "artifact_pending_submission"
+                | "artifact_missing_evidence"
                 | "failed"
                 | "scheduled_pending_customer_execution"
                 | "dependency_not_completed"
@@ -786,7 +787,7 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             return Err(ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS",
-                "execution_status must be completed, artifact_pending_submission, failed, scheduled_pending_customer_execution, or dependency_not_completed",
+                "execution_status must be completed, artifact_pending_submission, artifact_missing_evidence, failed, scheduled_pending_customer_execution, or dependency_not_completed",
             ));
         }
         if execution_status != "completed" {

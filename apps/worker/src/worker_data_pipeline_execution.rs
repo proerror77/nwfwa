@@ -354,6 +354,9 @@ fn base_execution_status(
     if json_string(reported, "status").as_deref() == Some("failed") {
         "failed"
     } else if json_string(reported, "status").as_deref() == Some("succeeded") {
+        if !has_reported_artifact_uri(reported) || !has_evidence_refs(reported) {
+            return "artifact_missing_evidence";
+        }
         if json_string(job, "submit_command").is_some() {
             if reported
                 .get("submitted")
@@ -364,14 +367,28 @@ fn base_execution_status(
             } else {
                 "artifact_pending_submission"
             }
-        } else if json_string(reported, "artifact_uri")
-            .is_some_and(|value| !value.trim().is_empty())
-        {
-            "completed"
         } else {
-            "artifact_pending_submission"
+            "completed"
         }
     } else {
         "artifact_pending_submission"
     }
+}
+
+fn has_reported_artifact_uri(reported: &serde_json::Value) -> bool {
+    json_string(reported, "artifact_uri").is_some_and(|value| !value.trim().is_empty())
+}
+
+fn has_evidence_refs(reported: &serde_json::Value) -> bool {
+    reported
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .is_some_and(|references| {
+            !references.is_empty()
+                && references.iter().all(|reference| {
+                    reference
+                        .as_str()
+                        .is_some_and(|value| !value.trim().is_empty())
+                })
+        })
 }
