@@ -14,6 +14,36 @@ const SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES: &[&str] = &[
     "unbundling_candidates:",
 ];
 
+const PROBABILITY_CALIBRATION_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "probability_calibration_reports:",
+    "probability_calibration_input:",
+    "calibration_labels:",
+];
+
+fn required_worker_data_pipeline_prefixes(job_kind: &str) -> Option<&'static [&'static str]> {
+    match job_kind {
+        "scoring_online_readback" => Some(SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES),
+        "probability_calibration_evidence" => {
+            Some(PROBABILITY_CALIBRATION_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        _ => None,
+    }
+}
+
+fn missing_required_worker_data_pipeline_prefix(
+    job_kind: &str,
+    required_evidence_prefixes: &[&str],
+) -> Option<&'static str> {
+    required_worker_data_pipeline_prefixes(job_kind)?
+        .iter()
+        .copied()
+        .find(|required_prefix| {
+            !required_evidence_prefixes
+                .iter()
+                .any(|prefix| *prefix == *required_prefix)
+        })
+}
+
 fn validate_required_evidence_ref(
     evidence_refs: &[String],
     expected_ref: &str,
@@ -1082,23 +1112,14 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "required_evidence_prefixes must contain no blank values",
                 ));
             }
-            if job_kind == "scoring_online_readback" {
-                if let Some(required_prefix) = SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES
-                    .iter()
-                    .find(|required_prefix| {
-                        !required_evidence_prefixes
-                            .iter()
-                            .any(|prefix| prefix == *required_prefix)
-                    })
-                {
-                    return Err(ApiError::new(
-                        StatusCode::BAD_REQUEST,
-                        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
-                        format!(
-                            "scoring_online_readback required_evidence_prefixes must include {required_prefix}"
-                        ),
-                    ));
-                }
+            if let Some(required_prefix) =
+                missing_required_worker_data_pipeline_prefix(job_kind, &required_evidence_prefixes)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    format!("{job_kind} required_evidence_prefixes must include {required_prefix}"),
+                ));
             }
             let missing_required_evidence_prefix =
                 required_evidence_prefixes.iter().find(|prefix| {
@@ -1525,23 +1546,17 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         "ready job readiness records require non-empty required_evidence_prefixes",
                     ));
                 }
-                if job_kind == "scoring_online_readback" {
-                    if let Some(required_prefix) = SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES
-                        .iter()
-                        .find(|required_prefix| {
-                            !required_evidence_prefixes
-                                .iter()
-                                .any(|prefix| prefix == *required_prefix)
-                        })
-                    {
-                        return Err(ApiError::new(
-                            StatusCode::BAD_REQUEST,
-                            "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
-                            format!(
-                                "scoring_online_readback required_evidence_prefixes must include {required_prefix}"
-                            ),
-                        ));
-                    }
+                if let Some(required_prefix) = missing_required_worker_data_pipeline_prefix(
+                    job_kind,
+                    &required_evidence_prefixes,
+                ) {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        format!(
+                            "{job_kind} required_evidence_prefixes must include {required_prefix}"
+                        ),
+                    ));
                 }
                 let missing_required_evidence_prefix =
                     required_evidence_prefixes.iter().find(|prefix| {
