@@ -172,6 +172,34 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             ["report_kind"]["const"],
         "scoring_feature_context_materialization"
     );
+    let readiness_job_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineReadinessReportSubmissionRequest"]["properties"]["job_readiness"]
+        ["items"]["properties"];
+    assert_eq!(
+        readiness_job_properties["required_evidence_prefixes"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        readiness_job_properties["required_evidence_prefixes"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("per-job customer evidence_refs"),
+        "missing readiness required_evidence_prefixes description"
+    );
+    let execution_job_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineExecutionReportSubmissionRequest"]["properties"]["job_executions"]
+        ["items"]["properties"];
+    assert_eq!(
+        execution_job_properties["required_evidence_prefixes"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        execution_job_properties["required_evidence_prefixes"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("scheduler-provided evidence_refs"),
+        "missing execution required_evidence_prefixes description"
+    );
     assert_eq!(
         schema["paths"]["/api/v1/ops/clinical-compatibility-references"]["post"]["requestBody"]
             ["content"]["application/json"]["schema"]["$ref"],

@@ -491,6 +491,11 @@ pub(super) fn dataset_schemas() -> Value {
                                 "items": { "type": "string", "minLength": 1 },
                                 "description": "Required and non-empty when execution_status is completed; references the source evidence proving the job artifact was produced."
                             },
+                            "required_evidence_prefixes": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Worker-plan prefixes that scheduler-provided evidence_refs must satisfy for this job, including scoring context source lineage prefixes when applicable."
+                            },
                             "required_permission": {
                                 "type": ["string", "null"],
                                 "enum": [
@@ -622,6 +627,11 @@ pub(super) fn dataset_schemas() -> Value {
                                 "type": "array",
                                 "items": { "type": "string", "minLength": 1 },
                                 "description": "Per-job customer evidence refs for artifact freshness, approval, coverage window, and quality; required and non-empty for ready jobs."
+                            },
+                            "required_evidence_prefixes": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Worker-plan prefixes that per-job customer evidence_refs must satisfy before this job can be considered ready."
                             },
                             "blockers": {
                                 "type": "array",
