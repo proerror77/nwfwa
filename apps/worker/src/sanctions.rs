@@ -79,6 +79,53 @@ pub struct SanctionsSyncReportSubmission {
     pub governance_boundary: String,
 }
 
+pub async fn fetch_oig_sam_sanctions_snapshot(
+    oig_url: Option<&str>,
+    sam_url: Option<&str>,
+    output_dir: impl AsRef<Path>,
+    source_date: Option<&str>,
+) -> anyhow::Result<SanctionsSourceSnapshot> {
+    if oig_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+        && sam_url
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_none()
+    {
+        bail!("at least one of oig_url or sam_url is required");
+    }
+
+    let client = reqwest::Client::new();
+    let mut records = Vec::new();
+    if let Some(url) = oig_url.map(str::trim).filter(|value| !value.is_empty()) {
+        records.extend(fetch_sanctions_records(&client, url, "OIG").await?);
+    }
+    if let Some(url) = sam_url.map(str::trim).filter(|value| !value.is_empty()) {
+        records.extend(fetch_sanctions_records(&client, url, "SAM").await?);
+    }
+
+    let snapshot = SanctionsSourceSnapshot {
+        source_date: source_date
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        records,
+    };
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create sanctions snapshot output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir.as_ref().join("oig_sam_sanctions_snapshot.json"),
+        &snapshot,
+    )?;
+    Ok(snapshot)
+}
+
 pub fn build_sanctions_sync_report(
     source_uri: &str,
     output_dir: impl AsRef<Path>,
@@ -229,6 +276,62 @@ pub async fn submit_sanctions_sync_report(
         .json::<serde_json::Value>()
         .await
         .context("parse sanctions sync report response")
+}
+
+async fn fetch_sanctions_records(
+    client: &reqwest::Client,
+    url: &str,
+    default_list: &str,
+) -> anyhow::Result<Vec<SanctionsSourceRecord>> {
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("fetch sanctions snapshot {url}"))?;
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .with_context(|| format!("read sanctions snapshot {url}"))?;
+    if !status.is_success() {
+        bail!("fetch sanctions snapshot {url} failed with {status}: {body}");
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(&body).with_context(|| format!("parse sanctions snapshot {url}"))?;
+    let mut records = sanctions_records_from_value(value, default_list)
+        .with_context(|| format!("parse sanctions records from {url}"))?;
+    for record in &mut records {
+        if record.list.trim().is_empty() {
+            record.list = default_list.into();
+        }
+    }
+    Ok(records)
+}
+
+fn sanctions_records_from_value(
+    value: serde_json::Value,
+    default_list: &str,
+) -> anyhow::Result<Vec<SanctionsSourceRecord>> {
+    if value.is_array() {
+        let mut records: Vec<SanctionsSourceRecord> = serde_json::from_value(value)?;
+        for record in &mut records {
+            if record.list.trim().is_empty() {
+                record.list = default_list.into();
+            }
+        }
+        return Ok(records);
+    }
+    let snapshot: SanctionsSourceSnapshot = serde_json::from_value(value)?;
+    Ok(snapshot
+        .records
+        .into_iter()
+        .map(|mut record| {
+            if record.list.trim().is_empty() {
+                record.list = default_list.into();
+            }
+            record
+        })
+        .collect())
 }
 
 fn sanctions_record_validation_error(record: &SanctionsSourceRecord) -> Option<String> {

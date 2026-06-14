@@ -105,6 +105,10 @@ As of the P1/P2 remediation commits after this review:
   sanctions sync report submit path and worker command that persist provider
   sanctions from an approved report while explicitly avoiding scoring-policy
   changes, fraud-label assignment, or claim adjudication.
+- The worker now also has a configured-endpoint OIG/SAM-compatible snapshot
+  fetcher that writes the governed sanctions snapshot artifact used by the
+  existing dry-run/report/submit path. Official feed configuration,
+  credentials, and customer scheduler execution remain external.
 - Claims scoring can now load persisted provider sanctions by provider and
   merge OIG/SAM hits into the provider profile input, including sanctions-only
   provider review when no inline `provider_profile` payload is supplied.
@@ -203,8 +207,9 @@ As of the P1/P2 remediation commits after this review:
   denial, model activation, or routing-policy changes.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
-execution, live external OIG/SAM fetch, customer claim/history data, LLM-backed
-specialist execution, real external tool-call runtime mediation, wiring long-
+execution, official OIG/SAM feed configuration and credentials, customer
+claim/history data, LLM-backed specialist execution, real external tool-call
+runtime mediation, wiring long-
 running/tool-using agents into the cancellation signal, customer-approved
 ICD-10/CPT or medical-policy reference data, customer-approved unbundling rule
 packs, customer-approved feature lineage/source mappings, calibrated-
@@ -271,7 +276,7 @@ validation on customer data.
 
 | Pipeline | Current gap | Priority |
 | --- | --- | --- |
-| OIG/SAM daily sanctions sync | Local worker contract, submit/write path, and claim-time sanctions consumption exist; live external fetch and scheduling remain. | P1 |
+| OIG/SAM daily sanctions sync | Configured-endpoint snapshot fetcher, local worker contract, submit/write path, and claim-time sanctions consumption exist; official feed configuration and scheduling remain. | P1 |
 | Provider profile windows | Local 30/90/365 worker rollup, submit/write path, and claim-time persisted profile consumption exist; customer claim-history validation remains. | P1 |
 | Billing ring detection | Local graph-signal rollup and persisted consumption exist; production validation against customer claim/referral history remains. | P2 |
 | Temporal co-billing | Local graph-signal rollup and persisted consumption exist; production validation against dated customer claim history remains. | P2 |
@@ -306,11 +311,11 @@ episode, suspicious beneficiary identity, and organized provider/member rings.
 
 - Implemented locally: provider graph signal fields/rollups, missing-data-aware
   scoring, broader confidence scoring, provider-profile windows, sanctions
-  sync contract/write path, PSI actioning, rule hit-rate trending, and
-  field-path PHI/PII response masking.
-- Remaining: live external OIG/SAM fetch, customer scheduler execution,
-  customer claim-history validation, production role assignments, and live
-  routing-impact evidence.
+  snapshot fetcher plus sync contract/write path, PSI actioning, rule hit-rate
+  trending, and field-path PHI/PII response masking.
+- Remaining: official OIG/SAM feed configuration and credentials, customer
+  scheduler execution, customer claim-history validation, production role
+  assignments, and live routing-impact evidence.
 
 ### P2 - Next Quarter Foundation Work
 

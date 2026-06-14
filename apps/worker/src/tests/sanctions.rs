@@ -1,5 +1,75 @@
 use super::*;
 
+#[tokio::test]
+async fn fetches_oig_sam_sanctions_snapshot_from_configured_endpoints() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("sanctions-fetch-snapshot");
+    let output_dir = root.join("out");
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let mut requests = Vec::new();
+        for _ in 0..2 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut socket).await;
+            let body = if request.starts_with("GET /oig HTTP/1.1") {
+                serde_json::json!({
+                    "source_date": "2026-06-15",
+                    "records": [
+                        {
+                            "list": "",
+                            "provider_id": "PRV-OIG-1",
+                            "npi": null,
+                            "provider_name": "OIG Excluded Clinic",
+                            "sanction_type": "exclusion",
+                            "effective_date": "2026-06-01",
+                            "source_ref": "oig:PRV-OIG-1"
+                        }
+                    ]
+                })
+            } else {
+                serde_json::json!([
+                    {
+                        "list": "",
+                        "provider_id": "PRV-SAM-1",
+                        "npi": "2234567890",
+                        "provider_name": "SAM Debarred Clinic",
+                        "sanction_type": "debarment",
+                        "effective_date": "2026-06-02",
+                        "source_ref": "sam:PRV-SAM-1"
+                    }
+                ])
+            };
+            write_json_response(&mut socket, body).await;
+            requests.push(request);
+        }
+        requests
+    });
+
+    let snapshot = fetch_oig_sam_sanctions_snapshot(
+        Some(&format!("{base_url}/oig")),
+        Some(&format!("{base_url}/sam")),
+        &output_dir,
+        Some("2026-06-15"),
+    )
+    .await
+    .expect("sanctions snapshot fetch");
+    let requests = server.await.unwrap();
+
+    assert_eq!(snapshot.source_date.as_deref(), Some("2026-06-15"));
+    assert_eq!(snapshot.records.len(), 2);
+    assert_eq!(snapshot.records[0].list, "OIG");
+    assert_eq!(snapshot.records[1].list, "SAM");
+    assert!(requests
+        .iter()
+        .any(|request| request.starts_with("GET /oig HTTP/1.1")));
+    assert!(requests
+        .iter()
+        .any(|request| request.starts_with("GET /sam HTTP/1.1")));
+    assert!(output_dir.join("oig_sam_sanctions_snapshot.json").exists());
+}
+
 #[test]
 fn builds_sanctions_sync_dry_run_contract() {
     let root = temp_root("sanctions-sync");
