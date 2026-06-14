@@ -452,6 +452,14 @@ impl DatasetsRepository for InMemoryScoringRepository {
         )
         .await
     }
+
+    async fn save_clinical_compatibility_references(
+        &self,
+        input: SaveClinicalCompatibilityReferencesInput,
+    ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
+        self.in_memory_save_clinical_compatibility_references(input)
+            .await
+    }
 }
 
 // ---------------------------------------------------------------------------

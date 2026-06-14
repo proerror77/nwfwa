@@ -826,6 +826,31 @@ CREATE TABLE IF NOT EXISTS scoring_feature_context_materializations (
 CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_scope_date_idx
   ON scoring_feature_context_materializations(customer_scope_id, as_of_date);
 
+CREATE TABLE IF NOT EXISTS clinical_compatibility_references (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  compatibility_key TEXT NOT NULL,
+  reference_version TEXT NOT NULL,
+  effective_date TEXT NOT NULL,
+  source_authority TEXT NOT NULL,
+  diagnosis_code_prefix TEXT NOT NULL,
+  procedure_code TEXT NOT NULL,
+  diagnosis_procedure_match_score DOUBLE PRECISION NOT NULL,
+  data_source TEXT NOT NULL,
+  policy_authority_ref TEXT NOT NULL,
+  rationale TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, compatibility_key, reference_version)
+);
+
+CREATE INDEX IF NOT EXISTS clinical_compatibility_references_scope_codes_idx
+  ON clinical_compatibility_references(customer_scope_id, diagnosis_code_prefix, procedure_code);
+
 CREATE TABLE IF NOT EXISTS provider_sanctions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   customer_scope_id TEXT NOT NULL,

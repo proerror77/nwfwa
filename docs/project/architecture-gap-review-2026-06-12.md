@@ -68,6 +68,10 @@ As of the P1/P2 remediation commits after this review:
   validates ICD/CPT-style compatibility rows with policy authority refs and
   evidence refs, then emits records suitable for the clinical compatibility
   feature input path.
+- The clinical compatibility reference report now has a permission-gated submit
+  path and worker command that persist customer policy reference rows while
+  explicitly avoiding claim scoring, fraud-label assignment, claim denial, or
+  replacement of medical review.
 - The worker now has an unbundling comparator contract that joins governed
   bundled/component code rules with episode procedure-code snapshots and emits
   medical-review candidates without assigning fraud labels.
@@ -133,8 +137,8 @@ As of the P1/P2 remediation commits after this review:
   insufficient.
 
 Remaining boundaries after those commits are production scheduling, DB write
-paths for clinical-compatibility and unbundling comparator artifacts outside
-the scoring-context materialization, live external OIG/SAM fetch, customer
+paths for unbundling comparator artifacts outside the scoring-context
+materialization, live external OIG/SAM fetch, customer
 claim/history data, LLM-backed specialist execution, real external tool-call
 runtime mediation, wiring long-running/tool-using agents into the cancellation
 signal, customer-approved ICD-10/CPT or medical-policy reference data,
@@ -151,13 +155,13 @@ and live routing-impact validation on customer data.
 | ID | Gap | Required planning response |
 | --- | --- | --- |
 | A-1 | L1 peer percentile fallback can be confused with a real peer percentile when real peer data is absent. | Mark proxy/baseline paths explicitly and reduce or exclude L1 weight when only proxy data is available. |
-| A-2 | `diagnosis_procedure_match_score` has a real clinical compatibility input path and worker reference contract, but the default remains a hard-coded heuristic fallback until governed reference data is supplied. | Populate `ClinicalCompatibilityFeatureContext` from customer-approved ICD-10/CPT compatibility or medical-policy reference data before using this layer as production clinical consistency. |
+| A-2 | `diagnosis_procedure_match_score` has a real clinical compatibility input path, worker reference contract, and permission-gated clinical reference submit/write path, but the default remains a hard-coded heuristic fallback until governed reference data is supplied to scoring. | Populate `ClinicalCompatibilityFeatureContext` from customer-approved ICD-10/CPT compatibility or medical-policy reference data before using this layer as production clinical consistency. |
 | A-3 | Confidence scoring overweights rule/anomaly/model agreement and ignores other high-signal layers. | Move to a weighted multi-layer confidence model or high-confidence rule based on two independent high-risk signals. |
 | A-4 | Provider graph input needs billing ring, temporal co-billing, and referral entropy signals. | Add fields to the provider graph contract and require worker rollups that compute them from claim/referral history. |
 | A-5 | Seven-layer weights are hard-coded and do not renormalize when data is missing. | Represent layer values as data-present vs. actual zero and renormalize across available layers. |
 | A-6 | Provider history counts now use the same 30/90/365 recency weighting philosophy as provider profile risk, producing effective counts instead of letting a 365-day max dominate current scoring. | Validate effective-count interpretation with customer review policy before exposing it as an operational KPI. |
 | A-7 | L3 anomaly baseline has a comment but no quantified upgrade trigger. | Add a measurable threshold, e.g. upgrade evaluation after at least 500 confirmed FWA labels or poor 30-day recall. |
-| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, a worker materialization contract, API ingestion support, and an episode-rollup submit/write path. Production scheduling, clinical/unbundling artifact DB write paths, and customer-data validation remain open. | Connect scheduled worker artifact persistence and customer-approved data sources before treating these schemes as production-covered. |
+| A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, a worker materialization contract, API ingestion support, an episode-rollup submit/write path, and a clinical-compatibility reference submit/write path. Production scheduling, unbundling artifact DB write paths, and customer-data validation remain open. | Connect scheduled worker artifact persistence and customer-approved data sources before treating these schemes as production-covered. |
 
 ## B. Feature Engineering And Data Quality Gaps
 
@@ -165,7 +169,7 @@ and live routing-impact validation on customer data.
 | --- | --- | --- |
 | B-1 | Peer percentile fallback is still a proxy path unless upstream supplies peer context. | Feature metadata must expose `is_proxy`, `data_source`, and source lineage. |
 | B-2 | Episode-level features now have worker-owned 30/90/365 member-provider aggregation, scoring input materialization, and a permission-gated submit/write path; production scheduling and customer claim-history validation remain open. | Connect scheduled customer-history rollups before treating unbundling and excessive-utilization coverage as production-ready. |
-| B-3 | ICD-10/CPT clinical compatibility ingestion and unbundling comparator contracts exist, but customer-approved rule packs and production DB write paths are still missing. | Connect bundled/component code references and episode co-occurrence outputs to governed customer data before treating unbundling detection as production-covered. |
+| B-3 | ICD-10/CPT clinical compatibility ingestion now has a permission-gated reference submit/write path. Unbundling comparator contracts exist, but customer-approved rule packs and production DB write paths are still missing. | Connect bundled/component code references and episode co-occurrence outputs to governed customer data before treating unbundling detection as production-covered. |
 | B-4 | Feature registry lacks proxy/source metadata. | Extend feature records and PRD acceptance criteria so compliance reports can distinguish real distributions from estimates. |
 
 ## C. Agentic Investigation Control-Plane Gaps

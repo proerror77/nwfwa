@@ -201,6 +201,10 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             post(ops_datasets::submit_scoring_feature_context_materialization),
         )
         .route(
+            "/api/v1/ops/clinical-compatibility-references",
+            post(ops_datasets::submit_clinical_compatibility_reference),
+        )
+        .route(
             "/api/v1/ops/scoring-feature-context-materializations/:materialization_id",
             get(ops_datasets::get_scoring_feature_context_materialization),
         )

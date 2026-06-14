@@ -201,6 +201,49 @@ pub struct SaveScoringFeatureContextMaterializationInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClinicalCompatibilityReferenceUpsertInput {
+    pub compatibility_key: String,
+    pub diagnosis_code_prefix: String,
+    pub procedure_code: String,
+    pub diagnosis_procedure_match_score: f64,
+    pub data_source: String,
+    pub policy_authority_ref: String,
+    pub rationale: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveClinicalCompatibilityReferencesInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub reference_version: String,
+    pub effective_date: String,
+    pub source_authority: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub records: Vec<ClinicalCompatibilityReferenceUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClinicalCompatibilityReferenceRecord {
+    pub customer_scope_id: String,
+    pub compatibility_key: String,
+    pub diagnosis_code_prefix: String,
+    pub procedure_code: String,
+    pub diagnosis_procedure_match_score: f64,
+    pub data_source: String,
+    pub policy_authority_ref: String,
+    pub rationale: String,
+    pub evidence_refs: Vec<String>,
+    pub reference_version: String,
+    pub effective_date: String,
+    pub source_authority: String,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterModelEvaluationInput {
     pub evaluation_run_id: String,
     pub model_key: String,

@@ -587,3 +587,76 @@ pub(super) async fn get_scoring_feature_context_materialization(
         },
     ))
 }
+
+pub(super) async fn save_clinical_compatibility_references(
+    repository: &PostgresScoringRepository,
+    input: SaveClinicalCompatibilityReferencesInput,
+) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
+    let mut saved = Vec::with_capacity(input.records.len());
+    let mut tx = repository.pool.begin().await?;
+    for record in input.records {
+        let evidence_refs = serde_json::Value::Array(
+            record
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+        sqlx::query(
+            "INSERT INTO clinical_compatibility_references
+                 (customer_scope_id, compatibility_key, reference_version, effective_date, source_authority, diagnosis_code_prefix, procedure_code, diagnosis_procedure_match_score, data_source, policy_authority_ref, rationale, evidence_refs, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                 ON CONFLICT (customer_scope_id, compatibility_key, reference_version) DO UPDATE
+                 SET effective_date = EXCLUDED.effective_date,
+                     source_authority = EXCLUDED.source_authority,
+                     diagnosis_code_prefix = EXCLUDED.diagnosis_code_prefix,
+                     procedure_code = EXCLUDED.procedure_code,
+                     diagnosis_procedure_match_score = EXCLUDED.diagnosis_procedure_match_score,
+                     data_source = EXCLUDED.data_source,
+                     policy_authority_ref = EXCLUDED.policy_authority_ref,
+                     rationale = EXCLUDED.rationale,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&record.compatibility_key)
+        .bind(&input.reference_version)
+        .bind(&input.effective_date)
+        .bind(&input.source_authority)
+        .bind(&record.diagnosis_code_prefix)
+        .bind(&record.procedure_code)
+        .bind(record.diagnosis_procedure_match_score)
+        .bind(&record.data_source)
+        .bind(&record.policy_authority_ref)
+        .bind(&record.rationale)
+        .bind(&evidence_refs)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(ClinicalCompatibilityReferenceRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            compatibility_key: record.compatibility_key,
+            diagnosis_code_prefix: record.diagnosis_code_prefix,
+            procedure_code: record.procedure_code,
+            diagnosis_procedure_match_score: record.diagnosis_procedure_match_score,
+            data_source: record.data_source,
+            policy_authority_ref: record.policy_authority_ref,
+            rationale: record.rationale,
+            evidence_refs: record.evidence_refs,
+            reference_version: input.reference_version.clone(),
+            effective_date: input.effective_date.clone(),
+            source_authority: input.source_authority.clone(),
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}

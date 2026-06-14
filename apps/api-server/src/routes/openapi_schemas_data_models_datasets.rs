@@ -199,5 +199,98 @@ pub(super) fn dataset_schemas() -> Value {
                 "materialization": { "$ref": "#/components/schemas/ScoringFeatureContextMaterialization" }
             }
         },
+        "ClinicalCompatibilityReferenceUpsert": {
+            "type": "object",
+            "required": ["compatibility_key", "diagnosis_code_prefix", "procedure_code", "diagnosis_procedure_match_score", "data_source", "policy_authority_ref", "rationale", "evidence_refs"],
+            "properties": {
+                "compatibility_key": { "type": "string", "minLength": 1 },
+                "diagnosis_code_prefix": { "type": "string", "minLength": 1 },
+                "procedure_code": { "type": "string", "minLength": 1 },
+                "diagnosis_procedure_match_score": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "data_source": { "type": "string", "minLength": 1 },
+                "policy_authority_ref": { "type": "string", "minLength": 1 },
+                "rationale": { "type": "string", "minLength": 1 },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                }
+            }
+        },
+        "ClinicalCompatibilityReferenceRecord": {
+            "allOf": [
+                { "$ref": "#/components/schemas/ClinicalCompatibilityReferenceUpsert" },
+                {
+                    "type": "object",
+                    "required": ["customer_scope_id", "reference_version", "effective_date", "source_authority", "source_report_uri", "submitted_by", "notes"],
+                    "properties": {
+                        "customer_scope_id": { "type": "string" },
+                        "reference_version": { "type": "string" },
+                        "effective_date": { "type": "string" },
+                        "source_authority": { "type": "string" },
+                        "source_report_uri": { "type": "string" },
+                        "submitted_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                }
+            ]
+        },
+        "ClinicalCompatibilityReferenceSubmissionRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "source_report_uri", "report_kind", "reference_version", "effective_date", "source_authority", "source_uri", "record_count", "records", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": { "type": "string", "minLength": 1 },
+                "source_report_uri": { "type": "string", "minLength": 1 },
+                "report_kind": { "type": "string", "const": "clinical_compatibility_reference" },
+                "reference_version": { "type": "string", "minLength": 1 },
+                "effective_date": { "type": "string", "minLength": 1 },
+                "source_authority": { "type": "string", "minLength": 1 },
+                "source_uri": { "type": "string", "minLength": 1 },
+                "record_count": { "type": "integer", "minimum": 1 },
+                "records": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/components/schemas/ClinicalCompatibilityReferenceUpsert" }
+                },
+                "review_tasks": {
+                    "type": "array",
+                    "items": { "type": "object" }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include clinical_compatibility_references:{source_report_uri}."
+                },
+                "governance_boundary": { "type": "string", "minLength": 1 }
+            }
+        },
+        "ClinicalCompatibilityReferenceSubmissionResponse": {
+            "type": "object",
+            "required": ["report_kind", "source_report_uri", "reference_version", "record_count", "review_task_count", "persisted_records", "active_scoring_policy_change", "claim_scoring", "label_assignment", "claim_denial", "medical_review_replacement", "governance_boundary", "audit_event_type"],
+            "properties": {
+                "report_kind": { "type": "string", "const": "clinical_compatibility_reference" },
+                "source_report_uri": { "type": "string" },
+                "reference_version": { "type": "string" },
+                "record_count": { "type": "integer" },
+                "review_task_count": { "type": "integer" },
+                "persisted_records": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/ClinicalCompatibilityReferenceRecord" }
+                },
+                "active_scoring_policy_change": { "type": "boolean", "const": false },
+                "claim_scoring": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "claim_denial": { "type": "boolean", "const": false },
+                "medical_review_replacement": { "type": "boolean", "const": false },
+                "governance_boundary": { "type": "string" },
+                "audit_event_type": { "type": "string", "enum": ["clinical_compatibility.reference.submitted"] }
+            }
+        },
     })
 }

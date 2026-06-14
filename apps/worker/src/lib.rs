@@ -175,9 +175,11 @@ pub use episode_rollup::{
 
 mod clinical_compatibility;
 pub use clinical_compatibility::{
-    build_clinical_compatibility_reference_report, ClinicalCompatibilityRecord,
-    ClinicalCompatibilityReferenceInput, ClinicalCompatibilityReferenceReport,
-    ClinicalCompatibilityReferenceRow, ClinicalCompatibilityReviewTask,
+    build_clinical_compatibility_reference_report,
+    build_clinical_compatibility_reference_submission, submit_clinical_compatibility_reference,
+    ClinicalCompatibilityRecord, ClinicalCompatibilityReferenceInput,
+    ClinicalCompatibilityReferenceReport, ClinicalCompatibilityReferenceRow,
+    ClinicalCompatibilityReferenceSubmission, ClinicalCompatibilityReviewTask,
 };
 
 mod unbundling_comparator;

@@ -41,6 +41,7 @@ mod run_rule_candidate_backtest;
 mod run_scheduled_mlops_monitoring;
 mod serve_mlops_alert_router;
 mod submit_anomaly_clustering_report;
+mod submit_clinical_compatibility_reference;
 mod submit_episode_aggregation;
 mod submit_mlops_alert_delivery_tasks;
 mod submit_mlops_monitoring_report;
@@ -71,6 +72,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-anomaly-upgrade-readiness" => build_anomaly_upgrade_readiness::run(args),
         "build-clinical-compatibility-reference" => {
             build_clinical_compatibility_reference::run(args)
+        }
+        "submit-clinical-compatibility-reference" => {
+            submit_clinical_compatibility_reference::run(args).await
         }
         "build-mlops-monitoring-plan" => build_mlops_monitoring_plan::run(args),
         "run-scheduled-mlops-monitoring" => run_scheduled_mlops_monitoring::run(args),

@@ -319,6 +319,11 @@ pub trait DatasetsRepository: Send + Sync {
         materialization_id: &str,
         customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>>;
+
+    async fn save_clinical_compatibility_references(
+        &self,
+        input: SaveClinicalCompatibilityReferencesInput,
+    ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>>;
 }
 
 // ---------------------------------------------------------------------------

@@ -291,6 +291,142 @@ pub(super) fn validate_scoring_feature_context_materialization(
     Ok(())
 }
 
+pub(super) fn validate_clinical_compatibility_reference_submission(
+    request: &SubmitClinicalCompatibilityReferenceRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.reference_version.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_VERSION",
+            "reference_version is required",
+        ),
+        (
+            request.effective_date.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_EFFECTIVE_DATE",
+            "effective_date is required",
+        ),
+        (
+            request.source_authority.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_AUTHORITY",
+            "source_authority is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "clinical_compatibility_reference" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_KIND",
+            "report_kind must be clinical_compatibility_reference",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+            "source_report_uri must point to a JSON clinical compatibility reference report",
+        ));
+    }
+    if request.records.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CLINICAL_COMPATIBILITY_RECORDS",
+            "records are required",
+        ));
+    }
+    if request.record_count != request.records.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_RECORD_COUNT",
+            "record_count must match records length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "clinical_compatibility_references:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+            format!("clinical compatibility evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    for record in &request.records {
+        if record.compatibility_key.trim().is_empty()
+            || record.diagnosis_code_prefix.trim().is_empty()
+            || record.procedure_code.trim().is_empty()
+            || record.data_source.trim().is_empty()
+            || record.policy_authority_ref.trim().is_empty()
+            || record.rationale.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_RECORD",
+                "compatibility_key, diagnosis_code_prefix, procedure_code, data_source, policy_authority_ref, and rationale are required",
+            ));
+        }
+        if !record.diagnosis_procedure_match_score.is_finite()
+            || !(0.0..=1.0).contains(&record.diagnosis_procedure_match_score)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_SCORE",
+                "diagnosis_procedure_match_score must be between 0 and 1",
+            ));
+        }
+        if record.evidence_refs.is_empty()
+            || record
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+                "clinical compatibility records require non-empty evidence_refs",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_unit_interval_metric(
     metric_name: &'static str,
     metric: &Option<Decimal>,

@@ -124,6 +124,45 @@ fn scoring_feature_context_materialization_payload() -> &'static str {
     }"#
 }
 
+fn clinical_compatibility_reference_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-clinical-compatibility-reference",
+      "notes": "customer policy board approved clinical reference",
+      "source_report_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
+      "report_kind": "clinical_compatibility_reference",
+      "reference_version": "clinical-policy-2026-06",
+      "effective_date": "2026-06-01",
+      "source_authority": "customer-medical-policy-board",
+      "source_uri": "local://inputs/clinical-reference.json",
+      "record_count": 1,
+      "records": [
+        {
+          "compatibility_key": "J|IMG-900",
+          "diagnosis_code_prefix": "J",
+          "procedure_code": "IMG-900",
+          "diagnosis_procedure_match_score": 0.25,
+          "data_source": "worker.icd_cpt_compatibility_reference:clinical-policy-2026-06",
+          "policy_authority_ref": "policy:clinical:J:IMG-900",
+          "rationale": "Respiratory diagnosis requires additional support for this imaging procedure.",
+          "evidence_refs": ["policy:clinical:J:IMG-900", "medical_policy:v2026-06"]
+        }
+      ],
+      "review_tasks": [
+        {
+          "task_type": "clinical_policy_review_candidate",
+          "compatibility_key": "J|IMG-900",
+          "reason": "low compatibility score should be reviewed before production activation",
+          "evidence_refs": ["policy:clinical:J:IMG-900"]
+        }
+      ],
+      "evidence_refs": [
+        "clinical_compatibility_references:local://artifacts/clinical/clinical_compatibility_reference_report.json",
+        "clinical_policy_authority:customer-medical-policy-board"
+      ],
+      "governance_boundary": "clinical compatibility reference data can feed ClinicalCompatibilityFeatureContext; it must not deny claims or replace medical review without customer-approved policy authority"
+    }"#
+}
+
 fn renewal_dataset_payload(storage_format: &str) -> String {
     format!(
         r#"{{
@@ -190,6 +229,61 @@ fn renewal_dataset_payload(storage_format: &str) -> String {
           ]
         }}"#
     )
+}
+
+#[tokio::test]
+async fn submits_clinical_compatibility_reference() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        clinical_compatibility_reference_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "clinical_compatibility_reference");
+    assert_eq!(body["reference_version"], "clinical-policy-2026-06");
+    assert_eq!(body["record_count"], 1);
+    assert_eq!(body["review_task_count"], 1);
+    assert_eq!(
+        body["persisted_records"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_records"][0]["compatibility_key"],
+        "J|IMG-900"
+    );
+    assert_eq!(
+        body["persisted_records"][0]["policy_authority_ref"],
+        "policy:clinical:J:IMG-900"
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["medical_review_replacement"], false);
+}
+
+#[tokio::test]
+async fn clinical_compatibility_reference_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        clinical_compatibility_reference_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
 }
 
 #[tokio::test]

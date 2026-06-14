@@ -287,6 +287,43 @@ impl InMemoryScoringRepository {
             });
         Ok(record)
     }
+
+    pub(super) async fn in_memory_save_clinical_compatibility_references(
+        &self,
+        input: SaveClinicalCompatibilityReferencesInput,
+    ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
+        let mut records = self.clinical_compatibility_references.lock().await;
+        let mut saved = Vec::with_capacity(input.records.len());
+        for upsert in input.records {
+            let record = ClinicalCompatibilityReferenceRecord {
+                customer_scope_id: input.customer_scope_id.clone(),
+                compatibility_key: upsert.compatibility_key,
+                diagnosis_code_prefix: upsert.diagnosis_code_prefix,
+                procedure_code: upsert.procedure_code,
+                diagnosis_procedure_match_score: upsert.diagnosis_procedure_match_score,
+                data_source: upsert.data_source,
+                policy_authority_ref: upsert.policy_authority_ref,
+                rationale: upsert.rationale,
+                evidence_refs: upsert.evidence_refs,
+                reference_version: input.reference_version.clone(),
+                effective_date: input.effective_date.clone(),
+                source_authority: input.source_authority.clone(),
+                source_report_uri: input.source_report_uri.clone(),
+                submitted_by: input.submitted_by.clone(),
+                notes: input.notes.clone(),
+            };
+            records.insert(
+                clinical_compatibility_key(
+                    &record.customer_scope_id,
+                    &record.compatibility_key,
+                    &record.reference_version,
+                ),
+                record.clone(),
+            );
+            saved.push(record);
+        }
+        Ok(saved)
+    }
 }
 
 fn scoring_context_materialization_key(
@@ -294,4 +331,12 @@ fn scoring_context_materialization_key(
     materialization_id: &str,
 ) -> String {
     format!("{customer_scope_id}::{materialization_id}")
+}
+
+fn clinical_compatibility_key(
+    customer_scope_id: &str,
+    compatibility_key: &str,
+    reference_version: &str,
+) -> String {
+    format!("{customer_scope_id}::{compatibility_key}::{reference_version}")
 }

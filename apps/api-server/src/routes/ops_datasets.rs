@@ -6,7 +6,7 @@ use crate::{
         CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, ModelDatasetRecord,
         ModelEvaluationRecord, PersistedAuditEvent, RegisterDatasetInput, RegisterFeatureSetInput,
         RegisterModelDatasetInput, RegisterModelEvaluationInput,
-        SaveScoringFeatureContextMaterializationInput,
+        SaveClinicalCompatibilityReferencesInput, SaveScoringFeatureContextMaterializationInput,
     },
 };
 
@@ -26,9 +26,10 @@ pub(crate) use super::ops_datasets_readiness::build_dataset_health_record;
 use super::ops_datasets_readiness::{build_dataset_health, build_factor_readiness};
 pub use super::ops_datasets_types::*;
 use validation::{
-    validate_dataset_contract, validate_feature_set_registration, validate_field_mapping,
-    validate_model_dataset_registration, validate_model_evaluation_registration,
-    validate_parquet_uri, validate_scoring_feature_context_materialization,
+    validate_clinical_compatibility_reference_submission, validate_dataset_contract,
+    validate_feature_set_registration, validate_field_mapping, validate_model_dataset_registration,
+    validate_model_evaluation_registration, validate_parquet_uri,
+    validate_scoring_feature_context_materialization,
 };
 
 pub async fn register_dataset(
@@ -396,6 +397,82 @@ pub async fn submit_scoring_feature_context_materialization(
     Ok(Json(ScoringFeatureContextMaterializationResponse {
         materialization,
     }))
+}
+
+pub async fn submit_clinical_compatibility_reference(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitClinicalCompatibilityReferenceRequest>,
+) -> Result<Json<ClinicalCompatibilityReferenceSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_clinical_compatibility_reference_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_clinical_compatibility_references(SaveClinicalCompatibilityReferencesInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            reference_version: request.reference_version.clone(),
+            effective_date: request.effective_date.clone(),
+            source_authority: request.source_authority.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            records: request.records.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "CLINICAL_COMPATIBILITY_REFERENCES_SAVE_FAILED",
+        ))?;
+    let response = ClinicalCompatibilityReferenceSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        reference_version: request.reference_version.clone(),
+        record_count: persisted.len(),
+        review_task_count: request.review_tasks.len(),
+        persisted_records: persisted,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        medical_review_replacement: false,
+        governance_boundary:
+            "clinical compatibility reference submission writes customer policy reference data only; it must not score claims, assign fraud labels, deny claims, or replace medical review"
+                .into(),
+        audit_event_type: "clinical_compatibility.reference.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "clinical_compatibility.reference.submitted",
+            summary: "Clinical compatibility reference submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "reference_version": request.reference_version,
+                "effective_date": request.effective_date,
+                "source_authority": request.source_authority,
+                "source_uri": request.source_uri,
+                "record_count": request.record_count,
+                "persisted_record_count": response.record_count,
+                "review_task_count": response.review_task_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "medical_review_replacement": response.medical_review_replacement,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "CLINICAL_COMPATIBILITY_REFERENCES_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
 }
 
 pub async fn get_scoring_feature_context_materialization(

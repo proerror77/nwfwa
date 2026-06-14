@@ -506,6 +506,13 @@ impl DatasetsRepository for PostgresScoringRepository {
         )
         .await
     }
+
+    async fn save_clinical_compatibility_references(
+        &self,
+        input: SaveClinicalCompatibilityReferencesInput,
+    ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
+        postgres_datasets::save_clinical_compatibility_references(self, input).await
+    }
 }
 
 #[async_trait]

@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
-use crate::{read_json_report, write_json};
+use crate::{api_url, read_json_report, required_non_empty, write_json};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClinicalCompatibilityReferenceInput {
@@ -48,6 +48,23 @@ pub struct ClinicalCompatibilityReviewTask {
 pub struct ClinicalCompatibilityReferenceReport {
     pub report_kind: String,
     pub report_version: u8,
+    pub reference_version: String,
+    pub effective_date: String,
+    pub source_authority: String,
+    pub source_uri: String,
+    pub record_count: usize,
+    pub records: Vec<ClinicalCompatibilityRecord>,
+    pub review_tasks: Vec<ClinicalCompatibilityReviewTask>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClinicalCompatibilityReferenceSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
     pub reference_version: String,
     pub effective_date: String,
     pub source_authority: String,
@@ -131,6 +148,73 @@ pub fn build_clinical_compatibility_reference_report(
         &report.records,
     )?;
     Ok(report)
+}
+
+pub fn build_clinical_compatibility_reference_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<ClinicalCompatibilityReferenceSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report: ClinicalCompatibilityReferenceReport =
+        serde_json::from_value(read_json_report(report_uri)?)
+            .context("parse clinical compatibility reference report")?;
+    if report.report_kind != "clinical_compatibility_reference" {
+        bail!("report_kind must be clinical_compatibility_reference");
+    }
+    if report.records.is_empty() {
+        bail!("clinical compatibility reference requires records before API submission");
+    }
+    let mut evidence_refs = report.evidence_refs;
+    evidence_refs.push(format!("clinical_compatibility_references:{report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    Ok(ClinicalCompatibilityReferenceSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: report_uri.into(),
+        report_kind: report.report_kind,
+        reference_version: report.reference_version,
+        effective_date: report.effective_date,
+        source_authority: report.source_authority,
+        source_uri: report.source_uri,
+        record_count: report.record_count,
+        records: report.records,
+        review_tasks: report.review_tasks,
+        evidence_refs,
+        governance_boundary: report.governance_boundary,
+    })
+}
+
+pub async fn submit_clinical_compatibility_reference(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_clinical_compatibility_reference_submission(report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/clinical-compatibility-references",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit clinical compatibility reference")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit clinical compatibility reference failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse clinical compatibility reference response")
 }
 
 fn validate_header(input: &ClinicalCompatibilityReferenceInput) -> anyhow::Result<()> {

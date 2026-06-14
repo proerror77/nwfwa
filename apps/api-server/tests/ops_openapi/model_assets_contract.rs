@@ -172,6 +172,34 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             ["report_kind"]["const"],
         "scoring_feature_context_materialization"
     );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/clinical-compatibility-references"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ClinicalCompatibilityReferenceSubmissionRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/clinical-compatibility-references"]["post"]["responses"]
+            ["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ClinicalCompatibilityReferenceSubmissionResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ClinicalCompatibilityReferenceUpsert"]["properties"]
+            ["diagnosis_procedure_match_score"]["maximum"],
+        1
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "claim_scoring",
+        "label_assignment",
+        "claim_denial",
+        "medical_review_replacement",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["ClinicalCompatibilityReferenceSubmissionResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
     assert!(
         schema["components"]["schemas"]["ModelEvaluation"]["required"]
             .as_array()
