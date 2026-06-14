@@ -67,6 +67,41 @@ async fn rejects_duplicate_nested_and_top_level_payload_fields() {
 }
 
 #[tokio::test]
+async fn rejects_conflicting_materialized_peer_percentile() {
+    let app = build_app(test_config()).unwrap();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim_amount_peer_percentile": 80,
+              "claim": {
+                "external_claim_id": "CLM-CONFLICTING-PEER",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "scoring_feature_context": {
+                "peer_context": {
+                  "claim_amount_peer_percentile": 90
+                }
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("AMBIGUOUS_SCORE_REQUEST"));
+    assert!(body.contains("claim_amount_peer_percentile must match"));
+}
+
+#[tokio::test]
 async fn rejects_canonical_context_with_full_payload_fields() {
     let app = build_app(test_config()).unwrap();
 
