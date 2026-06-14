@@ -130,6 +130,21 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "source_uri": { "type": "string", "minLength": 1 },
                 "source_date": { "type": ["string", "null"] },
                 "sync_status": { "type": "string", "minLength": 1 },
+                "source_record_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional source artifact count; when all count fields are supplied, must equal valid_record_count + invalid_record_count."
+                },
+                "valid_record_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional source artifact count; when supplied, must match provider_upserts length."
+                },
+                "invalid_record_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional source artifact count; when supplied, must match review_tasks length."
+                },
                 "provider_upserts": {
                     "type": "array",
                     "minItems": 1,

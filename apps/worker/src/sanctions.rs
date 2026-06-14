@@ -73,6 +73,9 @@ pub struct SanctionsSyncReportSubmission {
     pub source_uri: String,
     pub source_date: Option<String>,
     pub sync_status: String,
+    pub source_record_count: usize,
+    pub valid_record_count: usize,
+    pub invalid_record_count: usize,
     pub provider_upserts: Vec<SanctionsProviderUpsert>,
     pub review_tasks: Vec<serde_json::Value>,
     pub evidence_refs: Vec<String>,
@@ -238,6 +241,9 @@ pub fn build_sanctions_sync_report_submission(
         source_uri: report.source_uri,
         source_date: report.source_date,
         sync_status: report.sync_status,
+        source_record_count: report.source_record_count,
+        valid_record_count: report.valid_record_count,
+        invalid_record_count: report.invalid_record_count,
         provider_upserts: report.provider_upserts,
         review_tasks: report
             .review_tasks

@@ -187,6 +187,37 @@ pub(super) fn validate_sanctions_sync_report_submission(
             "provider_upserts are required",
         ));
     }
+    if let Some(valid_record_count) = request.valid_record_count {
+        if valid_record_count != request.provider_upserts.len() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SANCTIONS_SYNC_RECORD_COUNT",
+                "valid_record_count must match provider_upserts length",
+            ));
+        }
+    }
+    if let Some(invalid_record_count) = request.invalid_record_count {
+        if invalid_record_count != request.review_tasks.len() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SANCTIONS_SYNC_RECORD_COUNT",
+                "invalid_record_count must match review_tasks length",
+            ));
+        }
+    }
+    if let (Some(source_record_count), Some(valid_record_count), Some(invalid_record_count)) = (
+        request.source_record_count,
+        request.valid_record_count,
+        request.invalid_record_count,
+    ) {
+        if source_record_count != valid_record_count + invalid_record_count {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SANCTIONS_SYNC_RECORD_COUNT",
+                "source_record_count must equal valid_record_count + invalid_record_count",
+            ));
+        }
+    }
     let expected_report_ref = format!("sanctions_sync_reports:{}", request.source_report_uri);
     if !request
         .evidence_refs

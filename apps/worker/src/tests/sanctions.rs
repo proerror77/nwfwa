@@ -199,6 +199,9 @@ fn builds_sanctions_sync_report_submission() {
     .expect("sanctions submission");
 
     assert_eq!(submission.report_kind, "oig_sam_sanctions_sync_report");
+    assert_eq!(submission.source_record_count, 1);
+    assert_eq!(submission.valid_record_count, 1);
+    assert_eq!(submission.invalid_record_count, 0);
     assert_eq!(submission.provider_upserts[0].sanction_key, "OIG:PRV-1");
     assert!(submission.evidence_refs.contains(&format!(
         "sanctions_sync_reports:{}",

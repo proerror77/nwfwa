@@ -88,6 +88,9 @@ fn sanctions_sync_report_payload() -> &'static str {
       "source_uri": "local://inputs/oig-sam-snapshot.json",
       "source_date": "2026-06-13",
       "sync_status": "ready_to_apply",
+      "source_record_count": 1,
+      "valid_record_count": 1,
+      "invalid_record_count": 0,
       "provider_upserts": [
         {
           "sanction_key": "OIG:PRV-SANCTIONED-1",
@@ -324,6 +327,26 @@ async fn submits_provider_sanctions_sync_report() {
     );
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["label_assignment"], false);
+}
+
+#[tokio::test]
+async fn provider_sanctions_sync_rejects_mismatched_record_counts() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(sanctions_sync_report_payload()).expect("sanctions sync payload");
+    payload["valid_record_count"] = serde_json::json!(2);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/sanctions-sync-reports",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SANCTIONS_SYNC_RECORD_COUNT");
 }
 
 #[tokio::test]
