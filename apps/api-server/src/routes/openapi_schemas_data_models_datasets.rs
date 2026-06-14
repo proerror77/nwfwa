@@ -510,6 +510,11 @@ pub(super) fn dataset_schemas() -> Value {
                                 "type": "array",
                                 "items": { "type": "string", "minLength": 1 },
                                 "description": "Required and non-empty when readiness_status is blocked; omit or leave empty when readiness_status is ready."
+                            },
+                            "required_permission": {
+                                "type": ["string", "null"],
+                                "minLength": 1,
+                                "description": "API permission scope required before submitting this job artifact; null for artifact-only jobs."
                             }
                         }
                     }

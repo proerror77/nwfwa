@@ -940,6 +940,18 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                 "job_kind must not be blank",
             ));
         }
+        if let Some(required_permission) = readiness.get("required_permission") {
+            if required_permission
+                .as_str()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
+                    "required_permission must not be blank when supplied",
+                ));
+            }
+        }
         let Some(readiness_status) = readiness
             .get("readiness_status")
             .and_then(|value| value.as_str())

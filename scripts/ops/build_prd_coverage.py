@@ -147,6 +147,7 @@ CAPABILITIES = [
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "required_permission"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "required_permission"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"),
+            ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"),
             ("apps/api-server/src/routes/ops_providers.rs", "save_provider_sanctions"),
             ("apps/api-server/src/routes/ops_providers/validation.rs", "INVALID_SANCTIONS_SYNC_RECORD_COUNT"),
             ("apps/worker/src/sanctions.rs", "valid_record_count"),
