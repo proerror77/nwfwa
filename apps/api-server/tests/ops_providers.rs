@@ -296,6 +296,19 @@ fn episode_rollup_payload() -> &'static str {
     }"#
 }
 
+fn remove_top_level_evidence_ref_with_prefix(payload: &str, prefix: &str) -> String {
+    let mut payload: serde_json::Value = serde_json::from_str(payload).expect("provider payload");
+    let evidence_refs = payload["evidence_refs"]
+        .as_array()
+        .expect("top-level evidence_refs")
+        .iter()
+        .filter(|reference| !reference.as_str().unwrap_or_default().starts_with(prefix))
+        .cloned()
+        .collect::<Vec<_>>();
+    payload["evidence_refs"] = serde_json::Value::Array(evidence_refs);
+    payload.to_string()
+}
+
 #[tokio::test]
 async fn submits_provider_sanctions_sync_report() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
@@ -327,6 +340,52 @@ async fn submits_provider_sanctions_sync_report() {
     );
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["label_assignment"], false);
+}
+
+#[tokio::test]
+async fn provider_write_paths_require_top_level_source_evidence() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, missing_prefix, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "sanctions_source_snapshot:",
+            "MISSING_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "provider_profile_claim_snapshot:",
+            "MISSING_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "provider_graph_claim_snapshot:",
+            "MISSING_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "peer_benchmark_claim_snapshot:",
+            "MISSING_PEER_BENCHMARK_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "episode_claim_snapshot:",
+            "MISSING_EPISODE_ROLLUP_EVIDENCE",
+        ),
+    ] {
+        let payload = remove_top_level_evidence_ref_with_prefix(payload, missing_prefix);
+        let (status, body) =
+            json_request_with_key(app.clone(), "POST", path, &payload, "provider-write-secret")
+                .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+        assert!(body["message"].as_str().unwrap().contains(missing_prefix));
+    }
 }
 
 #[tokio::test]

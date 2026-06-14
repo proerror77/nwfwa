@@ -230,6 +230,13 @@ pub(super) fn validate_sanctions_sync_report_submission(
             format!("sanctions sync evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_source_ref = format!("sanctions_source_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        format!("sanctions sync evidence_refs must include {expected_source_ref}"),
+    )?;
     for upsert in &request.provider_upserts {
         if upsert.sanction_key.trim().is_empty()
             || upsert.list.trim().is_empty()
@@ -354,6 +361,13 @@ pub(super) fn validate_provider_profile_window_rollup_submission(
             format!("provider profile rollup evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_source_ref = format!("provider_profile_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        format!("provider profile rollup evidence_refs must include {expected_source_ref}"),
+    )?;
     for profile in &request.provider_profiles {
         if profile.provider_id.trim().is_empty() {
             return Err(ApiError::new(
@@ -469,6 +483,21 @@ fn validate_source_lineage_evidence_refs(
     Ok(())
 }
 
+fn validate_required_evidence_ref(
+    evidence_refs: &[String],
+    expected_ref: &str,
+    code: &'static str,
+    message: String,
+) -> Result<(), ApiError> {
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
 pub(super) fn validate_provider_graph_signal_rollup_submission(
     request: &SubmitProviderGraphSignalRollupRequest,
 ) -> Result<(), ApiError> {
@@ -556,6 +585,13 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
             format!("provider graph rollup evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_source_ref = format!("provider_graph_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        format!("provider graph rollup evidence_refs must include {expected_source_ref}"),
+    )?;
     for relationship in &request.provider_relationships {
         if relationship.provider_id.trim().is_empty() {
             return Err(ApiError::new(
@@ -707,6 +743,13 @@ pub(super) fn validate_peer_benchmark_submission(
             format!("peer benchmark evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_source_ref = format!("peer_benchmark_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_PEER_BENCHMARK_EVIDENCE",
+        format!("peer benchmark evidence_refs must include {expected_source_ref}"),
+    )?;
     for group in &request.peer_groups {
         if group.peer_group_key.trim().is_empty()
             || group.specialty.trim().is_empty()
@@ -842,6 +885,13 @@ pub(super) fn validate_episode_rollup_submission(
             format!("episode rollup evidence_refs must include {expected_report_ref}"),
         ));
     }
+    let expected_source_ref = format!("episode_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_EPISODE_ROLLUP_EVIDENCE",
+        format!("episode rollup evidence_refs must include {expected_source_ref}"),
+    )?;
     for episode in &request.episodes {
         if episode.episode_key.trim().is_empty()
             || episode.member_id.trim().is_empty()
