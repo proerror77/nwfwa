@@ -58,6 +58,10 @@ The command writes:
 
 CI runs the same script in the `staging-proof` job. The script fails when an
 expected code, document, workflow, or proof artifact is missing.
+It now treats worker data pipeline productionization as its own
+customer-validation-boundary capability, covering governed worker commands,
+customer-data write paths, readiness gates, run-status templates, and execution
+evidence.
 
 ## Coverage Matrix
 
