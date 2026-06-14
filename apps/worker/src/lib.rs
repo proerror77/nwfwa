@@ -144,6 +144,12 @@ pub use worker_data_pipeline_execution::{
     submit_worker_data_pipeline_execution_report, WorkerDataPipelineExecutionReportSubmission,
 };
 
+mod worker_data_pipeline_readiness;
+pub use worker_data_pipeline_readiness::{
+    build_worker_data_pipeline_readiness_report, WorkerDataPipelineReadinessCheck,
+    WorkerDataPipelineReadinessInput,
+};
+
 mod sanctions;
 pub use sanctions::{
     build_sanctions_sync_report, build_sanctions_sync_report_submission,

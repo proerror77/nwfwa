@@ -196,6 +196,10 @@ fn builds_scheduled_worker_data_pipeline_plan() {
             "dry_run_reports_reviewed_before_first_submit"
         )));
     assert_eq!(
+        plan["downstream_contracts"]["readiness_report"],
+        "build-worker-data-pipeline-readiness-report"
+    );
+    assert_eq!(
         plan["downstream_contracts"]["scheduler_execution_report"],
         "build-worker-data-pipeline-execution-report"
     );

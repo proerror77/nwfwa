@@ -24,6 +24,7 @@ mod build_training_handoff;
 mod build_unbundling_comparator;
 mod build_worker_data_pipeline_execution_report;
 mod build_worker_data_pipeline_plan;
+mod build_worker_data_pipeline_readiness_report;
 mod check_pilot_readiness;
 mod claim_retraining_job;
 mod cluster_claim_entities;
@@ -139,6 +140,9 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
             build_worker_data_pipeline_execution_report::run(args)
         }
         "build-worker-data-pipeline-plan" => build_worker_data_pipeline_plan::run(args),
+        "build-worker-data-pipeline-readiness-report" => {
+            build_worker_data_pipeline_readiness_report::run(args)
+        }
         "claim-retraining-job" => claim_retraining_job::run(args).await,
         "run-retraining-job" => run_retraining_job::run(args).await,
         "promote-approved-model-version" => promote_approved_model_version::run(args).await,

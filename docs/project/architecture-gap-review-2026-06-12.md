@@ -147,6 +147,9 @@ As of the P1/P2 remediation commits after this review:
   peer benchmarks, episode rollups, clinical references, unbundling candidates,
   scoring feature contexts, and probability-calibration evidence under daily
   or monthly cadence with explicit readiness gates.
+- The worker now has a data-pipeline readiness report that checks customer-
+  approved artifact URIs, minimum row counts, data-quality status, evidence
+  refs, and external OIG/SAM fetch configuration before scheduled writes.
 - The worker now has a data-pipeline execution report contract that converts a
   customer scheduler run-status artifact into per-job completion, pending,
   failed, and review-task evidence without running live customer jobs itself.
