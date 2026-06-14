@@ -560,6 +560,11 @@ pub(super) fn dataset_schemas() -> Value {
                                 "enum": ["fresh", "stale", "pending_customer_validation", null],
                                 "description": "Customer-confirmed source freshness; must be fresh for ready jobs."
                             },
+                            "evidence_refs": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Per-job customer evidence refs for artifact freshness, approval, coverage window, and quality; required and non-empty for ready jobs."
+                            },
                             "blockers": {
                                 "type": "array",
                                 "items": { "type": "string", "minLength": 1 },

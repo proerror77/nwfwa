@@ -136,6 +136,7 @@ CAPABILITIES = [
             ("apps/worker/src/worker_data_pipeline_execution.rs", "blocked_dependencies"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "dependency_not_completed"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS"),
+            ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"),
             ("apps/api-server/src/routes/ops_datasets/validation.rs", "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_STATUS"),
             ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "blocked_dependencies"),
             ("apps/api-server/src/routes/openapi_schemas_data_models_datasets.rs", "readiness_status"),

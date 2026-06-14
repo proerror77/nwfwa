@@ -1005,6 +1005,24 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         "ready job readiness records require source_freshness_status fresh",
                     ));
                 }
+                let has_job_evidence_refs = readiness
+                    .get("evidence_refs")
+                    .and_then(|value| value.as_array())
+                    .is_some_and(|references| {
+                        !references.is_empty()
+                            && references.iter().all(|reference| {
+                                reference
+                                    .as_str()
+                                    .is_some_and(|value| !value.trim().is_empty())
+                            })
+                    });
+                if !has_job_evidence_refs {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job readiness records require non-empty evidence_refs",
+                    ));
+                }
                 ready_jobs += 1;
             }
             "blocked" => {

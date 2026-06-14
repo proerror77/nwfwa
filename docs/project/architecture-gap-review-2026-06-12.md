@@ -165,6 +165,9 @@ As of the P1/P2 remediation commits after this review:
   source data and a positive coverage window before a job can be marked ready,
   so stale peer/profile/graph/episode/calibration inputs cannot be submitted as
   production-ready prerequisites.
+- The worker data-pipeline readiness submit API now also rejects ready jobs
+  without non-empty per-job evidence refs, preventing direct API submissions
+  from bypassing the worker-generated evidence contract.
 - The claims scoring API now accepts inline materialized worker contexts and
   also loads the latest persisted scoring-feature-context materialization by
   claim when no inline context is supplied, passing peer, clinical
