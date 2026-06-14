@@ -369,6 +369,11 @@ pub(super) fn validate_provider_profile_window_rollup_submission(
                 "windows are required",
             ));
         }
+        validate_lineage_evidence_refs(
+            &profile.evidence_refs,
+            "INVALID_PROVIDER_PROFILE_EVIDENCE",
+            "provider profiles require non-empty evidence_refs",
+        )?;
         for window in &profile.windows {
             validate_provider_profile_window(window)?;
         }
@@ -426,6 +431,21 @@ fn validate_provider_profile_window(window: &serde_json::Value) -> Result<(), Ap
                 ));
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_lineage_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.is_empty()
+        || evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
     }
     Ok(())
 }
@@ -525,6 +545,11 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
                 "provider_id is required",
             ));
         }
+        validate_lineage_evidence_refs(
+            &relationship.evidence_refs,
+            "INVALID_PROVIDER_GRAPH_SIGNAL_EVIDENCE",
+            "provider graph signals require non-empty evidence_refs",
+        )?;
         for (value, field) in [
             (
                 relationship.high_risk_neighbor_ratio,
@@ -681,6 +706,11 @@ pub(super) fn validate_peer_benchmark_submission(
                 "claim_count must be greater than 0",
             ));
         }
+        validate_lineage_evidence_refs(
+            &group.evidence_refs,
+            "INVALID_PEER_BENCHMARK_EVIDENCE",
+            "peer benchmark groups require non-empty evidence_refs",
+        )?;
         let percentiles = [group.p25, group.p50, group.p75, group.p90, group.p99];
         if percentiles
             .iter()
@@ -809,6 +839,11 @@ pub(super) fn validate_episode_rollup_submission(
                 "windows are required",
             ));
         }
+        validate_lineage_evidence_refs(
+            &episode.evidence_refs,
+            "INVALID_EPISODE_ROLLUP_EVIDENCE",
+            "episode rollups require non-empty evidence_refs",
+        )?;
         for window in &episode.windows {
             validate_episode_window(window)?;
         }

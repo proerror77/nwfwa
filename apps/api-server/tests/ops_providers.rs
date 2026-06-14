@@ -383,6 +383,26 @@ async fn submits_provider_profile_window_rollup() {
 }
 
 #[tokio::test]
+async fn provider_profile_window_rollup_rejects_profile_without_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(provider_profile_window_rollup_payload()).unwrap();
+    payload["provider_profiles"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/profile-window-rollups",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PROVIDER_PROFILE_EVIDENCE");
+}
+
+#[tokio::test]
 async fn submits_provider_graph_signal_rollup() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
 
@@ -433,6 +453,26 @@ async fn submits_provider_graph_signal_rollup() {
 }
 
 #[tokio::test]
+async fn provider_graph_signal_rollup_rejects_signal_without_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(provider_graph_signal_rollup_payload()).unwrap();
+    payload["provider_relationships"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/graph-signal-rollups",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PROVIDER_GRAPH_SIGNAL_EVIDENCE");
+}
+
+#[tokio::test]
 async fn submits_peer_benchmark() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
 
@@ -462,6 +502,25 @@ async fn submits_peer_benchmark() {
     assert_eq!(body["active_scoring_policy_change"], false);
     assert_eq!(body["label_assignment"], false);
     assert_eq!(body["claim_scoring"], false);
+}
+
+#[tokio::test]
+async fn peer_benchmark_rejects_group_without_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value = serde_json::from_str(peer_benchmark_payload()).unwrap();
+    payload["peer_groups"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/peer-benchmarks",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PEER_BENCHMARK_EVIDENCE");
 }
 
 #[tokio::test]
@@ -497,6 +556,25 @@ async fn submits_episode_rollup() {
     assert_eq!(body["label_assignment"], false);
     assert_eq!(body["case_creation"], false);
     assert_eq!(body["claim_denial"], false);
+}
+
+#[tokio::test]
+async fn episode_rollup_rejects_episode_without_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value = serde_json::from_str(episode_rollup_payload()).unwrap();
+    payload["episodes"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/episode-rollups",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_EPISODE_ROLLUP_EVIDENCE");
 }
 
 #[tokio::test]
