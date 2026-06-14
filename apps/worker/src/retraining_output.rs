@@ -478,6 +478,9 @@ pub(crate) fn build_mock_retraining_output(
     let overfitting_diagnostics_report_uri = format!(
         "{artifact_root}/{safe_model_key}/{candidate_model_version}/diagnostics/overfitting_diagnostics_report.json"
     );
+    let rust_feature_set_manifest_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/rust_feature_set/feature_set_manifest.json"
+    );
     let rule_backtest_report_uri = format!(
         "{artifact_root}/{safe_model_key}/{candidate_model_version}/rule-candidates/backtest/rule_candidate_backtest_report.json"
     );
@@ -498,6 +501,7 @@ pub(crate) fn build_mock_retraining_output(
         format!("model_artifact_evaluations:{artifact_evaluation_report_uri}"),
         format!("automl_factor_rankings:{automl_factor_ranking_report_uri}"),
         format!("model_overfitting_diagnostics:{overfitting_diagnostics_report_uri}"),
+        format!("feature_set_manifests:{rust_feature_set_manifest_uri}"),
         format!("rule_candidate_backtests:{rule_backtest_report_uri}"),
         format!("rule_candidate_review_tasks:{rule_review_tasks_uri}"),
         format!("model_evaluations:{evaluation_run_id}"),
@@ -556,6 +560,8 @@ pub(crate) fn build_mock_retraining_output(
             "serving_version_lock_status": "passed",
             "artifact_integrity_status": "passed",
             "feature_store_materialization_status": "passed",
+            "rust_feature_set_status": "passed",
+            "rust_feature_set_manifest_uri": rust_feature_set_manifest_uri,
             "segment_fairness_status": "passed",
             "review_capacity_threshold_status": "passed",
             "model_artifact_evaluation_status": "passed",
