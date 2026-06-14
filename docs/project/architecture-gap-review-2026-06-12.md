@@ -254,9 +254,9 @@ As of the P1/P2 remediation commits after this review:
   API permission validation use the same endpoint-family contract.
 - Worker data-pipeline plans, readiness input templates, and run-status
   templates now expose per-job `required_evidence_prefixes`; readiness reports
-  keep jobs blocked until customer evidence includes those prefixes, including
-  scoring-context source lineage for episode, peer, clinical, and unbundling
-  artifacts.
+  keep jobs blocked until required prefixes are non-blank and customer evidence
+  includes those prefixes, including scoring-context source lineage for episode,
+  peer, clinical, and unbundling artifacts.
 - Worker data-pipeline readiness submit API now also rejects ready jobs with
   blank required evidence prefixes or evidence refs that do not satisfy the
   declared prefixes before persisting prerequisite evidence.

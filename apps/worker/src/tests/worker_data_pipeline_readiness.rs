@@ -307,6 +307,58 @@ fn marks_worker_data_pipeline_ready_when_all_customer_inputs_pass() {
 }
 
 #[test]
+fn blocks_worker_data_pipeline_readiness_when_required_evidence_prefix_is_blank() {
+    let root = temp_root("worker-data-pipeline-readiness-blank-prefix");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let readiness_uri = root.join("worker_data_pipeline_readiness_input.json");
+    let output_dir = root.join("output");
+    let mut plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    plan["jobs"][0]["required_evidence_prefixes"] = serde_json::json!([" "]);
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    write_json(
+        readiness_uri.clone(),
+        &serde_json::json!({
+            "checks": [
+                {
+                    "job_kind": "oig_sam_sanctions_snapshot_fetch",
+                    "artifact_uri": "s3://nwfwa-production-artifacts/readiness/oig_sam_sanctions_snapshot_fetch.json",
+                    "customer_approved": true,
+                    "external_fetch_configured": true,
+                    "row_count": 100,
+                    "minimum_row_count": 10,
+                    "data_quality_status": "passed",
+                    "coverage_window_days": 90,
+                    "source_freshness_status": "fresh",
+                    "evidence_refs": ["customer_approval:oig_sam_sanctions_snapshot_fetch:2026-06-14"]
+                }
+            ]
+        }),
+    )
+    .expect("write readiness input");
+
+    let report = build_worker_data_pipeline_readiness_report(
+        &plan_uri.to_string_lossy(),
+        &readiness_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect("readiness report");
+
+    let first_job = &report["job_readiness"].as_array().expect("jobs")[0];
+    assert_eq!(first_job["readiness_status"], "blocked");
+    assert!(first_job["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("blank_required_evidence_prefixes")));
+}
+
+#[test]
 fn builds_worker_data_pipeline_readiness_submission() {
     let root = temp_root("worker-data-pipeline-readiness-submission");
     let report_uri = root.join("worker_data_pipeline_readiness_report.json");

@@ -374,7 +374,12 @@ fn readiness_blockers(
     {
         blockers.push("missing_evidence_refs".into());
     }
-    if required_evidence_prefixes.iter().any(|prefix| {
+    if required_evidence_prefixes
+        .iter()
+        .any(|prefix| prefix.trim().is_empty())
+    {
+        blockers.push("blank_required_evidence_prefixes".into());
+    } else if required_evidence_prefixes.iter().any(|prefix| {
         !check
             .evidence_refs
             .iter()
