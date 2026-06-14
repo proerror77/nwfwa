@@ -33,6 +33,12 @@ from scripts.ops.validate_production_readiness_contract import (
 
 
 DEFAULT_OUTPUT_DIR = Path("artifacts/production-evidence-package")
+SOURCE_TEMPLATE_FILES = {
+    "customer_data_governance": "customer-data-governance-source.json",
+    "retention_legal_hold": "retention-legal-hold-source.json",
+    "model_serving_slo": "model-serving-slo-source.json",
+    "ocr_vector_analytics_execution": "ocr-vector-analytics-source.json",
+}
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -254,23 +260,130 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
     )
 
 
+def source_template(gate_id: str, generated_at: str) -> dict | None:
+    base = {
+        "artifact_kind": "production_readiness_source_template",
+        "gate_id": gate_id,
+        "generated_at": generated_at,
+        "status": "pending_customer_input",
+        "readiness_claim": False,
+        "template_boundary": (
+            "Source template only. Replace pending values with customer-approved "
+            "production evidence before running the matching report builder."
+        ),
+    }
+    if gate_id == "customer_data_governance":
+        return {
+            **base,
+            "customer_scope_id": "",
+            "as_of_date": "",
+            "dataset_provenance_status": "pending_customer_approval",
+            "label_provenance_status": "pending_customer_approval",
+            "holdout_split_status": "pending_customer_approval",
+            "shadow_traffic_plan_status": "pending_customer_approval",
+            "approved_label_count": 0,
+            "holdout_claim_count": 0,
+            "evidence_refs": [
+                "dataset_provenance:local://template/dataset-provenance.json",
+                "label_provenance:local://template/label-provenance.json",
+                "holdout_split:local://template/holdout-split.json",
+                "shadow_traffic_plan:local://template/shadow-traffic-plan.json",
+            ],
+        }
+    if gate_id == "retention_legal_hold":
+        return {
+            **base,
+            "retention_years": 0,
+            "retention_policy_id": "",
+            "legal_hold_policy_id": "",
+            "archive_storage_uri": "local://template/archive-storage",
+            "legal_hold_reconciliation_status": "pending",
+            "destruction_workflow": "pending_customer_approval",
+            "automated_destruction_enabled": False,
+            "evidence_refs": [
+                "retention_policy:local://template/retention-policy.json",
+                "legal_hold_policy:local://template/legal-hold-policy.json",
+            ],
+        }
+    if gate_id == "model_serving_slo":
+        return {
+            **base,
+            "model_key": "",
+            "model_version": "",
+            "latency_slo_ms": None,
+            "p95_latency_ms": None,
+            "error_rate_slo": None,
+            "error_rate": None,
+            "checksum_verified": False,
+            "signature_verified": False,
+            "fallback_status": "pending",
+            "rollback_ready": False,
+            "probability_calibration_status": "pending",
+            "calibrated_probability_serving_active": False,
+            "evidence_refs": [
+                "model_serving:local://template/model-serving-slo.json",
+                "model_artifact:local://template/model-artifact.json",
+                "probability_calibration_reports:local://template/probability-calibration-report.json",
+            ],
+        }
+    if gate_id == "ocr_vector_analytics_execution":
+        return {
+            **base,
+            "ocr_execution_status": "pending",
+            "embedding_vector_status": "pending",
+            "retrieval_ranking_status": "pending",
+            "clickhouse_export_status": "pending",
+            "dashboard_access_status": "pending",
+            "analytics_retention_backup_status": "pending",
+            "document_count": 0,
+            "embedding_job_count": 0,
+            "retrieval_audit_count": 0,
+            "analytics_export_job_count": 0,
+            "raw_phi_exported": None,
+            "evidence_refs": [
+                "ai_evidence_execution:local://template/ai-evidence-execution.json",
+                "ocr_outputs:local://template/ocr-outputs.json",
+                "embedding_jobs:local://template/embedding-jobs.json",
+                "retrieval_audits:local://template/retrieval-audits.json",
+                "analytics_exports:local://template/analytics-exports.json",
+                "clickhouse_dashboard:local://template/clickhouse-dashboard.json",
+            ],
+        }
+    return None
+
+
 def build_evidence_package(output_dir: Path) -> dict:
     generated_at = datetime.now(timezone.utc).isoformat()
     contract_dir = output_dir / "contract"
     evidence_dir = output_dir / "evidence"
+    source_dir = output_dir / "sources"
     contract = build_contract(contract_dir)
     artifacts = []
+    sources = []
     for gate in contract["required_gates"]:
         artifact_name = gate["required_artifact"]
+        gate_id = gate["gate_id"]
         write_json(evidence_dir / artifact_name, artifact_template(gate, generated_at))
         artifacts.append(
             {
-                "gate_id": gate["gate_id"],
+                "gate_id": gate_id,
                 "artifact": f"evidence/{artifact_name}",
                 "status": "pending_customer_evidence",
                 "customer_data_required": gate["customer_data_required"],
             }
         )
+        source_name = SOURCE_TEMPLATE_FILES.get(gate_id)
+        source = source_template(gate_id, generated_at)
+        if source_name and source:
+            write_json(source_dir / source_name, source)
+            sources.append(
+                {
+                    "gate_id": gate_id,
+                    "source": f"sources/{source_name}",
+                    "status": "pending_customer_input",
+                    "customer_data_required": gate["customer_data_required"],
+                }
+            )
     package = {
         "artifact_kind": "production_readiness_evidence_package_template",
         "generated_at": generated_at,
@@ -278,8 +391,11 @@ def build_evidence_package(output_dir: Path) -> dict:
         "readiness_claim": False,
         "contract_dir": "contract",
         "evidence_dir": "evidence",
+        "source_dir": "sources",
         "artifact_count": len(artifacts),
+        "source_template_count": len(sources),
         "artifacts": artifacts,
+        "source_templates": sources,
         "validation_command": (
             "python3 scripts/ops/validate_production_readiness_contract.py "
             "--contract-dir <package>/contract --evidence-dir <package>/evidence"

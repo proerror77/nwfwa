@@ -784,7 +784,7 @@ evidence artifact into the package:
 
 ```bash
 python3 scripts/ops/build_customer_data_governance_report.py \
-  --source-uri artifacts/production-evidence-package/customer-data-governance-source.json \
+  --source-uri artifacts/production-evidence-package/sources/customer-data-governance-source.json \
   --output-dir artifacts/production-evidence-package/evidence
 ```
 
@@ -799,7 +799,7 @@ Render approved retention/legal-hold controls into the required report shape:
 
 ```bash
 python3 scripts/ops/build_retention_legal_hold_report.py \
-  --source-uri artifacts/production-evidence-package/retention-legal-hold-source.json \
+  --source-uri artifacts/production-evidence-package/sources/retention-legal-hold-source.json \
   --output-dir artifacts/production-evidence-package/evidence
 ```
 
@@ -814,7 +814,7 @@ Render production model-serving measurements into the required report shape:
 
 ```bash
 python3 scripts/ops/build_model_serving_slo_report.py \
-  --source-uri artifacts/production-evidence-package/model-serving-slo-source.json \
+  --source-uri artifacts/production-evidence-package/sources/model-serving-slo-source.json \
   --output-dir artifacts/production-evidence-package/evidence
 ```
 
@@ -830,7 +830,7 @@ Render customer execution results into the required report shape:
 
 ```bash
 python3 scripts/ops/build_ocr_vector_analytics_execution_report.py \
-  --source-uri artifacts/production-evidence-package/ocr-vector-analytics-source.json \
+  --source-uri artifacts/production-evidence-package/sources/ocr-vector-analytics-source.json \
   --output-dir artifacts/production-evidence-package/evidence
 ```
 

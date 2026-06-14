@@ -316,6 +316,14 @@ CAPABILITIES = [
                 "pending_customer_evidence",
             ),
             (
+                "scripts/ops/build_production_evidence_package.py",
+                "SOURCE_TEMPLATE_FILES",
+            ),
+            (
+                "scripts/ops/build_production_evidence_package.py",
+                "source_template_count",
+            ),
+            (
                 "scripts/ops/build_customer_data_governance_report.py",
                 "customer_data_governance_report",
             ),
