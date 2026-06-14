@@ -804,6 +804,28 @@ ALTER TABLE model_evaluation_runs
 ALTER TABLE model_evaluation_runs
   ADD COLUMN IF NOT EXISTS permutation_importance_uri TEXT;
 
+CREATE TABLE IF NOT EXISTS scoring_feature_context_materializations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  materialization_id TEXT NOT NULL,
+  customer_scope_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  source_uris JSONB NOT NULL DEFAULT '{}'::jsonb,
+  claim_count INTEGER NOT NULL,
+  context_count INTEGER NOT NULL,
+  contexts_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, materialization_id)
+);
+
+CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_scope_date_idx
+  ON scoring_feature_context_materializations(customer_scope_id, as_of_date);
+
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

@@ -477,3 +477,113 @@ pub(super) async fn list_model_evaluations(
         )
         .collect())
 }
+
+pub(super) async fn save_scoring_feature_context_materialization(
+    repository: &PostgresScoringRepository,
+    input: SaveScoringFeatureContextMaterializationInput,
+) -> anyhow::Result<ScoringFeatureContextMaterializationRecord> {
+    sqlx::query(
+        "INSERT INTO scoring_feature_context_materializations
+             (materialization_id, customer_scope_id, as_of_date, report_uri, report_kind, source_uris, claim_count, context_count, contexts_json, evidence_refs, governance_boundary, submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (customer_scope_id, materialization_id) DO UPDATE
+             SET customer_scope_id = EXCLUDED.customer_scope_id,
+                 as_of_date = EXCLUDED.as_of_date,
+                 report_uri = EXCLUDED.report_uri,
+                 report_kind = EXCLUDED.report_kind,
+                 source_uris = EXCLUDED.source_uris,
+                 claim_count = EXCLUDED.claim_count,
+                 context_count = EXCLUDED.context_count,
+                 contexts_json = EXCLUDED.contexts_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes",
+    )
+    .bind(&input.materialization_id)
+    .bind(&input.customer_scope_id)
+    .bind(&input.as_of_date)
+    .bind(&input.report_uri)
+    .bind(&input.report_kind)
+    .bind(&input.source_uris)
+    .bind(input.claim_count as i64)
+    .bind(input.context_count as i64)
+    .bind(&input.contexts_json)
+    .bind(serde_json::json!(input.evidence_refs))
+    .bind(&input.governance_boundary)
+    .bind(&input.submitted_by)
+    .bind(&input.notes)
+    .execute(&repository.pool)
+    .await?;
+
+    get_scoring_feature_context_materialization(
+        repository,
+        &input.materialization_id,
+        Some(&input.customer_scope_id),
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("saved scoring feature context materialization was not found"))
+}
+
+pub(super) async fn get_scoring_feature_context_materialization(
+    repository: &PostgresScoringRepository,
+    materialization_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>> {
+    let row: Option<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Value,
+        i32,
+        i32,
+        Value,
+        Value,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT materialization_id, customer_scope_id, as_of_date, report_uri, report_kind, source_uris, claim_count, context_count, contexts_json, evidence_refs, governance_boundary, submitted_by, notes
+             FROM scoring_feature_context_materializations
+             WHERE materialization_id = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)",
+    )
+    .bind(materialization_id)
+    .bind(customer_scope_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            materialization_id,
+            customer_scope_id,
+            as_of_date,
+            report_uri,
+            report_kind,
+            source_uris,
+            claim_count,
+            context_count,
+            contexts_json,
+            evidence_refs,
+            governance_boundary,
+            submitted_by,
+            notes,
+        )| ScoringFeatureContextMaterializationRecord {
+            materialization_id,
+            customer_scope_id,
+            as_of_date,
+            report_uri,
+            report_kind,
+            source_uris,
+            claim_count: claim_count as u64,
+            context_count: context_count as u64,
+            contexts_json,
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            governance_boundary,
+            submitted_by,
+            notes,
+        },
+    ))
+}

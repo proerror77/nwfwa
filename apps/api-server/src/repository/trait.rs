@@ -308,6 +308,17 @@ pub trait DatasetsRepository: Send + Sync {
     ) -> anyhow::Result<Option<ModelEvaluationRecord>>;
 
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>>;
+
+    async fn save_scoring_feature_context_materialization(
+        &self,
+        input: SaveScoringFeatureContextMaterializationInput,
+    ) -> anyhow::Result<ScoringFeatureContextMaterializationRecord>;
+
+    async fn get_scoring_feature_context_materialization(
+        &self,
+        materialization_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>>;
 }
 
 // ---------------------------------------------------------------------------

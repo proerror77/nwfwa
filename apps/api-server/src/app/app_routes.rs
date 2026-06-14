@@ -197,6 +197,14 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             get(ops_datasets::get_model_evaluation),
         )
         .route(
+            "/api/v1/ops/scoring-feature-context-materializations",
+            post(ops_datasets::submit_scoring_feature_context_materialization),
+        )
+        .route(
+            "/api/v1/ops/scoring-feature-context-materializations/:materialization_id",
+            get(ops_datasets::get_scoring_feature_context_materialization),
+        )
+        .route(
             "/api/v1/ops/evidence/documents",
             get(ops_evidence::list_documents).post(ops_evidence::create_document),
         )

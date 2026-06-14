@@ -1,5 +1,8 @@
-use crate::repository::{DatasetRecord, FieldMappingRecord, ModelEvaluationRecord};
-use serde::Serialize;
+use crate::repository::{
+    DatasetRecord, FieldMappingRecord, ModelEvaluationRecord,
+    ScoringFeatureContextMaterializationRecord,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 #[derive(Debug, Serialize)]
@@ -39,6 +42,27 @@ pub struct ModelEvaluationResponse {
 pub struct ModelEvaluationListResponse {
     pub evaluations: Vec<ModelEvaluationRecord>,
     pub lineage: Vec<ModelEvaluationLineageRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitScoringFeatureContextMaterializationRequest {
+    pub materialization_id: String,
+    pub actor: String,
+    pub notes: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uris: Value,
+    pub claim_count: u64,
+    pub context_count: u64,
+    pub contexts: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ScoringFeatureContextMaterializationResponse {
+    pub materialization: ScoringFeatureContextMaterializationRecord,
 }
 
 #[derive(Debug, Serialize)]

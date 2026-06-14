@@ -1,11 +1,12 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, ModelDatasetRecord,
         ModelEvaluationRecord, PersistedAuditEvent, RegisterDatasetInput, RegisterFeatureSetInput,
         RegisterModelDatasetInput, RegisterModelEvaluationInput,
+        SaveScoringFeatureContextMaterializationInput,
     },
 };
 
@@ -15,6 +16,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{canonical_scheme_family, AuditEventId, ScoringRunId};
 use serde_json::{json, Value};
 
@@ -26,7 +28,7 @@ pub use super::ops_datasets_types::*;
 use validation::{
     validate_dataset_contract, validate_feature_set_registration, validate_field_mapping,
     validate_model_dataset_registration, validate_model_evaluation_registration,
-    validate_parquet_uri,
+    validate_parquet_uri, validate_scoring_feature_context_materialization,
 };
 
 pub async fn register_dataset(
@@ -332,6 +334,98 @@ pub async fn list_model_evaluations(
     }))
 }
 
+pub async fn submit_scoring_feature_context_materialization(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitScoringFeatureContextMaterializationRequest>,
+) -> Result<Json<ScoringFeatureContextMaterializationResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_scoring_feature_context_materialization(&request)?;
+    let contexts_json = serde_json::Value::Array(request.contexts);
+    let materialization = state
+        .repository
+        .save_scoring_feature_context_materialization(
+            SaveScoringFeatureContextMaterializationInput {
+                materialization_id: request.materialization_id,
+                customer_scope_id: actor.customer_scope_id.clone(),
+                as_of_date: request.as_of_date,
+                report_uri: request.report_uri,
+                report_kind: request.report_kind,
+                source_uris: request.source_uris,
+                claim_count: request.claim_count,
+                context_count: request.context_count,
+                contexts_json,
+                evidence_refs: request.evidence_refs,
+                governance_boundary: request.governance_boundary,
+                submitted_by: request.actor,
+                notes: request.notes,
+            },
+        )
+        .await
+        .map_err(internal_error(
+            "SCORING_FEATURE_CONTEXT_MATERIALIZATION_SAVE_FAILED",
+        ))?;
+    let mut evidence_refs = materialization.evidence_refs.clone();
+    evidence_refs.push(format!(
+        "scoring_feature_context_materializations:{}",
+        materialization.materialization_id
+    ));
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "scoring_feature_context.materialization.submitted",
+            summary: "Scoring feature context materialization submitted",
+            payload: json!({
+                "materialization_id": materialization.materialization_id,
+                "as_of_date": materialization.as_of_date,
+                "report_uri": materialization.report_uri,
+                "report_kind": materialization.report_kind,
+                "claim_count": materialization.claim_count,
+                "context_count": materialization.context_count,
+                "submitted_by": materialization.submitted_by,
+                "owner": actor.actor_id.clone(),
+            }),
+            evidence_refs,
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "SCORING_FEATURE_CONTEXT_MATERIALIZATION_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(ScoringFeatureContextMaterializationResponse {
+        materialization,
+    }))
+}
+
+pub async fn get_scoring_feature_context_materialization(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(materialization_id): Path<String>,
+) -> Result<Json<ScoringFeatureContextMaterializationResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:read")?;
+    let materialization = state
+        .repository
+        .get_scoring_feature_context_materialization(
+            &materialization_id,
+            Some(&actor.customer_scope_id),
+        )
+        .await
+        .map_err(internal_error(
+            "SCORING_FEATURE_CONTEXT_MATERIALIZATION_LOAD_FAILED",
+        ))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "SCORING_FEATURE_CONTEXT_MATERIALIZATION_NOT_FOUND",
+                "scoring feature context materialization not found",
+            )
+        })?;
+    Ok(Json(ScoringFeatureContextMaterializationResponse {
+        materialization,
+    }))
+}
+
 async fn build_model_evaluation_lineage(
     state: &AppState,
     evaluations: &[ModelEvaluationRecord],
@@ -410,4 +504,18 @@ async fn record_data_lineage_audit(
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

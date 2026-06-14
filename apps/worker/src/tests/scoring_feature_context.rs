@@ -180,3 +180,144 @@ fn materializes_scoring_feature_contexts_from_worker_artifacts() {
         .join("claim_scoring_feature_contexts.json")
         .exists());
 }
+
+#[test]
+fn builds_scoring_feature_context_materialization_submission_payload() {
+    let root = temp_root("scoring-feature-context-submission");
+    let report_uri = root.join("scoring_feature_context_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "scoring_feature_context_materialization",
+            "report_version": 1,
+            "as_of_date": "2026-06-13",
+            "source_uris": {
+                "claims_uri": "local://claims.json",
+                "episode_rollups_uri": "local://episode.json",
+                "peer_benchmarks_uri": "local://peer.json",
+                "clinical_compatibility_uri": "local://clinical.json",
+                "unbundling_candidates_uri": "local://unbundling.json"
+            },
+            "claim_count": 1,
+            "context_count": 1,
+            "contexts": [
+                {
+                    "claim_id": "CLM-1",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-1",
+                    "peer_context": {"claim_amount_peer_percentile": 90},
+                    "clinical_compatibility_context": null,
+                    "episode_utilization_context": null,
+                    "evidence_refs": ["scoring_feature_contexts:CLM-1"],
+                    "data_sources": ["worker.peer_percentile_benchmark_rollup"],
+                    "missing_contexts": []
+                }
+            ],
+            "evidence_refs": ["scoring_feature_contexts:local://claims.json"],
+            "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
+        }),
+    )
+    .unwrap();
+
+    let submission = build_scoring_feature_context_materialization_submission(
+        &report_uri.to_string_lossy(),
+        "sfc-mat-1",
+        "worker:scoring-contexts",
+        "pilot materialization",
+    )
+    .expect("submission");
+
+    assert_eq!(submission.materialization_id, "sfc-mat-1");
+    assert_eq!(
+        submission.report_kind,
+        "scoring_feature_context_materialization"
+    );
+    assert_eq!(submission.context_count, 1);
+    assert_eq!(submission.contexts[0]["claim_id"], "CLM-1");
+    assert_eq!(submission.source_uris["claims_uri"], "local://claims.json");
+    assert!(submission
+        .governance_boundary
+        .contains("must not assign fraud labels"));
+}
+
+#[tokio::test]
+async fn submits_scoring_feature_context_materialization_to_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("scoring-feature-context-submit-api");
+    let report_uri = root.join("scoring_feature_context_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "scoring_feature_context_materialization",
+            "report_version": 1,
+            "as_of_date": "2026-06-13",
+            "source_uris": {
+                "claims_uri": "local://claims.json",
+                "episode_rollups_uri": "local://episode.json",
+                "peer_benchmarks_uri": "local://peer.json",
+                "clinical_compatibility_uri": "local://clinical.json",
+                "unbundling_candidates_uri": "local://unbundling.json"
+            },
+            "claim_count": 1,
+            "context_count": 1,
+            "contexts": [
+                {
+                    "claim_id": "CLM-1",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-1",
+                    "peer_context": {"claim_amount_peer_percentile": 90},
+                    "clinical_compatibility_context": null,
+                    "episode_utilization_context": null,
+                    "evidence_refs": ["scoring_feature_contexts:CLM-1"],
+                    "data_sources": ["worker.peer_percentile_benchmark_rollup"],
+                    "missing_contexts": []
+                }
+            ],
+            "evidence_refs": ["scoring_feature_contexts:local://claims.json"],
+            "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
+        }),
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "materialization": {
+                    "materialization_id": "sfc-mat-1",
+                    "context_count": 1
+                }
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = submit_scoring_feature_context_materialization(
+        &api_url,
+        "dataset-write-secret",
+        &report_uri.to_string_lossy(),
+        "sfc-mat-1",
+        "worker:scoring-contexts",
+        "pilot materialization",
+    )
+    .await
+    .expect("submit scoring feature context materialization");
+
+    assert_eq!(
+        response["materialization"]["materialization_id"],
+        "sfc-mat-1"
+    );
+    let request = server.await.unwrap();
+    assert!(
+        request.starts_with("POST /api/v1/ops/scoring-feature-context-materializations HTTP/1.1")
+    );
+    assert!(request.contains("x-api-key: dataset-write-secret"));
+    assert!(request.contains(r#""materialization_id":"sfc-mat-1""#));
+    assert!(request.contains(r#""claim_id":"CLM-1""#));
+}

@@ -10,8 +10,8 @@ use std::{
 };
 
 use crate::{
-    read_json_report, write_json, ClinicalCompatibilityRecord, EpisodeAggregationReport,
-    MemberProviderEpisodeRollup, PeerBenchmarkGroup, PeerBenchmarkReport,
+    api_url, read_json_report, required_non_empty, write_json, ClinicalCompatibilityRecord,
+    EpisodeAggregationReport, MemberProviderEpisodeRollup, PeerBenchmarkGroup, PeerBenchmarkReport,
     UnbundlingComparatorCandidate, UnbundlingComparatorReport,
 };
 
@@ -67,6 +67,22 @@ pub struct ScoringFeatureContextReport {
     pub claim_count: usize,
     pub context_count: usize,
     pub contexts: Vec<ClaimScoringFeatureContext>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoringFeatureContextMaterializationSubmission {
+    pub materialization_id: String,
+    pub actor: String,
+    pub notes: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uris: serde_json::Value,
+    pub claim_count: usize,
+    pub context_count: usize,
+    pub contexts: Vec<serde_json::Value>,
     pub evidence_refs: Vec<String>,
     pub governance_boundary: String,
 }
@@ -153,6 +169,86 @@ pub fn build_scoring_feature_context_report(
         &report.contexts,
     )?;
     Ok(report)
+}
+
+pub fn build_scoring_feature_context_materialization_submission(
+    report_uri: &str,
+    materialization_id: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<ScoringFeatureContextMaterializationSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let materialization_id = required_non_empty("materialization_id", materialization_id)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report: ScoringFeatureContextReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse scoring feature context materialization report")?;
+    if report.report_kind != "scoring_feature_context_materialization" {
+        bail!("report_kind must be scoring_feature_context_materialization");
+    }
+    if report.context_count != report.contexts.len() {
+        bail!("context_count must match contexts length");
+    }
+    if report.context_count > report.claim_count {
+        bail!("context_count must not exceed claim_count");
+    }
+    if report.evidence_refs.is_empty() {
+        bail!("scoring feature context materialization requires evidence_refs");
+    }
+
+    Ok(ScoringFeatureContextMaterializationSubmission {
+        materialization_id: materialization_id.into(),
+        actor: actor.into(),
+        notes: notes.into(),
+        report_uri: report_uri.into(),
+        report_kind: report.report_kind,
+        as_of_date: report.as_of_date,
+        source_uris: serde_json::to_value(report.source_uris)?,
+        claim_count: report.claim_count,
+        context_count: report.context_count,
+        contexts: report
+            .contexts
+            .into_iter()
+            .map(serde_json::to_value)
+            .collect::<Result<Vec<_>, _>>()?,
+        evidence_refs: report.evidence_refs,
+        governance_boundary: report.governance_boundary,
+    })
+}
+
+pub async fn submit_scoring_feature_context_materialization(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    materialization_id: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_scoring_feature_context_materialization_submission(
+        report_uri,
+        materialization_id,
+        actor,
+        notes,
+    )?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/scoring-feature-context-materializations",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit scoring feature context materialization")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit scoring feature context materialization failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse scoring feature context materialization response")
 }
 
 fn materialize_claim_context(

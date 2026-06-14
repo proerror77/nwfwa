@@ -28,17 +28,50 @@ fn test_config() -> AppConfig {
     }
 }
 
+fn test_config_with_dataset_actors() -> AppConfig {
+    AppConfig {
+        api_key: "legacy-secret".into(),
+        api_key_principals: vec![
+            "dataset-read-secret|dataset-reader|operations_reviewer|ops-studio|demo-customer|ops:datasets:read,audit:read".into(),
+            "dataset-write-secret|dataset-writer|fwa_operator|ops-studio|demo-customer|ops:datasets:read,ops:datasets:write,audit:read".into(),
+        ],
+        source_system: "tpa-demo".into(),
+        database_url: "postgres://unused".into(),
+        model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    }
+}
+
 async fn json_request(
     app: axum::Router,
     method: &str,
     uri: &str,
     body: &str,
 ) -> (StatusCode, serde_json::Value) {
+    json_request_with_key(app, method, uri, body, "dev-secret").await
+}
+
+async fn json_request_with_key(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+    api_key: &str,
+) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .header("x-api-key", "dev-secret")
+        .header("x-api-key", api_key)
         .body(Body::from(body.to_string()))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -46,6 +79,49 @@ async fn json_request(
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
     (status, body)
+}
+
+fn scoring_feature_context_materialization_payload() -> &'static str {
+    r#"{
+      "materialization_id": "sfc-mat-2026-06-13",
+      "actor": "worker:scoring-feature-contexts",
+      "notes": "pilot worker materialization",
+      "report_uri": "local://artifacts/scoring/scoring_feature_context_report.json",
+      "report_kind": "scoring_feature_context_materialization",
+      "as_of_date": "2026-06-13",
+      "source_uris": {
+        "claims_uri": "local://inputs/scoring-claims.json",
+        "episode_rollups_uri": "local://artifacts/episode/episode_aggregation_report.json",
+        "peer_benchmarks_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
+        "clinical_compatibility_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
+        "unbundling_candidates_uri": "local://artifacts/unbundling/unbundling_comparator_report.json"
+      },
+      "claim_count": 1,
+      "context_count": 1,
+      "contexts": [
+        {
+          "claim_id": "CLM-WORKER-CONTEXT-1",
+          "peer_context": {"claim_amount_peer_percentile": 90},
+          "clinical_compatibility_context": {
+            "diagnosis_procedure_match_score": 0.32,
+            "data_source": "worker.icd_cpt_compatibility_reference"
+          },
+          "episode_utilization_context": {
+            "member_provider_claim_count_30d": 2,
+            "duplicate_claim_similarity_score": 1.0,
+            "procedure_frequency_peer_percentile": 92,
+            "unbundling_candidate_count": 1,
+            "data_source": "worker.episode_utilization_rollup"
+          },
+          "evidence_refs": ["scoring_feature_contexts:CLM-WORKER-CONTEXT-1"]
+        }
+      ],
+      "evidence_refs": [
+        "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json",
+        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json"
+      ],
+      "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
+    }"#
 }
 
 fn renewal_dataset_payload(storage_format: &str) -> String {
@@ -114,6 +190,71 @@ fn renewal_dataset_payload(storage_format: &str) -> String {
           ]
         }}"#
     )
+}
+
+#[tokio::test]
+async fn submits_and_reads_scoring_feature_context_materialization() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, submitted) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        scoring_feature_context_materialization_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let materialization = &submitted["materialization"];
+    assert_eq!(materialization["materialization_id"], "sfc-mat-2026-06-13");
+    assert_eq!(materialization["customer_scope_id"], "demo-customer");
+    assert_eq!(materialization["context_count"], 1);
+    assert_eq!(
+        materialization["contexts_json"][0]["claim_id"],
+        "CLM-WORKER-CONTEXT-1"
+    );
+    assert!(materialization["governance_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("must not assign fraud labels"));
+
+    let (status, loaded) = json_request_with_key(
+        app,
+        "GET",
+        "/api/v1/ops/scoring-feature-context-materializations/sfc-mat-2026-06-13",
+        "{}",
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        loaded["materialization"]["report_uri"],
+        "local://artifacts/scoring/scoring_feature_context_report.json"
+    );
+    assert_eq!(
+        loaded["materialization"]["evidence_refs"][0],
+        "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json"
+    );
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        scoring_feature_context_materialization_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
 }
 
 #[tokio::test]

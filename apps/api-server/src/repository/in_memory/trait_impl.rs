@@ -432,6 +432,26 @@ impl DatasetsRepository for InMemoryScoringRepository {
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
         self.in_memory_list_model_evaluations().await
     }
+
+    async fn save_scoring_feature_context_materialization(
+        &self,
+        input: SaveScoringFeatureContextMaterializationInput,
+    ) -> anyhow::Result<ScoringFeatureContextMaterializationRecord> {
+        self.in_memory_save_scoring_feature_context_materialization(input)
+            .await
+    }
+
+    async fn get_scoring_feature_context_materialization(
+        &self,
+        materialization_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>> {
+        self.in_memory_get_scoring_feature_context_materialization(
+            materialization_id,
+            customer_scope_id,
+        )
+        .await
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -167,6 +167,40 @@ pub struct ModelEvaluationRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoringFeatureContextMaterializationRecord {
+    pub materialization_id: String,
+    pub customer_scope_id: String,
+    pub as_of_date: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub source_uris: Value,
+    pub claim_count: u64,
+    pub context_count: u64,
+    pub contexts_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveScoringFeatureContextMaterializationInput {
+    pub materialization_id: String,
+    pub customer_scope_id: String,
+    pub as_of_date: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub source_uris: Value,
+    pub claim_count: u64,
+    pub context_count: u64,
+    pub contexts_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterModelEvaluationInput {
     pub evaluation_run_id: String,
     pub model_key: String,

@@ -486,6 +486,26 @@ impl DatasetsRepository for PostgresScoringRepository {
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
         postgres_datasets::list_model_evaluations(self).await
     }
+
+    async fn save_scoring_feature_context_materialization(
+        &self,
+        input: SaveScoringFeatureContextMaterializationInput,
+    ) -> anyhow::Result<ScoringFeatureContextMaterializationRecord> {
+        postgres_datasets::save_scoring_feature_context_materialization(self, input).await
+    }
+
+    async fn get_scoring_feature_context_materialization(
+        &self,
+        materialization_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>> {
+        postgres_datasets::get_scoring_feature_context_materialization(
+            self,
+            materialization_id,
+            customer_scope_id,
+        )
+        .await
+    }
 }
 
 #[async_trait]

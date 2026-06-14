@@ -235,4 +235,63 @@ impl InMemoryScoringRepository {
         evaluations.sort_by(|left, right| left.evaluation_run_id.cmp(&right.evaluation_run_id));
         Ok(evaluations)
     }
+
+    pub(super) async fn in_memory_save_scoring_feature_context_materialization(
+        &self,
+        input: SaveScoringFeatureContextMaterializationInput,
+    ) -> anyhow::Result<ScoringFeatureContextMaterializationRecord> {
+        let record = ScoringFeatureContextMaterializationRecord {
+            materialization_id: input.materialization_id,
+            customer_scope_id: input.customer_scope_id,
+            as_of_date: input.as_of_date,
+            report_uri: input.report_uri,
+            report_kind: input.report_kind,
+            source_uris: input.source_uris,
+            claim_count: input.claim_count,
+            context_count: input.context_count,
+            contexts_json: input.contexts_json,
+            evidence_refs: input.evidence_refs,
+            governance_boundary: input.governance_boundary,
+            submitted_by: input.submitted_by,
+            notes: input.notes,
+        };
+        self.scoring_feature_context_materializations
+            .lock()
+            .await
+            .insert(
+                scoring_context_materialization_key(
+                    &record.customer_scope_id,
+                    &record.materialization_id,
+                ),
+                record.clone(),
+            );
+        Ok(record)
+    }
+
+    pub(super) async fn in_memory_get_scoring_feature_context_materialization(
+        &self,
+        materialization_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>> {
+        let record = self
+            .scoring_feature_context_materializations
+            .lock()
+            .await
+            .values()
+            .find(|record| record.materialization_id == materialization_id)
+            .cloned()
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            });
+        Ok(record)
+    }
+}
+
+fn scoring_context_materialization_key(
+    customer_scope_id: &str,
+    materialization_id: &str,
+) -> String {
+    format!("{customer_scope_id}::{materialization_id}")
 }

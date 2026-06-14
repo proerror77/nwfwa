@@ -217,6 +217,80 @@ pub(super) fn validate_model_evaluation_registration(
     Ok(())
 }
 
+pub(super) fn validate_scoring_feature_context_materialization(
+    request: &SubmitScoringFeatureContextMaterializationRequest,
+) -> Result<(), ApiError> {
+    if request.materialization_id.trim().is_empty()
+        || request.actor.trim().is_empty()
+        || request.report_uri.trim().is_empty()
+        || request.as_of_date.trim().is_empty()
+        || request.governance_boundary.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "materialization_id, actor, report_uri, as_of_date, and governance_boundary are required",
+        ));
+    }
+    if request.report_kind != "scoring_feature_context_materialization" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "report_kind must be scoring_feature_context_materialization",
+        ));
+    }
+    if !request.source_uris.is_object() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "source_uris must be an object",
+        ));
+    }
+    if request.context_count != request.contexts.len() as u64 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "context_count must match contexts length",
+        ));
+    }
+    if request.context_count > request.claim_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "context_count must not exceed claim_count",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "evidence_refs must be non-empty and contain no blank values",
+        ));
+    }
+    for context in &request.contexts {
+        let Some(claim_id) = context.get("claim_id").and_then(|value| value.as_str()) else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+                "each context must include claim_id",
+            ));
+        };
+        if claim_id.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+                "context claim_id must not be blank",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_unit_interval_metric(
     metric_name: &'static str,
     metric: &Option<Decimal>,

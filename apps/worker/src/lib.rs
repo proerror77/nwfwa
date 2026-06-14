@@ -180,8 +180,10 @@ pub use unbundling_comparator::{
 
 mod scoring_feature_context;
 pub use scoring_feature_context::{
-    build_scoring_feature_context_report, ClaimScoringFeatureContext,
-    ScoringFeatureContextClaimInput, ScoringFeatureContextInput, ScoringFeatureContextReport,
+    build_scoring_feature_context_materialization_submission, build_scoring_feature_context_report,
+    submit_scoring_feature_context_materialization, ClaimScoringFeatureContext,
+    ScoringFeatureContextClaimInput, ScoringFeatureContextInput,
+    ScoringFeatureContextMaterializationSubmission, ScoringFeatureContextReport,
     ScoringFeatureContextSourceUris,
 };
 

@@ -137,6 +137,41 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             ["application/json"]["schema"]["$ref"],
         "#/components/schemas/ModelEvaluationResponse"
     );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/scoring-feature-context-materializations"]["post"]
+            ["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextMaterializationRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/scoring-feature-context-materializations"]["post"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextMaterializationResponse"
+    );
+    assert_eq!(
+        schema["paths"]
+            ["/api/v1/ops/scoring-feature-context-materializations/{materialization_id}"]["get"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextMaterializationResponse"
+    );
+    assert!(
+        schema["paths"]["/api/v1/ops/scoring-feature-context-materializations"]["post"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("does not score")
+    );
+    assert!(
+        schema["components"]["schemas"]["ScoringFeatureContextMaterializationRequest"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "governance_boundary")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ScoringFeatureContextMaterialization"]["properties"]
+            ["report_kind"]["const"],
+        "scoring_feature_context_materialization"
+    );
     assert!(
         schema["components"]["schemas"]["ModelEvaluation"]["required"]
             .as_array()

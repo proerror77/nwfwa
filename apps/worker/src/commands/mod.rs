@@ -43,6 +43,7 @@ mod serve_mlops_alert_router;
 mod submit_anomaly_clustering_report;
 mod submit_mlops_alert_delivery_tasks;
 mod submit_mlops_monitoring_report;
+mod submit_scoring_feature_contexts;
 mod sync_oig_sam_sanctions;
 mod verify_demo_automl_lifecycle;
 
@@ -83,6 +84,7 @@ pub async fn dispatch(mut args: Vec<String>) -> anyhow::Result<()> {
         "build-provider-graph-signals" => build_provider_graph_signals::run(args),
         "build-provider-profile-windows" => build_provider_profile_windows::run(args),
         "build-scoring-feature-contexts" => build_scoring_feature_contexts::run(args),
+        "submit-scoring-feature-contexts" => submit_scoring_feature_contexts::run(args).await,
         "build-unbundling-comparator" => build_unbundling_comparator::run(args),
         "submit-mlops-alert-delivery-tasks" => submit_mlops_alert_delivery_tasks::run(args).await,
         "submit-anomaly-clustering-report" => submit_anomaly_clustering_report::run(args).await,

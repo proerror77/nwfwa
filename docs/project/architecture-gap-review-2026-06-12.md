@@ -76,7 +76,10 @@ As of the P1/P2 remediation commits after this review:
 - The worker now has a scoring feature context materialization contract that
   maps episode rollups, peer benchmarks, clinical compatibility records, and
   unbundling candidates into claim-level contexts suitable for online scoring
-  integration without writing production state.
+  integration, plus a permission-gated
+  `/api/v1/ops/scoring-feature-context-materializations` submit path and
+  `submit-scoring-feature-contexts` worker command so those claim-level
+  contexts can be audited and persisted before scoring.
 - The claims scoring API now accepts those materialized worker contexts and
   passes peer, clinical compatibility, and episode-utilization inputs into
   online feature calculation while preserving the assistive-only scoring
@@ -106,7 +109,8 @@ As of the P1/P2 remediation commits after this review:
   insufficient.
 
 Remaining boundaries after those commits are production scheduling, DB write
-paths for customer rollups, customer claim/history data, LLM-backed specialist
+paths for customer rollups outside the scoring-context materialization path,
+customer claim/history data, LLM-backed specialist
 execution, real external tool-call runtime mediation, wiring long-running/tool-
 using agents into the cancellation signal, customer-approved ICD-10/CPT or
 medical-policy reference data, customer-approved unbundling rule packs,
@@ -114,8 +118,9 @@ customer-approved feature lineage/source mappings, calibrated-probability
 serving activation, and replacement of the L3 heuristic anomaly scorer with a
 validated statistical baseline. Audit retention still needs customer-environment
 partitioning, archive storage, legal-hold reconciliation writes, approved
-destruction workflow execution, production scheduling/DB write paths for worker
-artifacts, and live routing-impact validation on customer data.
+destruction workflow execution, production scheduling/DB write paths for
+remaining worker artifacts, and live routing-impact validation on customer
+data.
 
 ## A. Scoring Layer Gaps
 
