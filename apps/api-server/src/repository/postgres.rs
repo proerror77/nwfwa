@@ -741,6 +741,19 @@ impl KnowledgeRepository for PostgresScoringRepository {
         postgres_providers::save_provider_profile_windows(self, input).await
     }
 
+    async fn latest_provider_profile_windows_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderProfileWindowRecord>> {
+        postgres_providers::latest_provider_profile_windows_for_provider(
+            self,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
     async fn save_provider_graph_signals(
         &self,
         input: SaveProviderGraphSignalsInput,

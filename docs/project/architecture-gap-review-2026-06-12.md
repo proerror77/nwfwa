@@ -98,6 +98,9 @@ As of the P1/P2 remediation commits after this review:
   permission-gated submit path and worker command that persist provider profile
   windows from an approved rollup report while explicitly avoiding scoring-
   policy changes, fraud-label assignment, or claim adjudication.
+- The claims scoring API can now load the latest persisted provider profile
+  window rollup by provider when no inline `provider_profile` payload is
+  supplied, preserving rollup evidence refs in the scoring evidence trace.
 - The provider graph signal rollup now has a separate permission-gated submit
   path and worker command that persist billing-ring, temporal co-billing, and
   referral-entropy signals from an approved rollup report while explicitly

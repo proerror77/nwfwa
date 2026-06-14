@@ -307,6 +307,138 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
 }
 
 #[tokio::test]
+async fn returns_persisted_provider_profile_rollup_for_network_risk() {
+    let app = build_app(test_config()).unwrap();
+
+    let rollup_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/profile-window-rollups")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-provider-profile-windows",
+              "notes": "claims scoring provider profile test",
+              "source_report_uri": "local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
+              "report_kind": "provider_profile_window_rollup",
+              "as_of_date": "2026-06-14",
+              "source_uri": "local://inputs/provider-claims.json",
+              "provider_count": 1,
+              "claim_count": 3,
+              "provider_profiles": [
+                {
+                  "provider_id": "PRV-PERSISTED-PROFILE",
+                  "specialty": "imaging",
+                  "network_status": "in_network",
+                  "windows": [
+                    {
+                      "window_days": 30,
+                      "claim_count": 3,
+                      "total_claim_amount": "36000.00",
+                      "high_cost_item_ratio": 1.0,
+                      "diagnosis_procedure_mismatch_rate": 0.5,
+                      "peer_amount_percentile": 97,
+                      "peer_frequency_percentile": 95,
+                      "review_failure_count": 1,
+                      "confirmed_fwa_count": 2,
+                      "false_positive_count": 0
+                    }
+                  ],
+                  "evidence_refs": ["claims:CLM-PERSISTED-PROFILE-1"]
+                }
+              ],
+              "evidence_refs": [
+                "provider_profile_window_rollups:local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
+                "provider_profile_claim_snapshot:local://inputs/provider-claims.json"
+              ],
+              "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+            }"#,
+        ))
+        .unwrap();
+    let rollup_response = app.clone().oneshot(rollup_request).await.unwrap();
+    assert_eq!(rollup_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-PROFILE-1",
+                "claim_amount": "12000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-901",
+                  "item_type": "procedure",
+                  "description": "High cost imaging",
+                  "quantity": 1,
+                  "unit_amount": "12000",
+                  "total_amount": "12000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-PROFILE"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-PROFILE",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "15000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-PROFILE",
+                "name": "Persisted Profile Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let profile = &body["provider_profile"];
+    assert_eq!(profile["provider_id"], "PRV-PERSISTED-PROFILE");
+    assert_eq!(profile["review_required"], true);
+    assert_eq!(profile["specialty"], "imaging");
+    assert_eq!(profile["network_status"], "in_network");
+
+    let provider_profile_feature = body["feature_values"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|feature| feature["name"] == "provider_profile_score")
+        .expect("provider profile score feature");
+    assert_eq!(provider_profile_feature["is_proxy"], false);
+    assert_eq!(
+        provider_profile_feature["data_source"],
+        "worker.provider_profile_window_rollup"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!("claims:CLM-PERSISTED-PROFILE-1")));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "provider_profile_windows:PRV-PERSISTED-PROFILE:2026-06-14"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "provider_profile_window_rollups:local://artifacts/provider-profile/provider_profile_window_rollup_report.json"
+    )));
+}
+
+#[tokio::test]
 async fn returns_provider_sanctions_evidence_for_excluded_provider() {
     let app = build_app(test_config()).unwrap();
 

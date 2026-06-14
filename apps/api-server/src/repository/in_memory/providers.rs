@@ -65,6 +65,31 @@ impl InMemoryScoringRepository {
         Ok(saved)
     }
 
+    pub(super) async fn in_memory_latest_provider_profile_windows_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderProfileWindowRecord>> {
+        let records = self.provider_profile_windows.lock().await;
+        let mut candidates = records
+            .values()
+            .filter(|record| record.provider_id == provider_id)
+            .filter(|record| {
+                customer_scope_id
+                    .map(|scope| record.customer_scope_id == scope)
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        candidates.sort_by(|left, right| {
+            right
+                .as_of_date
+                .cmp(&left.as_of_date)
+                .then_with(|| right.source_report_uri.cmp(&left.source_report_uri))
+        });
+        Ok(candidates.into_iter().next())
+    }
+
     pub(super) async fn in_memory_save_provider_graph_signals(
         &self,
         input: SaveProviderGraphSignalsInput,

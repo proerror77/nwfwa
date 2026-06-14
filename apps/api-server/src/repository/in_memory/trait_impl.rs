@@ -712,6 +712,15 @@ impl KnowledgeRepository for InMemoryScoringRepository {
         self.in_memory_save_provider_profile_windows(input).await
     }
 
+    async fn latest_provider_profile_windows_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderProfileWindowRecord>> {
+        self.in_memory_latest_provider_profile_windows_for_provider(provider_id, customer_scope_id)
+            .await
+    }
+
     async fn save_provider_graph_signals(
         &self,
         input: SaveProviderGraphSignalsInput,

@@ -138,6 +138,62 @@ pub(super) async fn save_provider_profile_windows(
     Ok(saved)
 }
 
+pub(super) async fn latest_provider_profile_windows_for_provider(
+    repository: &PostgresScoringRepository,
+    provider_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ProviderProfileWindowRecord>> {
+    let row: Option<(
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        Value,
+        Value,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT customer_scope_id, provider_id, specialty, network_status, as_of_date, windows, evidence_refs, source_report_uri, submitted_by, notes
+             FROM provider_profile_windows
+             WHERE provider_id = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)
+             ORDER BY as_of_date DESC, updated_at DESC
+             LIMIT 1",
+    )
+    .bind(provider_id)
+    .bind(customer_scope_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            customer_scope_id,
+            provider_id,
+            specialty,
+            network_status,
+            as_of_date,
+            windows,
+            evidence_refs,
+            source_report_uri,
+            submitted_by,
+            notes,
+        )| ProviderProfileWindowRecord {
+            customer_scope_id,
+            provider_id,
+            specialty,
+            network_status,
+            as_of_date,
+            windows: serde_json::from_value(windows).unwrap_or_default(),
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            source_report_uri,
+            submitted_by,
+            notes,
+        },
+    ))
+}
+
 pub(super) async fn save_provider_graph_signals(
     repository: &PostgresScoringRepository,
     input: SaveProviderGraphSignalsInput,

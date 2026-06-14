@@ -980,6 +980,8 @@ CREATE TABLE IF NOT EXISTS provider_profile_windows (
 
 CREATE INDEX IF NOT EXISTS provider_profile_windows_scope_provider_idx
   ON provider_profile_windows(customer_scope_id, provider_id);
+CREATE INDEX IF NOT EXISTS provider_profile_windows_scope_provider_date_idx
+  ON provider_profile_windows(customer_scope_id, provider_id, as_of_date);
 
 CREATE TABLE IF NOT EXISTS provider_graph_signals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

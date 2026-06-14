@@ -499,6 +499,12 @@ pub trait KnowledgeRepository: Send + Sync {
         input: SaveProviderProfileWindowsInput,
     ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>>;
 
+    async fn latest_provider_profile_windows_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderProfileWindowRecord>>;
+
     async fn save_provider_graph_signals(
         &self,
         input: SaveProviderGraphSignalsInput,

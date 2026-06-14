@@ -173,6 +173,57 @@ async fn resolve_scoring_feature_context(
     }))
 }
 
+async fn resolve_provider_profile_input(
+    state: &AppState,
+    actor: &ActorContext,
+    provider_id: &str,
+    inline_profile: Option<ProviderProfileInput>,
+) -> Result<(Option<ProviderProfileInput>, Vec<serde_json::Value>), ApiError> {
+    if inline_profile.is_some() {
+        return Ok((inline_profile, Vec::new()));
+    }
+
+    let Some(record) = state
+        .repository
+        .latest_provider_profile_windows_for_provider(provider_id, Some(&actor.customer_scope_id))
+        .await
+        .map_err(internal_error("PROVIDER_PROFILE_LOAD_FAILED"))?
+    else {
+        return Ok((None, Vec::new()));
+    };
+
+    let windows = serde_json::from_value::<Vec<ProviderProfileWindowPayload>>(
+        serde_json::Value::Array(record.windows),
+    )
+    .map_err(internal_error("PROVIDER_PROFILE_PARSE_FAILED"))?;
+    let profile = ProviderProfileInput::from(ProviderProfilePayload {
+        specialty: record.specialty,
+        network_status: record.network_status,
+        oig_excluded: None,
+        sam_debarred: None,
+        windows,
+    });
+    let mut evidence_refs = record
+        .evidence_refs
+        .into_iter()
+        .chain([
+            format!(
+                "provider_profile_windows:{}:{}",
+                record.provider_id, record.as_of_date
+            ),
+            format!(
+                "provider_profile_window_rollups:{}",
+                record.source_report_uri
+            ),
+        ])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(serde_json::Value::String)
+        .collect::<Vec<_>>();
+    evidence_refs.sort_by_key(|value| value.to_string());
+    Ok((Some(profile), evidence_refs))
+}
+
 pub async fn score_claim(
     State(state): State<AppState>,
     AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
@@ -387,6 +438,14 @@ pub async fn score_claim(
     let episode_utilization_context =
         episode_utilization_context_from_request(scoring_feature_context);
     let run_id = ScoringRunId::new();
+    let (provider_profile_input, provider_profile_materialization_evidence_refs) =
+        resolve_provider_profile_input(
+            &state,
+            &actor,
+            &context.provider.external_provider_id,
+            provider_profile_input,
+        )
+        .await?;
     let provider_profile =
         assess_provider_profile(&context.provider, provider_profile_input.as_ref());
     let provider_profile_feature_context = ProviderProfileFeatureContext {
@@ -419,6 +478,7 @@ pub async fn score_claim(
     if let Some(context) = &resolved_scoring_feature_context {
         evidence_refs.extend(context.evidence_refs.clone());
     }
+    evidence_refs.extend(provider_profile_materialization_evidence_refs);
     evidence_refs.extend(
         clinical_evidence
             .evidence_refs
