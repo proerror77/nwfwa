@@ -324,6 +324,14 @@ CAPABILITIES = [
                 "source_template_count",
             ),
             (
+                "scripts/ops/render_production_evidence_package.py",
+                "production_evidence_package_render_summary",
+            ),
+            (
+                "scripts/ops/render_production_evidence_package.py",
+                "rendered_with_blockers",
+            ),
+            (
                 "scripts/ops/build_customer_data_governance_report.py",
                 "customer_data_governance_report",
             ),

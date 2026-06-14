@@ -774,6 +774,18 @@ readiness validator against a newly generated template should fail until the
 customer replaces `local://template/...` placeholders and pending statuses with
 real production artifact URIs, scheduler execution results, approvals, counts,
 and evidence refs.
+After filling the supported source templates under `sources/`, render those
+sources into the matching evidence reports:
+
+```bash
+python3 scripts/ops/render_production_evidence_package.py \
+  --package-dir artifacts/production-evidence-package
+```
+
+The renderer currently covers customer-data governance, retention/legal hold,
+model-serving SLO, and OCR/vector/analytics execution. It writes
+`render_summary.json`; blocked source inputs remain blocked reports, and the
+production readiness validator remains the final acceptance gate.
 
 The customer-data governance gate requires
 `customer_data_governance_report.json` to show approved dataset provenance,
