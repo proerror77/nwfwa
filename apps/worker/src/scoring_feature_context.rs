@@ -195,6 +195,30 @@ pub fn build_scoring_feature_context_materialization_submission(
     if report.evidence_refs.is_empty() {
         bail!("scoring feature context materialization requires evidence_refs");
     }
+    for required_ref in [
+        format!(
+            "scoring_feature_context_claim_snapshot:{}",
+            report.source_uris.claims_uri
+        ),
+        format!("episode_rollups:{}", report.source_uris.episode_rollups_uri),
+        format!("peer_benchmarks:{}", report.source_uris.peer_benchmarks_uri),
+        format!(
+            "clinical_compatibility:{}",
+            report.source_uris.clinical_compatibility_uri
+        ),
+        format!(
+            "unbundling_candidates:{}",
+            report.source_uris.unbundling_candidates_uri
+        ),
+    ] {
+        if !report
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == required_ref)
+        {
+            bail!("scoring feature context materialization requires {required_ref} evidence");
+        }
+    }
     let mut evidence_refs = report.evidence_refs;
     evidence_refs.push(format!("scoring_feature_contexts:{report_uri}"));
 
