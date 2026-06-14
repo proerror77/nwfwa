@@ -183,7 +183,7 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
         readiness_job_properties["required_evidence_prefixes"]["description"]
             .as_str()
             .unwrap_or_default()
-            .contains("per-job customer evidence_refs"),
+            .contains("source-lineage prefixes"),
         "missing readiness required_evidence_prefixes description"
     );
     let execution_job_properties = &schema["components"]["schemas"]
@@ -197,7 +197,7 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
         execution_job_properties["required_evidence_prefixes"]["description"]
             .as_str()
             .unwrap_or_default()
-            .contains("scheduler-provided evidence_refs"),
+            .contains("source-lineage prefixes"),
         "missing execution required_evidence_prefixes description"
     );
     assert_eq!(

@@ -495,7 +495,7 @@ pub(super) fn dataset_schemas() -> Value {
                                 "type": "array",
                                 "minItems": 1,
                                 "items": { "type": "string", "minLength": 1 },
-                                "description": "Required and non-empty when execution_status is completed. Worker-plan prefixes that scheduler-provided evidence_refs must satisfy for this job, including scoring context source lineage prefixes when applicable."
+                                "description": "Required and non-empty when execution_status is completed. Worker-plan prefixes that scheduler-provided evidence_refs must satisfy for this job, including submit/write and source-lineage prefixes for provider, dataset, and scoring-context artifacts when applicable."
                             },
                             "required_permission": {
                                 "type": ["string", "null"],
@@ -633,7 +633,7 @@ pub(super) fn dataset_schemas() -> Value {
                                 "type": "array",
                                 "minItems": 1,
                                 "items": { "type": "string", "minLength": 1 },
-                                "description": "Required and non-empty when readiness_status is ready. Worker-plan prefixes that per-job customer evidence_refs must satisfy before this job can be considered ready."
+                                "description": "Required and non-empty when readiness_status is ready. Worker-plan prefixes that per-job customer evidence_refs must satisfy before this job can be considered ready, including submit/write and source-lineage prefixes when applicable."
                             },
                             "blockers": {
                                 "type": "array",
