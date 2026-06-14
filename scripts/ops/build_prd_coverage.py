@@ -181,8 +181,20 @@ CAPABILITIES = [
                 "completed_job_artifact_and_evidence_refs_present",
             ),
             (
+                "scripts/ops/build_production_readiness_contract.py",
+                "completed_job_artifacts_are_production_uris",
+            ),
+            (
+                "scripts/ops/build_production_readiness_contract.py",
+                "governed_submit_jobs_include_write_evidence_refs",
+            ),
+            (
                 "scripts/ops/validate_production_readiness_contract.py",
                 "WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS",
+            ),
+            (
+                "scripts/ops/validate_production_readiness_contract.py",
+                "WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES",
             ),
             (
                 "scripts/ops/validate_production_readiness_contract.py",

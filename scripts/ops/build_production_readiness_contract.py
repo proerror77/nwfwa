@@ -73,8 +73,16 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
         "description": "Every completed worker data-pipeline job has a non-empty reported artifact URI and per-job evidence refs.",
     },
     {
+        "check_id": "completed_job_artifacts_are_production_uris",
+        "description": "Completed worker data-pipeline job artifact URIs are customer-environment production artifact URIs, not local dry-run or template placeholders.",
+    },
+    {
         "check_id": "governed_submit_jobs_submitted",
         "description": "Every governed worker data-pipeline submit job has submitted = true, expected API path and permission scope, and a non-empty reported artifact URI.",
+    },
+    {
+        "check_id": "governed_submit_jobs_include_write_evidence_refs",
+        "description": "Every governed worker data-pipeline submit job includes the expected write evidence reference for its persisted API submission.",
     },
     {
         "check_id": "source_snapshot_artifact_reported",

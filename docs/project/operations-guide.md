@@ -783,10 +783,13 @@ checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
 zero review tasks, all governed worker job kinds completed, required execution
 URIs present, plan/run-status/readiness evidence refs present, and the
 no-adjudication governance boundary preserved. Every job must show
-`reported_status = succeeded` and no blocked dependencies. All governed submit
-jobs must also show `submitted = true`, while the expected API path, required
-permission scope, and non-empty artifact URI are present. The artifact-only
-OIG/SAM source snapshot job must also report a non-empty artifact URI.
+`reported_status = succeeded` and no blocked dependencies. Every completed job
+must report a production artifact URI rather than a local dry-run URI or
+template placeholder. All governed submit jobs must also show
+`submitted = true`, while the expected API path, required permission scope,
+non-empty artifact URI, and matching write evidence reference are present. The
+artifact-only OIG/SAM source snapshot job must also report a non-empty
+production artifact URI.
 After the customer environment publishes production evidence, validate that all
 required readiness artifacts are present and JSON-parseable, and validate the
 worker pipeline execution artifact against those deeper checks:

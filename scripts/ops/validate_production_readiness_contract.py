@@ -71,6 +71,18 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS = {
     "probability_calibration_evidence": "ops:models:review",
 }
 
+WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES = {
+    "oig_sam_sanctions_sync": "sanctions_sync_reports:",
+    "provider_profile_window_rollup": "provider_profile_window_rollups:",
+    "provider_graph_signal_rollup": "provider_graph_signal_rollups:",
+    "peer_percentile_benchmark": "peer_benchmarks:",
+    "episode_aggregation": "episode_rollups:",
+    "clinical_compatibility_reference": "clinical_compatibility_references:",
+    "unbundling_comparator": "unbundling_comparator_candidates:",
+    "scoring_feature_context_materialization": "scoring_feature_context_materializations:",
+    "probability_calibration_evidence": "probability_calibration_reports:",
+}
+
 WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "report_kind_is_worker_data_pipeline_execution_report",
     "readiness_gate_status_ready",
@@ -81,7 +93,9 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "required_job_kinds_completed",
     "scheduler_reported_jobs_succeeded_without_dependency_blockers",
     "completed_job_artifact_and_evidence_refs_present",
+    "completed_job_artifacts_are_production_uris",
     "governed_submit_jobs_submitted",
+    "governed_submit_jobs_include_write_evidence_refs",
     "source_snapshot_artifact_reported",
     "evidence_refs_include_plan_run_status_and_readiness",
     "governance_boundary_no_adjudication",
@@ -291,6 +305,21 @@ def validate_evidence_dir(evidence_dir: Path, gates: list[dict]) -> dict[str, di
     return artifacts
 
 
+def is_production_artifact_uri(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    uri = value.strip()
+    return bool(uri) and not uri.startswith("local://") and "{" not in uri and "}" not in uri
+
+
+def evidence_refs_include_prefix(job: dict, prefix: str) -> bool:
+    evidence_refs = job.get("evidence_refs")
+    return isinstance(evidence_refs, list) and any(
+        isinstance(reference, str) and reference.startswith(prefix)
+        for reference in evidence_refs
+    )
+
+
 def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
     require(
         report.get("report_kind") == "worker_data_pipeline_execution_report",
@@ -358,6 +387,10 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
             and job["reported_artifact_uri"].strip(),
             f"worker data pipeline job {job_kind} must report artifact URI",
         )
+        require(
+            is_production_artifact_uri(job.get("reported_artifact_uri")),
+            f"worker data pipeline job {job_kind} must report a production artifact URI, not a local dry-run or template URI",
+        )
         job_evidence_refs = job.get("evidence_refs")
         require(
             isinstance(job_evidence_refs, list)
@@ -388,11 +421,20 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
             and job["reported_artifact_uri"].strip(),
             f"worker data pipeline submit job {job_kind} must report artifact URI",
         )
+        required_evidence_prefix = WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES[job_kind]
+        require(
+            evidence_refs_include_prefix(job, required_evidence_prefix),
+            f"worker data pipeline submit job {job_kind} evidence_refs missing {required_evidence_prefix}",
+        )
     snapshot_job = jobs_by_kind["oig_sam_sanctions_snapshot_fetch"]
     require(
         isinstance(snapshot_job.get("reported_artifact_uri"), str)
         and snapshot_job["reported_artifact_uri"].strip(),
         "worker data pipeline source snapshot job must report artifact URI",
+    )
+    require(
+        is_production_artifact_uri(snapshot_job.get("reported_artifact_uri")),
+        "worker data pipeline source snapshot job must report a production artifact URI, not a local dry-run or template URI",
     )
     evidence_refs = report.get("evidence_refs")
     require(
