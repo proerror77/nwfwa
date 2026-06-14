@@ -217,11 +217,11 @@ validation on customer data.
 | --- | --- | --- |
 | A-1 | L1 peer percentile fallback is explicitly marked as proxy data when real peer data is absent; real peer percentile can now come from inline/materialized context or the latest persisted benchmark group when provider specialty, region, and explicit service segment are available. | Keep proxy paths excluded or down-weighted when those real peer inputs are missing, and validate persisted peer benchmarks against customer claim history before production use. |
 | A-2 | `diagnosis_procedure_match_score` has a real clinical compatibility input path, worker reference contract, permission-gated clinical reference submit/write path, and claim-time persisted-reference lookup. The default remains a hard-coded heuristic fallback when neither inline/materialized context nor a matching governed reference exists. | Populate the persisted reference set from customer-approved ICD-10/CPT compatibility or medical-policy data and validate it against customer claims before using this layer as production clinical consistency. |
-| A-3 | Confidence scoring overweights rule/anomaly/model agreement and ignores other high-signal layers. | Move to a weighted multi-layer confidence model or high-confidence rule based on two independent high-risk signals. |
-| A-4 | Provider graph input needs billing ring, temporal co-billing, and referral entropy signals. | Add fields to the provider graph contract and require worker rollups that compute them from claim/referral history. |
-| A-5 | Seven-layer weights are hard-coded and do not renormalize when data is missing. | Represent layer values as data-present vs. actual zero and renormalize across available layers. |
+| A-3 | Confidence scoring now includes broader multi-layer evidence instead of only rule/anomaly/model agreement. | Validate confidence thresholds against customer routing queues and live reviewer capacity before production routing. |
+| A-4 | Provider graph input now carries billing-ring, temporal co-billing, referral entropy, and related persisted graph signals. | Validate graph rollups against customer claim/referral history before treating them as production network-risk evidence. |
+| A-5 | Seven-layer scoring now distinguishes missing data from real zero scores and renormalizes across available layers. | Recalibrate layer weights against customer labels and routing impact before production activation. |
 | A-6 | Provider history counts now use the same 30/90/365 recency weighting philosophy as provider profile risk, producing effective counts instead of letting a 365-day max dominate current scoring. | Validate effective-count interpretation with customer review policy before exposing it as an operational KPI. |
-| A-7 | L3 anomaly baseline has a comment but no quantified upgrade trigger. | Add a measurable threshold, e.g. upgrade evaluation after at least 500 confirmed FWA labels or poor 30-day recall. |
+| A-7 | L3 anomaly upgrade readiness now has a worker report contract with quantified label/recall gates; the online scorer remains heuristic until validated statistical replacement data exists. | Replace the heuristic scorer with IQR/MAD or ensemble scoring only after customer labels/history meet the readiness gates. |
 | A-8 | FWA feature families for revisit frequency, duplicate-claim similarity, procedure frequency vs. peers, and unbundling candidates now have optional feature/scoring inputs, a worker materialization contract, persisted API ingestion and claim-time lookup support, direct persisted episode-rollup lookup for member-provider utilization, direct persisted unbundling comparator lookup for candidate counts, an episode-rollup submit/write path, a clinical-compatibility reference submit/write path, and an unbundling comparator candidate submit/write path. Production scheduling and customer-data validation remain open. | Connect scheduled worker artifact persistence and customer-approved data sources before treating these schemes as production-covered. |
 
 ## B. Feature Engineering And Data Quality Gaps
@@ -231,15 +231,15 @@ validation on customer data.
 | B-1 | Peer percentile fallback remains a proxy path unless upstream supplies peer context or a matching persisted peer benchmark group is available by provider specialty, region, and explicit service segment. | Feature metadata must continue to expose `is_proxy`, `data_source`, and source lineage so compliance reports can distinguish real distributions from estimates. |
 | B-2 | Episode-level features now have worker-owned 30/90/365 member-provider aggregation, scoring input materialization, a permission-gated submit/write path, and claim-time persisted rollup lookup for member-provider utilization fallback; production scheduling and customer claim-history validation remain open. | Connect scheduled customer-history rollups before treating unbundling and excessive-utilization coverage as production-ready. |
 | B-3 | ICD-10/CPT clinical compatibility ingestion now has a permission-gated reference submit/write path and claim-time scoring lookup. Unbundling comparator candidates now also have a permission-gated submit/write path and claim-time candidate-count lookup, but customer-approved rule packs, production scheduling, and customer-data validation remain open. | Connect clinical compatibility references, bundled/component code references, and episode co-occurrence outputs to governed customer data before treating clinical matching or unbundling detection as production-covered. |
-| B-4 | Feature registry lacks proxy/source metadata. | Extend feature records and PRD acceptance criteria so compliance reports can distinguish real distributions from estimates. |
+| B-4 | Feature records and online scoring responses now expose proxy/source metadata for compliance traceability. | Fill customer-approved feature lineage/source mappings before production compliance reporting. |
 
 ## C. Agentic Investigation Control-Plane Gaps
 
 | ID | Gap | Required planning response |
 | --- | --- | --- |
-| C-1 | Agent identity registry is missing as a runtime authority. | Add `agent_registry` with identity, kind, version, capability scope, PHI field allowlist, status, registration, and deprovision timestamps. |
-| C-2 | No independent `investigations` entity groups multiple agent runs for the same claim. | Add `investigations` and make agent audit events reference a stable investigation id instead of a run-derived string. |
-| C-3 | PHI field access is not enforced by registry policy, and accessed fields can be empty in audit events. | Enforce field allowlists at investigation/tool boundaries and persist actual PHI field names without values. |
+| C-1 | Agent identity registry exists as an additive runtime authority for deterministic agent capability/PHI checks. | Extend the registry to LLM-backed and externally mediated agents before enabling those runtimes. |
+| C-2 | Independent `investigations` now group agent runs under stable investigation ids. | Validate multi-run investigation lifecycle with customer operating procedures. |
+| C-3 | Registry PHI allowlists are enforced for deterministic knowledge access, and audit events persist accessed PHI field names without values. | Extend enforcement to every future external tool and LLM specialist boundary. |
 | C-4 | Kill-switch behavior now includes an API control plane plus crate-level deterministic cancellation checkpoints, but no long-running/tool-using agent runtime is wired to the signal yet. | Wire runtime specialist dispatch and tool calls through the cancellation signal before adding LLM-backed or long-running agents. |
 | C-5 | Deterministic investigation now has an orchestrator trait, specialist-plan contract, deterministic specialist dispatch/tool mediation contract, and API/OpenAPI exposure for specialist execution traces, but not LLM-backed specialist execution or real external tool runtime mediation. | Add LLM-backed investigators and real tool mediation only after governance checks and cancellation wiring are stable. |
 
@@ -248,44 +248,45 @@ validation on customer data.
 | ID | Gap | Required planning response |
 | --- | --- | --- |
 | D-1 | Serving manifest loading now caches parsed manifests after the first score request. | Keep customer deployment evidence focused on cache behavior under live serving load rather than reimplementing manifest parsing. |
-| D-2 | Poisoned ONNX/session mutexes can cause persistent scorer failure. | Recover poisoned locks with error logging and alerting instead of requiring process restart. |
-| D-3 | PSI calculation exists as a monitoring concept but must drive actions. | PSI above threshold must create monitoring alerts and compliance/model review tasks. |
-| D-4 | Rule hit-rate trending is defined as a plan but needs runtime computation. | Compute 7-day and 90-day hit-rate windows and trigger drift review when short-term rates collapse. |
+| D-2 | Poisoned ONNX/session mutex recovery is implemented with error logging. | Add customer-environment alert routing and incident evidence. |
+| D-3 | PSI threshold actioning now creates monitoring/review artifacts. | Wire action artifacts into customer model-governance operations. |
+| D-4 | Rule hit-rate trending now computes 7-day vs. 90-day drift and emits review artifacts. | Validate thresholds against customer production traffic and rule governance cadence. |
 | D-5 | L3 anomaly scoring is still a heuristic baseline. | Add worker evaluation for IQR/MAD or ensemble anomaly readiness and make the upgrade trigger measurable. |
-| D-6 | Raw sigmoid outputs may be interpreted as calibrated fraud probability. | Mark probability calibration status explicitly, such as `uncalibrated_raw_sigmoid`. |
+| D-6 | Raw sigmoid outputs are explicitly marked as `uncalibrated_raw_sigmoid`, and calibration evidence report contracts exist. | Fit and activate calibrated probability serving only after customer labels, holdout, and governance approval. |
 
 ## E. Compliance, Security, And HIPAA Gaps
 
 | ID | Gap | Required planning response |
 | --- | --- | --- |
-| E-1 | Validation-error serialization must not silently turn failures into empty arrays. | Treat serialization failure as an explicit error or critical audit event. |
-| E-2 | Canonical claim context and evidence payloads can expose PHI unless field-level masking is applied. | Mask known PII field paths before API responses and audit payloads; do not rely only on regex value detection. |
-| E-3 | Routing policy lifecycle writes need fine-grained permissions. | Align routing policy write/approve/activate/rollback permissions with rule lifecycle governance. |
-| E-4 | PII masking by value pattern misses names and non-US identity numbers. | Prefer field-name/path-based masking for known PHI/PII inputs. |
-| E-5 | Six-year audit retention is documented but not enforced. | Add audit retention policy, archive workflow, and production evidence for HIPAA retention. |
+| E-1 | Validation-error serialization now fails loudly instead of silently storing empty arrays. | Keep audit replay evidence in customer validation runs. |
+| E-2 | Canonical claim context and evidence responses now apply field-path PHI/PII masking at API response boundaries. | Confirm customer-specific raw payload adapters and PII field policies. |
+| E-3 | Routing policy lifecycle writes now require fine-grained permissions aligned with rule lifecycle governance. | Validate production role assignments and approval workflow. |
+| E-4 | Known PHI/PII fields are masked by field path instead of relying only on value-pattern detection. | Extend field-path maps for each customer payload schema. |
+| E-5 | Audit retention now has a dry-run scan contract; deletion/archive execution is still not performed locally. | Add customer-environment partitioning, cold archive, legal-hold reconciliation, and approved destruction execution. |
 
 ## F. Worker Data Pipeline Gaps
 
 | Pipeline | Current gap | Priority |
 | --- | --- | --- |
-| OIG/SAM daily sanctions sync | No autonomous sync command; sanctions status depends on upstream input. | P1 |
-| Provider profile windows | 30/90/365 windows are required, but worker rollup ownership must be explicit. | P1 |
-| Billing ring detection | Graph clustering needs billing-ring membership or patient-overlap ring detection. | P2 |
-| Temporal co-billing | Needs 7-day co-occurrence computation from dated claim history. | P2 |
-| Referral entropy | Referral concentration should be entropy or HHI-backed, not an opaque score. | P2 |
+| OIG/SAM daily sanctions sync | Local worker contract, submit/write path, and claim-time sanctions consumption exist; live external fetch and scheduling remain. | P1 |
+| Provider profile windows | Local 30/90/365 worker rollup, submit/write path, and claim-time persisted profile consumption exist; customer claim-history validation remains. | P1 |
+| Billing ring detection | Local graph-signal rollup and persisted consumption exist; production validation against customer claim/referral history remains. | P2 |
+| Temporal co-billing | Local graph-signal rollup and persisted consumption exist; production validation against dated customer claim history remains. | P2 |
+| Referral entropy | Local entropy-backed graph signal and persisted consumption exist; production validation against customer referral history remains. | P2 |
 | Peer-group percentile benchmark | Local worker rollup, permission-gated submit/write path, and claim-time persisted benchmark lookup exist; production scheduling and customer claim-history validation remain. | P2 |
-| Episode aggregation | Member-provider 30/90/365 episode rollups are missing for unbundling/utilization schemes. | P2 |
-| PSI actioning | PSI must create alerts/tasks, not only report values. | P1 |
-| Rule hit-rate trending | 7-day vs. 90-day rule hit-rate computation must be implemented and scheduled. | P1 |
+| Episode aggregation | Local member-provider rollup, submit/write path, and claim-time persisted episode consumption exist; production scheduling and customer history validation remain. | P2 |
+| PSI actioning | PSI actioning exists as monitoring/review artifacts. | P1 |
+| Rule hit-rate trending | 7-day vs. 90-day computation and drift review artifacts exist; production scheduling remains. | P1 |
 
 ## G. Scheme Coverage Implications
 
 The strongest current coverage is provider peer outlier and suspicious provider
-relationship review, but both still depend on real peer distributions and graph
-rollups. Duplicate billing, unbundling, excessive utilization, lab abuse,
-telehealth abuse, genetic testing abuse, pharmacy/opioid abuse, and DME/home
-health abuse all require episode, code-frequency, or policy-reference features
-before they can be treated as production-complete schemes.
+  relationship review, and both now have local worker rollups plus claim-time
+persisted consumption paths. Duplicate billing, unbundling, excessive
+utilization, lab abuse, telehealth abuse, genetic testing abuse,
+pharmacy/opioid abuse, and DME/home health abuse still require
+customer-approved episode history, code-frequency references, or medical-policy
+reference data before they can be treated as production-complete schemes.
 
 China-market-specific patterns also need explicit feature and evidence support:
 early high-value claims, split treatment across multiple facilities in one
@@ -295,36 +296,36 @@ episode, suspicious beneficiary identity, and organized provider/member rings.
 
 ### P0 - Immediate Correctness And Safety
 
-- Label proxy and placeholder scoring paths for L1 peer percentile, L5
-  diagnosis/procedure compatibility, and L3 anomaly baseline.
-- Add fine-grained permissions to routing policy lifecycle writes.
-- Make inbox validation serialization failures fail loudly.
-- Recover scorer mutex poisoning and log/alert the recovery.
+- Implemented: proxy/placeholder labels, routing-policy permissions,
+  validation-error hard failure, and scorer mutex poison recovery.
 
 ### P1 - Current Month Architecture Completion
 
-- Add provider graph contract fields for billing ring membership, temporal
-  co-billing, and referral entropy.
-- Add missing-data-aware scoring reweighting and improve confidence scoring.
-- Add worker commands for provider profile windows and daily OIG/SAM sanctions
-  sync.
-- Make PSI violations and rule hit-rate drift produce actionable review tasks.
-- Add field-path PII masking to canonical claim context and evidence responses.
+- Implemented locally: provider graph signal fields/rollups, missing-data-aware
+  scoring, broader confidence scoring, provider-profile windows, sanctions
+  sync contract/write path, PSI actioning, rule hit-rate trending, and
+  field-path PHI/PII response masking.
+- Remaining: live external OIG/SAM fetch, customer scheduler execution,
+  customer claim-history validation, production role assignments, and live
+  routing-impact evidence.
 
 ### P2 - Next Quarter Foundation Work
 
-- Add worker rollups for billing rings, temporal co-billing, referral entropy,
-  peer percentile benchmarks, and episode aggregation.
-- Add `agent_registry`, `investigations`, PHI field enforcement, and populated
-  `phi_fields_accessed` audit records.
-- Add episode-level features, ICD-10/CPT unbundling comparators, and feature
-  proxy/source metadata.
-- Cache serving manifests in the Rust ML runtime.
+- Implemented locally: billing-ring/temporal/referral graph rollups, peer
+  percentile benchmarks, episode aggregation, `agent_registry`,
+  `investigations`, PHI allowlist enforcement, populated PHI field audits,
+  episode-level features, ICD-10/CPT clinical reference inputs, unbundling
+  comparator contracts, feature proxy/source metadata, and serving manifest
+  caching.
+- Remaining: customer-approved reference/rule packs, customer data validation,
+  production scheduler execution, and LLM-backed external tool mediation.
 
 ### P3 - Medium-Term Agentic And Compliance Hardening
 
-- Implement agent kill-switch and specialist-agent orchestration.
-- Add audit retention implementation and evidence of six-year retention policy.
+- Continue from the implemented control-plane contracts into LLM-backed
+  specialist execution and real external tool mediation.
+- Execute audit retention in the customer environment with archive/legal-hold
+  reconciliation and approved destruction workflow.
 - Replace L3 heuristic anomaly baseline with IQR/MAD or ensemble scoring once
-  label/history thresholds are met.
+  customer label/history thresholds are met.
 - Extend scheme coverage for China-market-specific organized fraud patterns.
