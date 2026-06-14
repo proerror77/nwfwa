@@ -1525,6 +1525,24 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         "ready job readiness records require non-empty required_evidence_prefixes",
                     ));
                 }
+                if job_kind == "scoring_online_readback" {
+                    if let Some(required_prefix) = SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES
+                        .iter()
+                        .find(|required_prefix| {
+                            !required_evidence_prefixes
+                                .iter()
+                                .any(|prefix| prefix == *required_prefix)
+                        })
+                    {
+                        return Err(ApiError::new(
+                            StatusCode::BAD_REQUEST,
+                            "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                            format!(
+                                "scoring_online_readback required_evidence_prefixes must include {required_prefix}"
+                            ),
+                        ));
+                    }
+                }
                 let missing_required_evidence_prefix =
                     required_evidence_prefixes.iter().find(|prefix| {
                         !readiness
