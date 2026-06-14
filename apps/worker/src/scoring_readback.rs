@@ -4,6 +4,17 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 use crate::{api_url, read_json_report, required_non_empty, write_json};
 
+pub(crate) const REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES: &[&str] = &[
+    "scoring_feature_contexts:",
+    "provider_profile_window_rollups:",
+    "sanctions_sync_reports:",
+    "provider_graph_signal_rollups:",
+    "peer_benchmarks:",
+    "episode_rollups:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoringReadbackInput {
     pub customer_scope_id: String,
@@ -227,6 +238,15 @@ fn normalized_expected_prefixes(prefixes: &[String]) -> anyhow::Result<Vec<Strin
     }
     normalized.sort();
     normalized.dedup();
+    let normalized_set = normalized
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for required_prefix in REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES {
+        if !normalized_set.contains(required_prefix) {
+            bail!("expected_evidence_prefixes missing required production readback prefix: {required_prefix}");
+        }
+    }
     Ok(normalized)
 }
 

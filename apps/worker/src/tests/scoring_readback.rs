@@ -1,4 +1,5 @@
 use super::*;
+use crate::scoring_readback::REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES;
 
 #[tokio::test]
 async fn fetches_scoring_readback_response_from_claims_score_api() {
@@ -67,11 +68,7 @@ fn verifies_scoring_readback_response_evidence_prefixes() {
             "as_of_date": "2026-06-15",
             "score_request_uri": "s3://customer-alpha/scoring-readback/2026-06-15/request.json",
             "score_response_uri": response_uri.to_string_lossy(),
-            "expected_evidence_prefixes": [
-                "scoring_feature_contexts:",
-                "peer_benchmarks:",
-                "clinical_compatibility:"
-            ],
+            "expected_evidence_prefixes": full_expected_prefixes(),
             "evidence_refs": ["worker_data_pipeline_executions:run-1"]
         }),
     )
@@ -95,7 +92,14 @@ fn verifies_scoring_readback_response_evidence_prefixes() {
                     "evidence_refs": ["clinical_compatibility:s3://clinical/report.json"]
                 }
             ],
-            "evidence_refs": ["rule_runs:baseline"]
+            "evidence_refs": [
+                "rule_runs:baseline",
+                "provider_profile_window_rollups:s3://provider-profile/report.json",
+                "sanctions_sync_reports:s3://sanctions/report.json",
+                "provider_graph_signal_rollups:s3://provider-graph/report.json",
+                "episode_rollups:s3://episode/report.json",
+                "unbundling_candidates:s3://unbundling/report.json"
+            ]
         }),
     )
     .unwrap();
@@ -107,8 +111,14 @@ fn verifies_scoring_readback_response_evidence_prefixes() {
     assert_eq!(report.report_kind, "scoring_readback_report");
     assert_eq!(report.readback_status, "verified");
     assert_eq!(report.execution_mode, "score_response_artifact_readback");
-    assert_eq!(report.expected_evidence_prefix_count, 3);
-    assert_eq!(report.matched_evidence_prefix_count, 3);
+    assert_eq!(
+        report.expected_evidence_prefix_count,
+        REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES.len()
+    );
+    assert_eq!(
+        report.matched_evidence_prefix_count,
+        REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES.len()
+    );
     assert!(report.blockers.is_empty());
     assert!(report
         .observed_evidence_refs
@@ -134,7 +144,7 @@ fn blocks_scoring_readback_without_score_response_artifact() {
             "customer_scope_id": "customer-alpha",
             "as_of_date": "2026-06-15",
             "score_request_uri": "s3://customer-alpha/scoring-readback/2026-06-15/request.json",
-            "expected_evidence_prefixes": ["scoring_feature_contexts:"]
+            "expected_evidence_prefixes": full_expected_prefixes()
         }),
     )
     .unwrap();
@@ -161,10 +171,7 @@ fn blocks_scoring_readback_when_expected_evidence_prefix_is_missing() {
             "customer_scope_id": "customer-alpha",
             "as_of_date": "2026-06-15",
             "score_request_uri": "s3://customer-alpha/scoring-readback/2026-06-15/request.json",
-            "expected_evidence_prefixes": [
-                "scoring_feature_contexts:",
-                "provider_graph_signal_rollups:"
-            ]
+            "expected_evidence_prefixes": full_expected_prefixes()
         }),
     )
     .unwrap();
@@ -194,4 +201,32 @@ fn blocks_scoring_readback_when_expected_evidence_prefix_is_missing() {
         report.review_tasks[0].task_kind,
         "scoring_online_readback_review"
     );
+}
+
+#[test]
+fn rejects_scoring_readback_input_missing_required_production_prefix() {
+    let root = temp_root("scoring-readback-missing-required-input-prefix");
+    let input_uri = root.join("scoring_readback_input.json");
+    write_json(
+        input_uri.clone(),
+        &serde_json::json!({
+            "customer_scope_id": "customer-alpha",
+            "as_of_date": "2026-06-15",
+            "score_request_uri": "s3://customer-alpha/scoring-readback/2026-06-15/request.json",
+            "expected_evidence_prefixes": full_expected_prefixes()
+                .into_iter()
+                .filter(|prefix| *prefix != "provider_graph_signal_rollups:")
+                .collect::<Vec<_>>()
+        }),
+    )
+    .unwrap();
+
+    let error = build_scoring_readback_report(&input_uri.to_string_lossy(), None, root.join("out"))
+        .expect_err("missing required production prefix should fail fast");
+
+    assert!(error.to_string().contains("provider_graph_signal_rollups:"));
+}
+
+fn full_expected_prefixes() -> Vec<&'static str> {
+    REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES.to_vec()
 }
