@@ -342,7 +342,21 @@ fn builds_deterministic_mock_retraining_output() {
     assert_eq!(output.metrics_json["segment_fairness_status"], "passed");
     assert_eq!(output.metrics_json["out_of_time_precision"], 0.76);
     assert_eq!(output.metrics_json["out_of_time_recall"], 0.71);
+    assert_eq!(
+        output.metrics_json["out_of_time_validation_status"],
+        "passed"
+    );
     assert_eq!(output.metrics_json["max_feature_psi"], 0.08);
+    assert_eq!(output.metrics_json["score_stability_status"], "passed");
+    assert_eq!(output.metrics_json["feature_stability_status"], "passed");
+    assert_eq!(
+        output.metrics_json["automl_factor_ranking_status"],
+        "passed"
+    );
+    assert_eq!(
+        output.metrics_json["overfitting_diagnostics_status"],
+        "passed"
+    );
     assert_eq!(
         output.metrics_json["model_artifact_evaluation_status"],
         "passed"
@@ -362,6 +376,8 @@ fn builds_deterministic_mock_retraining_output() {
             "model_feature_importance:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/feature_importance.parquet",
             "model_permutation_importance:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/permutation_importance.parquet",
             "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/artifact-evaluation/model_artifact_evaluation_report.json",
+            "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/automl/factor_ranking_report.json",
+            "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/diagnostics/overfitting_diagnostics_report.json",
             "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rule-candidates/backtest/rule_candidate_backtest_report.json",
             "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json",
             "model_evaluations:eval_baseline_fwa_0_1_0_candidate_model_retraining_job_1",

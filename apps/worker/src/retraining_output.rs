@@ -472,6 +472,12 @@ pub(crate) fn build_mock_retraining_output(
     let artifact_evaluation_report_uri = format!(
         "{artifact_root}/{safe_model_key}/{candidate_model_version}/artifact-evaluation/model_artifact_evaluation_report.json"
     );
+    let automl_factor_ranking_report_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/automl/factor_ranking_report.json"
+    );
+    let overfitting_diagnostics_report_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/diagnostics/overfitting_diagnostics_report.json"
+    );
     let rule_backtest_report_uri = format!(
         "{artifact_root}/{safe_model_key}/{candidate_model_version}/rule-candidates/backtest/rule_candidate_backtest_report.json"
     );
@@ -490,6 +496,8 @@ pub(crate) fn build_mock_retraining_output(
         format!("model_feature_importance:{feature_importance_uri}"),
         format!("model_permutation_importance:{permutation_importance_uri}"),
         format!("model_artifact_evaluations:{artifact_evaluation_report_uri}"),
+        format!("automl_factor_rankings:{automl_factor_ranking_report_uri}"),
+        format!("model_overfitting_diagnostics:{overfitting_diagnostics_report_uri}"),
         format!("rule_candidate_backtests:{rule_backtest_report_uri}"),
         format!("rule_candidate_review_tasks:{rule_review_tasks_uri}"),
         format!("model_evaluations:{evaluation_run_id}"),
@@ -527,12 +535,19 @@ pub(crate) fn build_mock_retraining_output(
             "out_of_time_auc": 0.82,
             "out_of_time_precision": 0.76,
             "out_of_time_recall": 0.71,
+            "out_of_time_validation_status": "passed",
             "score_psi": 0.04,
             "max_feature_psi": 0.08,
+            "score_stability_status": "passed",
+            "feature_stability_status": "passed",
             "leakage_check_status": "passed",
             "time_group_split_status": "passed",
             "time_split_field": "service_date",
             "group_split_fields": ["member_id", "policy_id", "provider_id"],
+            "automl_factor_ranking_status": "passed",
+            "automl_factor_ranking_report_uri": automl_factor_ranking_report_uri,
+            "overfitting_diagnostics_status": "passed",
+            "overfitting_diagnostics_report_uri": overfitting_diagnostics_report_uri,
             "feature_reproducibility_hash": "sha256:demo-retraining-feature-reproducibility",
             "label_provenance_status": "passed",
             "label_reviewer_source": "investigation_results",
