@@ -221,6 +221,10 @@ As of the P1/P2 remediation commits after this review:
   submit path that persists scheduler evidence and records governance audit
   lineage while explicitly avoiding claim scoring, label assignment, claim
   denial, model activation, or routing-policy changes.
+- Worker data-pipeline readiness and execution submit paths now validate
+  optional review-task `required_permission` scopes, including endpoint-family
+  matching when a review task carries an `api_path`, before persisting scheduler
+  evidence.
 
 Remaining boundaries after those commits are live scheduler deployment/runtime
 execution, official OIG/SAM feed configuration and credentials, customer
