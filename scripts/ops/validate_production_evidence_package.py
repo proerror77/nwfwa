@@ -301,7 +301,7 @@ def validate_worker_execution_template(report: dict) -> None:
         )
         validate_worker_required_prefixes(
             job_kind,
-            list(expected_worker_evidence_prefixes(job_kind)),
+            job.get("required_evidence_prefixes"),
             job.get("evidence_refs"),
             "worker data pipeline execution template",
         )

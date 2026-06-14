@@ -107,6 +107,7 @@ def worker_job_template(job_kind: str) -> dict:
         "reported_status": "pending",
         "blocked_dependencies": ["customer_scheduler_not_run"],
         "reported_artifact_uri": f"local://template/{job_kind}.json",
+        "required_evidence_prefixes": worker_required_evidence_prefixes(job_kind),
         "evidence_refs": [f"{prefix}local://template/{job_kind}.json" for prefix in evidence_refs],
     }
     if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:

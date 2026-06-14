@@ -224,6 +224,29 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "job kind set"):
                 validate_package(package_dir)
 
+    def test_rejects_worker_execution_template_missing_job_required_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            provider_profile_job = next(
+                job
+                for job in report["job_executions"]
+                if job["job_kind"] == "provider_profile_window_rollup"
+            )
+            provider_profile_job["required_evidence_prefixes"] = [
+                prefix
+                for prefix in provider_profile_job["required_evidence_prefixes"]
+                if prefix != "provider_profile_claim_snapshot:"
+            ]
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(
+                AssertionError, "required_evidence_prefixes changed unexpectedly"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_scoring_readback_template_missing_response_ref(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
