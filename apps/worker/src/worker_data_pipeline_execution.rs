@@ -56,11 +56,17 @@ pub fn build_worker_data_pipeline_execution_report(
         .and_then(|value| value.as_array())
         .context("worker data pipeline plan requires jobs")?;
     let reported_jobs = reported_job_statuses(&run_status);
+    let jobs_by_kind = jobs
+        .iter()
+        .filter_map(|job| Some((json_string(job, "job_kind")?, job)))
+        .collect::<BTreeMap<_, _>>();
     let job_executions = jobs
         .iter()
         .map(|job| {
             let job_kind = json_string(job, "job_kind").unwrap_or_else(|| "unknown".into());
             let reported = reported_jobs.get(&job_kind);
+            let blocked_dependencies = blocked_dependencies(job, &jobs_by_kind, &reported_jobs);
+            let execution_status = execution_status(job, reported, &blocked_dependencies);
             serde_json::json!({
                 "job_kind": job_kind,
                 "cadence": json_string(job, "cadence"),
@@ -74,7 +80,8 @@ pub fn build_worker_data_pipeline_execution_report(
                     .and_then(|status| status.get("submitted"))
                     .and_then(|value| value.as_bool())
                     .unwrap_or(false),
-                "execution_status": execution_status(job, reported)
+                "blocked_dependencies": blocked_dependencies,
+                "execution_status": execution_status
             })
         })
         .collect::<Vec<_>>();
@@ -298,7 +305,42 @@ fn readiness_gate_status(readiness_report_uri: Option<&str>) -> anyhow::Result<&
     }
 }
 
-fn execution_status(job: &serde_json::Value, reported: Option<&serde_json::Value>) -> &'static str {
+fn blocked_dependencies(
+    job: &serde_json::Value,
+    jobs_by_kind: &BTreeMap<String, &serde_json::Value>,
+    reported_jobs: &BTreeMap<String, serde_json::Value>,
+) -> Vec<String> {
+    job.get("depends_on")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|dependency| dependency.as_str())
+        .filter(|dependency| {
+            let Some(dependency_job) = jobs_by_kind.get(*dependency) else {
+                return true;
+            };
+            let dependency_reported = reported_jobs.get(*dependency);
+            base_execution_status(dependency_job, dependency_reported) != "completed"
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn execution_status(
+    job: &serde_json::Value,
+    reported: Option<&serde_json::Value>,
+    blocked_dependencies: &[String],
+) -> &'static str {
+    if !blocked_dependencies.is_empty() {
+        return "dependency_not_completed";
+    }
+    base_execution_status(job, reported)
+}
+
+fn base_execution_status(
+    job: &serde_json::Value,
+    reported: Option<&serde_json::Value>,
+) -> &'static str {
     let Some(reported) = reported else {
         return "scheduled_pending_customer_execution";
     };

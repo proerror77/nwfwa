@@ -133,6 +133,7 @@ CAPABILITIES = [
             ("apps/worker/src/commands/mod.rs", "submit-scoring-feature-contexts"),
             ("apps/worker/src/commands/mod.rs", "submit-probability-calibration-report"),
             ("apps/worker/src/worker_data_pipeline_execution.rs", "readiness_gate_status"),
+            ("apps/worker/src/worker_data_pipeline_execution.rs", "blocked_dependencies"),
             ("apps/worker/src/worker_data_pipeline_readiness.rs", "build_worker_data_pipeline_readiness_input_template"),
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "readiness_report_uri"),
             ("apps/worker/src/worker_data_pipeline_run_status.rs", "build_command"),

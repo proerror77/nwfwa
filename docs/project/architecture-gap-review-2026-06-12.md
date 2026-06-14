@@ -150,6 +150,9 @@ As of the P1/P2 remediation commits after this review:
   scheduler run-status artifacts can reference the readiness report, execution
   evidence records `ready`/`blocked`/`missing`, and missing or blocked readiness
   creates an operations review task instead of silently allowing downstream use.
+  Execution evidence also records dependency blockers and marks downstream jobs
+  `dependency_not_completed` when planned upstream artifacts are missing or
+  incomplete.
 - The worker now emits a readiness input template from the scheduled plan so
   customer operators can fill artifact URIs, approvals, row counts, quality
   status, external-fetch configuration, and evidence refs without inventing the
@@ -212,7 +215,8 @@ As of the P1/P2 remediation commits after this review:
   submission.
 - The worker now has a data-pipeline execution report contract that converts a
   customer scheduler run-status artifact into per-job completion, pending,
-  failed, and review-task evidence without running live customer jobs itself.
+  failed, dependency-blocked, and review-task evidence without running live
+  customer jobs itself.
 - The worker data-pipeline execution report now has a permission-gated API
   submit path that persists scheduler evidence and records governance audit
   lineage while explicitly avoiding claim scoring, label assignment, claim
