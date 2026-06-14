@@ -76,6 +76,7 @@ fn opens_probability_calibration_review_when_raw_probabilities_are_miscalibrated
             "model_key": "baseline_fwa",
             "model_version": "0.2.0-rust",
             "as_of_date": "2026-06-13",
+            "label_source_uri": "s3://labels/holdout-2026-06-13.json",
             "rows": rows
         }),
     )
@@ -94,6 +95,35 @@ fn opens_probability_calibration_review_when_raw_probabilities_are_miscalibrated
     assert!(report
         .governance_boundary
         .contains("must not relabel outcomes"));
+}
+
+#[test]
+fn rejects_probability_calibration_report_without_label_lineage() {
+    let root = temp_root("probability-calibration-missing-labels");
+    let source_uri = root.join("probability-calibration-input.json");
+    write_json(
+        source_uri.clone(),
+        &serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "as_of_date": "2026-06-13",
+            "rows": [
+                {
+                    "observation_id": "OBS-1",
+                    "predicted_probability": 0.7,
+                    "actual_label": 1
+                }
+            ]
+        }),
+    )
+    .unwrap();
+
+    let output_dir = root.join("out");
+    let error =
+        build_probability_calibration_report(&source_uri.to_string_lossy(), &output_dir, Some(10))
+            .expect_err("missing label source must fail");
+
+    assert!(error.to_string().contains("label_source_uri"));
 }
 
 #[test]

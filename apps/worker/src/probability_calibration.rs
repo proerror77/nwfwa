@@ -110,6 +110,13 @@ pub fn build_probability_calibration_report(
     if input.as_of_date.trim().is_empty() {
         bail!("probability calibration input requires as_of_date");
     }
+    let label_source_uri = input
+        .label_source_uri
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("probability calibration input requires label_source_uri"))?
+        .to_string();
     if input.rows.is_empty() {
         bail!("probability calibration input requires rows");
     }
@@ -166,15 +173,10 @@ pub fn build_probability_calibration_report(
         "passed"
     };
 
-    let mut evidence_refs = vec![format!("probability_calibration_input:{source_uri}")];
-    if let Some(label_source_uri) = input
-        .label_source_uri
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        evidence_refs.push(format!("calibration_labels:{label_source_uri}"));
-    }
+    let evidence_refs = vec![
+        format!("probability_calibration_input:{source_uri}"),
+        format!("calibration_labels:{label_source_uri}"),
+    ];
 
     let report = ProbabilityCalibrationReport {
         report_kind: "probability_calibration_report".into(),
@@ -183,7 +185,7 @@ pub fn build_probability_calibration_report(
         model_version: input.model_version.trim().into(),
         as_of_date: input.as_of_date.trim().into(),
         source_uri: source_uri.into(),
-        label_source_uri: input.label_source_uri,
+        label_source_uri: Some(label_source_uri),
         row_count: input.rows.len(),
         minimum_calibration_rows: MIN_CALIBRATION_ROWS,
         bin_count,
