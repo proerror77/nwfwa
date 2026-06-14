@@ -27,6 +27,7 @@ pub struct ScoreClaimRequest {
     pub documents: Option<Vec<DocumentPayload>>,
     pub provider_profile: Option<ProviderProfilePayload>,
     pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
+    pub scoring_feature_context: Option<ScoringFeatureContextPayload>,
     pub canonical_claim_context: Option<serde_json::Value>,
     pub inbox_run_id: Option<String>,
     pub inbox_idempotency_key: Option<String>,
@@ -47,6 +48,7 @@ pub struct FullClaimPayload {
     pub documents: Option<Vec<DocumentPayload>>,
     pub provider_profile: Option<ProviderProfilePayload>,
     pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
+    pub scoring_feature_context: Option<ScoringFeatureContextPayload>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -128,6 +130,34 @@ pub struct ProviderRelationshipGraphPayload {
     pub connected_confirmed_fwa_count: u32,
     pub network_component_risk_score: Option<u8>,
     pub evidence_refs: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScoringFeatureContextPayload {
+    pub peer_context: Option<PeerFeatureContextPayload>,
+    pub clinical_compatibility_context: Option<ClinicalCompatibilityFeatureContextPayload>,
+    pub episode_utilization_context: Option<EpisodeUtilizationFeatureContextPayload>,
+    pub evidence_refs: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PeerFeatureContextPayload {
+    pub claim_amount_peer_percentile: Option<u8>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClinicalCompatibilityFeatureContextPayload {
+    pub diagnosis_procedure_match_score: Option<f64>,
+    pub data_source: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EpisodeUtilizationFeatureContextPayload {
+    pub member_provider_claim_count_30d: Option<u32>,
+    pub duplicate_claim_similarity_score: Option<f64>,
+    pub procedure_frequency_peer_percentile: Option<u8>,
+    pub unbundling_candidate_count: Option<u32>,
+    pub data_source: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

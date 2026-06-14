@@ -24,7 +24,8 @@ use fwa_audit::ActorContext;
 use fwa_clinical::{assess_clinical_evidence, ClinicalDocumentEvidence};
 use fwa_core::*;
 use fwa_features::{
-    calculate_features_with_contexts, PeerFeatureContext, ProviderProfileFeatureContext,
+    calculate_features_with_operational_contexts, ClinicalCompatibilityFeatureContext,
+    EpisodeUtilizationFeatureContext, PeerFeatureContext, ProviderProfileFeatureContext,
 };
 use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
 use fwa_provider::{
@@ -35,13 +36,82 @@ use fwa_rules::evaluate_rules;
 
 pub use super::claims_types::*;
 
-fn peer_feature_context_from_request(request: &ScoreClaimRequest) -> Option<PeerFeatureContext> {
-    let claim_amount_peer_percentile = request
-        .claim_amount_peer_percentile
-        .or_else(|| request.claim.as_ref()?.claim_amount_peer_percentile);
-    Some(PeerFeatureContext {
-        claim_amount_peer_percentile,
-    })
+fn peer_feature_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Result<Option<PeerFeatureContext>, ApiError> {
+    let direct_percentile = request.claim_amount_peer_percentile.or_else(|| {
+        request
+            .claim
+            .as_ref()
+            .and_then(|claim| claim.claim_amount_peer_percentile)
+    });
+    let materialized_percentile = scoring_feature_context_from_request(request)
+        .and_then(|context| context.peer_context.as_ref())
+        .and_then(|context| context.claim_amount_peer_percentile);
+    if let (Some(direct), Some(materialized)) = (direct_percentile, materialized_percentile) {
+        if direct != materialized {
+            return Err(ApiError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "AMBIGUOUS_SCORE_REQUEST",
+                "claim_amount_peer_percentile must match scoring_feature_context.peer_context.claim_amount_peer_percentile when both are supplied",
+            ));
+        }
+    }
+    let claim_amount_peer_percentile = materialized_percentile.or(direct_percentile);
+    if claim_amount_peer_percentile.is_some() {
+        Ok(Some(PeerFeatureContext {
+            claim_amount_peer_percentile,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+fn clinical_compatibility_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Option<ClinicalCompatibilityFeatureContext> {
+    scoring_feature_context_from_request(request)
+        .and_then(|context| context.clinical_compatibility_context.as_ref())
+        .and_then(|context| {
+            context.diagnosis_procedure_match_score.map(|score| {
+                ClinicalCompatibilityFeatureContext {
+                    diagnosis_procedure_match_score: Some(score),
+                    data_source: context.data_source.clone(),
+                }
+            })
+        })
+}
+
+fn episode_utilization_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Option<EpisodeUtilizationFeatureContext> {
+    scoring_feature_context_from_request(request)
+        .and_then(|context| context.episode_utilization_context.as_ref())
+        .map(|context| EpisodeUtilizationFeatureContext {
+            member_provider_claim_count_30d: context.member_provider_claim_count_30d,
+            duplicate_claim_similarity_score: context.duplicate_claim_similarity_score,
+            procedure_frequency_peer_percentile: context.procedure_frequency_peer_percentile,
+            unbundling_candidate_count: context.unbundling_candidate_count,
+            data_source: context.data_source.clone(),
+        })
+}
+
+fn scoring_feature_context_from_request(
+    request: &ScoreClaimRequest,
+) -> Option<&ScoringFeatureContextPayload> {
+    request
+        .scoring_feature_context
+        .as_ref()
+        .or_else(|| request.claim.as_ref()?.scoring_feature_context.as_ref())
+}
+
+fn scoring_feature_context_evidence_refs(request: &ScoreClaimRequest) -> Vec<serde_json::Value> {
+    scoring_feature_context_from_request(request)
+        .and_then(|context| context.evidence_refs.as_ref())
+        .into_iter()
+        .flat_map(|refs| refs.iter())
+        .map(|reference| serde_json::Value::String(reference.clone()))
+        .collect()
 }
 
 pub async fn score_claim(
@@ -208,6 +278,9 @@ pub async fn score_claim(
         payload.provider_relationships = payload
             .provider_relationships
             .or_else(|| request.provider_relationships.clone());
+        payload.scoring_feature_context = payload
+            .scoring_feature_context
+            .or_else(|| request.scoring_feature_context.clone());
         let clinical_documents = payload
             .documents
             .clone()
@@ -242,18 +315,21 @@ pub async fn score_claim(
         )
     };
 
-    let peer_feature_context = peer_feature_context_from_request(&request)
-        .filter(|context| context.claim_amount_peer_percentile.is_some());
+    let peer_feature_context = peer_feature_context_from_request(&request)?;
+    let clinical_compatibility_context = clinical_compatibility_context_from_request(&request);
+    let episode_utilization_context = episode_utilization_context_from_request(&request);
     let run_id = ScoringRunId::new();
     let provider_profile =
         assess_provider_profile(&context.provider, provider_profile_input.as_ref());
     let provider_profile_feature_context = ProviderProfileFeatureContext {
         risk_score: Some(provider_profile.risk_score),
     };
-    let mut features = calculate_features_with_contexts(
+    let mut features = calculate_features_with_operational_contexts(
         &context,
         peer_feature_context.as_ref(),
         Some(&provider_profile_feature_context),
+        clinical_compatibility_context.as_ref(),
+        episode_utilization_context.as_ref(),
     );
     let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
     let provider_relationships = assess_provider_relationship_graph(
@@ -272,6 +348,7 @@ pub async fn score_claim(
         })
         .collect::<Vec<_>>();
     evidence_refs.extend(request_evidence_refs);
+    evidence_refs.extend(scoring_feature_context_evidence_refs(&request));
     evidence_refs.extend(
         clinical_evidence
             .evidence_refs

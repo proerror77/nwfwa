@@ -395,3 +395,135 @@ async fn scores_spec_style_top_level_full_payload() {
         .unwrap()
         .contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0")));
 }
+
+#[tokio::test]
+async fn scores_full_payload_with_materialized_worker_feature_context() {
+    let app = build_app(test_config()).unwrap();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-WORKER-CONTEXT",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10",
+                "items": [
+                  {
+                    "item_code": "IMG-BUNDLE",
+                    "item_type": "procedure",
+                    "description": "Imaging bundle",
+                    "quantity": 1,
+                    "unit_amount": "8000",
+                    "total_amount": "8000"
+                  }
+                ],
+                "member": {
+                  "external_member_id": "MBR-WORKER-CONTEXT"
+                },
+                "policy": {
+                  "external_policy_id": "POL-WORKER-CONTEXT",
+                  "product_code": "MED",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": "10000",
+                  "currency": "CNY"
+                },
+                "provider": {
+                  "external_provider_id": "PRV-WORKER-CONTEXT",
+                  "name": "Worker Context Hospital",
+                  "provider_type": "hospital",
+                  "region": "SH",
+                  "risk_tier": "Medium"
+                }
+              },
+              "scoring_feature_context": {
+                "peer_context": {
+                  "claim_amount_peer_percentile": 92
+                },
+                "clinical_compatibility_context": {
+                  "diagnosis_procedure_match_score": 0.25,
+                  "data_source": "worker.icd_cpt_compatibility_reference:clinical-ref-v1"
+                },
+                "episode_utilization_context": {
+                  "member_provider_claim_count_30d": 3,
+                  "duplicate_claim_similarity_score": 0.75,
+                  "procedure_frequency_peer_percentile": 88,
+                  "unbundling_candidate_count": 2,
+                  "data_source": "worker.episode_utilization_rollup"
+                },
+                "evidence_refs": [
+                  "scoring_feature_contexts:CLM-WORKER-CONTEXT",
+                  "unbundling:UNB-IMG:MBR-WORKER-CONTEXT|PRV-WORKER-CONTEXT"
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let feature = |name: &str| {
+        feature_values
+            .iter()
+            .find(|feature| feature["name"] == name)
+            .unwrap_or_else(|| panic!("missing feature {name}"))
+    };
+
+    assert_eq!(
+        feature("claim_amount_peer_percentile")["value"],
+        serde_json::json!(92)
+    );
+    assert_eq!(
+        feature("claim_amount_peer_percentile")["data_source"],
+        "worker.peer_percentile_benchmark_rollup"
+    );
+    assert_eq!(
+        feature("diagnosis_procedure_match_score")["value"],
+        serde_json::json!(0.25)
+    );
+    assert_eq!(
+        feature("diagnosis_procedure_match_score")["is_proxy"],
+        false
+    );
+    assert_eq!(
+        feature("diagnosis_procedure_match_score")["data_source"],
+        "worker.icd_cpt_compatibility_reference:clinical-ref-v1"
+    );
+    assert_eq!(
+        feature("member_provider_claim_count_30d")["value"],
+        serde_json::json!(3)
+    );
+    assert_eq!(
+        feature("duplicate_claim_similarity_score")["value"],
+        serde_json::json!(0.75)
+    );
+    assert_eq!(
+        feature("procedure_frequency_peer_percentile")["value"],
+        serde_json::json!(88)
+    );
+    assert_eq!(
+        feature("unbundling_candidate_count")["value"],
+        serde_json::json!(2)
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_contexts:CLM-WORKER-CONTEXT"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "unbundling:UNB-IMG:MBR-WORKER-CONTEXT|PRV-WORKER-CONTEXT"
+    )));
+}

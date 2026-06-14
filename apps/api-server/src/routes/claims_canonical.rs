@@ -35,6 +35,9 @@ pub(super) fn duplicate_payload_fields(
     if payload.provider_relationships.is_some() && request.provider_relationships.is_some() {
         fields.push("provider_relationships");
     }
+    if payload.scoring_feature_context.is_some() && request.scoring_feature_context.is_some() {
+        fields.push("scoring_feature_context");
+    }
     fields
 }
 
@@ -167,6 +170,7 @@ pub(super) fn canonical_score_input(
             documents: None,
             provider_profile: None,
             provider_relationships: None,
+            scoring_feature_context: None,
         }),
         clinical_documents,
         evidence_refs,

@@ -1,7 +1,9 @@
 use super::claims::{
-    ClaimItemPayload, DocumentPayload, FullClaimPayload, MemberPayload, PolicyPayload,
-    ProviderPayload, ProviderProfilePayload, ProviderProfileWindowPayload,
-    ProviderRelationshipGraphPayload, ScoreClaimRequest,
+    ClaimItemPayload, ClinicalCompatibilityFeatureContextPayload, DocumentPayload,
+    EpisodeUtilizationFeatureContextPayload, FullClaimPayload, MemberPayload,
+    PeerFeatureContextPayload, PolicyPayload, ProviderPayload, ProviderProfilePayload,
+    ProviderProfileWindowPayload, ProviderRelationshipGraphPayload, ScoreClaimRequest,
+    ScoringFeatureContextPayload,
 };
 use crate::error::ApiError;
 use fwa_audit::ActorContext;
@@ -56,6 +58,9 @@ pub(super) fn validate_score_request_contract(request: &ScoreClaimRequest) -> Re
     if let Some(provider_relationships) = &request.provider_relationships {
         validate_provider_relationship_graph_payload(provider_relationships)?;
     }
+    if let Some(scoring_feature_context) = &request.scoring_feature_context {
+        validate_scoring_feature_context_payload(scoring_feature_context)?;
+    }
     Ok(())
 }
 
@@ -108,6 +113,9 @@ fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiErro
     }
     if let Some(provider_relationships) = &payload.provider_relationships {
         validate_provider_relationship_graph_payload(provider_relationships)?;
+    }
+    if let Some(scoring_feature_context) = &payload.scoring_feature_context {
+        validate_scoring_feature_context_payload(scoring_feature_context)?;
     }
     Ok(())
 }
@@ -261,6 +269,80 @@ fn validate_provider_relationship_graph_payload(
         for evidence_ref in evidence_refs {
             require_nonblank(evidence_ref, "provider_relationships.evidence_refs")?;
         }
+    }
+    Ok(())
+}
+
+fn validate_scoring_feature_context_payload(
+    payload: &ScoringFeatureContextPayload,
+) -> Result<(), ApiError> {
+    if let Some(peer_context) = &payload.peer_context {
+        validate_peer_feature_context_payload(peer_context)?;
+    }
+    if let Some(clinical_context) = &payload.clinical_compatibility_context {
+        validate_clinical_compatibility_feature_context_payload(clinical_context)?;
+    }
+    if let Some(episode_context) = &payload.episode_utilization_context {
+        validate_episode_utilization_feature_context_payload(episode_context)?;
+    }
+    if let Some(evidence_refs) = &payload.evidence_refs {
+        for evidence_ref in evidence_refs {
+            require_nonblank(evidence_ref, "scoring_feature_context.evidence_refs")?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_peer_feature_context_payload(
+    payload: &PeerFeatureContextPayload,
+) -> Result<(), ApiError> {
+    if let Some(peer_percentile) = payload.claim_amount_peer_percentile {
+        require_percentile(
+            peer_percentile,
+            "scoring_feature_context.peer_context.claim_amount_peer_percentile",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_clinical_compatibility_feature_context_payload(
+    payload: &ClinicalCompatibilityFeatureContextPayload,
+) -> Result<(), ApiError> {
+    if let Some(score) = payload.diagnosis_procedure_match_score {
+        require_unit_interval(
+            score,
+            "scoring_feature_context.clinical_compatibility_context.diagnosis_procedure_match_score",
+        )?;
+    }
+    if let Some(data_source) = &payload.data_source {
+        require_nonblank(
+            data_source,
+            "scoring_feature_context.clinical_compatibility_context.data_source",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_episode_utilization_feature_context_payload(
+    payload: &EpisodeUtilizationFeatureContextPayload,
+) -> Result<(), ApiError> {
+    if let Some(score) = payload.duplicate_claim_similarity_score {
+        require_unit_interval(
+            score,
+            "scoring_feature_context.episode_utilization_context.duplicate_claim_similarity_score",
+        )?;
+    }
+    if let Some(percentile) = payload.procedure_frequency_peer_percentile {
+        require_percentile(
+            percentile,
+            "scoring_feature_context.episode_utilization_context.procedure_frequency_peer_percentile",
+        )?;
+    }
+    if let Some(data_source) = &payload.data_source {
+        require_nonblank(
+            data_source,
+            "scoring_feature_context.episode_utilization_context.data_source",
+        )?;
     }
     Ok(())
 }

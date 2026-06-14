@@ -52,6 +52,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .unwrap()
         .contains("authenticated API key"));
     assert_eq!(claim_id_mode["properties"]["claim_id"]["minLength"], 1);
+    assert_eq!(
+        claim_id_mode["properties"]["scoring_feature_context"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextPayload"
+    );
     for field in [
         "claim",
         "items",
@@ -75,6 +79,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         );
     }
     let full_payload_mode = &schema["components"]["schemas"]["FullPayloadScoreClaimRequest"];
+    assert_eq!(
+        full_payload_mode["properties"]["scoring_feature_context"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextPayload"
+    );
     assert_eq!(
         full_payload_mode["properties"]["review_mode"]["enum"],
         serde_json::json!(["pre_payment", "post_payment"])
@@ -104,6 +112,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         canonical_mode["properties"]["canonical_claim_context"]["$ref"],
         "#/components/schemas/InboxCanonicalClaimContext"
     );
+    assert_eq!(
+        canonical_mode["properties"]["scoring_feature_context"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextPayload"
+    );
     assert!(canonical_mode["not"]["anyOf"]
         .as_array()
         .expect("canonical mode forbidden fields")
@@ -111,6 +123,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .any(|schema| schema["required"][0] == "claim"));
     let inbox_mode = &schema["components"]["schemas"]["InboxHandoffScoreClaimRequest"];
     assert_eq!(inbox_mode["properties"]["inbox_run_id"]["minLength"], 1);
+    assert_eq!(
+        inbox_mode["properties"]["scoring_feature_context"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextPayload"
+    );
     assert_eq!(
         inbox_mode["properties"]["inbox_idempotency_key"]["minLength"],
         1
@@ -155,6 +171,26 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             );
         }
     }
+    assert_eq!(
+        schema["components"]["schemas"]["ScoringFeatureContextPayload"]["properties"]
+            ["peer_context"]["$ref"],
+        "#/components/schemas/PeerFeatureContextPayload"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PeerFeatureContextPayload"]["properties"]
+            ["claim_amount_peer_percentile"]["maximum"],
+        100
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ClinicalCompatibilityFeatureContextPayload"]["properties"]
+            ["diagnosis_procedure_match_score"]["maximum"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["EpisodeUtilizationFeatureContextPayload"]["properties"]
+            ["procedure_frequency_peer_percentile"]["maximum"],
+        100
+    );
     assert_eq!(
         schema["components"]["schemas"]["DocumentPayload"]["properties"]["linked_item_codes"]
             ["items"]["minLength"],
