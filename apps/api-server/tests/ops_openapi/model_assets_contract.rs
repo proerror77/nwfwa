@@ -197,6 +197,13 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             .contains("Published URI flags"),
         "missing readiness required_submit_flags description"
     );
+    assert!(
+        readiness_job_properties["api_path"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Governed API path"),
+        "missing readiness api_path description"
+    );
     let execution_job_properties = &schema["components"]["schemas"]
         ["WorkerDataPipelineExecutionReportSubmissionRequest"]["properties"]["job_executions"]
         ["items"]["properties"];
