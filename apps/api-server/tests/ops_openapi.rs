@@ -515,6 +515,14 @@ async fn openapi_includes_operations_paths() {
     );
     assert_writeback_pii_contract(&schema, "UpdateQaFeedbackStatusRequest");
     assert!(
+        schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("not local/template refs"),
+        "missing UpdateQaFeedbackStatusRequest.evidence_refs production-ref contract"
+    );
+    assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
             .as_array()
             .unwrap()

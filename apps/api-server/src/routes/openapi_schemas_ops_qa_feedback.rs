@@ -61,7 +61,7 @@ pub(super) fn qa_feedback_schemas() -> Value {
                 "evidence_refs": {
                     "type": "array",
                     "minItems": 1,
-                    "description": "Structured evidence references must include qa_feedback:{feedback_id} for the updated feedback item and must not contain PII.",
+                    "description": "Structured evidence references must include qa_feedback:{feedback_id} for the updated feedback item, must not contain PII, and must be production refs, not local/template refs.",
                     "items": { "type": "string", "minLength": 1 },
                     "contains": { "type": "string", "pattern": "^qa_feedback:" }
                 }

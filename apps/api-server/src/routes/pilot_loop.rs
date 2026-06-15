@@ -127,6 +127,7 @@ pub async fn update_qa_feedback_status(
             format!("QA feedback status evidence_refs must include {required_ref}"),
         ));
     }
+    validate_qa_feedback_status_production_evidence_refs(&request.evidence_refs)?;
     request.customer_scope_id = Some(actor.customer_scope_id.clone());
     let record = state
         .repository
@@ -174,6 +175,23 @@ fn is_supported_qa_feedback_target(feedback_target: &str) -> bool {
         canonical_feedback_target(feedback_target),
         "rules" | "model" | "features" | "provider_profile" | "workflow" | "tpa"
     )
+}
+
+fn validate_qa_feedback_status_production_evidence_refs(
+    evidence_refs: &[String],
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_QA_FEEDBACK_STATUS_EVIDENCE",
+            "QA feedback status evidence_refs must not use local dry-run or placeholder evidence",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 pub async fn list_qa_queue(
