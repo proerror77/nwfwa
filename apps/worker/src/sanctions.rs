@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 use crate::{
-    api_url, ensure_production_artifact_uri, published_submission_evidence_refs, read_json_report,
-    required_non_empty, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_json_artifact_uri,
+    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -269,7 +269,10 @@ fn build_sanctions_sync_report_submission_from_report(
     if report.provider_upserts.is_empty() {
         bail!("sanctions sync report requires provider_upserts before API submission");
     }
-    ensure_production_artifact_uri("sanctions sync published_report_uri", published_report_uri)?;
+    ensure_production_json_artifact_uri(
+        "sanctions sync published_report_uri",
+        published_report_uri,
+    )?;
     ensure_production_artifact_uri("sanctions sync published_source_uri", published_source_uri)?;
     let evidence_refs = published_submission_evidence_refs(
         "sanctions sync evidence_refs",

@@ -4,7 +4,8 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 use crate::{
     api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
-    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
+    ensure_production_json_artifact_uri, published_submission_evidence_refs, read_json_report,
+    required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -185,7 +186,7 @@ fn build_unbundling_comparator_submission_from_report(
     if report.candidates.is_empty() {
         bail!("unbundling comparator requires candidates before API submission");
     }
-    ensure_production_artifact_uri(
+    ensure_production_json_artifact_uri(
         "unbundling comparator published_report_uri",
         published_report_uri,
     )?;

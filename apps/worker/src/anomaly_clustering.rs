@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::Serialize;
 
 use super::{
-    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, json_string,
+    api_url, ensure_production_evidence_refs, ensure_production_json_artifact_uri, json_string,
     read_json_report, required_non_empty,
 };
 
@@ -54,7 +54,7 @@ pub fn build_anomaly_clustering_report_submission_with_published_uri(
     let actor = required_non_empty("actor", actor)?;
     let notes = required_non_empty("notes", notes)?;
     let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
-    ensure_production_artifact_uri(
+    ensure_production_json_artifact_uri(
         "anomaly clustering published_report_uri",
         published_report_uri,
     )?;

@@ -8,7 +8,8 @@ use std::{
 
 use crate::{
     api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
-    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
+    ensure_production_json_artifact_uri, published_submission_evidence_refs, read_json_report,
+    required_non_empty, write_json,
 };
 
 const EPISODE_WINDOWS: [u16; 3] = [30, 90, 365];
@@ -194,7 +195,7 @@ fn build_episode_aggregation_submission_from_report(
     if report.episodes.is_empty() {
         bail!("episode aggregation requires episodes before API submission");
     }
-    ensure_production_artifact_uri(
+    ensure_production_json_artifact_uri(
         "episode aggregation published_report_uri",
         published_report_uri,
     )?;

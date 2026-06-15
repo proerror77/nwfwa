@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 use crate::{
-    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, read_json_report,
-    required_non_empty, round4, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
+    ensure_production_json_artifact_uri, read_json_report, required_non_empty, round4, write_json,
 };
 
 const DEFAULT_BIN_COUNT: usize = 10;
@@ -322,7 +322,7 @@ fn build_probability_calibration_submission_from_report(
     if report.report_kind != "probability_calibration_report" {
         bail!("report_kind must be probability_calibration_report");
     }
-    ensure_production_artifact_uri(
+    ensure_production_json_artifact_uri(
         "probability calibration published_report_uri",
         published_report_uri,
     )?;

@@ -8,7 +8,8 @@ use std::{
 
 use crate::{
     api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
-    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
+    ensure_production_json_artifact_uri, published_submission_evidence_refs, read_json_report,
+    required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,7 +217,10 @@ fn build_peer_benchmark_submission_from_report(
     if report.peer_groups.is_empty() {
         bail!("peer benchmark requires peer_groups before API submission");
     }
-    ensure_production_artifact_uri("peer benchmark published_report_uri", published_report_uri)?;
+    ensure_production_json_artifact_uri(
+        "peer benchmark published_report_uri",
+        published_report_uri,
+    )?;
     ensure_production_artifact_uri("peer benchmark published_source_uri", published_source_uri)?;
     for group in &report.peer_groups {
         ensure_production_evidence_refs(

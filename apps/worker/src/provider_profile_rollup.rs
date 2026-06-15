@@ -8,7 +8,8 @@ use std::{
 
 use crate::{
     api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
-    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
+    ensure_production_json_artifact_uri, published_submission_evidence_refs, read_json_report,
+    required_non_empty, write_json,
 };
 
 const PROFILE_WINDOWS: [u16; 3] = [30, 90, 365];
@@ -215,7 +216,7 @@ fn build_provider_profile_window_rollup_submission_from_report(
     if report.provider_profiles.is_empty() {
         bail!("provider profile window rollup requires provider_profiles before API submission");
     }
-    ensure_production_artifact_uri(
+    ensure_production_json_artifact_uri(
         "provider profile published_report_uri",
         published_report_uri,
     )?;

@@ -412,11 +412,26 @@ fn ensure_production_artifact_uri(field: &str, value: &str) -> anyhow::Result<()
     let value = value.trim();
     if value.is_empty()
         || value.starts_with("local://")
+        || value.starts_with("file://")
         || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
     {
         bail!("{field} must use production evidence, not local dry-run or placeholder URI");
+    }
+    Ok(())
+}
+
+fn ensure_production_json_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    ensure_production_artifact_uri(field, value)?;
+    let normalized = value
+        .trim()
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !normalized.ends_with(".json") {
+        bail!("{field} must point to a JSON report artifact");
     }
     Ok(())
 }

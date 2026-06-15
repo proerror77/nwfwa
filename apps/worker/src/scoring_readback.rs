@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
 use crate::{
-    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, read_json_report,
-    required_non_empty, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
+    ensure_production_json_artifact_uri, read_json_report, required_non_empty, write_json,
 };
 
 pub(crate) const REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES: &[&str] = &[
@@ -159,7 +159,7 @@ pub fn build_scoring_readback_report_with_published_uris(
         });
     let published_report_uri = published_report_uri
         .map(|value| {
-            ensure_production_artifact_uri("scoring readback published_report_uri", value)?;
+            ensure_production_json_artifact_uri("scoring readback published_report_uri", value)?;
             Ok::<_, anyhow::Error>(value.trim().to_string())
         })
         .transpose()?;

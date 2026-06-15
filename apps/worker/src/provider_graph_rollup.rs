@@ -8,7 +8,8 @@ use std::{
 
 use crate::{
     api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
-    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
+    ensure_production_json_artifact_uri, published_submission_evidence_refs, read_json_report,
+    required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,7 +259,10 @@ fn build_provider_graph_signal_rollup_submission_from_report(
     if report.provider_relationships.is_empty() {
         bail!("provider graph signal rollup requires provider_relationships before API submission");
     }
-    ensure_production_artifact_uri("provider graph published_report_uri", published_report_uri)?;
+    ensure_production_json_artifact_uri(
+        "provider graph published_report_uri",
+        published_report_uri,
+    )?;
     ensure_production_artifact_uri("provider graph published_source_uri", published_source_uri)?;
     for relationship in &report.provider_relationships {
         ensure_production_evidence_refs(

@@ -10,10 +10,11 @@ use std::{
 };
 
 use crate::{
-    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, read_json_report,
-    required_non_empty, write_json, ClinicalCompatibilityRecord, EpisodeAggregationReport,
-    MemberProviderEpisodeRollup, PeerBenchmarkGroup, PeerBenchmarkReport,
-    UnbundlingComparatorCandidate, UnbundlingComparatorReport,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
+    ensure_production_json_artifact_uri, read_json_report, required_non_empty, write_json,
+    ClinicalCompatibilityRecord, EpisodeAggregationReport, MemberProviderEpisodeRollup,
+    PeerBenchmarkGroup, PeerBenchmarkReport, UnbundlingComparatorCandidate,
+    UnbundlingComparatorReport,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,7 +214,7 @@ pub fn build_scoring_feature_context_materialization_submission_with_published_u
     if report.evidence_refs.is_empty() {
         bail!("scoring feature context materialization requires evidence_refs");
     }
-    ensure_production_artifact_uri(
+    ensure_production_json_artifact_uri(
         "scoring feature context published_report_uri",
         published_report_uri,
     )?;

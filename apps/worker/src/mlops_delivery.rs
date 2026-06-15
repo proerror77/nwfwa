@@ -302,11 +302,20 @@ fn ensure_published_artifact_uri(field: &str, value: &str) -> anyhow::Result<()>
     let value = value.trim();
     if value.is_empty()
         || value.starts_with("local://")
+        || value.starts_with("file://")
         || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
     {
         bail!("{field} must use a published production artifact URI");
+    }
+    let normalized = value
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !normalized.ends_with(".json") {
+        bail!("{field} must point to a JSON report artifact");
     }
     Ok(())
 }
