@@ -738,6 +738,50 @@ fn rejects_worker_data_pipeline_readiness_submission_with_ready_count_drift() {
 }
 
 #[test]
+fn rejects_worker_data_pipeline_readiness_submission_without_blocked_job_review_task() {
+    let root = temp_root("worker-data-pipeline-readiness-submission-missing-review-task");
+    let report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "readiness_input_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+            "readiness_status": "blocked",
+            "job_count": 1,
+            "ready_job_count": 0,
+            "blocked_job_count": 1,
+            "job_readiness": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "readiness_status": "blocked"
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "readiness report validates customer data prerequisites only",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_readiness_inputs:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_readiness_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-readiness",
+        "daily readiness evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+    )
+    .expect_err("blocked job without review task should fail before API submission");
+
+    assert!(error
+        .to_string()
+        .contains("blocked job requires matching worker_data_pipeline_readiness_review"));
+}
+
+#[test]
 fn rejects_worker_data_pipeline_readiness_submission_without_published_report_uri() {
     let root = temp_root("worker-data-pipeline-readiness-submission-unpublished-report");
     let report_uri = root.join("worker_data_pipeline_readiness_report.json");

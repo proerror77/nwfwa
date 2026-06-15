@@ -286,6 +286,13 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
         pending_or_failed_job_count,
         review_task_count,
     )?;
+    let readiness_gate_status =
+        json_string(&report, "readiness_gate_status").unwrap_or_else(|| "missing".into());
+    validate_worker_data_pipeline_execution_review_tasks(
+        &job_executions,
+        &review_tasks,
+        &readiness_gate_status,
+    )?;
     let mut evidence_refs = report
         .get("evidence_refs")
         .and_then(|value| value.as_array())
@@ -332,8 +339,7 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
         plan_uri,
         run_status_uri,
         readiness_report_uri,
-        readiness_gate_status: json_string(&report, "readiness_gate_status")
-            .unwrap_or_else(|| "missing".into()),
+        readiness_gate_status,
         run_id: json_string(&report, "run_id")
             .context("worker data pipeline execution report requires run_id")?,
         execution_date: json_string(&report, "execution_date")
@@ -617,6 +623,65 @@ fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json
                     .is_some_and(|value| value.starts_with(prefix))
             })
     })
+}
+
+fn validate_worker_data_pipeline_execution_review_tasks(
+    job_executions: &[serde_json::Value],
+    review_tasks: &[serde_json::Value],
+    readiness_gate_status: &str,
+) -> anyhow::Result<()> {
+    for job in job_executions {
+        let job_kind = json_string(job, "job_kind").context("job_executions requires job_kind")?;
+        let execution_status = json_string(job, "execution_status")
+            .context("job_executions requires execution_status")?;
+        if execution_status == "completed" {
+            continue;
+        }
+        let has_matching_review = review_tasks.iter().any(|task| {
+            json_string(task, "task_kind").as_deref()
+                == Some("worker_data_pipeline_execution_review")
+                && json_string(task, "job_kind").as_deref() == Some(job_kind.as_str())
+                && json_string(task, "execution_status").as_deref()
+                    == Some(execution_status.as_str())
+        });
+        if !has_matching_review {
+            bail!("non-completed job requires matching worker_data_pipeline_execution_review task");
+        }
+    }
+    for task in review_tasks {
+        match json_string(task, "task_kind").as_deref() {
+            Some("worker_data_pipeline_execution_review") => {
+                let job_kind = json_string(task, "job_kind")
+                    .context("worker_data_pipeline_execution_review requires job_kind")?;
+                let execution_status = json_string(task, "execution_status")
+                    .context("worker_data_pipeline_execution_review requires execution_status")?;
+                let matches_non_completed_job = job_executions.iter().any(|job| {
+                    json_string(job, "job_kind").as_deref() == Some(job_kind.as_str())
+                        && json_string(job, "execution_status").as_deref()
+                            == Some(execution_status.as_str())
+                        && execution_status != "completed"
+                });
+                if !matches_non_completed_job {
+                    bail!(
+                        "worker_data_pipeline_execution_review task must match a non-completed job"
+                    );
+                }
+            }
+            Some("worker_data_pipeline_readiness_gate_review") => {
+                let task_status = json_string(task, "readiness_gate_status")
+                    .context("worker_data_pipeline_readiness_gate_review requires readiness_gate_status")?;
+                if readiness_gate_status == "ready" || task_status != readiness_gate_status {
+                    bail!(
+                        "worker_data_pipeline_readiness_gate_review task must match non-ready readiness_gate_status"
+                    );
+                }
+            }
+            Some(_) | None => bail!(
+                "review task kind must be worker_data_pipeline_execution_review or worker_data_pipeline_readiness_gate_review"
+            ),
+        }
+    }
+    Ok(())
 }
 
 fn validate_worker_data_pipeline_execution_counts(

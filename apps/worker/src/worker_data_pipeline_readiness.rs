@@ -296,6 +296,7 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
         blocked_job_count,
         review_task_count,
     )?;
+    validate_worker_data_pipeline_readiness_review_tasks(&job_readiness, &review_tasks)?;
     let mut evidence_refs = report
         .get("evidence_refs")
         .and_then(|value| value.as_array())
@@ -343,6 +344,45 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
         governance_boundary: json_string(&report, "governance_boundary")
             .context("worker data pipeline readiness report requires governance_boundary")?,
     })
+}
+
+fn validate_worker_data_pipeline_readiness_review_tasks(
+    job_readiness: &[serde_json::Value],
+    review_tasks: &[serde_json::Value],
+) -> anyhow::Result<()> {
+    for job in job_readiness {
+        let job_kind = json_string(job, "job_kind").context("job_readiness requires job_kind")?;
+        let readiness_status = json_string(job, "readiness_status")
+            .context("job_readiness requires readiness_status")?;
+        if readiness_status != "blocked" {
+            continue;
+        }
+        let has_matching_review = review_tasks.iter().any(|task| {
+            json_string(task, "task_kind").as_deref()
+                == Some("worker_data_pipeline_readiness_review")
+                && json_string(task, "job_kind").as_deref() == Some(job_kind.as_str())
+        });
+        if !has_matching_review {
+            bail!("blocked job requires matching worker_data_pipeline_readiness_review task");
+        }
+    }
+    for task in review_tasks {
+        if json_string(task, "task_kind").as_deref()
+            != Some("worker_data_pipeline_readiness_review")
+        {
+            bail!("readiness review task kind must be worker_data_pipeline_readiness_review");
+        }
+        let job_kind = json_string(task, "job_kind")
+            .context("worker_data_pipeline_readiness_review requires job_kind")?;
+        let matches_blocked_job = job_readiness.iter().any(|job| {
+            json_string(job, "job_kind").as_deref() == Some(job_kind.as_str())
+                && json_string(job, "readiness_status").as_deref() == Some("blocked")
+        });
+        if !matches_blocked_job {
+            bail!("worker_data_pipeline_readiness_review task must match a blocked job");
+        }
+    }
+    Ok(())
 }
 
 fn validate_worker_data_pipeline_readiness_counts(
