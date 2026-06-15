@@ -98,6 +98,17 @@ pub fn build_probability_calibration_report(
     output_dir: impl AsRef<Path>,
     bin_count: Option<usize>,
 ) -> anyhow::Result<ProbabilityCalibrationReport> {
+    build_probability_calibration_report_with_expected_label_source_uri(
+        source_uri, output_dir, bin_count, None,
+    )
+}
+
+pub fn build_probability_calibration_report_with_expected_label_source_uri(
+    source_uri: &str,
+    output_dir: impl AsRef<Path>,
+    bin_count: Option<usize>,
+    expected_label_source_uri: Option<&str>,
+) -> anyhow::Result<ProbabilityCalibrationReport> {
     let bin_count = bin_count.unwrap_or(DEFAULT_BIN_COUNT);
     if bin_count == 0 {
         bail!("bin_count must be greater than zero");
@@ -124,6 +135,19 @@ pub fn build_probability_calibration_report(
         bail!(
             "probability calibration input label_source_uri must not use local://template evidence"
         );
+    }
+    if let Some(expected_label_source_uri) = expected_label_source_uri {
+        let expected_label_source_uri =
+            required_non_empty("expected_label_source_uri", expected_label_source_uri)?;
+        ensure_production_artifact_uri(
+            "probability calibration expected_label_source_uri",
+            expected_label_source_uri,
+        )?;
+        if label_source_uri != expected_label_source_uri {
+            bail!(
+                "probability calibration input label_source_uri must match expected_label_source_uri"
+            );
+        }
     }
     if input.rows.is_empty() {
         bail!("probability calibration input requires rows");

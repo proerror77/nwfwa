@@ -158,6 +158,41 @@ fn rejects_probability_calibration_report_with_template_label_lineage() {
 }
 
 #[test]
+fn rejects_probability_calibration_report_when_expected_label_source_differs() {
+    let root = temp_root("probability-calibration-label-source-mismatch");
+    let source_uri = root.join("probability-calibration-input.json");
+    write_json(
+        source_uri.clone(),
+        &serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "as_of_date": "2026-06-13",
+            "label_source_uri": "s3://customer-prod-artifacts/labels/holdout-2026-06-13.json",
+            "rows": [
+                {
+                    "observation_id": "OBS-1",
+                    "predicted_probability": 0.7,
+                    "actual_label": 1
+                }
+            ]
+        }),
+    )
+    .unwrap();
+
+    let error = build_probability_calibration_report_with_expected_label_source_uri(
+        &source_uri.to_string_lossy(),
+        root.join("out"),
+        None,
+        Some("s3://customer-prod-artifacts/labels/holdout-2026-06-14.json"),
+    )
+    .expect_err("mismatched expected label source must fail");
+
+    assert!(error
+        .to_string()
+        .contains("label_source_uri must match expected_label_source_uri"));
+}
+
+#[test]
 fn builds_probability_calibration_submission() {
     let root = temp_root("probability-calibration-submission");
     let report_uri = root.join("probability_calibration_report.json");

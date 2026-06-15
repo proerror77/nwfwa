@@ -673,6 +673,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                 "command": (
                     "cargo run --locked -p worker -- build-probability-calibration-report "
                     "--source-uri <customer-labeled-holdout-predictions-uri> "
+                    "--expected-label-source-uri <customer-approved-calibration-labels-uri> "
                     "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>"
                 ),
                 "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json",

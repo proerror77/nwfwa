@@ -260,6 +260,9 @@ REQUIRED_RUNBOOK_SUBMIT_FLAGS = {
     },
 }
 REQUIRED_RUNBOOK_BUILD_FLAGS = {
+    "build_probability_calibration_report": {
+        "--expected-label-source-uri": "<customer-approved-calibration-labels-uri>",
+    },
     "build_scoring_readback_report": {
         "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_report.json",
         "--published-input-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_input.json",

@@ -664,6 +664,29 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_probability_calibration_build_missing_expected_label_uri(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            for command in runbook["commands"]:
+                if command["step"] == "build_probability_calibration_report":
+                    command["command"] = command["command"].replace(
+                        "--expected-label-source-uri <customer-approved-calibration-labels-uri> ",
+                        "",
+                    )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "--expected-label-source-uri must be "
+                "<customer-approved-calibration-labels-uri>",
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_with_wrong_scoring_readback_input_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

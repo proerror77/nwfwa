@@ -114,6 +114,10 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
                 command_text,
             )
             self.assertIn(
+                "--expected-label-source-uri <customer-approved-calibration-labels-uri>",
+                command_text,
+            )
+            self.assertIn(
                 "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_report.json",
                 command_text,
             )

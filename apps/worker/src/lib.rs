@@ -101,7 +101,9 @@ pub use audit_retention::{
 
 mod probability_calibration;
 pub use probability_calibration::{
-    build_probability_calibration_report, build_probability_calibration_submission,
+    build_probability_calibration_report,
+    build_probability_calibration_report_with_expected_label_source_uri,
+    build_probability_calibration_submission,
     build_probability_calibration_submission_with_published_uris,
     submit_probability_calibration_report,
     submit_probability_calibration_report_with_published_uris, ProbabilityCalibrationBin,
