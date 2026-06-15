@@ -234,6 +234,11 @@ fn is_production_artifact_uri(value: &str) -> bool {
         && !value.contains('}')
 }
 
+fn evidence_ref_is_non_production(value: &str) -> bool {
+    let value = value.trim();
+    value.contains("local://") || value.contains('{') || value.contains('}')
+}
+
 pub(super) fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiError> {
     if request.external_field.trim().is_empty()
         || request.canonical_target.trim().is_empty()
@@ -1378,6 +1383,23 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "completed job evidence_refs must not use local://template evidence",
                 ));
             }
+            let has_non_production_evidence_ref = execution
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .any(|reference| {
+                    reference
+                        .as_str()
+                        .is_some_and(evidence_ref_is_non_production)
+                });
+            if has_non_production_evidence_ref {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job evidence_refs must not use local dry-run or placeholder evidence",
+                ));
+            }
             let required_evidence_prefixes = execution
                 .get("required_evidence_prefixes")
                 .and_then(|value| value.as_array())
@@ -1870,6 +1892,23 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         StatusCode::BAD_REQUEST,
                         "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
                         "ready job evidence_refs must not use local://template evidence",
+                    ));
+                }
+                let has_non_production_evidence_ref = readiness
+                    .get("evidence_refs")
+                    .and_then(|value| value.as_array())
+                    .into_iter()
+                    .flatten()
+                    .any(|reference| {
+                        reference
+                            .as_str()
+                            .is_some_and(evidence_ref_is_non_production)
+                    });
+                if has_non_production_evidence_ref {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job evidence_refs must not use local dry-run or placeholder evidence",
                     ));
                 }
                 if required_evidence_prefixes.is_empty() {

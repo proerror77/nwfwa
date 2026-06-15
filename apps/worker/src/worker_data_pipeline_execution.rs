@@ -385,7 +385,7 @@ fn base_execution_status(
         if !has_production_artifact_uri(reported) {
             return "artifact_missing_evidence";
         }
-        if has_template_artifact_uri(reported) || has_template_evidence_refs(reported) {
+        if has_template_artifact_uri(reported) || has_non_production_evidence_refs(reported) {
             return "artifact_missing_evidence";
         }
         if !has_required_evidence_prefixes(job, reported) {
@@ -442,7 +442,7 @@ fn has_evidence_refs(reported: &serde_json::Value) -> bool {
         })
 }
 
-fn has_template_evidence_refs(reported: &serde_json::Value) -> bool {
+fn has_non_production_evidence_refs(reported: &serde_json::Value) -> bool {
     reported
         .get("evidence_refs")
         .and_then(|value| value.as_array())
@@ -451,8 +451,13 @@ fn has_template_evidence_refs(reported: &serde_json::Value) -> bool {
         .any(|reference| {
             reference
                 .as_str()
-                .is_some_and(|value| value.trim().contains("local://template"))
+                .is_some_and(|value| evidence_ref_is_non_production(value))
         })
+}
+
+fn evidence_ref_is_non_production(value: &str) -> bool {
+    let value = value.trim();
+    value.contains("local://") || value.contains('{') || value.contains('}')
 }
 
 fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json::Value) -> bool {
@@ -508,7 +513,7 @@ fn validate_completed_job_evidence_prefixes(
                     .is_some_and(|reference| reference.trim().contains("local://template"))
             })
         {
-            bail!("{job_kind} evidence_refs must not use local://template evidence");
+            bail!("{job_kind} evidence_refs must not use local or placeholder evidence");
         }
         let Some(required_prefixes) = canonical_required_evidence_prefixes(&job_kind) else {
             continue;

@@ -403,7 +403,7 @@ fn blocks_worker_data_pipeline_readiness_when_template_refs_are_not_replaced() {
     assert!(provider_profile["blockers"]
         .as_array()
         .unwrap()
-        .contains(&serde_json::json!("template_evidence_refs_not_replaced")));
+        .contains(&serde_json::json!("non_production_evidence_refs")));
 }
 
 #[test]
@@ -462,6 +462,64 @@ fn blocks_worker_data_pipeline_readiness_when_artifact_uri_has_placeholders() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("non_production_artifact_uri")));
+}
+
+#[test]
+fn blocks_worker_data_pipeline_readiness_when_evidence_refs_are_local() {
+    let root = temp_root("worker-data-pipeline-readiness-local-evidence");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let readiness_uri = root.join("worker_data_pipeline_readiness_input.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    write_json(
+        readiness_uri.clone(),
+        &serde_json::json!({
+            "checks": [
+                {
+                    "job_kind": "peer_percentile_benchmark",
+                    "artifact_uri": "s3://nwfwa-production-artifacts/peer-benchmark/2026-06/peer_percentile_benchmark.json",
+                    "customer_approved": true,
+                    "external_fetch_configured": false,
+                    "row_count": 100,
+                    "minimum_row_count": 10,
+                    "data_quality_status": "passed",
+                    "coverage_window_days": 365,
+                    "source_freshness_status": "fresh",
+                    "evidence_refs": [
+                        "peer_benchmarks:local://artifacts/peer_percentile_benchmark.json",
+                        "peer_benchmark_claim_snapshot:s3://nwfwa-production-artifacts/peer-benchmark/2026-06/claims.json"
+                    ]
+                }
+            ]
+        }),
+    )
+    .expect("write readiness input");
+
+    let report = build_worker_data_pipeline_readiness_report(
+        &plan_uri.to_string_lossy(),
+        &readiness_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect("readiness report");
+
+    let jobs = report["job_readiness"].as_array().expect("jobs");
+    let peer_benchmark = jobs
+        .iter()
+        .find(|job| job["job_kind"] == "peer_percentile_benchmark")
+        .expect("peer benchmark readiness");
+    assert_eq!(peer_benchmark["readiness_status"], "blocked");
+    assert!(peer_benchmark["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("non_production_evidence_refs")));
 }
 
 #[test]

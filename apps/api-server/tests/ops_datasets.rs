@@ -220,11 +220,11 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
     r#"{
       "actor": "worker:worker-data-pipeline-scheduler",
       "notes": "daily worker data pipeline execution evidence",
-      "source_report_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
       "report_kind": "worker_data_pipeline_execution_report",
-      "plan_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
-      "run_status_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
-      "readiness_report_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+      "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+      "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+      "readiness_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
       "readiness_gate_status": "ready",
       "run_id": "wdp_2026_06_14",
       "execution_date": "2026-06-14",
@@ -242,7 +242,7 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
           "required_evidence_prefixes": ["sanctions_sync_reports:"],
           "evidence_refs": [
             "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
-            "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+            "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
           ],
           "submitted": true,
           "blocked_dependencies": []
@@ -263,10 +263,10 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "worker_data_pipeline_execution_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
-        "worker_data_pipeline_readiness_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
-        "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
-        "worker_data_pipeline_run_status:local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
+        "worker_data_pipeline_execution_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+        "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+        "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+        "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
       ],
       "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy"
     }"#
@@ -276,10 +276,10 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
     r#"{
       "actor": "worker:worker-data-pipeline-readiness",
       "notes": "daily customer data readiness evidence",
-      "source_report_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
       "report_kind": "worker_data_pipeline_readiness_report",
-      "plan_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
-      "readiness_input_uri": "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+      "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+      "readiness_input_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
       "readiness_status": "blocked",
       "job_count": 2,
       "ready_job_count": 1,
@@ -296,7 +296,7 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
           "source_freshness_status": "fresh",
           "readiness_status": "ready",
           "evidence_refs": [
-            "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+            "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
           ]
         },
         {
@@ -315,9 +315,9 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "worker_data_pipeline_readiness_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
-        "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
-        "worker_data_pipeline_readiness_inputs:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json"
+        "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+        "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+        "worker_data_pipeline_readiness_inputs:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json"
       ],
       "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy"
     }"#
@@ -731,11 +731,11 @@ async fn submits_worker_data_pipeline_execution_report() {
     assert_eq!(body["report_kind"], "worker_data_pipeline_execution_report");
     assert_eq!(
         body["source_report_uri"],
-        "local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
     );
     assert_eq!(
         body["readiness_report_uri"],
-        "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
     );
     assert_eq!(body["readiness_gate_status"], "ready");
     assert_eq!(body["run_id"], "wdp_2026_06_14");
@@ -744,7 +744,7 @@ async fn submits_worker_data_pipeline_execution_report() {
     assert_eq!(body["review_task_count"], 1);
     assert_eq!(
         body["persisted_report"]["source_report_uri"],
-        "local://artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
     );
     assert_eq!(body["persisted_report"]["run_id"], "wdp_2026_06_14");
     assert_eq!(body["persisted_report"]["readiness_gate_status"], "ready");
@@ -800,8 +800,8 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
             ],
             "evidence_refs": [
                 "worker_job_artifacts:provider_profile_window_rollup:2026-06-14",
-                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
-                "provider_profile_claim_snapshot:local://artifacts/worker-data-pipeline/provider_profile_claims.json"
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+                "provider_profile_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json"
             ],
             "submitted": true,
             "blocked_dependencies": []
@@ -1327,6 +1327,33 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_local_artif
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_local_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["evidence_refs"] = serde_json::json!([
+        "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
+        "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"].as_str().unwrap().contains("local dry-run"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_rejects_completed_job_without_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -1356,7 +1383,7 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_template_ev
         serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
     payload["job_executions"][0]["evidence_refs"] = serde_json::json!([
         "provider_profile_window_rollups:local://template/worker/provider_profile_window_rollup.json",
-        "provider_profile_claim_snapshot:local://artifacts/worker-data-pipeline/provider_profile_claim_snapshot.json"
+        "provider_profile_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claim_snapshot.json"
     ]);
 
     let (status, body) = json_request_with_key(
@@ -1459,10 +1486,10 @@ async fn worker_data_pipeline_execution_report_requires_full_scoring_readback_pr
                 "scoring_readback_score_responses:"
             ],
             "evidence_refs": [
-                "scoring_readback_reports:local://artifacts/worker-data-pipeline/scoring_readback_report.json",
-                "scoring_readback_inputs:local://artifacts/worker-data-pipeline/scoring_readback_input.json",
-                "scoring_readback_score_requests:local://artifacts/worker-data-pipeline/score_request.json",
-                "scoring_readback_score_responses:local://artifacts/worker-data-pipeline/score_response.json"
+                "scoring_readback_reports:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
+                "scoring_readback_inputs:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_input.json",
+                "scoring_readback_score_requests:s3://customer-prod-artifacts/worker-data-pipeline/score_request.json",
+                "scoring_readback_score_responses:s3://customer-prod-artifacts/worker-data-pipeline/score_response.json"
             ],
             "blocked_dependencies": []
         }
@@ -1507,7 +1534,7 @@ async fn worker_data_pipeline_execution_report_requires_probability_calibration_
                 "probability_calibration_reports:"
             ],
             "evidence_refs": [
-                "probability_calibration_reports:local://artifacts/worker-data-pipeline/probability_calibration_report.json"
+                "probability_calibration_reports:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json"
             ],
             "blocked_dependencies": []
         }
@@ -1554,7 +1581,7 @@ async fn worker_data_pipeline_execution_report_requires_provider_profile_lineage
                 "provider_profile_window_rollups:"
             ],
             "evidence_refs": [
-                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
             ],
             "submitted": true,
             "blocked_dependencies": []
@@ -1692,7 +1719,7 @@ async fn worker_data_pipeline_execution_report_requires_readiness_evidence_when_
         .retain(|reference| {
             reference.as_str()
                 != Some(
-                    "worker_data_pipeline_readiness_reports:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+                    "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
                 )
         });
 
@@ -1723,7 +1750,7 @@ async fn worker_data_pipeline_execution_report_requires_plan_evidence() {
         .retain(|reference| {
             reference.as_str()
                 != Some(
-                    "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                    "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
                 )
         });
 
@@ -1751,7 +1778,7 @@ async fn worker_data_pipeline_execution_report_requires_run_status_evidence() {
         .retain(|reference| {
             reference.as_str()
                 != Some(
-                    "worker_data_pipeline_run_status:local://artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+                    "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
                 )
         });
 
@@ -1811,7 +1838,7 @@ async fn submits_worker_data_pipeline_readiness_report() {
     assert_eq!(body["review_task_count"], 1);
     assert_eq!(
         body["persisted_report"]["source_report_uri"],
-        "local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
     );
     assert_eq!(body["persisted_report"]["readiness_status"], "blocked");
     assert_eq!(
@@ -1845,7 +1872,7 @@ async fn worker_data_pipeline_readiness_report_requires_plan_evidence() {
         .retain(|reference| {
             reference.as_str()
                 != Some(
-                    "worker_data_pipeline_plans:local://artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                    "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
                 )
         });
 
@@ -1873,7 +1900,7 @@ async fn worker_data_pipeline_readiness_report_requires_input_evidence() {
         .retain(|reference| {
             reference.as_str()
                 != Some(
-                    "worker_data_pipeline_readiness_inputs:local://artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+                    "worker_data_pipeline_readiness_inputs:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
                 )
         });
 
@@ -2259,6 +2286,32 @@ async fn worker_data_pipeline_readiness_report_rejects_ready_job_local_artifact(
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_local_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["evidence_refs"] = serde_json::json!([
+        "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"].as_str().unwrap().contains("local dry-run"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_readiness_report_rejects_ready_job_template_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -2387,10 +2440,10 @@ async fn worker_data_pipeline_readiness_report_requires_full_scoring_readback_pr
                 "scoring_readback_score_responses:"
             ],
             "evidence_refs": [
-                "scoring_readback_reports:local://artifacts/worker-data-pipeline/scoring_readback_report.json",
-                "scoring_readback_inputs:local://artifacts/worker-data-pipeline/scoring_readback_input.json",
-                "scoring_readback_score_requests:local://artifacts/worker-data-pipeline/score_request.json",
-                "scoring_readback_score_responses:local://artifacts/worker-data-pipeline/score_response.json"
+                "scoring_readback_reports:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
+                "scoring_readback_inputs:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_input.json",
+                "scoring_readback_score_requests:s3://customer-prod-artifacts/worker-data-pipeline/score_request.json",
+                "scoring_readback_score_responses:s3://customer-prod-artifacts/worker-data-pipeline/score_response.json"
             ],
             "blockers": []
         }
@@ -2438,7 +2491,7 @@ async fn worker_data_pipeline_readiness_report_requires_probability_calibration_
                 "probability_calibration_reports:"
             ],
             "evidence_refs": [
-                "probability_calibration_reports:local://artifacts/worker-data-pipeline/probability_calibration_report.json"
+                "probability_calibration_reports:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json"
             ],
             "blockers": []
         }
@@ -2488,7 +2541,7 @@ async fn worker_data_pipeline_readiness_report_requires_provider_profile_lineage
                 "provider_profile_window_rollups:"
             ],
             "evidence_refs": [
-                "provider_profile_window_rollups:local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
             ],
             "blockers": []
         }

@@ -404,9 +404,9 @@ fn readiness_blockers(
     if check
         .evidence_refs
         .iter()
-        .any(|reference| reference.trim().contains("local://template"))
+        .any(|reference| evidence_ref_is_non_production(reference))
     {
-        blockers.push("template_evidence_refs_not_replaced".into());
+        blockers.push("non_production_evidence_refs".into());
     }
     if required_evidence_prefixes
         .iter()
@@ -440,6 +440,11 @@ fn is_production_artifact_uri(value: &str) -> bool {
         && !value.starts_with("local://")
         && !value.contains('{')
         && !value.contains('}')
+}
+
+fn evidence_ref_is_non_production(value: &str) -> bool {
+    let value = value.trim();
+    value.contains("local://") || value.contains('{') || value.contains('}')
 }
 
 fn json_usize(value: &serde_json::Value, key: &'static str) -> anyhow::Result<usize> {
