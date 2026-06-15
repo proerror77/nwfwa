@@ -124,7 +124,23 @@ pub fn build_scoring_readback_report(
         });
 
     let mut blockers = Vec::new();
-    let observed_evidence_refs = if let Some(score_response_uri) = score_response_uri.as_deref() {
+    if score_request_uri.trim().starts_with("local://template") {
+        blockers.push("score_request_uri_template_not_replaced".to_string());
+    }
+    if input
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        blockers.push("input_template_evidence_refs_not_replaced".to_string());
+    }
+    let score_response_uri_is_template = score_response_uri
+        .as_deref()
+        .is_some_and(|value| value.trim().starts_with("local://template"));
+    let observed_evidence_refs = if score_response_uri_is_template {
+        blockers.push("score_response_uri_template_not_replaced".to_string());
+        Vec::new()
+    } else if let Some(score_response_uri) = score_response_uri.as_deref() {
         let response = read_json_report(score_response_uri)
             .with_context(|| format!("read scoring response {score_response_uri}"))?;
         collect_evidence_refs(&response)
@@ -151,6 +167,14 @@ pub fn build_scoring_readback_report(
             }
         })
         .collect::<Vec<_>>();
+    blockers.sort();
+    blockers.dedup();
+    if observed_evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        blockers.push("score_response_template_evidence_refs_not_replaced".to_string());
+    }
     blockers.sort();
     blockers.dedup();
     let matched_evidence_prefix_count = checks.iter().filter(|check| check.matched).count();
