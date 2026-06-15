@@ -194,6 +194,21 @@ async fn cancels_running_agent_run_and_records_governance_audit_event() {
         "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
         r#"{
           "canceller": "ops-lead",
+          "reason": "Loopback evidence must not cancel a running agent.",
+          "evidence_refs": ["agent_run:agent_cancel_running_1", "agent_cancel:http://localhost:8080/cancel.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_CANCEL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
           "reason": "File evidence must not cancel a running agent.",
           "evidence_refs": ["agent_run:agent_cancel_running_1", "agent_cancel:file://tmp/cancel.json"]
         }"#,
