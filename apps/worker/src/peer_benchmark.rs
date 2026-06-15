@@ -6,7 +6,10 @@ use std::{
     path::Path,
 };
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerBenchmarkInput {
@@ -174,6 +177,14 @@ pub fn build_peer_benchmark_submission(
     }
     if report.peer_groups.is_empty() {
         bail!("peer benchmark requires peer_groups before API submission");
+    }
+    ensure_no_template_uri("peer benchmark source_uri", &report.source_uri)?;
+    ensure_no_template_evidence_refs("peer benchmark evidence_refs", &report.evidence_refs)?;
+    for group in &report.peer_groups {
+        ensure_no_template_evidence_refs(
+            "peer benchmark group evidence_refs",
+            &group.evidence_refs,
+        )?;
     }
     let required_ref = format!("peer_benchmark_claim_snapshot:{}", report.source_uri);
     if !report

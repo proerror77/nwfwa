@@ -376,6 +376,23 @@ fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str
     Ok(value)
 }
 
+fn ensure_no_template_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    if value.trim().starts_with("local://template") {
+        bail!("{field} must not use local://template evidence");
+    }
+    Ok(())
+}
+
+fn ensure_no_template_evidence_refs(field: &str, evidence_refs: &[String]) -> anyhow::Result<()> {
+    if evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        bail!("{field} must not use local://template evidence");
+    }
+    Ok(())
+}
+
 fn required_optional<'a>(field: &str, value: Option<&'a str>) -> anyhow::Result<&'a str> {
     value
         .map(|value| required_non_empty(field, value))

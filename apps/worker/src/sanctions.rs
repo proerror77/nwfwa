@@ -2,7 +2,10 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SanctionsSourceSnapshot {
@@ -228,6 +231,8 @@ pub fn build_sanctions_sync_report_submission(
     if report.provider_upserts.is_empty() {
         bail!("sanctions sync report requires provider_upserts before API submission");
     }
+    ensure_no_template_uri("sanctions sync source_uri", &report.source_uri)?;
+    ensure_no_template_evidence_refs("sanctions sync evidence_refs", &report.evidence_refs)?;
     let required_ref = format!("sanctions_source_snapshot:{}", report.source_uri);
     if !report
         .evidence_refs

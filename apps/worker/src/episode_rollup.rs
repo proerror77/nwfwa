@@ -6,7 +6,10 @@ use std::{
     path::Path,
 };
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json,
+};
 
 const EPISODE_WINDOWS: [u16; 3] = [30, 90, 365];
 
@@ -152,6 +155,11 @@ pub fn build_episode_aggregation_submission(
     }
     if report.episodes.is_empty() {
         bail!("episode aggregation requires episodes before API submission");
+    }
+    ensure_no_template_uri("episode aggregation source_uri", &report.source_uri)?;
+    ensure_no_template_evidence_refs("episode aggregation evidence_refs", &report.evidence_refs)?;
+    for episode in &report.episodes {
+        ensure_no_template_evidence_refs("episode rollup evidence_refs", &episode.evidence_refs)?;
     }
     let required_ref = format!("episode_claim_snapshot:{}", report.source_uri);
     if !report

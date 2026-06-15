@@ -6,7 +6,10 @@ use std::{
     path::Path,
 };
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderGraphRollupInput {
@@ -215,6 +218,14 @@ pub fn build_provider_graph_signal_rollup_submission(
     }
     if report.provider_relationships.is_empty() {
         bail!("provider graph signal rollup requires provider_relationships before API submission");
+    }
+    ensure_no_template_uri("provider graph source_uri", &report.source_uri)?;
+    ensure_no_template_evidence_refs("provider graph evidence_refs", &report.evidence_refs)?;
+    for relationship in &report.provider_relationships {
+        ensure_no_template_evidence_refs(
+            "provider graph record evidence_refs",
+            &relationship.evidence_refs,
+        )?;
     }
     let required_ref = format!("provider_graph_claim_snapshot:{}", report.source_uri);
     if !report

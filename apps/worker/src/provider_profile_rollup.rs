@@ -6,7 +6,10 @@ use std::{
     path::Path,
 };
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json,
+};
 
 const PROFILE_WINDOWS: [u16; 3] = [30, 90, 365];
 
@@ -172,6 +175,14 @@ pub fn build_provider_profile_window_rollup_submission(
     }
     if report.provider_profiles.is_empty() {
         bail!("provider profile window rollup requires provider_profiles before API submission");
+    }
+    ensure_no_template_uri("provider profile source_uri", &report.source_uri)?;
+    ensure_no_template_evidence_refs("provider profile evidence_refs", &report.evidence_refs)?;
+    for profile in &report.provider_profiles {
+        ensure_no_template_evidence_refs(
+            "provider profile record evidence_refs",
+            &profile.evidence_refs,
+        )?;
     }
     let required_ref = format!("provider_profile_claim_snapshot:{}", report.source_uri);
     if !report

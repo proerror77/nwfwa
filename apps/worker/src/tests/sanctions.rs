@@ -260,6 +260,57 @@ fn rejects_sanctions_submission_without_source_snapshot_evidence() {
         .contains("sanctions_source_snapshot:local://inputs/oig-sam.json"));
 }
 
+#[test]
+fn rejects_sanctions_submission_with_template_evidence_refs() {
+    let root = temp_root("sanctions-sync-submission-template-evidence");
+    let report_uri = root.join("sanctions_sync_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "oig_sam_sanctions_sync_report",
+            "report_version": 1,
+            "run_date": "2026-06-14",
+            "source_uri": "local://inputs/oig-sam.json",
+            "source_date": "2026-06-13",
+            "dry_run": true,
+            "execution_mode": "dry_run_contract_only",
+            "sync_status": "ready_to_apply",
+            "source_record_count": 1,
+            "valid_record_count": 1,
+            "invalid_record_count": 0,
+            "provider_upserts": [
+                {
+                    "sanction_key": "OIG:PRV-1",
+                    "list": "OIG",
+                    "provider_id": "PRV-1",
+                    "npi": null,
+                    "provider_name": "Excluded Provider Clinic",
+                    "risk_feature": "provider_sanctions_excluded",
+                    "risk_score": 100
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": [
+                "sanctions_source_snapshot:local://inputs/oig-sam.json",
+                "worker_template:local://template/sanctions/source.json"
+            ],
+            "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+        }),
+    )
+    .unwrap();
+
+    let error = build_sanctions_sync_report_submission(
+        &report_uri.to_string_lossy(),
+        "worker:sync-oig-sam-sanctions",
+        "daily sync",
+    )
+    .expect_err("sanctions submission with template evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("sanctions sync evidence_refs must not use local://template evidence"));
+}
+
 #[tokio::test]
 async fn submits_sanctions_sync_report_to_api() {
     use tokio::net::TcpListener;
