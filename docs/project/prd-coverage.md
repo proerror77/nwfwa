@@ -140,6 +140,11 @@ review. This is verified in `88be67bd` by
 `cargo test --locked -p api-server --test ops_rules candidate_reviews` and
 `cargo test --locked -p api-server --test ops_openapi`.
 
+Label bootstrap review writebacks now require non-blank evidence refs, reject
+PII in evidence refs, and reject local dry-run/template evidence before labels
+can be approved for training. This is verified in `03e8a048` by
+`cargo test --locked -p api-server --test ops_bootstrap`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
