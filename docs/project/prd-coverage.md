@@ -178,6 +178,14 @@ evidence. This is verified in `339ca806` by
 `cargo test --locked -p api-server --test ops_openapi`, and
 `cargo check --locked -p api-server`.
 
+Active dataset, feature-set, and model-dataset registrations now require
+production artifact URIs for manifest/profile/schema, split data, feature
+matrix, and train/validation/test evidence while preserving draft local/public
+data paths for staging shape validation. This is verified in `3a5382b9` by
+`cargo test --locked -p api-server --test ops_datasets`,
+`cargo test --locked -p api-server --test ops_openapi`, and
+`cargo check --locked -p api-server`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
