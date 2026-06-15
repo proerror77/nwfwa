@@ -163,6 +163,13 @@ task refs are present. This is verified in `caa618ba` by
 `cargo test --locked -p api-server --test ops_openapi`, and
 `cargo check --locked -p api-server`.
 
+Model retraining output writebacks now require production feature-importance
+artifact URIs, aligning `feature_importance_uri` with the existing production
+artifact contract for model artifacts, validation reports, permutation
+importance, training artifacts, and serving manifests. This is verified in
+`0f6c1cc9` by `cargo test --locked -p api-server --test ops_models` and
+`cargo check --locked -p api-server`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
