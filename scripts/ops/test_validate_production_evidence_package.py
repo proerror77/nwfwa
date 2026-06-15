@@ -714,6 +714,48 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_artifact_build_step_with_wrong_customer_source_uri(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            for command in runbook["commands"]:
+                if command["step"] == "build_provider_profile_windows":
+                    command["command"] = command["command"].replace(
+                        "--claims-uri <customer-approved-provider-profile-claims-snapshot-uri> ",
+                        "--claims-uri local://template/provider-profile-claims.json ",
+                    )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "build_provider_profile_windows --claims-uri must be "
+                "<customer-approved-provider-profile-claims-snapshot-uri>",
+            ):
+                validate_package(package_dir)
+
+    def test_rejects_runbook_probability_calibration_build_with_wrong_source_uri(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            for command in runbook["commands"]:
+                if command["step"] == "build_probability_calibration_report":
+                    command["command"] = command["command"].replace(
+                        "--source-uri <customer-labeled-holdout-predictions-uri> ",
+                        "--source-uri local://template/calibration-input.json ",
+                    )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "build_probability_calibration_report --source-uri must be "
+                "<customer-labeled-holdout-predictions-uri>",
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_submit_step_with_wrong_api_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

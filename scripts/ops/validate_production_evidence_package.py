@@ -273,6 +273,34 @@ REQUIRED_RUNBOOK_SUBMIT_FLAGS = {
     },
 }
 REQUIRED_RUNBOOK_BUILD_FLAGS = {
+    "fetch_oig_sam_sanctions_snapshot": {
+        "--oig-url": "<customer-approved-oig-compatible-json-url>",
+        "--sam-url": "<customer-approved-sam-compatible-json-url>",
+    },
+    "sync_oig_sam_sanctions": {
+        "--source-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/oig_sam_sanctions_snapshot.json",
+    },
+    "build_provider_profile_windows": {
+        "--claims-uri": "<customer-approved-provider-profile-claims-snapshot-uri>",
+    },
+    "build_provider_graph_signals": {
+        "--graph-uri": "<customer-approved-provider-graph-snapshot-uri>",
+    },
+    "build_peer_benchmarks": {
+        "--claims-uri": "<customer-approved-peer-benchmark-claims-snapshot-uri>",
+    },
+    "build_episode_aggregation": {
+        "--claims-uri": "<customer-approved-episode-claims-snapshot-uri>",
+    },
+    "build_clinical_compatibility_reference": {
+        "--reference-uri": "<customer-approved-clinical-compatibility-reference-uri>",
+    },
+    "build_unbundling_comparator": {
+        "--input-uri": "<customer-approved-unbundling-comparator-input-uri>",
+    },
+    "build_scoring_feature_contexts": {
+        "--claims-uri": "<customer-approved-scoring-context-claims-snapshot-uri>",
+    },
     "build_readiness_report": {
         "--published-plan-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/plan/<customer-scheduler-run-id>/worker_data_pipeline_plan.json",
         "--published-readiness-input-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_input.json",
@@ -283,6 +311,7 @@ REQUIRED_RUNBOOK_BUILD_FLAGS = {
         "--published-readiness-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_report.json",
     },
     "build_probability_calibration_report": {
+        "--source-uri": "<customer-labeled-holdout-predictions-uri>",
         "--expected-label-source-uri": "<customer-approved-calibration-labels-uri>",
     },
     "build_scoring_readback_report": {
