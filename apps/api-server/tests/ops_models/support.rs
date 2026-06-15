@@ -64,9 +64,34 @@ pub(crate) fn model_lifecycle_payload(model_key: &str, version: &str) -> String 
 }
 
 pub(crate) async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
+    register_active_model_dataset_for_test(app, suffix).await
+}
+
+pub(crate) async fn register_draft_model_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
+        "draft",
+        "data/eval",
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+    )
+    .await
+}
+
+pub(crate) async fn register_active_model_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        "active",
+        "s3://fwa-model-data",
         r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
         r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
         r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
@@ -81,6 +106,8 @@ pub(crate) async fn register_unhealthy_model_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
+        "active",
+        "s3://fwa-model-data",
         "{}",
         r#"{"allowed_values": [0, 1]}"#,
         "{}",
@@ -91,6 +118,8 @@ pub(crate) async fn register_unhealthy_model_dataset_for_test(
 async fn register_model_dataset_for_test_with_profiles(
     app: axum::Router,
     suffix: &str,
+    status: &str,
+    uri_prefix: &str,
     key_profile: &str,
     label_profile: &str,
     feature_profile: &str,
@@ -111,17 +140,17 @@ async fn register_model_dataset_for_test_with_profiles(
               "sample_grain": "claim",
               "label_column": "confirmed_fwa",
               "entity_keys": ["claim_id"],
-              "manifest_uri": "data/eval/claims_model_eval_{suffix}/v1/manifest.json",
-              "schema_uri": "data/eval/claims_model_eval_{suffix}/v1/schema.json",
-              "profile_uri": "data/eval/claims_model_eval_{suffix}/v1/profile.json",
+              "manifest_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/manifest.json",
+              "schema_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/schema.json",
+              "profile_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/profile.json",
               "storage_format": "parquet",
               "schema_hash": "sha256:model-{suffix}",
               "row_count": 100,
-              "status": "draft",
+              "status": "{status}",
               "splits": [
                 {{
                   "split_name": "validation",
-                  "data_uri": "data/eval/claims_model_eval_{suffix}/v1/split=validation/",
+                  "data_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/split=validation/",
                   "row_count": 100,
                   "positive_count": 25,
                   "negative_count": 75,
@@ -170,11 +199,11 @@ async fn register_model_dataset_for_test_with_profiles(
               "feature_set_key": "claims_features_{suffix}",
               "version": "v1",
               "dataset_id": "{dataset_id}",
-              "features_uri": "data/eval/claims_model_eval_{suffix}/v1/features/",
+              "features_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/features/",
               "feature_list_json": ["claim_amount_to_limit_ratio"],
               "row_count": 100,
               "label_column": "confirmed_fwa",
-              "status": "draft"
+              "status": "{status}"
             }}"#
         ),
     )
@@ -191,12 +220,12 @@ async fn register_model_dataset_for_test_with_profiles(
               "task_type": "binary_classification",
               "label_name": "confirmed_fwa",
               "feature_set_id": "{feature_set_id}",
-              "train_uri": "data/eval/claims_model_eval_{suffix}/v1/split=train/",
-              "validation_uri": "data/eval/claims_model_eval_{suffix}/v1/split=validation/",
+              "train_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/split=train/",
+              "validation_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/split=validation/",
               "test_uri": null,
               "row_counts_json": {{"train": 80, "validation": 20}},
               "label_distribution_json": {{"train": {{"1": 20, "0": 60}}, "validation": {{"1": 5, "0": 15}}}},
-              "status": "draft"
+              "status": "{status}"
             }}"#
         ),
     )

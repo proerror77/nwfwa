@@ -2,8 +2,8 @@ use api_server::app::build_app;
 use axum::http::StatusCode;
 
 use super::support::{
-    get_json, json_request, register_activation_candidate, register_model_dataset_for_test,
-    register_unhealthy_model_dataset_for_test, test_config,
+    get_json, json_request, register_activation_candidate, register_draft_model_dataset_for_test,
+    register_model_dataset_for_test, register_unhealthy_model_dataset_for_test, test_config,
 };
 
 #[tokio::test]
@@ -162,6 +162,63 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
         assert_eq!(gate["passed"], true);
         assert_eq!(gate["evidence_source"], "evaluation");
     }
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_draft_source_datasets() {
+    let app = build_app(test_config()).unwrap();
+    let model_dataset_id =
+        register_draft_model_dataset_for_test(app.clone(), "draft_source_gate").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_draft_source_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/draft_source_gate/feature_importance.parquet",
+              "metrics_json": {{
+                "data_quality_score": 0.91,
+                "feature_reproducibility_hash": "sha256:draft-source-gate-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "qa_review"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["source_data_quality_score"], 1.0);
+    assert_eq!(body["source_data_quality_status"], "not_active");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("source dataset is not active")));
+    let source_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Source data quality")
+        .unwrap();
+    assert_eq!(source_gate["passed"], false);
+    assert_eq!(source_gate["evidence_source"], "dataset");
 }
 
 #[tokio::test]

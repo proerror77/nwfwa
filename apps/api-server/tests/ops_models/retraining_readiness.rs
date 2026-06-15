@@ -1,7 +1,10 @@
 use api_server::app::build_app;
 use axum::http::StatusCode;
 
-use super::support::{get_json, json_request, register_model_dataset_for_test, test_config};
+use super::support::{
+    get_json, json_request, register_draft_model_dataset_for_test, register_model_dataset_for_test,
+    test_config,
+};
 
 #[tokio::test]
 async fn model_retraining_readiness_blocks_without_training_inputs() {
@@ -172,4 +175,73 @@ async fn model_retraining_readiness_prepares_when_drift_and_labels_are_ready() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("approved model labels available")));
+}
+
+#[tokio::test]
+async fn model_retraining_readiness_blocks_draft_source_datasets() {
+    let app = build_app(test_config()).unwrap();
+    let model_dataset_id =
+        register_draft_model_dataset_for_test(app.clone(), "retraining_draft_source").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_retraining_draft_source",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/retraining_draft_source/feature_importance.parquet",
+              "metrics_json": {{"score_psi": 0.31, "data_quality_score": 0.91}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-RETRAINING-DRAFT-SOURCE-LABEL-1",
+          "investigation_id": "INV-RETRAINING-DRAFT-SOURCE-LABEL-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA label should not unlock retraining on draft data.",
+          "evidence_refs": ["investigation_results:INV-RETRAINING-DRAFT-SOURCE-LABEL-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) =
+        get_json(app, "/api/v1/ops/models/baseline_fwa/retraining-readiness").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["recommendation"], "blocked");
+    assert_eq!(body["source_data_quality_score"], 1.0);
+    assert_eq!(body["source_data_quality_status"], "not_active");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("source dataset is not active")));
+    assert!(body["retraining_triggers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("score drift status: drift")));
+    assert_eq!(body["approved_label_count"], 1);
 }

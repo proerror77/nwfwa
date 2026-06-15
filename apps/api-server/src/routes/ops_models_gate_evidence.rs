@@ -39,6 +39,16 @@ pub(super) fn source_data_quality_gate(
 ) -> SourceDataQualityGate {
     if let Some(dataset) = source_dataset {
         let health = build_dataset_health_record(dataset);
+        if dataset.status != "active" {
+            return SourceDataQualityGate {
+                dataset_id: health.dataset_id,
+                score: Some(health.data_quality_score),
+                status: "not_active".into(),
+                passed: false,
+                blocker: "source dataset is not active",
+                evidence_source: "dataset",
+            };
+        }
         return SourceDataQualityGate {
             dataset_id: health.dataset_id,
             score: Some(health.data_quality_score),
