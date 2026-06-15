@@ -382,6 +382,9 @@ fn base_execution_status(
         if !has_reported_artifact_uri(reported) || !has_evidence_refs(reported) {
             return "artifact_missing_evidence";
         }
+        if has_template_artifact_uri(reported) || has_template_evidence_refs(reported) {
+            return "artifact_missing_evidence";
+        }
         if !has_required_evidence_prefixes(job, reported) {
             return "artifact_missing_evidence";
         }
@@ -407,6 +410,11 @@ fn has_reported_artifact_uri(reported: &serde_json::Value) -> bool {
     json_string(reported, "artifact_uri").is_some_and(|value| !value.trim().is_empty())
 }
 
+fn has_template_artifact_uri(reported: &serde_json::Value) -> bool {
+    json_string(reported, "artifact_uri")
+        .is_some_and(|value| value.trim().starts_with("local://template"))
+}
+
 fn has_evidence_refs(reported: &serde_json::Value) -> bool {
     reported
         .get("evidence_refs")
@@ -418,6 +426,19 @@ fn has_evidence_refs(reported: &serde_json::Value) -> bool {
                         .as_str()
                         .is_some_and(|value| !value.trim().is_empty())
                 })
+        })
+}
+
+fn has_template_evidence_refs(reported: &serde_json::Value) -> bool {
+    reported
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .any(|reference| {
+            reference
+                .as_str()
+                .is_some_and(|value| value.trim().contains("local://template"))
         })
 }
 
@@ -458,6 +479,24 @@ fn validate_completed_job_evidence_prefixes(
         let Some(job_kind) = json_string(job, "job_kind") else {
             continue;
         };
+        if json_string(job, "reported_artifact_uri")
+            .is_some_and(|value| value.trim().starts_with("local://template"))
+        {
+            bail!("{job_kind} reported_artifact_uri must not use local://template evidence");
+        }
+        if job
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .any(|value| {
+                value
+                    .as_str()
+                    .is_some_and(|reference| reference.trim().contains("local://template"))
+            })
+        {
+            bail!("{job_kind} evidence_refs must not use local://template evidence");
+        }
         let Some(required_prefixes) = canonical_required_evidence_prefixes(&job_kind) else {
             continue;
         };
