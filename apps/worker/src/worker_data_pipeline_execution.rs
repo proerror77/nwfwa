@@ -630,6 +630,19 @@ fn validate_worker_data_pipeline_execution_review_tasks(
     review_tasks: &[serde_json::Value],
     readiness_gate_status: &str,
 ) -> anyhow::Result<()> {
+    if readiness_gate_status == "blocked" {
+        let has_matching_gate_review = review_tasks.iter().any(|task| {
+            json_string(task, "task_kind").as_deref()
+                == Some("worker_data_pipeline_readiness_gate_review")
+                && json_string(task, "readiness_gate_status").as_deref()
+                    == Some(readiness_gate_status)
+        });
+        if !has_matching_gate_review {
+            bail!(
+                "non-ready readiness_gate_status requires matching worker_data_pipeline_readiness_gate_review"
+            );
+        }
+    }
     for job in job_executions {
         let job_kind = json_string(job, "job_kind").context("job_executions requires job_kind")?;
         let execution_status = json_string(job, "execution_status")

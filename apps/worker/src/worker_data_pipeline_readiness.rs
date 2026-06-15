@@ -288,9 +288,12 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
     let ready_job_count = json_usize(&report, "ready_job_count")?;
     let blocked_job_count = json_usize(&report, "blocked_job_count")?;
     let review_task_count = json_usize(&report, "review_task_count")?;
+    let readiness_status = json_string(&report, "readiness_status")
+        .context("worker data pipeline readiness report requires readiness_status")?;
     validate_worker_data_pipeline_readiness_counts(
         &job_readiness,
         &review_tasks,
+        &readiness_status,
         job_count,
         ready_job_count,
         blocked_job_count,
@@ -332,8 +335,7 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
         report_kind: "worker_data_pipeline_readiness_report".into(),
         plan_uri,
         readiness_input_uri,
-        readiness_status: json_string(&report, "readiness_status")
-            .context("worker data pipeline readiness report requires readiness_status")?,
+        readiness_status,
         job_count,
         ready_job_count,
         blocked_job_count,
@@ -388,6 +390,7 @@ fn validate_worker_data_pipeline_readiness_review_tasks(
 fn validate_worker_data_pipeline_readiness_counts(
     job_readiness: &[serde_json::Value],
     review_tasks: &[serde_json::Value],
+    readiness_status: &str,
     job_count: usize,
     ready_job_count: usize,
     blocked_job_count: usize,
@@ -407,6 +410,11 @@ fn validate_worker_data_pipeline_readiness_counts(
     }
     if ready_job_count != actual_ready || blocked_job_count != actual_blocked {
         bail!("ready_job_count and blocked_job_count must match job_readiness statuses");
+    }
+    match (readiness_status, actual_blocked) {
+        ("ready", 0) => {}
+        ("blocked", blocked) if blocked > 0 => {}
+        _ => bail!("readiness_status must match whether any job is blocked"),
     }
     if review_task_count != review_tasks.len() {
         bail!("review_task_count must match review_tasks length");
