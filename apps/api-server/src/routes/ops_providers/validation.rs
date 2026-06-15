@@ -583,6 +583,7 @@ fn validate_production_artifact_uri(
     let value = value.trim();
     if value.is_empty()
         || value.starts_with("local://")
+        || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
     {
