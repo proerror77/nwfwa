@@ -491,6 +491,9 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
             ),
             f"worker data pipeline job {job_kind} must include non-empty evidence_refs",
         )
+        require_no_template_evidence_refs(
+            job_evidence_refs, f"worker data pipeline job {job_kind}"
+        )
     for job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
         job = jobs_by_kind[job_kind]
         require(
@@ -550,6 +553,9 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         isinstance(evidence_refs, list) and evidence_refs,
         "worker data pipeline execution evidence must include evidence_refs",
     )
+    require_no_template_evidence_refs(
+        evidence_refs, "worker data pipeline execution evidence"
+    )
     for prefix in (
         "worker_data_pipeline_plans:",
         "worker_data_pipeline_run_status:",
@@ -591,7 +597,7 @@ def validate_scoring_readback_evidence(report: dict) -> None:
             isinstance(report.get(field_name), str) and report[field_name].strip(),
             f"scoring readback evidence must include {field_name}",
         )
-    for field_name in ("score_request_uri", "score_response_uri"):
+    for field_name in ("input_uri", "score_request_uri", "score_response_uri"):
         require(
             is_production_artifact_uri(report.get(field_name)),
             f"scoring readback evidence {field_name} must be a production artifact URI, not a local dry-run or template URI",
@@ -634,6 +640,9 @@ def validate_scoring_readback_evidence(report: dict) -> None:
             isinstance(matched_refs, list) and matched_refs,
             "scoring readback evidence matched checks must include matched_evidence_refs",
         )
+        require_no_template_evidence_refs(
+            matched_refs, "scoring readback matched evidence"
+        )
     require(
         not report.get("blockers"),
         "scoring readback evidence must have no blockers",
@@ -647,6 +656,7 @@ def validate_scoring_readback_evidence(report: dict) -> None:
         isinstance(evidence_refs, list) and evidence_refs,
         "scoring readback evidence must include evidence_refs",
     )
+    require_no_template_evidence_refs(evidence_refs, "scoring readback evidence")
     for prefix in WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES:
         require(
             any(

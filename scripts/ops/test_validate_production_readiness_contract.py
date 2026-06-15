@@ -191,6 +191,29 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         ):
             validate_worker_data_pipeline_execution_evidence(report)
 
+    def test_worker_execution_rejects_template_job_evidence_refs(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        peer_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "peer_percentile_benchmark"
+        )
+        peer_job["evidence_refs"].append(
+            "peer_benchmarks:local://template/worker/peer_percentile_benchmark.json"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "local://template"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
+    def test_worker_execution_rejects_template_top_level_evidence_refs(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        report["evidence_refs"].append(
+            "worker_data_pipeline_plans:local://template/worker/plan.json"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "local://template"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
     def test_worker_execution_requires_probability_calibration_label_lineage(
         self,
     ) -> None:
@@ -256,6 +279,31 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(
             AssertionError, "provider_graph_signal_rollups:"
         ):
+            validate_scoring_readback_evidence(report)
+
+    def test_scoring_readback_rejects_template_input_uri(self) -> None:
+        report = scoring_readback_report()
+        report["input_uri"] = "local://template/worker/scoring_readback_input.json"
+
+        with self.assertRaisesRegex(AssertionError, "input_uri"):
+            validate_scoring_readback_evidence(report)
+
+    def test_scoring_readback_rejects_template_matched_evidence_refs(self) -> None:
+        report = scoring_readback_report()
+        report["checks"][0]["matched_evidence_refs"].append(
+            "peer_benchmarks:local://template/worker/peer.json"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "local://template"):
+            validate_scoring_readback_evidence(report)
+
+    def test_scoring_readback_rejects_template_top_level_evidence_refs(self) -> None:
+        report = scoring_readback_report()
+        report["evidence_refs"].append(
+            "scoring_readback_reports:local://template/evidence/scoring_readback_report.json"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "local://template"):
             validate_scoring_readback_evidence(report)
 
     def test_scoring_readback_rejects_blocked_contract_only_report(self) -> None:
