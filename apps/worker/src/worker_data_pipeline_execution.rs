@@ -801,7 +801,7 @@ fn validate_completed_job_evidence_prefixes(
             .any(|value| {
                 value
                     .as_str()
-                    .is_some_and(|reference| reference.trim().contains("local://template"))
+                    .is_some_and(|reference| evidence_ref_is_non_production(reference))
             })
         {
             bail!("{job_kind} evidence_refs must not use local or placeholder evidence");

@@ -1648,6 +1648,65 @@ fn rejects_worker_data_pipeline_execution_submission_with_template_job_evidence(
         .contains("reported_artifact_uri must not use local://template evidence"));
 }
 
+#[test]
+fn rejects_worker_data_pipeline_execution_submission_with_file_job_evidence() {
+    let root = temp_root("worker-data-pipeline-execution-submission-file-job-evidence");
+    let report_uri = root.join("worker_data_pipeline_execution_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_execution_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "customer_scope_id": "production-customer",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_count": 1,
+            "pending_or_failed_job_count": 0,
+            "job_executions": [
+                {
+                    "job_kind": "provider_profile_window_rollup",
+                    "execution_status": "completed",
+                    "reported_status": "succeeded",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup.json",
+                    "api_path": "/api/v1/ops/providers/profile-window-rollups",
+                    "required_permission": "ops:providers:write",
+                    "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
+                    "required_evidence_prefixes": [
+                        "provider_profile_window_rollups:",
+                        "provider_profile_claim_snapshot:"
+                    ],
+                    "evidence_refs": [
+                        "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup.json",
+                        "provider_profile_claim_snapshot:file://tmp/provider-claims.json"
+                    ],
+                    "submitted": true
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-scheduler",
+        "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+    )
+    .expect_err("execution submission with file job evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("provider_profile_window_rollup evidence_refs must not use local"));
+}
+
 #[tokio::test]
 async fn submits_worker_data_pipeline_execution_report_to_api() {
     let root = temp_root("worker-data-pipeline-execution-submit-api");
