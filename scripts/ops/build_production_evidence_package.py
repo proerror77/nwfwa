@@ -372,11 +372,11 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                 "probability_calibration_status": "pending",
                 "calibrated_probability_serving_active": False,
                 "evidence_refs": [
-                    "model_serving:local://template/model-serving-slo.json",
-                    "model_artifact:local://template/model-artifact.json",
-                    "probability_calibration_reports:local://template/probability-calibration-report.json",
-                    "probability_calibration_input:local://template/probability-calibration-input.json",
-                    "calibration_labels:local://template/calibration-labels.json",
+                    "model_serving:local://template/sources/model-serving-slo-source.json",
+                    "model_artifact:local://template/sources/model-artifact.json",
+                    "probability_calibration_reports:local://template/worker/probability-calibration/<benchmark-month>/probability_calibration_report.json",
+                    "probability_calibration_input:local://template/sources/probability-calibration-input.json",
+                    "calibration_labels:local://template/sources/calibration-labels.json",
                 ],
             },
         )
@@ -471,11 +471,11 @@ def source_template(gate_id: str, generated_at: str) -> dict | None:
             "probability_calibration_status": "pending",
             "calibrated_probability_serving_active": False,
             "evidence_refs": [
-                "model_serving:local://template/model-serving-slo.json",
-                "model_artifact:local://template/model-artifact.json",
-                "probability_calibration_reports:local://template/probability-calibration-report.json",
-                "probability_calibration_input:local://template/probability-calibration-input.json",
-                "calibration_labels:local://template/calibration-labels.json",
+                "model_serving:local://template/sources/model-serving-slo-source.json",
+                "model_artifact:local://template/sources/model-artifact.json",
+                "probability_calibration_reports:local://template/worker/probability-calibration/<benchmark-month>/probability_calibration_report.json",
+                "probability_calibration_input:local://template/sources/probability-calibration-input.json",
+                "calibration_labels:local://template/sources/calibration-labels.json",
             ],
         }
     if gate_id == "ocr_vector_analytics_execution":

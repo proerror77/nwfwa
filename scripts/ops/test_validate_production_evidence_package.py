@@ -118,6 +118,26 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_model_serving_slo_template_with_short_calibration_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "model_serving_slo_report.json"
+            report = _read_json(report_uri)
+            report["evidence_refs"] = [
+                reference.replace(
+                    "local://template/worker/probability-calibration/<benchmark-month>/probability_calibration_report.json",
+                    "local://template/probability-calibration-report.json",
+                )
+                for reference in report["evidence_refs"]
+            ]
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(
+                AssertionError, "package-relative template URIs"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_worker_readiness_input_missing_required_job(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

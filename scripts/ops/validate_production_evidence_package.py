@@ -88,6 +88,13 @@ REQUIRED_SCORING_READBACK_TEMPLATE_EVIDENCE_REFS = {
     "scoring_readback_score_requests:local://template/worker/score_request.json",
     "scoring_readback_score_responses:local://template/worker/scoring-readback/score_response.json",
 }
+REQUIRED_MODEL_SERVING_SLO_TEMPLATE_EVIDENCE_REFS = {
+    "model_serving:local://template/sources/model-serving-slo-source.json",
+    "model_artifact:local://template/sources/model-artifact.json",
+    "probability_calibration_reports:local://template/worker/probability-calibration/<benchmark-month>/probability_calibration_report.json",
+    "probability_calibration_input:local://template/sources/probability-calibration-input.json",
+    "calibration_labels:local://template/sources/calibration-labels.json",
+}
 REQUIRED_WORKER_RUN_STATUS_TEMPLATE_URIS = {
     "plan_uri": "local://template/worker/worker_data_pipeline_plan.json",
     "readiness_report_uri": "local://template/worker/worker_data_pipeline_readiness_report.json",
@@ -362,6 +369,12 @@ def validate_source_templates(package_dir: Path) -> None:
                 evidence_refs_include_prefix(evidence_refs, prefix),
                 f"source template {template_path} evidence_refs missing {prefix}",
             )
+        if template_path == "sources/model-serving-slo-source.json":
+            observed_refs = set(evidence_refs or [])
+            require(
+                REQUIRED_MODEL_SERVING_SLO_TEMPLATE_EVIDENCE_REFS.issubset(observed_refs),
+                "model serving SLO source template evidence_refs must use package-relative template URIs",
+            )
 
 
 def validate_worker_execution_template(report: dict) -> None:
@@ -480,6 +493,11 @@ def validate_model_serving_slo_template(report: dict) -> None:
             evidence_refs_include_prefix(evidence_refs, prefix),
             f"model serving SLO template evidence_refs missing {prefix}",
         )
+    observed_refs = set(evidence_refs or [])
+    require(
+        REQUIRED_MODEL_SERVING_SLO_TEMPLATE_EVIDENCE_REFS.issubset(observed_refs),
+        "model serving SLO template evidence_refs must use package-relative template URIs",
+    )
 
 
 def evidence_refs_include_prefix(evidence_refs: object, prefix: str) -> bool:

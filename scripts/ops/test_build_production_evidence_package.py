@@ -122,11 +122,11 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn("latency_slo_ms", model_slo)
             self.assertIn("checksum_verified", model_slo)
             self.assertIn(
-                "probability_calibration_input:local://template/probability-calibration-input.json",
+                "probability_calibration_input:local://template/sources/probability-calibration-input.json",
                 model_slo["evidence_refs"],
             )
             self.assertIn(
-                "calibration_labels:local://template/calibration-labels.json",
+                "calibration_labels:local://template/sources/calibration-labels.json",
                 model_slo["evidence_refs"],
             )
             retention = artifacts["retention_legal_hold_report.json"]
