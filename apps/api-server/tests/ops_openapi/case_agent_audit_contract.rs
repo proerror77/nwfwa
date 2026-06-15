@@ -289,6 +289,25 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]
+            ["investigation_id"]["type"],
+        serde_json::json!(["string", "null"])
+    );
+    assert!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]
+            ["investigation_id"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("group multiple agent runs")
+    );
+    assert!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "investigation_id")
+    );
+    assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["risk_score"]
             ["maximum"],
         100

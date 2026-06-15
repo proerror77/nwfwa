@@ -80,7 +80,7 @@ impl InMemoryScoringRepository {
             .await
             .entry(registry.agent_identity_id.clone())
             .or_insert(registry);
-        let investigation = agent_investigation_record_for_claim(&run.claim_id);
+        let investigation = agent_investigation_record(&run.claim_id, &run.investigation_id);
         self.agent_investigations.lock().await.insert(
             investigation.investigation_id.clone(),
             investigation.clone(),

@@ -48,6 +48,7 @@ pub(crate) struct AgentRunListResponse {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub(crate) struct AgentRunRecord {
     pub(crate) agent_run_id: String,
+    pub(crate) investigation_id: String,
     pub(crate) claim_id: String,
     pub(crate) status: String,
     pub(crate) decision_boundary: String,
@@ -76,6 +77,7 @@ pub(crate) struct AgentApprovalView {
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub(crate) struct AgentInvestigationResponse {
+    pub(crate) investigation_id: String,
     pub(crate) agent_run_id: String,
     pub(crate) decision_boundary: String,
     pub(crate) risk_summary: String,

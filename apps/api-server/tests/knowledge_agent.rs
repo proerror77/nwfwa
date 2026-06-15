@@ -132,6 +132,7 @@ async fn cancels_running_agent_run_and_records_governance_audit_event() {
     let repository = InMemoryScoringRepository::shared();
     repository
         .save_agent_run(PersistedAgentRun {
+            investigation_id: "investigation_cancel_running_1".into(),
             agent_run_id: "agent_cancel_running_1".into(),
             claim_id: "CLM-AGENT-CANCEL".into(),
             status: "running".into(),
@@ -455,6 +456,11 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["decision_boundary"], "assistive_only");
+    assert!(body["investigation_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("investigation_"));
+    assert_ne!(body["investigation_id"], body["agent_run_id"]);
     assert!(body["agent_run_id"].as_str().unwrap().starts_with("agent_"));
     assert!(!body["risk_summary"].as_str().unwrap().contains("CLM-0287"));
     assert!(body["risk_summary"]
@@ -872,6 +878,62 @@ async fn lists_agent_run_logs_for_governance_review() {
         .iter()
         .any(|execution| execution["agent_kind"] == "evidence_review"));
     assert!(!run["output_json"].to_string().contains("CLM-AGENT-LOGS"));
+}
+
+#[tokio::test]
+async fn reuses_supplied_investigation_id_across_multiple_agent_runs() {
+    let app = build_app(test_config()).unwrap();
+
+    let request_body = r#"{
+      "investigation_id": "investigation_shared_api_1",
+      "claim_id": "CLM-AGENT-SHARED-INVESTIGATION",
+      "risk_score": 91,
+      "rag": "RED",
+      "top_reasons": ["Agent rerun should stay grouped under the same investigation"],
+      "similar_case_query": {
+        "diagnosis_code": "J10",
+        "provider_region": "Shanghai",
+        "tags": ["provider_outlier"]
+      }
+    }"#;
+
+    let (status, first_body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        request_body,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let first: serde_json::Value = serde_json::from_str(&first_body).unwrap();
+
+    let (status, second_body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        request_body,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let second: serde_json::Value = serde_json::from_str(&second_body).unwrap();
+
+    assert_eq!(first["investigation_id"], "investigation_shared_api_1");
+    assert_eq!(second["investigation_id"], "investigation_shared_api_1");
+    assert_ne!(first["agent_run_id"], second["agent_run_id"]);
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let grouped_runs = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|run| run["investigation_id"] == "investigation_shared_api_1")
+        .collect::<Vec<_>>();
+    assert_eq!(grouped_runs.len(), 2);
+    assert!(grouped_runs
+        .iter()
+        .all(|run| run["agent_run_id"] != "investigation_shared_api_1"));
 }
 
 #[tokio::test]

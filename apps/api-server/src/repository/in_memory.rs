@@ -152,6 +152,7 @@ mod tests {
 
         repository
             .save_agent_run(PersistedAgentRun {
+                investigation_id: "investigation_test_01HX".into(),
                 agent_run_id: "agent_01HX".into(),
                 claim_id: "CLM-0287".into(),
                 status: "succeeded".into(),
@@ -173,9 +174,7 @@ mod tests {
 
         let audit_events = repository.agent_audit_events.lock().await;
         assert_eq!(audit_events.len(), 1);
-        assert!(audit_events[0]
-            .investigation_id
-            .starts_with("investigation:"));
+        assert_eq!(audit_events[0].investigation_id, "investigation_test_01HX");
         assert_eq!(audit_events[0].decision_boundary, "assistive_only");
         assert_eq!(audit_events[0].findings_count, 1);
         assert!(audit_events[0].input_digest.starts_with("sha256:"));
@@ -188,6 +187,7 @@ mod tests {
 
         let investigations = repository.agent_investigations.lock().await;
         assert_eq!(investigations.len(), 1);
+        assert!(investigations.contains_key("investigation_test_01HX"));
         assert_eq!(
             investigations.values().next().unwrap().orchestrator_version,
             DEFAULT_ORCHESTRATOR_VERSION

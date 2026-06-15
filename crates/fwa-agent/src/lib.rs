@@ -14,6 +14,7 @@ pub struct SimilarCaseInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvestigationRequest {
+    pub investigation_id: Option<String>,
     pub claim_id: String,
     pub risk_score: u8,
     pub rag: String,
@@ -43,6 +44,7 @@ pub struct EvidenceReferenceBuckets {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvestigationPackage {
+    pub investigation_id: String,
     pub agent_run_id: String,
     pub decision_boundary: String,
     pub risk_summary: String,
@@ -145,6 +147,10 @@ impl DeterministicInvestigator {
         cancellation: &(dyn InvestigationCancellation + Sync),
     ) -> Result<InvestigationPackage, InvestigationCancellationError> {
         check_cancellation(cancellation, "investigation.start")?;
+        let investigation_id = request
+            .investigation_id
+            .clone()
+            .unwrap_or_else(|| format!("investigation_{}", Ulid::new()));
         let agent_run_id = format!("agent_{}", Ulid::new());
         let findings = build_findings(&request);
         check_cancellation(cancellation, "investigation.findings_built")?;
@@ -165,6 +171,7 @@ impl DeterministicInvestigator {
         check_cancellation(cancellation, "investigation.evidence_sufficiency_built")?;
 
         Ok(InvestigationPackage {
+            investigation_id,
             agent_run_id,
             decision_boundary: "assistive_only".into(),
             risk_summary: format!(
@@ -538,6 +545,7 @@ mod tests {
     #[test]
     fn deterministic_investigator_returns_evidence_backed_package() {
         let request = InvestigationRequest {
+            investigation_id: None,
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
@@ -558,6 +566,8 @@ mod tests {
         let package = DeterministicInvestigator.investigate(request);
 
         assert_eq!(package.decision_boundary, "assistive_only");
+        assert!(package.investigation_id.starts_with("investigation_"));
+        assert_ne!(package.investigation_id, package.agent_run_id);
         assert!(package.agent_run_id.starts_with("agent_"));
         assert!(!package.agent_run_id.contains("CLM-0287"));
         assert!(package.risk_summary.contains("CLM-0287"));
@@ -592,6 +602,7 @@ mod tests {
     #[test]
     fn deterministic_investigator_uses_unique_run_ids_for_repeated_claims() {
         let request = InvestigationRequest {
+            investigation_id: Some("investigation_shared_0287".into()),
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
@@ -605,12 +616,15 @@ mod tests {
 
         assert!(first.agent_run_id.starts_with("agent_"));
         assert!(second.agent_run_id.starts_with("agent_"));
+        assert_eq!(first.investigation_id, "investigation_shared_0287");
+        assert_eq!(second.investigation_id, "investigation_shared_0287");
         assert_ne!(first.agent_run_id, second.agent_run_id);
     }
 
     #[test]
     fn deterministic_orchestrator_exposes_specialist_agent_plan() {
         let request = InvestigationRequest {
+            investigation_id: None,
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
@@ -657,6 +671,7 @@ mod tests {
     #[test]
     fn deterministic_orchestrator_supports_noop_cancellation_signal() {
         let request = InvestigationRequest {
+            investigation_id: None,
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
@@ -677,6 +692,7 @@ mod tests {
     #[test]
     fn deterministic_orchestrator_dispatches_specialists_with_tool_mediation_contract() {
         let request = InvestigationRequest {
+            investigation_id: None,
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
@@ -758,6 +774,7 @@ mod tests {
         }
 
         let request = InvestigationRequest {
+            investigation_id: None,
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
@@ -793,6 +810,7 @@ mod tests {
         }
 
         let request = InvestigationRequest {
+            investigation_id: None,
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
@@ -816,6 +834,7 @@ mod tests {
     #[test]
     fn buckets_provider_sanctions_evidence_refs() {
         let request = InvestigationRequest {
+            investigation_id: None,
             claim_id: "CLM-0287".into(),
             risk_score: 100,
             rag: "RED".into(),
