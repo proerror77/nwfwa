@@ -226,6 +226,13 @@ pub(in crate::routes) fn validate_probability_calibration_report_request(
         "INVALID_PROBABILITY_CALIBRATION_REPORT_URI",
         "probability calibration report_uri must point to a JSON report",
     )?;
+    if request.report_uri.trim().starts_with("local://template") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_REPORT_URI",
+            "probability calibration report_uri must not use local://template evidence",
+        ));
+    }
     if request.row_count == 0 || request.minimum_calibration_rows == 0 || request.bin_count == 0 {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -319,6 +326,17 @@ pub(in crate::routes) fn validate_probability_calibration_report_request(
             StatusCode::BAD_REQUEST,
             "MISSING_PROBABILITY_CALIBRATION_EVIDENCE",
             "probability calibration evidence_refs are required",
+        ));
+    }
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_EVIDENCE",
+            "probability calibration evidence_refs must not use local://template evidence",
         ));
     }
     if pii::contains_pii(
