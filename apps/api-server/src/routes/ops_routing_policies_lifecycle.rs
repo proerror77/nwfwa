@@ -159,6 +159,16 @@ fn validate_routing_policy_lifecycle_request(
             "routing policy lifecycle evidence_refs must not contain PII",
         ));
     }
+    if request.evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ROUTING_POLICY_LIFECYCLE_EVIDENCE",
+            "routing policy lifecycle evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     Ok(())
 }
 

@@ -85,6 +85,17 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/candidate_early_high_amount/submit",
+        r#"{"evidence_refs":["rules:candidate_early_high_amount:v1","rule_reviews:local://template/candidate-review.json"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_RULE_LIFECYCLE_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_early_high_amount/submit",
         &rule_lifecycle_payload("candidate_early_high_amount", 1),
     )
     .await;

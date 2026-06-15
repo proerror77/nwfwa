@@ -52,7 +52,27 @@ pub(super) fn validate_rule_lifecycle_request(
             "rule lifecycle evidence_refs must not contain PII",
         ));
     }
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_RULE_LIFECYCLE_EVIDENCE",
+        "rule lifecycle evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
+}
+
+pub(super) fn validate_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    } else {
+        Ok(())
+    }
 }
 
 pub(super) fn validate_candidate_review_backtest_evidence(
