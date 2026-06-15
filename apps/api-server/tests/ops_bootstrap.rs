@@ -247,6 +247,24 @@ async fn backfill_evidence_request_and_label_bootstrap_flow() {
           "governance_status": "approved_for_training",
           "feedback_target": "model",
           "notes": "Evidence was reviewed and can be used as a supervised label.",
+          "evidence_refs": ["evidence_documents:file://tmp/doc-bootstrap.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{review}");
+    assert_eq!(review["code"], "INVALID_LABEL_BOOTSTRAP_REVIEW_EVIDENCE");
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/label-bootstrap/items/{item_id}/review"),
+        r#"{
+          "reviewer": "label-governance",
+          "label_name": "clinical_evidence_sufficient",
+          "label_value": "true",
+          "governance_status": "approved_for_training",
+          "feedback_target": "model",
+          "notes": "Evidence was reviewed and can be used as a supervised label.",
           "evidence_refs": ["evidence_documents:doc_bootstrap_1"]
         }"#,
     )
@@ -352,6 +370,21 @@ async fn evidence_request_rejects_received_status_without_document_evidence() {
           "actor_id": "clinical-ops",
           "notes": "Attempt to mark received with a blank evidence ref.",
           "evidence_refs": ["evidence_documents:doc_bootstrap_3", " "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{update}");
+    assert_eq!(update["code"], "INVALID_EVIDENCE_REQUEST_STATUS_EVIDENCE");
+
+    let (status, update) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
+        r#"{
+          "status": "received",
+          "actor_id": "clinical-ops",
+          "notes": "Attempt to mark received with file document evidence.",
+          "evidence_refs": ["evidence_documents:file://tmp/doc-bootstrap-3.json"]
         }"#,
     )
     .await;

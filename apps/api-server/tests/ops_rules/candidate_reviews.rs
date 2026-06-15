@@ -96,6 +96,17 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/candidate_early_high_amount/submit",
+        r#"{"evidence_refs":["rules:candidate_early_high_amount:v1","rule_reviews:file://tmp/candidate-review.json"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_RULE_LIFECYCLE_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_early_high_amount/submit",
         &rule_lifecycle_payload("candidate_early_high_amount", 1),
     )
     .await;
@@ -145,6 +156,41 @@ async fn records_rejected_discovered_candidate_review_without_saving_rule() {
               "alert_code": "TREE_LOCAL_REVIEW",
               "recommended_action": "ManualReview",
               "reason": "测试本地证据候选规则"
+            }
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_CANDIDATE_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-review",
+          "notes": "Rejected because this candidate is not explainable enough for the governed rule library.",
+          "evidence_refs": ["dataset:inline", "rule_candidate_reviews:file://tmp/review.json"],
+          "rule": {
+            "rule_id": "candidate_tree_file_review",
+            "version": 1,
+            "name": "File evidence tree candidate",
+            "scheme_family": "high_risk_claim",
+            "conditions": [
+              {
+                "field": "claim_amount_to_limit_ratio",
+                "operator": ">=",
+                "value": 0.8
+              }
+            ],
+            "action": {
+              "score": 30,
+              "alert_code": "TREE_FILE_REVIEW",
+              "recommended_action": "ManualReview",
+              "reason": "File evidence candidate rule"
             }
           }
         }"#,

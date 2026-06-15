@@ -194,6 +194,21 @@ async fn cancels_running_agent_run_and_records_governance_audit_event() {
         "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
         r#"{
           "canceller": "ops-lead",
+          "reason": "File evidence must not cancel a running agent.",
+          "evidence_refs": ["agent_run:agent_cancel_running_1", "agent_cancel:file://tmp/cancel.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_CANCEL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/agent-runs/agent_cancel_running_1/cancel",
+        r#"{
+          "canceller": "ops-lead",
           "reason": "Policy kill-switch triggered during evidence collection.",
           "evidence_refs": ["agent_run:agent_cancel_running_1", "policy:manual-kill-switch"]
         }"#,
@@ -917,8 +932,9 @@ async fn reuses_supplied_investigation_id_across_multiple_agent_runs() {
     assert_eq!(status, StatusCode::OK);
     let second: serde_json::Value = serde_json::from_str(&second_body).unwrap();
 
-    assert_eq!(first["investigation_id"], "investigation_shared_api_1");
-    assert_eq!(second["investigation_id"], "investigation_shared_api_1");
+    let scoped_investigation_id = "demo-customer:investigation_shared_api_1";
+    assert_eq!(first["investigation_id"], scoped_investigation_id);
+    assert_eq!(second["investigation_id"], scoped_investigation_id);
     assert_ne!(first["agent_run_id"], second["agent_run_id"]);
 
     let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
@@ -928,12 +944,12 @@ async fn reuses_supplied_investigation_id_across_multiple_agent_runs() {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|run| run["investigation_id"] == "investigation_shared_api_1")
+        .filter(|run| run["investigation_id"] == scoped_investigation_id)
         .collect::<Vec<_>>();
     assert_eq!(grouped_runs.len(), 2);
     assert!(grouped_runs
         .iter()
-        .all(|run| run["agent_run_id"] != "investigation_shared_api_1"));
+        .all(|run| run["agent_run_id"] != scoped_investigation_id));
 }
 
 #[tokio::test]

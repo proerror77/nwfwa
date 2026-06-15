@@ -367,7 +367,10 @@ pub(super) fn validate_evidence_refs(values: &[String]) -> Result<(), ApiError> 
         ))
     } else if values.iter().any(|value| {
         let value = value.trim();
-        value.contains("local://") || value.contains('{') || value.contains('}')
+        value.contains("local://")
+            || value.contains("file://")
+            || value.contains('{')
+            || value.contains('}')
     }) {
         Err(bad_request(
             "EVIDENCE_REF_INVALID",

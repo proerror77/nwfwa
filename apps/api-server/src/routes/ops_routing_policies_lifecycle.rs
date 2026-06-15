@@ -161,7 +161,10 @@ fn validate_routing_policy_lifecycle_request(
     }
     if request.evidence_refs.iter().any(|reference| {
         let reference = reference.trim();
-        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+        reference.contains("local://")
+            || reference.contains("file://")
+            || reference.contains('{')
+            || reference.contains('}')
     }) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,

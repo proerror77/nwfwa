@@ -240,7 +240,10 @@ fn validate_knowledge_case_production_evidence_refs(
 ) -> Result<(), ApiError> {
     if evidence_refs.iter().any(|reference| {
         let reference = reference.trim();
-        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+        reference.contains("local://")
+            || reference.contains("file://")
+            || reference.contains('{')
+            || reference.contains('}')
     }) {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
