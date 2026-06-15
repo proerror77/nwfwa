@@ -1,5 +1,6 @@
 use crate::routes::pii;
 use rust_decimal::Decimal;
+use std::collections::BTreeSet;
 
 use super::*;
 
@@ -105,6 +106,10 @@ fn missing_required_worker_data_pipeline_prefix(
                 .iter()
                 .any(|prefix| *prefix == *required_prefix)
         })
+}
+
+fn is_known_worker_data_pipeline_job_kind(job_kind: &str) -> bool {
+    required_worker_data_pipeline_prefixes(job_kind).is_some()
 }
 
 fn worker_data_pipeline_submit_job_contract(
@@ -1524,6 +1529,7 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             ));
         }
     }
+    let mut seen_job_kinds = BTreeSet::new();
     let mut pending_or_failed_jobs = 0usize;
     let mut non_completed_jobs = Vec::new();
     for execution in &request.job_executions {
@@ -1539,6 +1545,20 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 StatusCode::BAD_REQUEST,
                 "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
                 "job_kind must not be blank",
+            ));
+        }
+        if !is_known_worker_data_pipeline_job_kind(job_kind) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                format!("unknown worker data pipeline job_kind {job_kind}"),
+            ));
+        }
+        if !seen_job_kinds.insert(job_kind.to_string()) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                format!("duplicate worker data pipeline job_kind {job_kind}"),
             ));
         }
         let Some(execution_status) = execution
@@ -2054,6 +2074,7 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             format!("worker data pipeline evidence_refs must include {expected_input_ref}"),
         ));
     }
+    let mut seen_job_kinds = BTreeSet::new();
     let mut ready_jobs = 0usize;
     let mut blocked_jobs = 0usize;
     let mut blocked_job_kinds = Vec::new();
@@ -2070,6 +2091,20 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                 StatusCode::BAD_REQUEST,
                 "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB",
                 "job_kind must not be blank",
+            ));
+        }
+        if !is_known_worker_data_pipeline_job_kind(job_kind) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB",
+                format!("unknown worker data pipeline job_kind {job_kind}"),
+            ));
+        }
+        if !seen_job_kinds.insert(job_kind.to_string()) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB",
+                format!("duplicate worker data pipeline job_kind {job_kind}"),
             ));
         }
         if let Some(required_permission) = readiness.get("required_permission") {

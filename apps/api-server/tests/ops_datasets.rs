@@ -2083,6 +2083,53 @@ async fn worker_data_pipeline_execution_report_rejects_local_top_level_evidence_
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_duplicate_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    let duplicate_job = payload["job_executions"][0].clone();
+    payload["job_executions"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_job);
+    payload["job_count"] = serde_json::json!(3);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB");
+    assert!(body["message"].as_str().unwrap().contains("duplicate"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_unknown_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["job_kind"] = serde_json::json!("unknown_worker_job");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB");
+    assert!(body["message"].as_str().unwrap().contains("unknown"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_dataset_write_permission() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
 
@@ -2276,6 +2323,54 @@ async fn worker_data_pipeline_readiness_report_rejects_local_top_level_evidence_
         body["code"],
         "INVALID_WORKER_DATA_PIPELINE_READINESS_EVIDENCE"
     );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_duplicate_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    let duplicate_job = payload["job_readiness"][0].clone();
+    payload["job_readiness"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_job);
+    payload["job_count"] = serde_json::json!(3);
+    payload["ready_job_count"] = serde_json::json!(2);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB");
+    assert!(body["message"].as_str().unwrap().contains("duplicate"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_unknown_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["job_kind"] = serde_json::json!("unknown_worker_job");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB");
+    assert!(body["message"].as_str().unwrap().contains("unknown"));
 }
 
 #[tokio::test]
