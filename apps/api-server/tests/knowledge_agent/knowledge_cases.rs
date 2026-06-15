@@ -252,6 +252,54 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
         "POST",
         "/api/v1/ops/knowledge/cases",
         r#"{
+          "case_id": "KC-LOCAL-EVIDENCE",
+          "title": "Local evidence case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste.",
+          "tags": ["lab_overuse"],
+          "evidence_refs": ["investigation_results:INV-KB-LOCAL", "knowledge_cases:local://template/case.json"],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-TEMPLATE-EVIDENCE",
+          "title": "Template evidence case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste.",
+          "tags": ["lab_overuse"],
+          "evidence_refs": ["qa_reviews:QA-KB-TEMPLATE", "investigation_results:{investigation_id}"],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
           "case_id": "KC-BLANK-TAG",
           "title": "Blank tag case",
           "fwa_type": "Waste",

@@ -109,6 +109,14 @@ async fn openapi_includes_operations_paths() {
             .unwrap()
             .contains("investigation_results")
     );
+    assert!(
+        schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs"),
+        "missing PublishKnowledgeCaseRequest.evidence_refs production-ref contract"
+    );
     for field in ["title", "summary", "outcome", "tags", "evidence_refs"] {
         assert!(
             schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"][field]

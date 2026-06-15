@@ -231,7 +231,25 @@ fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Res
             "knowledge case title, summary, outcome, tags, and evidence_refs must not contain PII",
         ));
     }
+    validate_knowledge_case_production_evidence_refs(&request.evidence_refs)?;
     Ok(())
+}
+
+fn validate_knowledge_case_production_evidence_refs(
+    evidence_refs: &[String],
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_KNOWLEDGE_CASE_EVIDENCE",
+            "knowledge case evidence_refs must not use local dry-run or placeholder evidence",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn unique_json_string_values(value: &Value) -> Vec<String> {

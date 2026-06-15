@@ -63,7 +63,7 @@ pub(super) fn knowledge_schemas() -> Value {
                 "evidence_refs": {
                     "type": "array",
                     "minItems": 1,
-                    "description": "Must include at least one confirmed review source: investigation_results:* or qa_reviews:* and must not contain PII. When source_claim_id has a prior canonical_claim_context_trace, publish automatically preserves canonical evidence_refs from the scoring audit.",
+                    "description": "Must include at least one confirmed review source: investigation_results:* or qa_reviews:*, must not contain PII, and must be production refs, not local/template refs. When source_claim_id has a prior canonical_claim_context_trace, publish automatically preserves canonical evidence_refs from the scoring audit.",
                     "items": { "type": "string", "minLength": 1 },
                     "contains": {
                         "type": "string",
