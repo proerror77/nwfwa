@@ -277,6 +277,102 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_VALIDATION_REPORT_URI");
 
+    let mut local_artifact_evaluation_report = valid_request.clone();
+    local_artifact_evaluation_report["metrics_json"]["model_artifact_evaluation_report_uri"] = serde_json::json!(
+        "/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/model_artifact_evaluation_report.json"
+    );
+    local_artifact_evaluation_report["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_artifact_evaluations:/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/model_artifact_evaluation_report.json",
+        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+        "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
+        "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate",
+        "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+        "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
+    ]);
+    let payload = local_artifact_evaluation_report.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION"
+    );
+
+    let mut local_automl_factor_ranking = valid_request.clone();
+    local_automl_factor_ranking["metrics_json"]["automl_factor_ranking_report_uri"] = serde_json::json!(
+        "/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json"
+    );
+    local_automl_factor_ranking["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+        "automl_factor_rankings:/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
+        "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate",
+        "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+        "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
+    ]);
+    let payload = local_automl_factor_ranking.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
+    );
+
+    let mut local_rule_candidate_backtest = valid_request.clone();
+    local_rule_candidate_backtest["metrics_json"]["rule_candidate_backtest_report_uri"] = serde_json::json!(
+        "/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/rule_candidate_backtest_report.json"
+    );
+    local_rule_candidate_backtest["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+        "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
+        "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate",
+        "rule_candidate_backtests:/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/rule_candidate_backtest_report.json",
+        "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
+    ]);
+    let payload = local_rule_candidate_backtest.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW"
+    );
+
     let mut invalid_training_artifact_sha = valid_request.clone();
     invalid_training_artifact_sha["training_artifact_sha256"] = serde_json::json!("not-sha");
     let payload = invalid_training_artifact_sha.to_string();

@@ -19,6 +19,7 @@ pub(super) use self::monitoring::{
     validate_probability_calibration_report_request,
 };
 pub(super) use self::retraining_output::{
-    retraining_metrics_with_artifacts, validate_json_artifact_uri, validate_json_report_uri,
-    validate_retraining_notes_without_pii, validate_retraining_output_request,
+    retraining_metrics_with_artifacts, validate_json_artifact_uri,
+    validate_json_production_report_uri, validate_retraining_notes_without_pii,
+    validate_retraining_output_request,
 };

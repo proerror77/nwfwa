@@ -1,4 +1,4 @@
-use super::validate_json_report_uri;
+use super::validate_json_production_report_uri;
 use crate::{
     error::ApiError,
     routes::{ops_models::CompleteModelRetrainingJobRequest, pii},
@@ -69,7 +69,10 @@ pub(super) fn validate_retraining_output_rule_candidate_workflow(
                 format!("model retraining output rule candidates require {field}"),
             ));
         };
-        validate_json_report_uri(uri, "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW")?;
+        validate_json_production_report_uri(
+            uri,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW",
+        )?;
         let expected_ref = format!("{evidence_prefix}:{uri}");
         if !request
             .evidence_refs

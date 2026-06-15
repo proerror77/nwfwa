@@ -118,11 +118,7 @@ pub(in crate::routes) fn validate_retraining_output_request(
         )?;
         validate_production_artifact_uri(serving_manifest_uri, "INVALID_SERVING_MANIFEST_URI")?;
     }
-    validate_json_report_uri(
-        &request.validation_report_uri,
-        "INVALID_VALIDATION_REPORT_URI",
-    )?;
-    validate_production_artifact_uri(
+    validate_json_production_report_uri(
         &request.validation_report_uri,
         "INVALID_VALIDATION_REPORT_URI",
     )?;
@@ -229,7 +225,10 @@ fn validate_retraining_output_artifact_evaluation(
             "model retraining output requires model_artifact_evaluation_report_uri",
         ));
     };
-    validate_json_report_uri(report_uri, "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION")?;
+    validate_json_production_report_uri(
+        report_uri,
+        "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION",
+    )?;
     let expected_ref = format!("model_artifact_evaluations:{report_uri}");
     if !request
         .evidence_refs
@@ -364,6 +363,10 @@ fn validate_retraining_output_evidence_refs(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
+        validate_json_production_report_uri(
+            overfitting_diagnostics_uri,
+            "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE",
+        )?;
         let expected_ref = format!("model_overfitting_diagnostics:{overfitting_diagnostics_uri}");
         if !request
             .evidence_refs
@@ -384,6 +387,10 @@ fn validate_retraining_output_evidence_refs(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
+        validate_json_production_report_uri(
+            factor_ranking_uri,
+            "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE",
+        )?;
         let expected_ref = format!("automl_factor_rankings:{factor_ranking_uri}");
         if !request
             .evidence_refs
@@ -526,6 +533,14 @@ pub(in crate::routes) fn validate_json_report_uri(
         code,
         "model retraining validation_report_uri must point to a JSON report",
     )
+}
+
+pub(in crate::routes) fn validate_json_production_report_uri(
+    value: &str,
+    code: &'static str,
+) -> Result<(), ApiError> {
+    validate_json_report_uri(value, code)?;
+    validate_production_artifact_uri(value, code)
 }
 
 pub(in crate::routes) fn validate_json_artifact_uri(
