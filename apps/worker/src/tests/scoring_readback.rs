@@ -57,7 +57,7 @@ async fn fetches_scoring_readback_response_from_claims_score_api() {
 }
 
 #[test]
-fn verifies_scoring_readback_response_evidence_prefixes() {
+fn blocks_unpublished_scoring_readback_response_evidence_prefixes() {
     let root = temp_root("scoring-readback");
     let input_uri = root.join("scoring_readback_input.json");
     let response_uri = root.join("score_response.json");
@@ -109,7 +109,7 @@ fn verifies_scoring_readback_response_evidence_prefixes() {
         .expect("scoring readback report");
 
     assert_eq!(report.report_kind, "scoring_readback_report");
-    assert_eq!(report.readback_status, "verified");
+    assert_eq!(report.readback_status, "blocked");
     assert_eq!(report.execution_mode, "score_response_artifact_readback");
     assert_eq!(
         report.expected_evidence_prefix_count,
@@ -119,7 +119,11 @@ fn verifies_scoring_readback_response_evidence_prefixes() {
         report.matched_evidence_prefix_count,
         REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES.len()
     );
-    assert!(report.blockers.is_empty());
+    assert!(report.blockers.contains(&"input_uri_non_production".into()));
+    assert!(report
+        .blockers
+        .contains(&"score_response_uri_non_production".into()));
+    assert_eq!(report.review_task_count, 1);
     assert!(report
         .observed_evidence_refs
         .contains(&"scoring_feature_contexts:s3://ctx/report.json".into()));
@@ -200,6 +204,64 @@ fn writes_published_scoring_readback_uris_into_report() {
         &"scoring_readback_score_responses:s3://customer-alpha/scoring-readback/response.json"
             .into()
     ));
+}
+
+#[test]
+fn blocks_scoring_readback_when_score_request_uri_is_not_published() {
+    let root = temp_root("scoring-readback-local-request-uri");
+    let input_uri = root.join("scoring_readback_input.json");
+    let request_uri = root.join("score_request.json");
+    let response_uri = root.join("score_response.json");
+    write_json(
+        request_uri.clone(),
+        &serde_json::json!({
+            "claim_id": "CLM-1"
+        }),
+    )
+    .unwrap();
+    write_json(
+        input_uri.clone(),
+        &serde_json::json!({
+            "customer_scope_id": "customer-alpha",
+            "as_of_date": "2026-06-15",
+            "score_request_uri": request_uri.to_string_lossy(),
+            "score_response_uri": response_uri.to_string_lossy(),
+            "expected_evidence_prefixes": full_expected_prefixes(),
+            "evidence_refs": ["worker_data_pipeline_executions:s3://customer-alpha/worker/execution.json"]
+        }),
+    )
+    .unwrap();
+    write_json(
+        response_uri.clone(),
+        &serde_json::json!({
+            "claim_id": "CLM-1",
+            "evidence_refs": [
+                "scoring_feature_contexts:s3://ctx/report.json",
+                "provider_profile_window_rollups:s3://provider-profile/report.json",
+                "sanctions_sync_reports:s3://sanctions/report.json",
+                "provider_graph_signal_rollups:s3://provider-graph/report.json",
+                "peer_benchmarks:s3://peer/report.json",
+                "episode_rollups:s3://episode/report.json",
+                "clinical_compatibility:s3://clinical/report.json",
+                "unbundling_candidates:s3://unbundling/report.json"
+            ]
+        }),
+    )
+    .unwrap();
+
+    let report =
+        build_scoring_readback_report(&input_uri.to_string_lossy(), None, root.join("out"))
+            .expect("blocked scoring readback report");
+
+    assert_eq!(report.readback_status, "blocked");
+    assert!(report
+        .blockers
+        .contains(&"score_request_uri_non_production".into()));
+    assert_eq!(
+        report.matched_evidence_prefix_count,
+        REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES.len()
+    );
+    assert_eq!(report.review_task_count, 1);
 }
 
 #[test]
@@ -357,7 +419,10 @@ fn blocks_scoring_readback_without_score_response_artifact() {
     assert_eq!(report.readback_status, "blocked");
     assert_eq!(report.execution_mode, "contract_only_blocked");
     assert_eq!(report.matched_evidence_prefix_count, 0);
-    assert_eq!(report.blockers, vec!["score_response_uri_missing"]);
+    assert_eq!(
+        report.blockers,
+        vec!["input_uri_non_production", "score_response_uri_missing"]
+    );
     assert_eq!(report.review_task_count, 1);
 }
 
