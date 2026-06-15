@@ -185,7 +185,17 @@ pub(super) fn validate_sanctions_sync_report_submission(
         "INVALID_SANCTIONS_SYNC_REPORT_URI",
         "source_report_uri",
     )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_SANCTIONS_SYNC_REPORT_URI",
+        "source_report_uri",
+    )?;
     validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
         &request.source_uri,
         "INVALID_SANCTIONS_SYNC_SOURCE_URI",
         "source_uri",
@@ -251,6 +261,11 @@ pub(super) fn validate_sanctions_sync_report_submission(
         &request.evidence_refs,
         "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
         "sanctions sync evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        "sanctions sync evidence_refs must not use local dry-run or placeholder evidence",
     )?;
     for upsert in &request.provider_upserts {
         if upsert.sanction_key.trim().is_empty()
@@ -352,7 +367,17 @@ pub(super) fn validate_provider_profile_window_rollup_submission(
         "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
         "source_report_uri",
     )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
     validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
         &request.source_uri,
         "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
         "source_uri",
@@ -397,6 +422,11 @@ pub(super) fn validate_provider_profile_window_rollup_submission(
         &request.evidence_refs,
         "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
         "provider profile rollup evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        "provider profile rollup evidence_refs must not use local dry-run or placeholder evidence",
     )?;
     for profile in &request.provider_profiles {
         if profile.provider_id.trim().is_empty() {
@@ -493,6 +523,7 @@ fn validate_lineage_evidence_refs(
         return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
     }
     validate_no_template_evidence_refs(evidence_refs, code, message)?;
+    validate_production_evidence_refs(evidence_refs, code, message)?;
     Ok(())
 }
 
@@ -544,6 +575,28 @@ fn validate_no_template_uri(
     Ok(())
 }
 
+fn validate_production_artifact_uri(
+    value: &str,
+    code: &'static str,
+    field_name: &'static str,
+) -> Result<(), ApiError> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.starts_with("local://")
+        || value.contains('{')
+        || value.contains('}')
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            format!(
+                "{field_name} must use production evidence, not local dry-run or placeholder URI"
+            ),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_no_template_evidence_refs(
     evidence_refs: &[String],
     code: &'static str,
@@ -553,6 +606,20 @@ fn validate_no_template_evidence_refs(
         .iter()
         .any(|reference| reference.trim().contains("local://template"))
     {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn validate_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
     }
     Ok(())
@@ -621,7 +688,17 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
         "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
         "source_report_uri",
     )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+        "source_report_uri",
+    )?;
     validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
         &request.source_uri,
         "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
         "source_uri",
@@ -666,6 +743,11 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
         &request.evidence_refs,
         "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
         "provider graph rollup evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        "provider graph rollup evidence_refs must not use local dry-run or placeholder evidence",
     )?;
     for relationship in &request.provider_relationships {
         if relationship.provider_id.trim().is_empty() {
@@ -797,7 +879,17 @@ pub(super) fn validate_peer_benchmark_submission(
         "INVALID_PEER_BENCHMARK_URI",
         "source_report_uri",
     )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_PEER_BENCHMARK_URI",
+        "source_report_uri",
+    )?;
     validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PEER_BENCHMARK_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
         &request.source_uri,
         "INVALID_PEER_BENCHMARK_SOURCE_URI",
         "source_uri",
@@ -839,6 +931,11 @@ pub(super) fn validate_peer_benchmark_submission(
         &request.evidence_refs,
         "INVALID_PEER_BENCHMARK_EVIDENCE",
         "peer benchmark evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PEER_BENCHMARK_EVIDENCE",
+        "peer benchmark evidence_refs must not use local dry-run or placeholder evidence",
     )?;
     for group in &request.peer_groups {
         if group.peer_group_key.trim().is_empty()
@@ -954,7 +1051,17 @@ pub(super) fn validate_episode_rollup_submission(
         "INVALID_EPISODE_ROLLUP_URI",
         "source_report_uri",
     )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_EPISODE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
     validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
         &request.source_uri,
         "INVALID_EPISODE_ROLLUP_SOURCE_URI",
         "source_uri",
@@ -996,6 +1103,11 @@ pub(super) fn validate_episode_rollup_submission(
         &request.evidence_refs,
         "INVALID_EPISODE_ROLLUP_EVIDENCE",
         "episode rollup evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_EPISODE_ROLLUP_EVIDENCE",
+        "episode rollup evidence_refs must not use local dry-run or placeholder evidence",
     )?;
     for episode in &request.episodes {
         if episode.episode_key.trim().is_empty()

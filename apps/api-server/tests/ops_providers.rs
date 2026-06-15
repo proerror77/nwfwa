@@ -82,10 +82,10 @@ fn sanctions_sync_report_payload() -> &'static str {
     r#"{
       "actor": "worker:sync-oig-sam-sanctions",
       "notes": "daily sanctions sync report",
-      "source_report_uri": "local://artifacts/sanctions/sanctions_sync_report.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
       "report_kind": "oig_sam_sanctions_sync_report",
       "run_date": "2026-06-14",
-      "source_uri": "local://inputs/oig-sam-snapshot.json",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
       "source_date": "2026-06-13",
       "sync_status": "ready_to_apply",
       "source_record_count": 1,
@@ -107,8 +107,8 @@ fn sanctions_sync_report_payload() -> &'static str {
       ],
       "review_tasks": [],
       "evidence_refs": [
-        "sanctions_sync_reports:local://artifacts/sanctions/sanctions_sync_report.json",
-        "sanctions_source_snapshot:local://inputs/oig-sam-snapshot.json"
+        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "sanctions_source_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json"
       ],
       "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
     }"#
@@ -118,10 +118,10 @@ fn provider_profile_window_rollup_payload() -> &'static str {
     r#"{
       "actor": "worker:build-provider-profile-windows",
       "notes": "daily provider profile window rollup",
-      "source_report_uri": "local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
       "report_kind": "provider_profile_window_rollup",
       "as_of_date": "2026-06-14",
-      "source_uri": "local://inputs/provider-claims.json",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json",
       "provider_count": 1,
       "claim_count": 3,
       "provider_profiles": [
@@ -171,8 +171,8 @@ fn provider_profile_window_rollup_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "provider_profile_window_rollups:local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
-        "provider_profile_claim_snapshot:local://inputs/provider-claims.json"
+        "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+        "provider_profile_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json"
       ],
       "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
     }"#
@@ -182,10 +182,10 @@ fn provider_graph_signal_rollup_payload() -> &'static str {
     r#"{
       "actor": "worker:build-provider-graph-signals",
       "notes": "daily provider graph signal rollup",
-      "source_report_uri": "local://artifacts/provider-graph/provider_graph_signal_rollup.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json",
       "report_kind": "provider_graph_signal_rollup",
       "as_of_date": "2026-06-14",
-      "source_uri": "local://inputs/provider-graph-input.json",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
       "provider_count": 1,
       "claim_count": 3,
       "provider_relationships": [
@@ -204,8 +204,8 @@ fn provider_graph_signal_rollup_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "provider_graph_signal_rollups:local://artifacts/provider-graph/provider_graph_signal_rollup.json",
-        "provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"
+        "provider_graph_signal_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json",
+        "provider_graph_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json"
       ],
       "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
     }"#
@@ -215,10 +215,10 @@ fn peer_benchmark_payload() -> &'static str {
     r#"{
       "actor": "worker:build-peer-benchmarks",
       "notes": "monthly peer percentile benchmark",
-      "source_report_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
       "report_kind": "peer_percentile_benchmark",
       "benchmark_month": "2026-06",
-      "source_uri": "local://inputs/peer-claims.json",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json",
       "claim_count": 5,
       "peer_group_count": 1,
       "peer_groups": [
@@ -237,8 +237,8 @@ fn peer_benchmark_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json",
-        "peer_benchmark_claim_snapshot:local://inputs/peer-claims.json"
+        "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "peer_benchmark_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json"
       ],
       "governance_boundary": "benchmark computes peer percentile reference data only; it must not score claims, assign labels, or change routing policy"
     }"#
@@ -248,10 +248,10 @@ fn episode_rollup_payload() -> &'static str {
     r#"{
       "actor": "worker:build-episode-aggregation",
       "notes": "daily member-provider episode rollup",
-      "source_report_uri": "local://artifacts/episode/episode_aggregation_report.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
       "report_kind": "member_provider_episode_aggregation",
       "as_of_date": "2026-06-14",
-      "source_uri": "local://inputs/episode-claims.json",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_claims.json",
       "episode_count": 1,
       "claim_count": 3,
       "episodes": [
@@ -289,8 +289,8 @@ fn episode_rollup_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json",
-        "episode_claim_snapshot:local://inputs/episode-claims.json"
+        "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+        "episode_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/episode_claims.json"
       ],
       "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
     }"#
@@ -437,6 +437,53 @@ async fn provider_write_paths_reject_template_source_report_uri() {
 }
 
 #[tokio::test]
+async fn provider_write_paths_reject_local_source_report_uri() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_URI",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_report_uri"] = serde_json::json!("local://provider/source_report.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
 async fn provider_write_paths_reject_template_source_uri() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
     for (path, payload, code) in [
@@ -468,6 +515,53 @@ async fn provider_write_paths_reject_template_source_uri() {
     ] {
         let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
         payload["source_uri"] = serde_json::json!("local://template/provider/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn provider_write_paths_reject_local_source_uri() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_uri"] = serde_json::json!("local://provider/source.json");
 
         let (status, body) = json_request_with_key(
             app.clone(),
@@ -519,6 +613,58 @@ async fn provider_write_paths_reject_template_top_level_evidence_refs() {
             .unwrap()
             .push(serde_json::json!(
                 "worker_template:local://template/provider/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn provider_write_paths_reject_local_top_level_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_report:local://provider/source.json"
             ));
 
         let (status, body) = json_request_with_key(
