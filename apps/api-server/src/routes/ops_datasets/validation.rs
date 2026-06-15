@@ -197,6 +197,35 @@ fn validate_required_evidence_ref(
     Ok(())
 }
 
+fn validate_no_template_uri(
+    value: &str,
+    code: &'static str,
+    field_name: &'static str,
+) -> Result<(), ApiError> {
+    if value.trim().starts_with("local://template") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            format!("{field_name} must not use local://template evidence"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_no_template_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
 pub(super) fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiError> {
     if request.external_field.trim().is_empty()
         || request.canonical_target.trim().is_empty()
@@ -433,6 +462,11 @@ pub(super) fn validate_scoring_feature_context_materialization(
             "report_kind must be scoring_feature_context_materialization",
         ));
     }
+    validate_no_template_uri(
+        &request.report_uri,
+        "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+        "report_uri",
+    )?;
     if !request.source_uris.is_object() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -459,6 +493,15 @@ pub(super) fn validate_scoring_feature_context_materialization(
                 format!("source_uris.{source_key} is required"),
             ));
         }
+        validate_no_template_uri(
+            request
+                .source_uris
+                .get(source_key)
+                .and_then(|value| value.as_str())
+                .unwrap_or_default(),
+            "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI",
+            source_key,
+        )?;
     }
     if request.context_count != request.contexts.len() as u64 {
         return Err(ApiError::new(
@@ -486,6 +529,11 @@ pub(super) fn validate_scoring_feature_context_materialization(
             "evidence_refs must be non-empty and contain no blank values",
         ));
     }
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+        "scoring feature context evidence_refs must not use local://template evidence",
+    )?;
     let required_evidence_refs = [
         format!("scoring_feature_contexts:{}", request.report_uri),
         format!(
@@ -563,6 +611,23 @@ pub(super) fn validate_scoring_feature_context_materialization(
                 StatusCode::BAD_REQUEST,
                 "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
                 "each context must include non-empty evidence_refs",
+            ));
+        }
+        let has_template_context_evidence_ref = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .any(|reference| {
+                reference
+                    .as_str()
+                    .is_some_and(|value| value.trim().contains("local://template"))
+            });
+        if has_template_context_evidence_ref {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                "context evidence_refs must not use local://template evidence",
             ));
         }
         let expected_claim_ref = format!("claims:{}", claim_id.trim());
@@ -654,6 +719,16 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
             "source_report_uri must point to a JSON clinical compatibility reference report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+        "source_uri",
+    )?;
     if request.records.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -697,6 +772,11 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
         "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
         format!("clinical compatibility evidence_refs must include {expected_authority_ref}"),
     )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+        "clinical compatibility evidence_refs must not use local://template evidence",
+    )?;
     for record in &request.records {
         if record.compatibility_key.trim().is_empty()
             || record.diagnosis_code_prefix.trim().is_empty()
@@ -732,6 +812,11 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
                 "clinical compatibility records require non-empty evidence_refs",
             ));
         }
+        validate_no_template_evidence_refs(
+            &record.evidence_refs,
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+            "clinical compatibility record evidence_refs must not use local://template evidence",
+        )?;
         if !record
             .evidence_refs
             .iter()
@@ -808,6 +893,16 @@ pub(super) fn validate_unbundling_comparator_submission(
             "source_report_uri must point to a JSON unbundling comparator report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+        "source_uri",
+    )?;
     if request.candidates.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -843,6 +938,11 @@ pub(super) fn validate_unbundling_comparator_submission(
         &expected_source_ref,
         "MISSING_UNBUNDLING_COMPARATOR_REPORT_EVIDENCE",
         format!("unbundling comparator evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+        "unbundling comparator evidence_refs must not use local://template evidence",
     )?;
     for candidate in &request.candidates {
         if candidate.candidate_id.trim().is_empty()
@@ -910,6 +1010,11 @@ pub(super) fn validate_unbundling_comparator_submission(
                 "unbundling candidates require non-empty evidence_refs",
             ));
         }
+        validate_no_template_evidence_refs(
+            &candidate.evidence_refs,
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+            "unbundling candidate evidence_refs must not use local://template evidence",
+        )?;
         if !candidate
             .evidence_refs
             .iter()
