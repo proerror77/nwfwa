@@ -436,6 +436,7 @@ def is_production_artifact_uri(value: object) -> bool:
         bool(uri)
         and not uri.startswith("local://")
         and not uri.startswith("file://")
+        and "://" in uri
         and "{" not in uri
         and "}" not in uri
     )
@@ -747,6 +748,10 @@ def validate_retention_legal_hold_evidence(report: dict) -> None:
             isinstance(report.get(field_name), str) and report[field_name].strip(),
             f"retention legal-hold evidence must include {field_name}",
         )
+    require(
+        is_production_artifact_uri(report.get("archive_storage_uri")),
+        "retention legal-hold evidence archive_storage_uri must be a production artifact URI, not a local dry-run or template URI",
+    )
     require(
         report.get("legal_hold_reconciliation_status") == "completed",
         "retention legal-hold evidence must have completed legal-hold reconciliation",

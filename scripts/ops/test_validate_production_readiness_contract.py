@@ -17,6 +17,7 @@ from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS,
     validate_model_serving_slo_evidence,
+    validate_retention_legal_hold_evidence,
     validate_scoring_readback_evidence,
     validate_worker_data_pipeline_execution_evidence,
 )
@@ -166,6 +167,23 @@ def model_serving_slo_report() -> dict:
     }
 
 
+def retention_legal_hold_report() -> dict:
+    return {
+        "artifact_kind": "retention_legal_hold_report",
+        "retention_years": 6,
+        "retention_policy_id": "customer-retention-policy-v1",
+        "legal_hold_policy_id": "customer-legal-hold-policy-v1",
+        "archive_storage_uri": "s3://customer-prod-artifacts/archive/audit/",
+        "legal_hold_reconciliation_status": "completed",
+        "destruction_workflow": "human_approval_required_before_destroy",
+        "automated_destruction_enabled": False,
+        "evidence_refs": [
+            "retention_policy:s3://customer-prod-artifacts/policies/retention.json",
+            "legal_hold_policy:s3://customer-prod-artifacts/policies/legal-hold.json",
+        ],
+    }
+
+
 class ProductionReadinessContractValidationTests(unittest.TestCase):
     def test_worker_execution_requires_source_snapshot_evidence_prefix(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=False)
@@ -255,6 +273,18 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
             if job["job_kind"] == "peer_percentile_benchmark"
         )
         peer_job["reported_artifact_uri"] = "file://tmp/peer_percentile_benchmark.json"
+
+        with self.assertRaisesRegex(AssertionError, "production artifact URI"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
+    def test_worker_execution_rejects_relative_job_artifact_uri(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        peer_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "peer_percentile_benchmark"
+        )
+        peer_job["reported_artifact_uri"] = "artifacts/peer_percentile_benchmark.json"
 
         with self.assertRaisesRegex(AssertionError, "production artifact URI"):
             validate_worker_data_pipeline_execution_evidence(report)
@@ -382,6 +412,13 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "input_uri"):
             validate_scoring_readback_evidence(report)
 
+    def test_scoring_readback_rejects_relative_input_uri(self) -> None:
+        report = scoring_readback_report()
+        report["input_uri"] = "artifacts/scoring_readback_input.json"
+
+        with self.assertRaisesRegex(AssertionError, "input_uri"):
+            validate_scoring_readback_evidence(report)
+
     def test_scoring_readback_rejects_template_matched_evidence_refs(self) -> None:
         report = scoring_readback_report()
         report["checks"][0]["matched_evidence_refs"].append(
@@ -417,6 +454,30 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AssertionError, "file://"):
             validate_scoring_readback_evidence(report)
+
+    def test_retention_legal_hold_accepts_production_archive_uri(self) -> None:
+        validate_retention_legal_hold_evidence(retention_legal_hold_report())
+
+    def test_retention_legal_hold_rejects_local_archive_uri(self) -> None:
+        report = retention_legal_hold_report()
+        report["archive_storage_uri"] = "local://template/archive-storage"
+
+        with self.assertRaisesRegex(AssertionError, "archive_storage_uri"):
+            validate_retention_legal_hold_evidence(report)
+
+    def test_retention_legal_hold_rejects_file_archive_uri(self) -> None:
+        report = retention_legal_hold_report()
+        report["archive_storage_uri"] = "file://tmp/archive"
+
+        with self.assertRaisesRegex(AssertionError, "archive_storage_uri"):
+            validate_retention_legal_hold_evidence(report)
+
+    def test_retention_legal_hold_rejects_relative_archive_uri(self) -> None:
+        report = retention_legal_hold_report()
+        report["archive_storage_uri"] = "artifacts/archive"
+
+        with self.assertRaisesRegex(AssertionError, "archive_storage_uri"):
+            validate_retention_legal_hold_evidence(report)
 
     def test_scoring_readback_rejects_blocked_contract_only_report(self) -> None:
         report = scoring_readback_report()
