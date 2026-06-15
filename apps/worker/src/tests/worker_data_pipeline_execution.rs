@@ -412,6 +412,65 @@ fn marks_succeeded_job_with_template_refs_for_review() {
 }
 
 #[test]
+fn marks_succeeded_job_with_local_artifact_uri_for_review() {
+    let root = temp_root("worker-data-pipeline-execution-local-artifact");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let run_status_uri = root.join("worker_data_pipeline_run_status.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    let jobs = plan["jobs"].as_array().expect("jobs");
+    write_json(
+        run_status_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_statuses": [
+                {
+                    "job_kind": "peer_percentile_benchmark",
+                    "status": "succeeded",
+                    "artifact_uri": "local://artifacts/peer_percentile_benchmark.json",
+                    "evidence_refs": evidence_refs_for_job(&jobs[4]),
+                    "submitted": true
+                }
+            ]
+        }),
+    )
+    .expect("write run status");
+
+    let report = build_worker_data_pipeline_execution_report(
+        &plan_uri.to_string_lossy(),
+        &run_status_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect("worker data pipeline execution report");
+
+    let executions = report["job_executions"].as_array().expect("executions");
+    let peer_benchmark = executions
+        .iter()
+        .find(|execution| execution["job_kind"] == "peer_percentile_benchmark")
+        .expect("peer benchmark execution");
+    assert_eq!(
+        peer_benchmark["execution_status"],
+        "artifact_missing_evidence"
+    );
+    assert!(report["review_tasks"]
+        .as_array()
+        .expect("review tasks")
+        .iter()
+        .any(|task| task["job_kind"] == "peer_percentile_benchmark"
+            && task["execution_status"] == "artifact_missing_evidence"));
+}
+
+#[test]
 fn builds_worker_data_pipeline_execution_report_with_ready_gate() {
     let root = temp_root("worker-data-pipeline-execution-ready");
     let plan_uri = root.join("worker_data_pipeline_plan.json");

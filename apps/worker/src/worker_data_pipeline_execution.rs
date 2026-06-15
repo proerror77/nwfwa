@@ -382,6 +382,9 @@ fn base_execution_status(
         if !has_reported_artifact_uri(reported) || !has_evidence_refs(reported) {
             return "artifact_missing_evidence";
         }
+        if !has_production_artifact_uri(reported) {
+            return "artifact_missing_evidence";
+        }
         if has_template_artifact_uri(reported) || has_template_evidence_refs(reported) {
             return "artifact_missing_evidence";
         }
@@ -413,6 +416,16 @@ fn has_reported_artifact_uri(reported: &serde_json::Value) -> bool {
 fn has_template_artifact_uri(reported: &serde_json::Value) -> bool {
     json_string(reported, "artifact_uri")
         .is_some_and(|value| value.trim().starts_with("local://template"))
+}
+
+fn has_production_artifact_uri(reported: &serde_json::Value) -> bool {
+    json_string(reported, "artifact_uri").is_some_and(|value| {
+        let value = value.trim();
+        !value.is_empty()
+            && !value.starts_with("local://")
+            && !value.contains('{')
+            && !value.contains('}')
+    })
 }
 
 fn has_evidence_refs(reported: &serde_json::Value) -> bool {

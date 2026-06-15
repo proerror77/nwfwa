@@ -362,6 +362,12 @@ fn readiness_blockers(
         .is_some_and(|value| value.trim().starts_with("local://template"))
     {
         blockers.push("template_artifact_uri_not_replaced".into());
+    } else if check
+        .artifact_uri
+        .as_deref()
+        .is_some_and(|value| !is_production_artifact_uri(value))
+    {
+        blockers.push("non_production_artifact_uri".into());
     }
     if !check.customer_approved {
         blockers.push("customer_approval_missing".into());
@@ -426,6 +432,14 @@ fn required_evidence_prefixes(job: &serde_json::Value) -> Vec<String> {
         .filter_map(|value| value.as_str())
         .map(str::to_string)
         .collect()
+}
+
+fn is_production_artifact_uri(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && !value.starts_with("local://")
+        && !value.contains('{')
+        && !value.contains('}')
 }
 
 fn json_usize(value: &serde_json::Value, key: &'static str) -> anyhow::Result<usize> {
