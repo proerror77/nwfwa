@@ -130,8 +130,10 @@ fn builds_unbundling_comparator_submission() {
     )
     .unwrap();
 
-    let submission = build_unbundling_comparator_submission(
+    let submission = build_unbundling_comparator_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json",
         "worker:build-unbundling-comparator",
         "customer approved unbundling candidates",
     )
@@ -143,10 +145,16 @@ fn builds_unbundling_comparator_submission() {
         submission.candidates[0].candidate_id,
         "unbundling:UNBUNDLE-KNEE-001:MBR-1|PRV-A"
     );
-    assert!(submission.evidence_refs.contains(&format!(
-        "unbundling_comparator_candidates:{}",
-        report_uri.to_string_lossy()
-    )));
+    assert_eq!(
+        submission.source_report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
+    );
+    assert_eq!(
+        submission.source_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json"
+    );
+    assert!(submission.evidence_refs.contains(&"unbundling_comparator_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"unbundling_comparator_input:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json".to_string()));
 }
 
 #[test]
@@ -185,8 +193,10 @@ fn rejects_unbundling_comparator_submission_without_input_evidence() {
     )
     .unwrap();
 
-    let error = build_unbundling_comparator_submission(
+    let error = build_unbundling_comparator_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json",
         "worker:build-unbundling-comparator",
         "customer approved unbundling candidates",
     )
@@ -235,15 +245,17 @@ fn rejects_unbundling_comparator_submission_with_template_candidate_evidence() {
     )
     .unwrap();
 
-    let error = build_unbundling_comparator_submission(
+    let error = build_unbundling_comparator_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json",
         "worker:build-unbundling-comparator",
         "customer approved unbundling candidates",
     )
     .expect_err("template candidate evidence must fail");
 
     assert!(error.to_string().contains(
-        "unbundling comparator candidate evidence_refs must not use local://template evidence"
+        "unbundling comparator candidate evidence_refs must not use local dry-run or placeholder evidence"
     ));
 }
 
@@ -301,10 +313,12 @@ async fn submits_unbundling_comparator_candidates_to_api() {
         request
     });
 
-    let response = submit_unbundling_comparator_candidates(
+    let response = submit_unbundling_comparator_candidates_with_published_uris(
         &api_url,
         "dataset-write-secret",
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json",
         "worker:build-unbundling-comparator",
         "customer approved unbundling candidates",
     )
@@ -316,5 +330,10 @@ async fn submits_unbundling_comparator_candidates_to_api() {
     assert!(request.starts_with("POST /api/v1/ops/unbundling-comparator-candidates HTTP/1.1"));
     assert!(request.contains("x-api-key: dataset-write-secret"));
     assert!(request.contains(r#""recommended_review":"medical_review_candidate""#));
-    assert!(request.contains("unbundling_comparator_candidates:"));
+    assert!(request.contains(
+        "unbundling_comparator_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
+    ));
+    assert!(request.contains(
+        r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json""#
+    ));
 }

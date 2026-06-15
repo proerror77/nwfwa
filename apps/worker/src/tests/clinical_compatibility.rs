@@ -147,8 +147,10 @@ fn builds_clinical_compatibility_reference_submission() {
     )
     .unwrap();
 
-    let submission = build_clinical_compatibility_reference_submission(
+    let submission = build_clinical_compatibility_reference_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
         "worker:build-clinical-compatibility-reference",
         "customer policy board approved reference",
     )
@@ -158,10 +160,16 @@ fn builds_clinical_compatibility_reference_submission() {
     assert_eq!(submission.reference_version, "clinical-policy-2026-06");
     assert_eq!(submission.record_count, 1);
     assert_eq!(submission.records[0].compatibility_key, "J|IMG-900");
-    assert!(submission.evidence_refs.contains(&format!(
-        "clinical_compatibility_references:{}",
-        report_uri.to_string_lossy()
-    )));
+    assert_eq!(
+        submission.source_report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json"
+    );
+    assert_eq!(
+        submission.source_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json"
+    );
+    assert!(submission.evidence_refs.contains(&"clinical_compatibility_references:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"clinical_compatibility_reference:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json".to_string()));
 }
 
 #[test]
@@ -197,8 +205,10 @@ fn rejects_clinical_compatibility_submission_without_source_evidence() {
     )
     .unwrap();
 
-    let error = build_clinical_compatibility_reference_submission(
+    let error = build_clinical_compatibility_reference_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
         "worker:build-clinical-compatibility-reference",
         "customer policy board approved reference",
     )
@@ -248,15 +258,17 @@ fn rejects_clinical_compatibility_submission_with_template_record_evidence() {
     )
     .unwrap();
 
-    let error = build_clinical_compatibility_reference_submission(
+    let error = build_clinical_compatibility_reference_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
         "worker:build-clinical-compatibility-reference",
         "customer policy board approved reference",
     )
     .expect_err("template record evidence must fail");
 
     assert!(error.to_string().contains(
-        "clinical compatibility record evidence_refs must not use local://template evidence"
+        "clinical compatibility record evidence_refs must not use local dry-run or placeholder evidence"
     ));
 }
 
@@ -314,10 +326,12 @@ async fn submits_clinical_compatibility_reference_to_api() {
         request
     });
 
-    let response = submit_clinical_compatibility_reference(
+    let response = submit_clinical_compatibility_reference_with_published_uris(
         &api_url,
         "dataset-write-secret",
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
         "worker:build-clinical-compatibility-reference",
         "customer policy board approved reference",
     )
@@ -329,5 +343,10 @@ async fn submits_clinical_compatibility_reference_to_api() {
     assert!(request.starts_with("POST /api/v1/ops/clinical-compatibility-references HTTP/1.1"));
     assert!(request.contains("x-api-key: dataset-write-secret"));
     assert!(request.contains(r#""compatibility_key":"J|IMG-900""#));
-    assert!(request.contains("clinical_compatibility_references:"));
+    assert!(request.contains(
+        "clinical_compatibility_references:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json"
+    ));
+    assert!(request.contains(
+        r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json""#
+    ));
 }

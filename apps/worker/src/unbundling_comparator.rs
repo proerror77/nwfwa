@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
 use crate::{
-    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
-    required_non_empty, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
+    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,43 +137,84 @@ pub fn build_unbundling_comparator_submission(
     notes: &str,
 ) -> anyhow::Result<UnbundlingComparatorSubmission> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
-    let actor = required_non_empty("actor", actor)?;
-    let notes = required_non_empty("notes", notes)?;
     let report: UnbundlingComparatorReport = serde_json::from_value(read_json_report(report_uri)?)
         .context("parse unbundling comparator report")?;
+    let published_source_uri = report.source_uri.clone();
+    build_unbundling_comparator_submission_from_report(
+        report_uri,
+        &published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+pub fn build_unbundling_comparator_submission_with_published_uris(
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<UnbundlingComparatorSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    let published_source_uri = required_non_empty("published_source_uri", published_source_uri)?;
+    let report: UnbundlingComparatorReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse unbundling comparator report")?;
+    build_unbundling_comparator_submission_from_report(
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+fn build_unbundling_comparator_submission_from_report(
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: UnbundlingComparatorReport,
+) -> anyhow::Result<UnbundlingComparatorSubmission> {
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
     if report.report_kind != "unbundling_comparator" {
         bail!("report_kind must be unbundling_comparator");
     }
     if report.candidates.is_empty() {
         bail!("unbundling comparator requires candidates before API submission");
     }
-    ensure_no_template_uri("unbundling comparator source_uri", &report.source_uri)?;
-    ensure_no_template_evidence_refs("unbundling comparator evidence_refs", &report.evidence_refs)?;
+    ensure_production_artifact_uri(
+        "unbundling comparator published_report_uri",
+        published_report_uri,
+    )?;
+    ensure_production_artifact_uri(
+        "unbundling comparator published_source_uri",
+        published_source_uri,
+    )?;
     for candidate in &report.candidates {
-        ensure_no_template_evidence_refs(
+        ensure_production_evidence_refs(
             "unbundling comparator candidate evidence_refs",
             &candidate.evidence_refs,
         )?;
     }
-    let required_ref = format!("unbundling_comparator_input:{}", report.source_uri);
-    if !report
-        .evidence_refs
-        .iter()
-        .any(|reference| reference.trim() == required_ref)
-    {
-        bail!("unbundling comparator requires {required_ref} evidence");
-    }
-    let mut evidence_refs = report.evidence_refs;
-    evidence_refs.push(format!("unbundling_comparator_candidates:{report_uri}"));
-    evidence_refs.sort();
-    evidence_refs.dedup();
+    let evidence_refs = published_submission_evidence_refs(
+        "unbundling comparator evidence_refs",
+        &report.evidence_refs,
+        "unbundling_comparator_input",
+        &report.source_uri,
+        published_source_uri,
+        "unbundling_comparator_candidates",
+        published_report_uri,
+    )?;
     Ok(UnbundlingComparatorSubmission {
         actor: actor.into(),
         notes: notes.into(),
-        source_report_uri: report_uri.into(),
+        source_report_uri: published_report_uri.into(),
         report_kind: report.report_kind,
         as_of_date: report.as_of_date,
-        source_uri: report.source_uri,
+        source_uri: published_source_uri.into(),
         rule_count: report.rule_count,
         episode_count: report.episode_count,
         candidate_count: report.candidate_count,
@@ -191,6 +232,33 @@ pub async fn submit_unbundling_comparator_candidates(
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let payload = build_unbundling_comparator_submission(report_uri, actor, notes)?;
+    submit_unbundling_comparator_candidates_payload(api_base_url, api_key, &payload).await
+}
+
+pub async fn submit_unbundling_comparator_candidates_with_published_uris(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_unbundling_comparator_submission_with_published_uris(
+        report_uri,
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+    )?;
+    submit_unbundling_comparator_candidates_payload(api_base_url, api_key, &payload).await
+}
+
+async fn submit_unbundling_comparator_candidates_payload(
+    api_base_url: &str,
+    api_key: &str,
+    payload: &UnbundlingComparatorSubmission,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,

@@ -137,7 +137,7 @@ fn clinical_compatibility_reference_payload() -> &'static str {
       "reference_version": "clinical-policy-2026-06",
       "effective_date": "2026-06-01",
       "source_authority": "customer-medical-policy-board",
-      "source_uri": "local://inputs/clinical-reference.json",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
       "record_count": 1,
       "records": [
         {
@@ -161,7 +161,7 @@ fn clinical_compatibility_reference_payload() -> &'static str {
       ],
       "evidence_refs": [
         "clinical_compatibility_references:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
-        "clinical_compatibility_reference:local://inputs/clinical-reference.json",
+        "clinical_compatibility_reference:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
         "clinical_policy_authority:customer-medical-policy-board"
       ],
       "governance_boundary": "clinical compatibility reference data can feed ClinicalCompatibilityFeatureContext; it must not deny claims or replace medical review without customer-approved policy authority"
@@ -175,7 +175,7 @@ fn unbundling_comparator_payload() -> &'static str {
       "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
       "report_kind": "unbundling_comparator",
       "as_of_date": "2026-06-13",
-      "source_uri": "local://inputs/unbundling-reference.json",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json",
       "rule_count": 1,
       "episode_count": 1,
       "candidate_count": 1,
@@ -197,7 +197,7 @@ fn unbundling_comparator_payload() -> &'static str {
       ],
       "evidence_refs": [
         "unbundling_comparator_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
-        "unbundling_comparator_input:local://inputs/unbundling-reference.json"
+        "unbundling_comparator_input:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json"
       ],
       "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
     }"#
@@ -562,6 +562,56 @@ async fn dataset_write_paths_reject_template_source_uri() {
 
         assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
         assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_local_source_uris() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, field, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_report_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_report_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload[field] = serde_json::json!("local://inputs/datasets/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+        assert!(body["message"]
+            .as_str()
+            .unwrap()
+            .contains("production evidence"));
     }
 }
 

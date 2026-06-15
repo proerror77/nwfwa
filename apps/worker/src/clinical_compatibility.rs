@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
 use crate::{
-    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
-    required_non_empty, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
+    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,24 +159,66 @@ pub fn build_clinical_compatibility_reference_submission(
     notes: &str,
 ) -> anyhow::Result<ClinicalCompatibilityReferenceSubmission> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
-    let actor = required_non_empty("actor", actor)?;
-    let notes = required_non_empty("notes", notes)?;
     let report: ClinicalCompatibilityReferenceReport =
         serde_json::from_value(read_json_report(report_uri)?)
             .context("parse clinical compatibility reference report")?;
+    let published_source_uri = report.source_uri.clone();
+    build_clinical_compatibility_reference_submission_from_report(
+        report_uri,
+        &published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+pub fn build_clinical_compatibility_reference_submission_with_published_uris(
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<ClinicalCompatibilityReferenceSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    let published_source_uri = required_non_empty("published_source_uri", published_source_uri)?;
+    let report: ClinicalCompatibilityReferenceReport =
+        serde_json::from_value(read_json_report(report_uri)?)
+            .context("parse clinical compatibility reference report")?;
+    build_clinical_compatibility_reference_submission_from_report(
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+fn build_clinical_compatibility_reference_submission_from_report(
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: ClinicalCompatibilityReferenceReport,
+) -> anyhow::Result<ClinicalCompatibilityReferenceSubmission> {
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
     if report.report_kind != "clinical_compatibility_reference" {
         bail!("report_kind must be clinical_compatibility_reference");
     }
     if report.records.is_empty() {
         bail!("clinical compatibility reference requires records before API submission");
     }
-    ensure_no_template_uri("clinical compatibility source_uri", &report.source_uri)?;
-    ensure_no_template_evidence_refs(
-        "clinical compatibility evidence_refs",
-        &report.evidence_refs,
+    ensure_production_artifact_uri(
+        "clinical compatibility published_report_uri",
+        published_report_uri,
+    )?;
+    ensure_production_artifact_uri(
+        "clinical compatibility published_source_uri",
+        published_source_uri,
     )?;
     for record in &report.records {
-        ensure_no_template_evidence_refs(
+        ensure_production_evidence_refs(
             "clinical compatibility record evidence_refs",
             &record.evidence_refs,
         )?;
@@ -193,19 +235,31 @@ pub fn build_clinical_compatibility_reference_submission(
             bail!("clinical compatibility reference requires {required_ref} evidence");
         }
     }
-    let mut evidence_refs = report.evidence_refs;
-    evidence_refs.push(format!("clinical_compatibility_references:{report_uri}"));
+    let mut evidence_refs = published_submission_evidence_refs(
+        "clinical compatibility evidence_refs",
+        &report.evidence_refs,
+        "clinical_compatibility_reference",
+        &report.source_uri,
+        published_source_uri,
+        "clinical_compatibility_references",
+        published_report_uri,
+    )?;
+    evidence_refs.push(format!(
+        "clinical_policy_authority:{}",
+        report.source_authority
+    ));
     evidence_refs.sort();
     evidence_refs.dedup();
+    ensure_production_evidence_refs("clinical compatibility evidence_refs", &evidence_refs)?;
     Ok(ClinicalCompatibilityReferenceSubmission {
         actor: actor.into(),
         notes: notes.into(),
-        source_report_uri: report_uri.into(),
+        source_report_uri: published_report_uri.into(),
         report_kind: report.report_kind,
         reference_version: report.reference_version,
         effective_date: report.effective_date,
         source_authority: report.source_authority,
-        source_uri: report.source_uri,
+        source_uri: published_source_uri.into(),
         record_count: report.record_count,
         records: report.records,
         review_tasks: report.review_tasks,
@@ -222,6 +276,33 @@ pub async fn submit_clinical_compatibility_reference(
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let payload = build_clinical_compatibility_reference_submission(report_uri, actor, notes)?;
+    submit_clinical_compatibility_reference_payload(api_base_url, api_key, &payload).await
+}
+
+pub async fn submit_clinical_compatibility_reference_with_published_uris(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_clinical_compatibility_reference_submission_with_published_uris(
+        report_uri,
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+    )?;
+    submit_clinical_compatibility_reference_payload(api_base_url, api_key, &payload).await
+}
+
+async fn submit_clinical_compatibility_reference_payload(
+    api_base_url: &str,
+    api_key: &str,
+    payload: &ClinicalCompatibilityReferenceSubmission,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,

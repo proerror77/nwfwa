@@ -204,16 +204,21 @@ pub use episode_rollup::{
 mod clinical_compatibility;
 pub use clinical_compatibility::{
     build_clinical_compatibility_reference_report,
-    build_clinical_compatibility_reference_submission, submit_clinical_compatibility_reference,
-    ClinicalCompatibilityRecord, ClinicalCompatibilityReferenceInput,
-    ClinicalCompatibilityReferenceReport, ClinicalCompatibilityReferenceRow,
-    ClinicalCompatibilityReferenceSubmission, ClinicalCompatibilityReviewTask,
+    build_clinical_compatibility_reference_submission,
+    build_clinical_compatibility_reference_submission_with_published_uris,
+    submit_clinical_compatibility_reference,
+    submit_clinical_compatibility_reference_with_published_uris, ClinicalCompatibilityRecord,
+    ClinicalCompatibilityReferenceInput, ClinicalCompatibilityReferenceReport,
+    ClinicalCompatibilityReferenceRow, ClinicalCompatibilityReferenceSubmission,
+    ClinicalCompatibilityReviewTask,
 };
 
 mod unbundling_comparator;
 pub use unbundling_comparator::{
     build_unbundling_comparator_report, build_unbundling_comparator_submission,
-    submit_unbundling_comparator_candidates, UnbundlingComparatorCandidate,
+    build_unbundling_comparator_submission_with_published_uris,
+    submit_unbundling_comparator_candidates,
+    submit_unbundling_comparator_candidates_with_published_uris, UnbundlingComparatorCandidate,
     UnbundlingComparatorInput, UnbundlingComparatorReport, UnbundlingComparatorSubmission,
     UnbundlingEpisodeInput, UnbundlingRuleInput,
 };
@@ -384,23 +389,6 @@ fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str
         bail!("{field} is required");
     }
     Ok(value)
-}
-
-fn ensure_no_template_uri(field: &str, value: &str) -> anyhow::Result<()> {
-    if value.trim().starts_with("local://template") {
-        bail!("{field} must not use local://template evidence");
-    }
-    Ok(())
-}
-
-fn ensure_no_template_evidence_refs(field: &str, evidence_refs: &[String]) -> anyhow::Result<()> {
-    if evidence_refs
-        .iter()
-        .any(|reference| reference.trim().contains("local://template"))
-    {
-        bail!("{field} must not use local://template evidence");
-    }
-    Ok(())
 }
 
 fn ensure_production_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {

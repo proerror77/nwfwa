@@ -786,11 +786,25 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
         "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
         "source_report_uri",
     )?;
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     validate_no_template_uri(
         &request.source_uri,
         "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
         "source_uri",
     )?;
+    if !is_production_artifact_uri(&request.source_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+            "source_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     if request.records.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -839,6 +853,17 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
         "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
         "clinical compatibility evidence_refs must not use local://template evidence",
     )?;
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+            "clinical compatibility evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     for record in &request.records {
         if record.compatibility_key.trim().is_empty()
             || record.diagnosis_code_prefix.trim().is_empty()
@@ -879,6 +904,17 @@ pub(super) fn validate_clinical_compatibility_reference_submission(
             "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
             "clinical compatibility record evidence_refs must not use local://template evidence",
         )?;
+        if record
+            .evidence_refs
+            .iter()
+            .any(|reference| evidence_ref_is_non_production(reference))
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+                "clinical compatibility record evidence_refs must not use local dry-run or placeholder evidence",
+            ));
+        }
         if !record
             .evidence_refs
             .iter()
@@ -960,11 +996,25 @@ pub(super) fn validate_unbundling_comparator_submission(
         "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
         "source_report_uri",
     )?;
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     validate_no_template_uri(
         &request.source_uri,
         "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
         "source_uri",
     )?;
+    if !is_production_artifact_uri(&request.source_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+            "source_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     if request.candidates.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -1006,6 +1056,17 @@ pub(super) fn validate_unbundling_comparator_submission(
         "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
         "unbundling comparator evidence_refs must not use local://template evidence",
     )?;
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+            "unbundling comparator evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     for candidate in &request.candidates {
         if candidate.candidate_id.trim().is_empty()
             || candidate.rule_id.trim().is_empty()
@@ -1077,6 +1138,17 @@ pub(super) fn validate_unbundling_comparator_submission(
             "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
             "unbundling candidate evidence_refs must not use local://template evidence",
         )?;
+        if candidate
+            .evidence_refs
+            .iter()
+            .any(|reference| evidence_ref_is_non_production(reference))
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                "unbundling candidate evidence_refs must not use local dry-run or placeholder evidence",
+            ));
+        }
         if !candidate
             .evidence_refs
             .iter()
