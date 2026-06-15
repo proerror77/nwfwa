@@ -389,6 +389,174 @@ async fn provider_write_paths_require_top_level_source_evidence() {
 }
 
 #[tokio::test]
+async fn provider_write_paths_reject_template_source_report_uri() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_URI",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_report_uri"] =
+            serde_json::json!("local://template/provider/source_report.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn provider_write_paths_reject_template_source_uri() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_uri"] = serde_json::json!("local://template/provider/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn provider_write_paths_reject_template_top_level_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_template:local://template/provider/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn provider_profile_window_rollup_rejects_template_record_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(provider_profile_window_rollup_payload()).unwrap();
+    payload["provider_profiles"][0]["evidence_refs"] =
+        serde_json::json!(["claims:local://template/provider/claim-snapshot.json"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/providers/profile-window-rollups",
+        &payload.to_string(),
+        "provider-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PROVIDER_PROFILE_EVIDENCE");
+}
+
+#[tokio::test]
 async fn provider_sanctions_sync_rejects_mismatched_record_counts() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
     let mut payload: serde_json::Value =

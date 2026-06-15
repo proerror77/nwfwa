@@ -180,6 +180,16 @@ pub(super) fn validate_sanctions_sync_report_submission(
             "source_report_uri must point to a JSON sanctions sync report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_SANCTIONS_SYNC_REPORT_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+        "source_uri",
+    )?;
     if request.provider_upserts.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -236,6 +246,11 @@ pub(super) fn validate_sanctions_sync_report_submission(
         &expected_source_ref,
         "MISSING_SANCTIONS_SYNC_REPORT_EVIDENCE",
         format!("sanctions sync evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        "sanctions sync evidence_refs must not use local://template evidence",
     )?;
     for upsert in &request.provider_upserts {
         if upsert.sanction_key.trim().is_empty()
@@ -332,6 +347,16 @@ pub(super) fn validate_provider_profile_window_rollup_submission(
             "source_report_uri must point to a JSON provider profile rollup report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
     if request.provider_profiles.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -367,6 +392,11 @@ pub(super) fn validate_provider_profile_window_rollup_submission(
         &expected_source_ref,
         "MISSING_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
         format!("provider profile rollup evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        "provider profile rollup evidence_refs must not use local://template evidence",
     )?;
     for profile in &request.provider_profiles {
         if profile.provider_id.trim().is_empty() {
@@ -462,6 +492,7 @@ fn validate_lineage_evidence_refs(
     {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
     }
+    validate_no_template_evidence_refs(evidence_refs, code, message)?;
     Ok(())
 }
 
@@ -492,6 +523,35 @@ fn validate_required_evidence_ref(
     if !evidence_refs
         .iter()
         .any(|reference| reference.trim() == expected_ref)
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn validate_no_template_uri(
+    value: &str,
+    code: &'static str,
+    field_name: &'static str,
+) -> Result<(), ApiError> {
+    if value.trim().starts_with("local://template") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            format!("{field_name} must not use local://template evidence"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_no_template_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
     {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
     }
@@ -556,6 +616,16 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
             "source_report_uri must point to a JSON provider graph signal rollup report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
     if request.provider_relationships.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -591,6 +661,11 @@ pub(super) fn validate_provider_graph_signal_rollup_submission(
         &expected_source_ref,
         "MISSING_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
         format!("provider graph rollup evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        "provider graph rollup evidence_refs must not use local://template evidence",
     )?;
     for relationship in &request.provider_relationships {
         if relationship.provider_id.trim().is_empty() {
@@ -717,6 +792,16 @@ pub(super) fn validate_peer_benchmark_submission(
             "source_report_uri must point to a JSON peer benchmark report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_PEER_BENCHMARK_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PEER_BENCHMARK_SOURCE_URI",
+        "source_uri",
+    )?;
     if request.peer_groups.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -749,6 +834,11 @@ pub(super) fn validate_peer_benchmark_submission(
         &expected_source_ref,
         "MISSING_PEER_BENCHMARK_EVIDENCE",
         format!("peer benchmark evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PEER_BENCHMARK_EVIDENCE",
+        "peer benchmark evidence_refs must not use local://template evidence",
     )?;
     for group in &request.peer_groups {
         if group.peer_group_key.trim().is_empty()
@@ -859,6 +949,16 @@ pub(super) fn validate_episode_rollup_submission(
             "source_report_uri must point to a JSON episode aggregation report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_EPISODE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
     if request.episodes.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -891,6 +991,11 @@ pub(super) fn validate_episode_rollup_submission(
         &expected_source_ref,
         "MISSING_EPISODE_ROLLUP_EVIDENCE",
         format!("episode rollup evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_EPISODE_ROLLUP_EVIDENCE",
+        "episode rollup evidence_refs must not use local://template evidence",
     )?;
     for episode in &request.episodes {
         if episode.episode_key.trim().is_empty()
