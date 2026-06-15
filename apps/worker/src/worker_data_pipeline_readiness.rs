@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::Path};
 
 use crate::{
-    api_url, json_string, read_json_report, required_non_empty,
+    api_url, contains_non_production_artifact_reference, json_string, read_json_report,
+    required_non_empty,
     worker_data_pipeline_execution::{
         canonical_required_evidence_prefixes, validate_worker_data_pipeline_job_kinds,
         validate_worker_data_pipeline_plan, worker_data_pipeline_submit_job_contract,
@@ -758,20 +759,11 @@ fn required_evidence_prefixes(job: &serde_json::Value) -> Vec<String> {
 
 fn is_production_artifact_uri(value: &str) -> bool {
     let value = value.trim();
-    !value.is_empty()
-        && !value.starts_with("local://")
-        && !value.starts_with("file://")
-        && value.contains("://")
-        && !value.contains('{')
-        && !value.contains('}')
+    !value.is_empty() && value.contains("://") && !contains_non_production_artifact_reference(value)
 }
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
-    let value = value.trim();
-    value.contains("local://")
-        || value.contains("file://")
-        || value.contains('{')
-        || value.contains('}')
+    contains_non_production_artifact_reference(value)
 }
 
 fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()> {
@@ -784,11 +776,8 @@ fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()>
 fn ensure_published_report_uri(field: &str, value: &str) -> anyhow::Result<()> {
     let value = value.trim();
     if value.is_empty()
-        || value.starts_with("local://")
-        || value.starts_with("file://")
         || !value.contains("://")
-        || value.contains('{')
-        || value.contains('}')
+        || contains_non_production_artifact_reference(value)
     {
         bail!("{field} must use production evidence, not local dry-run or placeholder URI");
     }

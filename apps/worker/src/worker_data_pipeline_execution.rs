@@ -6,7 +6,10 @@ use std::{
     path::Path,
 };
 
-use crate::{api_url, json_string, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, contains_non_production_artifact_reference, json_string, read_json_report,
+    required_non_empty, write_json,
+};
 
 pub const REPORT_VERSION: u64 = 1;
 
@@ -593,11 +596,8 @@ fn has_production_artifact_uri(reported: &serde_json::Value) -> bool {
     json_string(reported, "artifact_uri").is_some_and(|value| {
         let value = value.trim();
         !value.is_empty()
-            && !value.starts_with("local://")
-            && !value.starts_with("file://")
             && value.contains("://")
-            && !value.contains('{')
-            && !value.contains('}')
+            && !contains_non_production_artifact_reference(value)
     })
 }
 
@@ -629,11 +629,7 @@ fn has_non_production_evidence_refs(reported: &serde_json::Value) -> bool {
 }
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
-    let value = value.trim();
-    value.contains("local://")
-        || value.contains("file://")
-        || value.contains('{')
-        || value.contains('}')
+    contains_non_production_artifact_reference(value)
 }
 
 fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()> {
@@ -646,11 +642,8 @@ fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()>
 fn ensure_published_report_uri(field: &str, value: &str) -> anyhow::Result<()> {
     let value = value.trim();
     if value.is_empty()
-        || value.starts_with("local://")
-        || value.starts_with("file://")
         || !value.contains("://")
-        || value.contains('{')
-        || value.contains('}')
+        || contains_non_production_artifact_reference(value)
     {
         bail!("{field} must use production evidence, not local dry-run or placeholder URI");
     }
@@ -677,12 +670,7 @@ fn ensure_production_evidence_refs(evidence_refs: &[String]) -> anyhow::Result<(
 
 fn is_production_lineage_uri(value: &str) -> bool {
     let value = value.trim();
-    !value.is_empty()
-        && !value.starts_with("local://")
-        && !value.starts_with("file://")
-        && value.contains("://")
-        && !value.contains('{')
-        && !value.contains('}')
+    !value.is_empty() && value.contains("://") && !contains_non_production_artifact_reference(value)
 }
 
 fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json::Value) -> bool {
