@@ -104,6 +104,17 @@ pub fn build_worker_data_pipeline_execution_report_with_published_uris(
         .context("worker data pipeline run status requires execution_date")?;
     let readiness_report_uri = json_string(&run_status, "readiness_report_uri");
     let readiness_gate_status = readiness_gate_status(readiness_report_uri.as_deref())?;
+    let published_lineage_supplied = published_plan_uri.is_some()
+        || published_run_status_uri.is_some()
+        || published_readiness_report_uri.is_some();
+    if published_lineage_supplied {
+        if published_plan_uri.is_none() || published_run_status_uri.is_none() {
+            bail!("published_plan_uri and published_run_status_uri are required when publishing worker execution lineage");
+        }
+        if readiness_report_uri.is_some() && published_readiness_report_uri.is_none() {
+            bail!("published_readiness_report_uri is required when publishing worker execution lineage with readiness_report_uri");
+        }
+    }
     let published_plan_uri =
         output_lineage_uri("published_plan_uri", plan_uri, published_plan_uri)?;
     let published_run_status_uri = output_lineage_uri(

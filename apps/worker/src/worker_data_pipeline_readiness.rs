@@ -151,6 +151,9 @@ pub fn build_worker_data_pipeline_readiness_report_with_published_uris(
         serde_json::from_value(read_json_report(readiness_input_uri)?)
             .context("parse worker data pipeline readiness input")?;
     let (customer_scope_id, jobs) = validate_worker_data_pipeline_plan(&plan)?;
+    if published_plan_uri.is_some() != published_readiness_input_uri.is_some() {
+        bail!("published_plan_uri and published_readiness_input_uri must be supplied together");
+    }
     let published_plan_uri =
         output_lineage_uri("published_plan_uri", plan_uri, published_plan_uri)?;
     let published_readiness_input_uri = output_lineage_uri(

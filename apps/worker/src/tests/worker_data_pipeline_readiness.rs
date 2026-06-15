@@ -227,6 +227,40 @@ fn builds_worker_data_pipeline_readiness_report_with_published_lineage() {
 }
 
 #[test]
+fn rejects_worker_data_pipeline_readiness_report_with_partial_published_lineage() {
+    let root = temp_root("worker-data-pipeline-readiness-partial-published-lineage");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let template_dir = root.join("template");
+    let report_dir = root.join("report");
+    let readiness_input_uri =
+        template_dir.join("worker_data_pipeline_readiness_input_template.json");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    build_worker_data_pipeline_readiness_input_template(&plan_uri.to_string_lossy(), &template_dir)
+        .expect("readiness input template");
+
+    let error = build_worker_data_pipeline_readiness_report_with_published_uris(
+        &plan_uri.to_string_lossy(),
+        &readiness_input_uri.to_string_lossy(),
+        &report_dir,
+        Some("s3://customer-prod-artifacts/worker/plan/worker_data_pipeline_plan.json"),
+        None,
+    )
+    .expect_err("partial published readiness lineage must fail");
+
+    assert!(error
+        .to_string()
+        .contains("published_plan_uri and published_readiness_input_uri"));
+}
+
+#[test]
 fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
     let root = temp_root("worker-data-pipeline-readiness-blocked");
     let plan_uri = root.join("worker_data_pipeline_plan.json");

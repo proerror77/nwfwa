@@ -750,6 +750,57 @@ fn builds_worker_data_pipeline_execution_report_with_published_lineage() {
 }
 
 #[test]
+fn rejects_worker_data_pipeline_execution_report_with_partial_published_lineage() {
+    let root = temp_root("worker-data-pipeline-execution-partial-published-lineage");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let readiness_report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    let run_status_uri = root.join("worker_data_pipeline_run_status.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    write_json(
+        readiness_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "readiness_status": "ready"
+        }),
+    )
+    .expect("write readiness report");
+    write_json(
+        run_status_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "readiness_report_uri": readiness_report_uri.to_string_lossy(),
+            "job_statuses": []
+        }),
+    )
+    .expect("write run status");
+
+    let error = build_worker_data_pipeline_execution_report_with_published_uris(
+        &plan_uri.to_string_lossy(),
+        &run_status_uri.to_string_lossy(),
+        &output_dir,
+        Some("s3://customer-prod-artifacts/worker/plan/worker_data_pipeline_plan.json"),
+        Some("s3://customer-prod-artifacts/worker/run-status/worker_data_pipeline_run_status.json"),
+        None,
+    )
+    .expect_err("published readiness lineage must be required");
+
+    assert!(error
+        .to_string()
+        .contains("published_readiness_report_uri is required"));
+}
+
+#[test]
 fn builds_worker_data_pipeline_execution_report_with_blocked_gate() {
     let root = temp_root("worker-data-pipeline-execution-blocked");
     let plan_uri = root.join("worker_data_pipeline_plan.json");
