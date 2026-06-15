@@ -528,6 +528,8 @@ fn has_production_artifact_uri(reported: &serde_json::Value) -> bool {
         let value = value.trim();
         !value.is_empty()
             && !value.starts_with("local://")
+            && !value.starts_with("file://")
+            && value.contains("://")
             && !value.contains('{')
             && !value.contains('}')
     })
@@ -600,6 +602,7 @@ fn is_production_lineage_uri(value: &str) -> bool {
     !value.is_empty()
         && !value.starts_with("local://")
         && !value.starts_with("file://")
+        && value.contains("://")
         && !value.contains('{')
         && !value.contains('}')
 }
@@ -831,6 +834,13 @@ fn validate_completed_job_scheduler_statuses(
         }
         if json_string(job, "reported_status").as_deref() != Some("succeeded") {
             bail!("completed job executions require reported_status succeeded");
+        }
+        if !json_string(job, "reported_artifact_uri")
+            .is_some_and(|value| is_production_lineage_uri(&value))
+        {
+            bail!(
+                "completed job executions require a production reported_artifact_uri, not a local dry-run or placeholder URI"
+            );
         }
         let has_blocked_dependencies = job
             .get("blocked_dependencies")

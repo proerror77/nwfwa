@@ -1373,6 +1373,64 @@ fn rejects_worker_data_pipeline_execution_submission_with_local_lineage_uri() {
 }
 
 #[test]
+fn rejects_worker_data_pipeline_execution_submission_with_relative_artifact_uri() {
+    let root = temp_root("worker-data-pipeline-execution-submission-relative-artifact");
+    let report_uri = root.join("worker_data_pipeline_execution_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_execution_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "readiness_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+            "readiness_gate_status": "ready",
+            "customer_scope_id": "production-customer",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_count": 1,
+            "pending_or_failed_job_count": 0,
+            "job_executions": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "execution_status": "completed",
+                    "reported_status": "succeeded",
+                    "reported_artifact_uri": "artifacts/worker/sanctions_sync_report.json",
+                    "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+                    "required_permission": "ops:providers:write",
+                    "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
+                    "required_evidence_prefixes": ["sanctions_sync_reports:"],
+                    "evidence_refs": [
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+                    ],
+                    "submitted": true
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+                "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-scheduler",
+        "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+    )
+    .expect_err("execution submission with relative artifact URI must fail");
+
+    assert!(error
+        .to_string()
+        .contains("completed job executions require a production reported_artifact_uri"));
+}
+
+#[test]
 fn rejects_worker_data_pipeline_execution_submission_with_local_top_level_evidence() {
     let root = temp_root("worker-data-pipeline-execution-submission-local-evidence");
     let report_uri = root.join("worker_data_pipeline_execution_report.json");
