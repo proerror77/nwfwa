@@ -121,6 +121,48 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn("build-scoring-readback-report", command_text)
             self.assertIn("runtime-secret-not-persisted", command_text)
             self.assertIn("No API keys", runbook["secret_boundary"])
+            readiness_input = _read_json(
+                Path(temp_dir) / "worker" / "worker_data_pipeline_readiness_input.json"
+            )
+            readiness_checks = {
+                check["job_kind"]: check for check in readiness_input["checks"]
+            }
+            self.assertEqual(
+                readiness_checks["provider_profile_window_rollup"][
+                    "required_submit_flags"
+                ],
+                ["--published-report-uri", "--published-source-uri"],
+            )
+            self.assertEqual(
+                readiness_checks["scoring_online_readback"]["required_submit_flags"],
+                [],
+            )
+            run_status = _read_json(
+                Path(temp_dir) / "worker" / "worker_data_pipeline_run_status.json"
+            )
+            run_status_jobs = {job["job_kind"]: job for job in run_status["job_statuses"]}
+            self.assertEqual(
+                run_status_jobs["probability_calibration_evidence"][
+                    "required_submit_flags"
+                ],
+                [
+                    "--published-report-uri",
+                    "--published-input-uri",
+                    "--published-label-uri",
+                ],
+            )
+            execution_jobs = {
+                job["job_kind"]: job
+                for job in artifacts["worker_data_pipeline_execution_report.json"][
+                    "job_executions"
+                ]
+            }
+            self.assertEqual(
+                execution_jobs["scoring_feature_context_materialization"][
+                    "required_submit_flags"
+                ],
+                ["--published-report-uri"],
+            )
             self.assertIn(
                 "validate_production_evidence_package.py",
                 runbook["validation_command"],

@@ -15,6 +15,7 @@ from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
+    WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS,
     validate_model_serving_slo_evidence,
     validate_scoring_readback_evidence,
     validate_worker_data_pipeline_execution_evidence,
@@ -39,6 +40,9 @@ def worker_execution_report(include_snapshot_evidence: bool = True) -> dict:
             job["required_permission"] = WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[
                 job_kind
             ]
+            job["required_submit_flags"] = list(
+                WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS[job_kind]
+            )
             evidence_refs.append(
                 f"{WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES[job_kind]}"
                 f"s3://customer-prod-artifacts/{job_kind}.json"
@@ -189,6 +193,21 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(
             AssertionError, "scoring_feature_context_claim_snapshot:"
         ):
+            validate_worker_data_pipeline_execution_evidence(report)
+
+    def test_worker_execution_requires_submit_job_required_flags(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        calibration_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "probability_calibration_evidence"
+        )
+        calibration_job["required_submit_flags"] = [
+            "--published-report-uri",
+            "--published-input-uri",
+        ]
+
+        with self.assertRaisesRegex(AssertionError, "required_submit_flags"):
             validate_worker_data_pipeline_execution_evidence(report)
 
     def test_worker_execution_rejects_template_job_evidence_refs(self) -> None:

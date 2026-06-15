@@ -29,6 +29,7 @@ from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
+    WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS,
 )
 
 
@@ -115,6 +116,11 @@ def worker_job_template(job_kind: str) -> dict:
         job["submitted"] = False
         job["api_path"] = WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS[job_kind]
         job["required_permission"] = WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind]
+        job["required_submit_flags"] = list(
+            WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS[job_kind]
+        )
+    else:
+        job["required_submit_flags"] = []
     return job
 
 
@@ -142,6 +148,9 @@ def worker_readiness_check_template(job_kind: str) -> dict:
         "data_quality_status": "pending_customer_validation",
         "source_freshness_status": "pending_customer_validation",
         "required_evidence_prefixes": worker_required_evidence_prefixes(job_kind),
+        "required_submit_flags": list(
+            WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS.get(job_kind, ())
+        ),
         "evidence_refs": [
             f"{prefix}local://template/worker/{job_kind}.json"
             for prefix in worker_required_evidence_prefixes(job_kind)
@@ -158,6 +167,9 @@ def worker_run_status_job_template(job_kind: str) -> dict:
         "required_permission": WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS.get(job_kind),
         "api_path": WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS.get(job_kind),
         "required_evidence_prefixes": worker_required_evidence_prefixes(job_kind),
+        "required_submit_flags": list(
+            WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS.get(job_kind, ())
+        ),
         "evidence_refs": [],
     }
 

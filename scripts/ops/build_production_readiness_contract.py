@@ -86,6 +86,10 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
         "description": "Every governed worker data-pipeline submit job has submitted = true, expected API path and permission scope, and a non-empty reported artifact URI.",
     },
     {
+        "check_id": "governed_submit_jobs_include_required_submit_flags",
+        "description": "Every governed worker data-pipeline submit job carries the required published URI flags for its submit command.",
+    },
+    {
         "check_id": "governed_submit_jobs_include_write_evidence_refs",
         "description": "Every governed worker data-pipeline submit job includes the expected write evidence reference for its persisted API submission plus source-lineage evidence for provider profiles, graph signals, peer benchmarks, episodes, clinical references, unbundling candidates, scoring context materialization, and probability calibration inputs/labels.",
     },

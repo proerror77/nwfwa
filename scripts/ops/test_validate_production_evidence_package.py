@@ -172,6 +172,20 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "provider_profile_window_rollup"):
                 validate_package(package_dir)
 
+    def test_rejects_worker_readiness_input_missing_required_submit_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            input_uri = package_dir / "worker" / "worker_data_pipeline_readiness_input.json"
+            readiness_input = _read_json(input_uri)
+            for check in readiness_input["checks"]:
+                if check["job_kind"] == "provider_profile_window_rollup":
+                    check["required_submit_flags"] = ["--published-report-uri"]
+            _write_json(input_uri, readiness_input)
+
+            with self.assertRaisesRegex(AssertionError, "required_submit_flags"):
+                validate_package(package_dir)
+
     def test_rejects_worker_run_status_wrong_submit_permission(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
@@ -184,6 +198,23 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             _write_json(run_status_uri, run_status)
 
             with self.assertRaisesRegex(AssertionError, "required_permission"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_run_status_wrong_required_submit_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            run_status_uri = package_dir / "worker" / "worker_data_pipeline_run_status.json"
+            run_status = _read_json(run_status_uri)
+            for job in run_status["job_statuses"]:
+                if job["job_kind"] == "probability_calibration_evidence":
+                    job["required_submit_flags"] = [
+                        "--published-report-uri",
+                        "--published-input-uri",
+                    ]
+            _write_json(run_status_uri, run_status)
+
+            with self.assertRaisesRegex(AssertionError, "required_submit_flags"):
                 validate_package(package_dir)
 
     def test_rejects_worker_template_with_forbidden_phi_placeholder(self) -> None:

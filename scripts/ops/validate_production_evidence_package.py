@@ -22,6 +22,7 @@ from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
+    WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS,
     validate_contract,
     validate_evidence_dir,
 )
@@ -662,6 +663,11 @@ def validate_worker_readiness_checks(checks: object) -> None:
             check.get("evidence_refs"),
             "worker readiness input",
         )
+        validate_worker_required_submit_flags(
+            job_kind,
+            check.get("required_submit_flags"),
+            "worker readiness input",
+        )
         require(
             check.get("artifact_uri") == f"local://template/worker/{job_kind}.json",
             f"worker readiness input {job_kind} has wrong artifact_uri",
@@ -687,6 +693,11 @@ def validate_worker_run_status_jobs(job_statuses: object) -> None:
             job.get("evidence_refs"),
             "worker run status",
             require_evidence_refs=False,
+        )
+        validate_worker_required_submit_flags(
+            job_kind,
+            job.get("required_submit_flags"),
+            "worker run status",
         )
         if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
             require(
@@ -732,6 +743,18 @@ def validate_worker_required_prefixes(
             ),
             f"{owner} {job_kind} evidence_refs missing {prefix}",
         )
+
+
+def validate_worker_required_submit_flags(
+    job_kind: str,
+    required_submit_flags: object,
+    owner: str,
+) -> None:
+    expected_flags = list(WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS.get(job_kind, ()))
+    require(
+        required_submit_flags == expected_flags,
+        f"{owner} {job_kind} required_submit_flags changed unexpectedly",
+    )
 
 
 def validate_runbook(package_dir: Path) -> None:

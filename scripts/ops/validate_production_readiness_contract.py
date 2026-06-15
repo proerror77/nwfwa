@@ -87,6 +87,43 @@ WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES = {
     "probability_calibration_evidence": "probability_calibration_reports:",
 }
 
+WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS = {
+    "oig_sam_sanctions_sync": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "provider_profile_window_rollup": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "provider_graph_signal_rollup": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "peer_percentile_benchmark": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "episode_aggregation": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "clinical_compatibility_reference": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "unbundling_comparator": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "scoring_feature_context_materialization": ("--published-report-uri",),
+    "probability_calibration_evidence": (
+        "--published-report-uri",
+        "--published-input-uri",
+        "--published-label-uri",
+    ),
+}
+
 WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX = "oig_sam_snapshot:"
 
 WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES = (
@@ -140,6 +177,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
     "completed_job_artifact_and_evidence_refs_present",
     "completed_job_artifacts_are_production_uris",
     "governed_submit_jobs_submitted",
+    "governed_submit_jobs_include_required_submit_flags",
     "governed_submit_jobs_include_write_evidence_refs",
     "source_snapshot_artifact_reported",
     "scoring_online_readback_artifact_reported",
@@ -508,6 +546,11 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
             job.get("required_permission")
             == WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind],
             f"worker data pipeline submit job {job_kind} has wrong required_permission",
+        )
+        require(
+            job.get("required_submit_flags")
+            == list(WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS[job_kind]),
+            f"worker data pipeline submit job {job_kind} has wrong required_submit_flags",
         )
         require(
             isinstance(job.get("reported_artifact_uri"), str)
