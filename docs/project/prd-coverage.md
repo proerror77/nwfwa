@@ -156,6 +156,13 @@ and task refs are present. This is verified in `49560e8f` by
 `cargo test --locked -p api-server --test ops_models mlops_monitoring` and
 `cargo test --locked -p api-server --test ops_openapi`.
 
+MLOps monitoring report submissions and monitoring review-task reviews now reject
+local dry-run/template evidence refs even when required production report and
+task refs are present. This is verified in `caa618ba` by
+`cargo test --locked -p api-server --test ops_models mlops_monitoring`,
+`cargo test --locked -p api-server --test ops_openapi`, and
+`cargo check --locked -p api-server`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
