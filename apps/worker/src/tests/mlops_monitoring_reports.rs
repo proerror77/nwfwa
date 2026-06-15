@@ -131,6 +131,39 @@ fn rejects_mlops_monitoring_submission_without_published_uri() {
 }
 
 #[test]
+fn rejects_mlops_monitoring_submission_with_localhost_published_uri() {
+    let root = temp_root("mlops-monitoring-report-localhost-submit");
+    let report_uri = root.join("mlops_monitoring_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_monitoring_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "overall_status": "passed",
+            "retraining_recommendation": "monitor",
+            "triggers": [],
+            "review_tasks": [],
+            "evidence_refs": [
+                "model_drift_reports:http://127.0.0.1:8080/drift_report.json"
+            ]
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_monitoring_report_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "http://localhost:8080/mlops_monitoring_report.json",
+        "mlops-worker",
+        "submit monitoring report",
+    )
+    .expect_err("localhost monitoring report submission must fail");
+    assert!(error
+        .to_string()
+        .contains("published_report_uri must use a published production artifact URI"));
+}
+
+#[test]
 fn mlops_monitoring_report_opens_reviews_for_drift_and_latency() {
     let root = temp_root("mlops-monitoring-report-watch");
     let artifact_eval = root.join("artifact-evaluation.json");
@@ -343,6 +376,106 @@ fn rejects_mlops_alert_delivery_submission_without_published_uri() {
     .expect_err("local alert delivery submission must fail");
     assert!(error.to_string().contains(
         "published_scheduler_execution_report_uri must use a published production artifact URI"
+    ));
+}
+
+#[test]
+fn rejects_mlops_alert_delivery_submission_with_localhost_published_uri() {
+    let root = temp_root("mlops-alert-delivery-localhost-submit");
+    let scheduler_report_uri = root.join("mlops_scheduler_execution_report.json");
+    write_json(
+        scheduler_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_scheduler_execution_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "alert_delivery_status": "no_alerts_required",
+            "alert_delivery_tasks": [],
+            "evidence_refs": [
+                "mlops_scheduler_inputs:http://0.0.0.0:8080/scheduler-input.json"
+            ]
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_alert_delivery_submission_with_published_uri(
+        &scheduler_report_uri.to_string_lossy(),
+        "http://[::1]:8080/mlops_scheduler_execution_report.json",
+        "mlops-worker",
+        "submit alert delivery",
+    )
+    .expect_err("localhost alert delivery submission must fail");
+    assert!(error.to_string().contains(
+        "published_scheduler_execution_report_uri must use a published production artifact URI"
+    ));
+}
+
+#[test]
+fn filters_localhost_evidence_refs_from_mlops_submissions() {
+    let root = temp_root("mlops-submission-localhost-evidence-filter");
+    let monitoring_report_uri = root.join("mlops_monitoring_report.json");
+    write_json(
+        monitoring_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_monitoring_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "overall_status": "passed",
+            "retraining_recommendation": "monitor",
+            "triggers": [],
+            "review_tasks": [],
+            "evidence_refs": [
+                "model_drift_reports:http://127.0.0.1:8080/drift_report.json",
+                "shadow_evaluations:s3://customer-prod-artifacts/mlops/shadow_report.json"
+            ]
+        }),
+    )
+    .unwrap();
+    let (_, monitoring_submission) = build_mlops_monitoring_report_submission_with_published_uri(
+        &monitoring_report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/mlops/mlops_monitoring_report.json",
+        "mlops-worker",
+        "submit monitoring report",
+    )
+    .expect("monitoring submission");
+    assert!(monitoring_submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains("127.0.0.1")));
+    assert!(monitoring_submission.evidence_refs.contains(
+        &"shadow_evaluations:s3://customer-prod-artifacts/mlops/shadow_report.json".into()
+    ));
+
+    let scheduler_report_uri = root.join("mlops_scheduler_execution_report.json");
+    write_json(
+        scheduler_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_scheduler_execution_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "alert_delivery_status": "queued_for_external_alert_router",
+            "alert_delivery_tasks": [],
+            "evidence_refs": [
+                "mlops_scheduler_inputs:http://localhost:8080/input.json",
+                "mlops_monitoring_reports:s3://customer-prod-artifacts/mlops/mlops_monitoring_report.json"
+            ]
+        }),
+    )
+    .unwrap();
+    let (_, alert_submission) = build_mlops_alert_delivery_submission_with_published_uri(
+        &scheduler_report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/mlops/mlops_scheduler_execution_report.json",
+        "mlops-worker",
+        "submit alert delivery",
+    )
+    .expect("alert delivery submission");
+    assert!(alert_submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains("localhost")));
+    assert!(alert_submission.evidence_refs.contains(
+        &"mlops_monitoring_reports:s3://customer-prod-artifacts/mlops/mlops_monitoring_report.json"
+            .into()
     ));
 }
 

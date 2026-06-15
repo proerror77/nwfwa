@@ -3,7 +3,10 @@ use hmac::Mac;
 use serde::Serialize;
 use std::{collections::BTreeSet, fs, path::Path};
 
-use super::{api_url, json_string, read_json_report, required_non_empty, write_json, HmacSha256};
+use super::{
+    api_url, contains_non_production_artifact_reference, json_string, read_json_report,
+    required_non_empty, write_json, HmacSha256,
+};
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct MlopsMonitoringReportSubmission {
@@ -303,11 +306,8 @@ pub async fn submit_mlops_alert_delivery_tasks_with_published_uri(
 fn ensure_published_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {
     let value = value.trim();
     if value.is_empty()
-        || value.starts_with("local://")
-        || value.starts_with("file://")
         || !value.contains("://")
-        || value.contains('{')
-        || value.contains('}')
+        || contains_non_production_artifact_reference(value)
     {
         bail!("{field} must use a published production artifact URI");
     }
@@ -324,12 +324,7 @@ fn ensure_published_artifact_uri(field: &str, value: &str) -> anyhow::Result<()>
 
 fn evidence_ref_is_production(reference: &str) -> bool {
     let reference = reference.trim();
-    if reference.is_empty()
-        || reference.contains("local://")
-        || reference.contains("file://")
-        || reference.contains('{')
-        || reference.contains('}')
-    {
+    if reference.is_empty() || contains_non_production_artifact_reference(reference) {
         return false;
     }
     if reference.starts_with("model_versions:") {
