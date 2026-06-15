@@ -1799,6 +1799,55 @@ async fn worker_data_pipeline_execution_report_requires_run_status_evidence() {
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_local_lineage_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["plan_uri"] = serde_json::json!("local://plans/worker_data_pipeline_plan.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PLAN_URI"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_local_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!("scheduler_notes:local://notes/run.txt"));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_EVIDENCE"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_dataset_write_permission() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
 
@@ -1917,6 +1966,56 @@ async fn worker_data_pipeline_readiness_report_requires_input_evidence() {
     assert_eq!(
         body["code"],
         "MISSING_WORKER_DATA_PIPELINE_READINESS_INPUT_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_local_lineage_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["readiness_input_uri"] =
+        serde_json::json!("local://inputs/worker_data_pipeline_readiness_input.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_INPUT_URI"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_local_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!("readiness_notes:local://notes/input.txt"));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_EVIDENCE"
     );
 }
 

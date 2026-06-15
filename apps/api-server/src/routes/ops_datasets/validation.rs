@@ -1128,6 +1128,22 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             "source_report_uri must point to a JSON worker data pipeline execution report",
         ));
     }
+    for (value, code, message) in [
+        (
+            request.plan_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PLAN_URI",
+            "plan_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+        (
+            request.run_status_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS_URI",
+            "run_status_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+    ] {
+        if !is_production_artifact_uri(value) {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
     if request.job_count == 0 || request.job_count != request.job_executions.len() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -1175,6 +1191,13 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 "readiness_report_uri must not be blank when supplied",
             ));
         }
+        if !is_production_artifact_uri(readiness_report_uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_URI",
+                "readiness_report_uri must use production evidence, not local dry-run or placeholder URI",
+            ));
+        }
         match request.readiness_gate_status.as_deref() {
             Some("ready" | "blocked") => {}
             _ => {
@@ -1218,6 +1241,17 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
         "worker_data_pipeline_execution_reports:{}",
         request.source_report_uri
     );
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_EVIDENCE",
+            "worker data pipeline execution evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     if !request
         .evidence_refs
         .iter()
@@ -1682,6 +1716,22 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             "source_report_uri must point to a JSON worker data pipeline readiness report",
         ));
     }
+    for (value, code, message) in [
+        (
+            request.plan_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_PLAN_URI",
+            "plan_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+        (
+            request.readiness_input_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_INPUT_URI",
+            "readiness_input_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+    ] {
+        if !is_production_artifact_uri(value) {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
     if request.job_count == 0
         || request.job_count != request.job_readiness.len()
         || request.ready_job_count + request.blocked_job_count != request.job_count
@@ -1712,6 +1762,17 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
         "worker_data_pipeline_readiness_reports:{}",
         request.source_report_uri
     );
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_EVIDENCE",
+            "worker data pipeline readiness evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     if !request
         .evidence_refs
         .iter()

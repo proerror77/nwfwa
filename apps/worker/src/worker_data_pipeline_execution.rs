@@ -223,6 +223,12 @@ pub fn build_worker_data_pipeline_execution_submission(
     let run_status_uri = json_string(&report, "run_status_uri")
         .context("worker data pipeline execution report requires run_status_uri")?;
     let readiness_report_uri = json_string(&report, "readiness_report_uri");
+    ensure_production_lineage_uri("plan_uri", &plan_uri)?;
+    ensure_production_lineage_uri("run_status_uri", &run_status_uri)?;
+    if let Some(readiness_report_uri) = readiness_report_uri.as_deref() {
+        ensure_production_lineage_uri("readiness_report_uri", readiness_report_uri)?;
+    }
+    ensure_production_evidence_refs(&evidence_refs)?;
     let mut required_refs = vec![
         format!("worker_data_pipeline_plans:{plan_uri}"),
         format!("worker_data_pipeline_run_status:{run_status_uri}"),
@@ -458,6 +464,31 @@ fn has_non_production_evidence_refs(reported: &serde_json::Value) -> bool {
 fn evidence_ref_is_non_production(value: &str) -> bool {
     let value = value.trim();
     value.contains("local://") || value.contains('{') || value.contains('}')
+}
+
+fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    if !is_production_lineage_uri(value) {
+        bail!("{field} must use production evidence, not local dry-run or placeholder URI");
+    }
+    Ok(())
+}
+
+fn ensure_production_evidence_refs(evidence_refs: &[String]) -> anyhow::Result<()> {
+    if evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        bail!("worker data pipeline execution evidence_refs must not use local dry-run or placeholder evidence");
+    }
+    Ok(())
+}
+
+fn is_production_lineage_uri(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && !value.starts_with("local://")
+        && !value.contains('{')
+        && !value.contains('}')
 }
 
 fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json::Value) -> bool {

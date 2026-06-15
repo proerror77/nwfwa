@@ -681,8 +681,8 @@ fn builds_worker_data_pipeline_execution_submission() {
         report_uri.clone(),
         &serde_json::json!({
             "report_kind": "worker_data_pipeline_execution_report",
-            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
-            "run_status_uri": "local://runs/worker_data_pipeline_run_status.json",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
             "customer_scope_id": "production-customer",
             "run_id": "wdp_2026_06_14",
             "execution_date": "2026-06-14",
@@ -692,11 +692,11 @@ fn builds_worker_data_pipeline_execution_submission() {
                 {
                     "job_kind": "oig_sam_sanctions_sync",
                     "execution_status": "completed",
-                    "reported_artifact_uri": "local://artifacts/sanctions_sync_report.json",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
                     "required_evidence_prefixes": ["sanctions_sync_reports:"],
                     "evidence_refs": [
                         "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
-                        "sanctions_sync_reports:local://artifacts/sanctions_sync_report.json"
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
                     ],
                     "submitted": true
                 }
@@ -705,8 +705,8 @@ fn builds_worker_data_pipeline_execution_submission() {
             "review_tasks": [],
             "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
             "evidence_refs": [
-                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
-                "worker_data_pipeline_run_status:local://runs/worker_data_pipeline_run_status.json"
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
             ]
         }),
     )
@@ -745,9 +745,9 @@ fn rejects_worker_data_pipeline_execution_submission_without_source_evidence() {
         report_uri.clone(),
         &serde_json::json!({
             "report_kind": "worker_data_pipeline_execution_report",
-            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
-            "run_status_uri": "local://runs/worker_data_pipeline_run_status.json",
-            "readiness_report_uri": "local://readiness/worker_data_pipeline_readiness_report.json",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "readiness_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
             "readiness_gate_status": "ready",
             "customer_scope_id": "production-customer",
             "run_id": "wdp_2026_06_14",
@@ -758,11 +758,11 @@ fn rejects_worker_data_pipeline_execution_submission_without_source_evidence() {
                 {
                     "job_kind": "oig_sam_sanctions_sync",
                     "execution_status": "completed",
-                    "reported_artifact_uri": "local://artifacts/sanctions_sync_report.json",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
                     "required_evidence_prefixes": ["sanctions_sync_reports:"],
                     "evidence_refs": [
                         "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
-                        "sanctions_sync_reports:local://artifacts/sanctions_sync_report.json"
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
                     ],
                     "submitted": true
                 }
@@ -771,8 +771,8 @@ fn rejects_worker_data_pipeline_execution_submission_without_source_evidence() {
             "review_tasks": [],
             "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
             "evidence_refs": [
-                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
-                "worker_data_pipeline_run_status:local://runs/worker_data_pipeline_run_status.json"
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
             ]
         }),
     )
@@ -786,8 +786,111 @@ fn rejects_worker_data_pipeline_execution_submission_without_source_evidence() {
     .expect_err("execution submission without readiness evidence must fail");
 
     assert!(error.to_string().contains(
-        "worker_data_pipeline_readiness_reports:local://readiness/worker_data_pipeline_readiness_report.json"
+        "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
     ));
+}
+
+#[test]
+fn rejects_worker_data_pipeline_execution_submission_with_local_lineage_uri() {
+    let root = temp_root("worker-data-pipeline-execution-submission-local-lineage");
+    let report_uri = root.join("worker_data_pipeline_execution_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_execution_report",
+            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "customer_scope_id": "production-customer",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_count": 1,
+            "pending_or_failed_job_count": 0,
+            "job_executions": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "execution_status": "completed",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+                    "required_evidence_prefixes": ["sanctions_sync_reports:"],
+                    "evidence_refs": [
+                        "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+                    ],
+                    "submitted": true
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_execution_submission(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-scheduler",
+        "daily execution evidence",
+    )
+    .expect_err("execution submission with local lineage must fail");
+
+    assert!(error
+        .to_string()
+        .contains("plan_uri must use production evidence"));
+}
+
+#[test]
+fn rejects_worker_data_pipeline_execution_submission_with_local_top_level_evidence() {
+    let root = temp_root("worker-data-pipeline-execution-submission-local-evidence");
+    let report_uri = root.join("worker_data_pipeline_execution_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_execution_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "customer_scope_id": "production-customer",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_count": 1,
+            "pending_or_failed_job_count": 0,
+            "job_executions": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "execution_status": "completed",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+                    "required_evidence_prefixes": ["sanctions_sync_reports:"],
+                    "evidence_refs": [
+                        "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+                    ],
+                    "submitted": true
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+                "scheduler_notes:local://notes/run.txt"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_execution_submission(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-scheduler",
+        "daily execution evidence",
+    )
+    .expect_err("execution submission with local top-level evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("evidence_refs must not use local dry-run"));
 }
 
 #[test]
@@ -798,8 +901,8 @@ fn rejects_worker_data_pipeline_execution_submission_without_canonical_job_linea
         report_uri.clone(),
         &serde_json::json!({
             "report_kind": "worker_data_pipeline_execution_report",
-            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
-            "run_status_uri": "local://runs/worker_data_pipeline_run_status.json",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
             "customer_scope_id": "production-customer",
             "run_id": "wdp_2026_06_14",
             "execution_date": "2026-06-14",
@@ -809,10 +912,10 @@ fn rejects_worker_data_pipeline_execution_submission_without_canonical_job_linea
                 {
                     "job_kind": "provider_profile_window_rollup",
                     "execution_status": "completed",
-                    "reported_artifact_uri": "local://artifacts/provider_profile_window_rollup_report.json",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
                     "required_evidence_prefixes": ["provider_profile_window_rollups:"],
                     "evidence_refs": [
-                        "provider_profile_window_rollups:local://artifacts/provider_profile_window_rollup_report.json"
+                        "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
                     ],
                     "submitted": true
                 }
@@ -821,8 +924,8 @@ fn rejects_worker_data_pipeline_execution_submission_without_canonical_job_linea
             "review_tasks": [],
             "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
             "evidence_refs": [
-                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
-                "worker_data_pipeline_run_status:local://runs/worker_data_pipeline_run_status.json"
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
             ]
         }),
     )
@@ -848,8 +951,8 @@ fn rejects_worker_data_pipeline_execution_submission_with_template_job_evidence(
         report_uri.clone(),
         &serde_json::json!({
             "report_kind": "worker_data_pipeline_execution_report",
-            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
-            "run_status_uri": "local://runs/worker_data_pipeline_run_status.json",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
             "customer_scope_id": "production-customer",
             "run_id": "wdp_2026_06_14",
             "execution_date": "2026-06-14",
@@ -875,8 +978,8 @@ fn rejects_worker_data_pipeline_execution_submission_with_template_job_evidence(
             "review_tasks": [],
             "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
             "evidence_refs": [
-                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
-                "worker_data_pipeline_run_status:local://runs/worker_data_pipeline_run_status.json"
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
             ]
         }),
     )
@@ -902,9 +1005,9 @@ async fn submits_worker_data_pipeline_execution_report_to_api() {
         report_uri.clone(),
         &serde_json::json!({
             "report_kind": "worker_data_pipeline_execution_report",
-            "plan_uri": "local://plans/worker_data_pipeline_plan.json",
-            "run_status_uri": "local://runs/worker_data_pipeline_run_status.json",
-            "readiness_report_uri": "local://readiness/worker_data_pipeline_readiness_report.json",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "readiness_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
             "readiness_gate_status": "ready",
             "customer_scope_id": "production-customer",
             "run_id": "wdp_2026_06_14",
@@ -915,11 +1018,11 @@ async fn submits_worker_data_pipeline_execution_report_to_api() {
                 {
                     "job_kind": "oig_sam_sanctions_sync",
                     "execution_status": "completed",
-                    "reported_artifact_uri": "local://artifacts/sanctions_sync_report.json",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
                     "required_evidence_prefixes": ["sanctions_sync_reports:"],
                     "evidence_refs": [
                         "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
-                        "sanctions_sync_reports:local://artifacts/sanctions_sync_report.json"
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
                     ],
                     "submitted": true
                 }
@@ -928,9 +1031,9 @@ async fn submits_worker_data_pipeline_execution_report_to_api() {
             "review_tasks": [],
             "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
             "evidence_refs": [
-                "worker_data_pipeline_plans:local://plans/worker_data_pipeline_plan.json",
-                "worker_data_pipeline_run_status:local://runs/worker_data_pipeline_run_status.json",
-                "worker_data_pipeline_readiness_reports:local://readiness/worker_data_pipeline_readiness_report.json"
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+                "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
             ]
         }),
     )
