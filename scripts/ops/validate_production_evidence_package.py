@@ -77,6 +77,17 @@ REQUIRED_SCORING_READBACK_INPUT_EVIDENCE_PREFIXES = {
     "worker_data_pipeline_executions:",
     "scoring_readback_score_requests:",
 }
+REQUIRED_SCORING_READBACK_TEMPLATE_URIS = {
+    "input_uri": "local://template/worker/scoring_readback_input.json",
+    "score_request_uri": "local://template/worker/score_request.json",
+    "score_response_uri": "local://template/worker/scoring-readback/score_response.json",
+}
+REQUIRED_SCORING_READBACK_TEMPLATE_EVIDENCE_REFS = {
+    "scoring_readback_reports:local://template/evidence/scoring_readback_report.json",
+    "scoring_readback_inputs:local://template/worker/scoring_readback_input.json",
+    "scoring_readback_score_requests:local://template/worker/score_request.json",
+    "scoring_readback_score_responses:local://template/worker/scoring-readback/score_response.json",
+}
 REQUIRED_RUNBOOKS = {"runbooks/worker-data-pipeline-commands.json"}
 REQUIRED_RUNBOOK_STEPS = {
     "build_worker_data_pipeline_plan": (
@@ -420,6 +431,16 @@ def validate_scoring_readback_template(report: dict) -> None:
             evidence_refs_include_prefix(evidence_refs, prefix),
             f"scoring readback template evidence_refs missing {prefix}",
         )
+    for field, expected_uri in REQUIRED_SCORING_READBACK_TEMPLATE_URIS.items():
+        require(
+            report.get(field) == expected_uri,
+            f"scoring readback template {field} must be {expected_uri}",
+        )
+    observed_refs = set(evidence_refs or [])
+    require(
+        REQUIRED_SCORING_READBACK_TEMPLATE_EVIDENCE_REFS.issubset(observed_refs),
+        "scoring readback template evidence_refs must use package-relative template URIs",
+    )
 
 
 def validate_model_serving_slo_template(report: dict) -> None:

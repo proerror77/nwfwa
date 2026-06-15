@@ -309,9 +309,9 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                 "report_version": 1,
                 "readback_status": "blocked",
                 "execution_mode": "template_pending_score_response_artifact",
-                "input_uri": "local://template/scoring_readback_input.json",
-                "score_request_uri": "local://template/score_request.json",
-                "score_response_uri": "local://template/score_response.json",
+                "input_uri": "local://template/worker/scoring_readback_input.json",
+                "score_request_uri": "local://template/worker/score_request.json",
+                "score_response_uri": "local://template/worker/scoring-readback/score_response.json",
                 "expected_evidence_prefix_count": 0,
                 "matched_evidence_prefix_count": 0,
                 "checks": [],
@@ -326,10 +326,10 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                     }
                 ],
                 "evidence_refs": [
-                    "scoring_readback_reports:local://template/scoring_readback_report.json",
-                    "scoring_readback_inputs:local://template/scoring_readback_input.json",
-                    "scoring_readback_score_requests:local://template/score_request.json",
-                    "scoring_readback_score_responses:local://template/score_response.json",
+                    "scoring_readback_reports:local://template/evidence/scoring_readback_report.json",
+                    "scoring_readback_inputs:local://template/worker/scoring_readback_input.json",
+                    "scoring_readback_score_requests:local://template/worker/score_request.json",
+                    "scoring_readback_score_responses:local://template/worker/scoring-readback/score_response.json",
                 ],
             },
         )

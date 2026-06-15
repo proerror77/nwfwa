@@ -265,6 +265,26 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_scoring_readback_template_with_short_score_request_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "scoring_readback_report.json"
+            report = _read_json(report_uri)
+            report["evidence_refs"] = [
+                reference.replace(
+                    "local://template/worker/score_request.json",
+                    "local://template/score_request.json",
+                )
+                for reference in report["evidence_refs"]
+            ]
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(
+                AssertionError, "package-relative template URIs"
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_without_package_validator_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
