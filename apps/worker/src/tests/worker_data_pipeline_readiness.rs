@@ -176,6 +176,57 @@ fn readiness_input_template_remains_blocked_until_customer_evidence_is_filled() 
 }
 
 #[test]
+fn builds_worker_data_pipeline_readiness_report_with_published_lineage() {
+    let root = temp_root("worker-data-pipeline-readiness-published-lineage");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let template_dir = root.join("template");
+    let report_dir = root.join("report");
+    let readiness_input_uri =
+        template_dir.join("worker_data_pipeline_readiness_input_template.json");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    build_worker_data_pipeline_readiness_input_template(&plan_uri.to_string_lossy(), &template_dir)
+        .expect("readiness input template");
+
+    let published_plan_uri =
+        "s3://customer-prod-artifacts/worker/plan/worker_data_pipeline_plan.json";
+    let published_readiness_input_uri =
+        "s3://customer-prod-artifacts/worker/readiness/worker_data_pipeline_readiness_input.json";
+    let report = build_worker_data_pipeline_readiness_report_with_published_uris(
+        &plan_uri.to_string_lossy(),
+        &readiness_input_uri.to_string_lossy(),
+        &report_dir,
+        Some(published_plan_uri),
+        Some(published_readiness_input_uri),
+    )
+    .expect("readiness report");
+
+    assert_eq!(report["plan_uri"], published_plan_uri);
+    assert_eq!(report["readiness_input_uri"], published_readiness_input_uri);
+    let evidence_refs = report["evidence_refs"].as_array().expect("evidence refs");
+    assert!(evidence_refs.iter().all(|reference| !reference
+        .as_str()
+        .unwrap_or_default()
+        .contains(&*root.to_string_lossy())));
+    assert!(evidence_refs.iter().any(|reference| {
+        reference == &serde_json::json!(format!("worker_data_pipeline_plans:{published_plan_uri}"))
+    }));
+    assert!(evidence_refs.iter().any(|reference| {
+        reference
+            == &serde_json::json!(format!(
+                "worker_data_pipeline_readiness_inputs:{published_readiness_input_uri}"
+            ))
+    }));
+}
+
+#[test]
 fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
     let root = temp_root("worker-data-pipeline-readiness-blocked");
     let plan_uri = root.join("worker_data_pipeline_plan.json");

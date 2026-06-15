@@ -165,7 +165,9 @@ pub use worker_data_pipeline_run_status::build_worker_data_pipeline_run_status_t
 mod worker_data_pipeline_readiness;
 pub use worker_data_pipeline_readiness::{
     build_worker_data_pipeline_readiness_input_template,
-    build_worker_data_pipeline_readiness_report, build_worker_data_pipeline_readiness_submission,
+    build_worker_data_pipeline_readiness_report,
+    build_worker_data_pipeline_readiness_report_with_published_uris,
+    build_worker_data_pipeline_readiness_submission,
     build_worker_data_pipeline_readiness_submission_with_published_uri,
     submit_worker_data_pipeline_readiness_report,
     submit_worker_data_pipeline_readiness_report_with_published_uri,

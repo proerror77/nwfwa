@@ -110,6 +110,10 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
                 command_text,
             )
             self.assertIn(
+                "--published-readiness-input-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_input.json",
+                command_text,
+            )
+            self.assertIn(
                 "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json",
                 command_text,
             )

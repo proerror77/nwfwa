@@ -128,6 +128,22 @@ pub fn build_worker_data_pipeline_readiness_report(
     readiness_input_uri: &str,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<serde_json::Value> {
+    build_worker_data_pipeline_readiness_report_with_published_uris(
+        plan_uri,
+        readiness_input_uri,
+        output_dir,
+        None,
+        None,
+    )
+}
+
+pub fn build_worker_data_pipeline_readiness_report_with_published_uris(
+    plan_uri: &str,
+    readiness_input_uri: &str,
+    output_dir: impl AsRef<Path>,
+    published_plan_uri: Option<&str>,
+    published_readiness_input_uri: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
     let plan_uri = required_non_empty("plan_uri", plan_uri)?;
     let readiness_input_uri = required_non_empty("readiness_input_uri", readiness_input_uri)?;
     let plan = read_json_report(plan_uri)?;
@@ -135,6 +151,13 @@ pub fn build_worker_data_pipeline_readiness_report(
         serde_json::from_value(read_json_report(readiness_input_uri)?)
             .context("parse worker data pipeline readiness input")?;
     let (customer_scope_id, jobs) = validate_worker_data_pipeline_plan(&plan)?;
+    let published_plan_uri =
+        output_lineage_uri("published_plan_uri", plan_uri, published_plan_uri)?;
+    let published_readiness_input_uri = output_lineage_uri(
+        "published_readiness_input_uri",
+        readiness_input_uri,
+        published_readiness_input_uri,
+    )?;
     let checks_by_job = input
         .checks
         .iter()
@@ -207,8 +230,8 @@ pub fn build_worker_data_pipeline_readiness_report(
     let report = serde_json::json!({
         "report_kind": "worker_data_pipeline_readiness_report",
         "report_version": REPORT_VERSION,
-        "plan_uri": plan_uri,
-        "readiness_input_uri": readiness_input_uri,
+        "plan_uri": published_plan_uri,
+        "readiness_input_uri": published_readiness_input_uri,
         "customer_scope_id": customer_scope_id,
         "readiness_status": readiness_status,
         "job_count": jobs.len(),
@@ -219,8 +242,8 @@ pub fn build_worker_data_pipeline_readiness_report(
         "review_tasks": review_tasks,
         "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy",
         "evidence_refs": [
-            format!("worker_data_pipeline_plans:{plan_uri}"),
-            format!("worker_data_pipeline_readiness_inputs:{readiness_input_uri}")
+            format!("worker_data_pipeline_plans:{published_plan_uri}"),
+            format!("worker_data_pipeline_readiness_inputs:{published_readiness_input_uri}")
         ]
     });
 
@@ -243,6 +266,19 @@ pub fn build_worker_data_pipeline_readiness_report(
         &report["review_tasks"],
     )?;
     Ok(report)
+}
+
+fn output_lineage_uri(
+    field: &str,
+    local_uri: &str,
+    published_uri: Option<&str>,
+) -> anyhow::Result<String> {
+    let Some(published_uri) = published_uri else {
+        return Ok(local_uri.to_string());
+    };
+    let published_uri = required_non_empty(field, published_uri)?;
+    ensure_production_lineage_uri(field, published_uri)?;
+    Ok(published_uri.into())
 }
 
 pub fn build_worker_data_pipeline_readiness_submission(

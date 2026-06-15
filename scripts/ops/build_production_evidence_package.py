@@ -587,6 +587,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
             "customer scope id",
             "daily and monthly scheduler cadence",
             "filled worker readiness input",
+            "published worker readiness input artifact URI",
             "customer scheduler run-status artifact",
             "published worker plan and run-status artifact URIs",
             "customer-authorized scoring request and score response artifacts",
@@ -621,6 +622,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- build-worker-data-pipeline-readiness-report "
                     "--plan artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json "
                     "--readiness-input artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_input.json "
+                    "--published-plan-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/plan/<customer-scheduler-run-id>/worker_data_pipeline_plan.json "
+                    "--published-readiness-input-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_input.json "
                     "--output-dir artifacts/production-evidence-package/worker"
                 ),
                 "output": "worker/worker_data_pipeline_readiness_report.json",
