@@ -325,7 +325,10 @@ fn peer_benchmark_group_key(
     peer_group_key: &str,
     benchmark_month: &str,
 ) -> String {
-    format!("{}\x00{}\x00{}", customer_scope_id, peer_group_key, benchmark_month)
+    format!(
+        "{}\x00{}\x00{}",
+        customer_scope_id, peer_group_key, benchmark_month
+    )
 }
 
 fn episode_rollup_key(customer_scope_id: &str, episode_key: &str, as_of_date: &str) -> String {

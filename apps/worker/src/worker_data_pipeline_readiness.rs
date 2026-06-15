@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::Path};
 
 use crate::{
-    api_url, json_string, read_json_report, required_non_empty, write_json,
+    api_url, json_string, read_json_report, required_non_empty,
     worker_data_pipeline_execution::{validate_worker_data_pipeline_plan, REPORT_VERSION},
+    write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

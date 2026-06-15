@@ -287,9 +287,9 @@ async fn rejects_probability_calibration_report_without_ops_models_review_permis
         .uri("/api/v1/ops/models/baseline_fwa/probability-calibration-reports")
         .header("content-type", "application/json")
         .header("x-api-key", restricted_key)
-        .body(Body::from(
-            probability_calibration_payload(complete_probability_calibration_evidence_refs()),
-        ))
+        .body(Body::from(probability_calibration_payload(
+            complete_probability_calibration_evidence_refs(),
+        )))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
