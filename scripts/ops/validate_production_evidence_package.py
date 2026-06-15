@@ -440,6 +440,10 @@ def validate_worker_execution_template(report: dict) -> None:
         job.get("job_kind"): job for job in job_executions if isinstance(job, dict)
     }
     require(
+        len(jobs_by_kind) == len(job_executions),
+        "worker data pipeline execution template must not include duplicate job_kind entries",
+    )
+    require(
         set(jobs_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
         "worker data pipeline execution template job kind set changed unexpectedly",
     )
@@ -499,6 +503,10 @@ def validate_worker_execution_template(report: dict) -> None:
     review_tasks_by_kind = {
         task.get("job_kind"): task for task in review_tasks if isinstance(task, dict)
     }
+    require(
+        len(review_tasks_by_kind) == len(review_tasks),
+        "worker data pipeline execution template review_tasks must not include duplicate job_kind entries",
+    )
     require(
         set(review_tasks_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
         "worker data pipeline execution template review task job kind set changed unexpectedly",

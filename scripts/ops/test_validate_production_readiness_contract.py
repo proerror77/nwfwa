@@ -191,6 +191,15 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "review_tasks"):
             validate_worker_data_pipeline_execution_evidence(report)
 
+    def test_worker_execution_rejects_duplicate_job_kind(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        duplicate_job = copy.deepcopy(report["job_executions"][0])
+        report["job_executions"].append(duplicate_job)
+        report["job_count"] = len(report["job_executions"])
+
+        with self.assertRaisesRegex(AssertionError, "duplicate job_kind"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
     def test_worker_execution_requires_submit_job_source_lineage(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=True)
         scoring_context_job = next(

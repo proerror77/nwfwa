@@ -497,6 +497,10 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         job.get("job_kind"): job for job in job_executions if isinstance(job, dict)
     }
     require(
+        len(jobs_by_kind) == len(job_executions),
+        "worker data pipeline execution evidence must not include duplicate job_kind entries",
+    )
+    require(
         set(jobs_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
         "worker data pipeline execution evidence job kind set changed unexpectedly",
     )

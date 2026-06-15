@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import tempfile
 import unittest
 import json
@@ -273,6 +274,21 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             _write_json(report_uri, report)
 
             with self.assertRaisesRegex(AssertionError, "job kind set"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_execution_template_duplicate_job_kind(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            report["job_executions"].append(copy.deepcopy(report["job_executions"][0]))
+            report["job_count"] = len(report["job_executions"])
+            report["review_tasks"].append(copy.deepcopy(report["review_tasks"][0]))
+            report["review_task_count"] = len(report["review_tasks"])
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(AssertionError, "duplicate job_kind"):
                 validate_package(package_dir)
 
     def test_rejects_worker_execution_template_missing_job_required_prefix(self) -> None:
