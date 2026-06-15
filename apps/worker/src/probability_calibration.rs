@@ -117,6 +117,11 @@ pub fn build_probability_calibration_report(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| anyhow::anyhow!("probability calibration input requires label_source_uri"))?
         .to_string();
+    if label_source_uri.starts_with("local://template") {
+        bail!(
+            "probability calibration input label_source_uri must not use local://template evidence"
+        );
+    }
     if input.rows.is_empty() {
         bail!("probability calibration input requires rows");
     }
@@ -240,6 +245,15 @@ pub fn build_probability_calibration_submission(
             .context("parse probability calibration report")?;
     if report.report_kind != "probability_calibration_report" {
         bail!("report_kind must be probability_calibration_report");
+    }
+    if report
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        bail!(
+            "probability calibration report evidence_refs must not use local://template evidence"
+        );
     }
     for required_prefix in ["probability_calibration_input:", "calibration_labels:"] {
         if !report
