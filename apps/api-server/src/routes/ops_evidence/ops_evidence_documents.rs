@@ -367,8 +367,13 @@ pub(super) fn validate_evidence_refs(values: &[String]) -> Result<(), ApiError> 
         ))
     } else if values.iter().any(|value| {
         let value = value.trim();
-        value.contains("local://")
-            || value.contains("file://")
+        let normalized = value.to_ascii_lowercase();
+        normalized.contains("local://")
+            || normalized.contains("file://")
+            || normalized.contains("://localhost")
+            || normalized.contains("://127.")
+            || normalized.contains("://0.0.0.0")
+            || normalized.contains("://[::1]")
             || value.contains('{')
             || value.contains('}')
     }) {

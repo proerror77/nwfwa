@@ -291,6 +291,27 @@ async fn rejects_local_or_placeholder_evidence_refs() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "EVIDENCE_REF_INVALID");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/evidence/documents",
+        r#"{
+          "document_id": "doc-loopback-ref",
+          "source_record_ref": "claim-documents:CLM-LOOPBACK:invoice-1",
+          "claim_id": "CLM-LOOPBACK",
+          "external_document_id": "invoice-loopback",
+          "document_type": "invoice",
+          "storage_uri": "s3://customer-approved/documents/doc-loopback-ref.pdf",
+          "content_checksum": "sha256:doc-loopback-ref",
+          "ingestion_status": "registered",
+          "redaction_status": "redacted",
+          "evidence_refs": ["claim_documents:http://127.0.0.1:8080/claim-documents/doc-loopback-ref.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "EVIDENCE_REF_INVALID");
+
     let (status, _) = json_request(
         app.clone(),
         "POST",

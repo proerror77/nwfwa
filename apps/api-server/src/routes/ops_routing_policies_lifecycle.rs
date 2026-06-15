@@ -161,8 +161,13 @@ fn validate_routing_policy_lifecycle_request(
     }
     if request.evidence_refs.iter().any(|reference| {
         let reference = reference.trim();
-        reference.contains("local://")
-            || reference.contains("file://")
+        let normalized = reference.to_ascii_lowercase();
+        normalized.contains("local://")
+            || normalized.contains("file://")
+            || normalized.contains("://localhost")
+            || normalized.contains("://127.")
+            || normalized.contains("://0.0.0.0")
+            || normalized.contains("://[::1]")
             || reference.contains('{')
             || reference.contains('}')
     }) {
