@@ -377,6 +377,64 @@ fn rejects_scoring_feature_context_submission_with_template_source_uri() {
 }
 
 #[test]
+fn rejects_scoring_feature_context_submission_with_localhost_source_uri() {
+    let root = temp_root("scoring-feature-context-submission-localhost-source");
+    let report_uri = root.join("scoring_feature_context_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "scoring_feature_context_materialization",
+            "report_version": 1,
+            "as_of_date": "2026-06-13",
+            "source_uris": {
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "http://127.0.0.1:9000/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
+            },
+            "claim_count": 1,
+            "context_count": 1,
+            "contexts": [
+                {
+                    "claim_id": "CLM-1",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-1",
+                    "peer_context": {"claim_amount_peer_percentile": 90},
+                    "clinical_compatibility_context": null,
+                    "episode_utilization_context": null,
+                    "evidence_refs": ["scoring_feature_contexts:CLM-1"],
+                    "data_sources": ["worker.peer_percentile_benchmark_rollup"],
+                    "missing_contexts": []
+                }
+            ],
+            "evidence_refs": [
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks:http://127.0.0.1:9000/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
+            ],
+            "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
+        }),
+    )
+    .unwrap();
+
+    let error = build_scoring_feature_context_materialization_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
+        "sfc-mat-1",
+        "worker:scoring-contexts",
+        "pilot materialization",
+    )
+    .expect_err("localhost source uri must fail");
+
+    assert!(error
+        .to_string()
+        .contains("scoring feature context peer_benchmarks_uri must use production evidence"));
+}
+
+#[test]
 fn rejects_scoring_feature_context_submission_with_template_top_level_evidence() {
     let root = temp_root("scoring-feature-context-submission-template-evidence");
     let report_uri = root.join("scoring_feature_context_report.json");
@@ -429,6 +487,65 @@ fn rejects_scoring_feature_context_submission_with_template_top_level_evidence()
         "pilot materialization",
     )
     .expect_err("template top-level evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("scoring feature context evidence_refs must not use local dry-run"));
+}
+
+#[test]
+fn rejects_scoring_feature_context_submission_with_localhost_top_level_evidence() {
+    let root = temp_root("scoring-feature-context-submission-localhost-evidence");
+    let report_uri = root.join("scoring_feature_context_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "scoring_feature_context_materialization",
+            "report_version": 1,
+            "as_of_date": "2026-06-13",
+            "source_uris": {
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
+            },
+            "claim_count": 1,
+            "context_count": 1,
+            "contexts": [
+                {
+                    "claim_id": "CLM-1",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-1",
+                    "peer_context": {"claim_amount_peer_percentile": 90},
+                    "clinical_compatibility_context": null,
+                    "episode_utilization_context": null,
+                    "evidence_refs": ["scoring_feature_contexts:CLM-1"],
+                    "data_sources": ["worker.peer_percentile_benchmark_rollup"],
+                    "missing_contexts": []
+                }
+            ],
+            "evidence_refs": [
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
+                "worker_report:http://localhost:9000/scoring-context.json"
+            ],
+            "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
+        }),
+    )
+    .unwrap();
+
+    let error = build_scoring_feature_context_materialization_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
+        "sfc-mat-1",
+        "worker:scoring-contexts",
+        "pilot materialization",
+    )
+    .expect_err("localhost top-level evidence must fail");
 
     assert!(error
         .to_string()

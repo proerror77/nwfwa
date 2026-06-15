@@ -415,8 +415,7 @@ fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str
 fn ensure_production_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {
     let value = value.trim();
     if value.is_empty()
-        || value.starts_with("local://")
-        || value.starts_with("file://")
+        || contains_non_production_artifact_reference(value)
         || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
@@ -441,16 +440,26 @@ fn ensure_production_json_artifact_uri(field: &str, value: &str) -> anyhow::Resu
 }
 
 fn ensure_production_evidence_refs(field: &str, evidence_refs: &[String]) -> anyhow::Result<()> {
-    if evidence_refs.iter().any(|reference| {
-        let reference = reference.trim();
-        reference.contains("local://")
-            || reference.contains("file://")
-            || reference.contains('{')
-            || reference.contains('}')
-    }) {
+    if evidence_refs
+        .iter()
+        .any(|reference| contains_non_production_artifact_reference(reference))
+    {
         bail!("{field} must not use local dry-run or placeholder evidence");
     }
     Ok(())
+}
+
+fn contains_non_production_artifact_reference(value: &str) -> bool {
+    let value = value.trim();
+    let normalized = value.to_ascii_lowercase();
+    normalized.contains("local://")
+        || normalized.contains("file://")
+        || normalized.contains("://localhost")
+        || normalized.contains("://127.")
+        || normalized.contains("://0.0.0.0")
+        || normalized.contains("://[::1]")
+        || value.contains('{')
+        || value.contains('}')
 }
 
 fn published_submission_evidence_refs(
