@@ -152,6 +152,17 @@ pub(in crate::routes) fn validate_mlops_monitoring_report_request(
             "MLOps monitoring actor, notes, report_uri, triggers, and evidence_refs must not contain PII",
         ));
     }
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_EVIDENCE",
+            "MLOps monitoring evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     let review_task_text = request
         .review_tasks
         .iter()
@@ -491,6 +502,17 @@ pub(in crate::routes) fn validate_monitoring_review_task_review_request(
             StatusCode::BAD_REQUEST,
             "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REVIEW_TASK_REVIEW",
             "monitoring review task reviewer, notes, and evidence_refs must not contain PII",
+        ));
+    }
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE",
+            "monitoring review task evidence_refs must not use local dry-run or placeholder evidence",
         ));
     }
     Ok(())

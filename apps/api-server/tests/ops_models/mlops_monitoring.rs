@@ -58,6 +58,36 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "MISSING_MLOPS_MONITORING_EVIDENCE");
 
+    let (status, local_monitoring_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject local dry-run evidence mixed with production monitoring refs.",
+          "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+            "model_monitoring_reports:local://template/mlops_monitoring_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        local_monitoring_evidence["code"],
+        "INVALID_MLOPS_MONITORING_EVIDENCE"
+    );
+
     let (status, response) = json_request(
         app.clone(),
         "POST",
@@ -167,6 +197,34 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
     assert_eq!(
         missing_task_evidence["code"],
         "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE"
+    );
+
+    let (status, placeholder_review_evidence) = json_request(
+        app.clone(),
+        "POST",
+        &format!(
+            "/api/v1/ops/models/baseline_fwa/mlops-monitoring-review-tasks/{}/reviews",
+            task_id.replace(':', "%3A")
+        ),
+        &format!(
+            r#"{{
+              "decision": "acknowledged",
+              "reviewer": "model-governance",
+              "notes": "Reject placeholder review receipt evidence.",
+              "evidence_refs": [
+                "model_versions:baseline_fwa:0.1.0",
+                "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+                "model_monitoring_review_tasks:{task_id}",
+                "model_monitoring_review_receipts:{{receipt_id}}"
+              ]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        placeholder_review_evidence["code"],
+        "INVALID_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE"
     );
 
     let (status, missing_task) = json_request(
