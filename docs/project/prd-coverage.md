@@ -185,6 +185,12 @@ data paths for staging shape validation. This is verified in `3a5382b9` by
 `cargo test --locked -p api-server --test ops_datasets`,
 `cargo test --locked -p api-server --test ops_openapi`, and
 `cargo check --locked -p api-server`.
+Model promotion gates and retraining readiness now also require the linked
+source dataset to be active, so a draft dataset chain cannot unlock model
+promotion or retraining even when evaluation metrics, drift, and labels are
+present. This is verified in `4ee5b77d` by
+`cargo test --locked -p api-server --test ops_models` and
+`cargo check --locked -p api-server`.
 
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
