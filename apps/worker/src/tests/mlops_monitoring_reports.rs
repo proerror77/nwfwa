@@ -93,6 +93,11 @@ fn builds_mlops_monitoring_report_from_runtime_reports() {
         .evidence_refs
         .iter()
         .any(|reference| reference.starts_with("model_monitoring_reports:")));
+    let root_marker = root.to_string_lossy();
+    assert!(submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains(root_marker.as_ref())));
 }
 
 #[test]
@@ -306,6 +311,11 @@ fn builds_mlops_scheduler_execution_report_and_alert_delivery_tasks() {
         .evidence_refs
         .iter()
         .any(|reference| reference.starts_with("mlops_scheduler_execution_reports:")));
+    let root_marker = root.to_string_lossy();
+    assert!(submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains(root_marker.as_ref())));
 }
 
 #[test]

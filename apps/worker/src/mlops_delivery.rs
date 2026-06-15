@@ -89,6 +89,7 @@ pub fn build_mlops_monitoring_report_submission_with_published_uri(
         .into_iter()
         .flatten()
         .filter_map(|value| value.as_str().map(str::to_string))
+        .filter(|reference| evidence_ref_is_production(reference))
         .collect::<Vec<_>>();
     evidence_refs.push(format!("model_versions:{model_key}:{model_version}"));
     evidence_refs.push(format!("model_monitoring_reports:{published_report_uri}"));
@@ -222,6 +223,7 @@ pub fn build_mlops_alert_delivery_submission_with_published_uri(
         .into_iter()
         .flatten()
         .filter_map(|value| value.as_str().map(str::to_string))
+        .filter(|reference| evidence_ref_is_production(reference))
         .collect::<Vec<_>>();
     evidence_refs.push(format!("model_versions:{model_key}:{model_version}"));
     evidence_refs.push(format!(
@@ -318,6 +320,24 @@ fn ensure_published_artifact_uri(field: &str, value: &str) -> anyhow::Result<()>
         bail!("{field} must point to a JSON report artifact");
     }
     Ok(())
+}
+
+fn evidence_ref_is_production(reference: &str) -> bool {
+    let reference = reference.trim();
+    if reference.is_empty()
+        || reference.contains("local://")
+        || reference.contains("file://")
+        || reference.contains('{')
+        || reference.contains('}')
+    {
+        return false;
+    }
+    if reference.starts_with("model_versions:") {
+        return true;
+    }
+    reference
+        .split_once(':')
+        .is_some_and(|(_, uri)| uri.contains("://"))
 }
 
 pub fn build_mlops_alert_receiver_payload(
