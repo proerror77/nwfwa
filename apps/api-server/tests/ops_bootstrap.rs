@@ -344,6 +344,66 @@ async fn evidence_request_rejects_received_status_without_document_evidence() {
     let request_id = generated["requests"][0]["request_id"].as_str().unwrap();
 
     let (status, update) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
+        r#"{
+          "status": "received",
+          "actor_id": "clinical-ops",
+          "notes": "Attempt to mark received with a blank evidence ref.",
+          "evidence_refs": ["evidence_documents:doc_bootstrap_3", " "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{update}");
+    assert_eq!(update["code"], "INVALID_EVIDENCE_REQUEST_STATUS_EVIDENCE");
+
+    let (status, update) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
+        r#"{
+          "status": "requested",
+          "actor_id": "clinical-ops",
+          "notes": "Attempt to update with PII in evidence refs.",
+          "evidence_refs": ["email:alice@example.com"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{update}");
+    assert_eq!(update["code"], "PII_NOT_ALLOWED_IN_EVIDENCE_REQUEST_STATUS");
+
+    let (status, update) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
+        r#"{
+          "status": "received",
+          "actor_id": "clinical-ops",
+          "notes": "Attempt to mark received with local dry-run document evidence.",
+          "evidence_refs": ["evidence_documents:local://template/doc-bootstrap-3.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{update}");
+    assert_eq!(update["code"], "INVALID_EVIDENCE_REQUEST_STATUS_EVIDENCE");
+
+    let (status, update) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
+        r#"{
+          "status": "received",
+          "actor_id": "clinical-ops",
+          "notes": "Attempt to mark received with placeholder document evidence.",
+          "evidence_refs": ["evidence_documents:{document_id}"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{update}");
+    assert_eq!(update["code"], "INVALID_EVIDENCE_REQUEST_STATUS_EVIDENCE");
+
+    let (status, update) = json_request(
         app,
         "POST",
         &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
