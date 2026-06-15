@@ -113,6 +113,11 @@ template evidence refs before case state changes. This is verified in
 `22c8b7e5` by `cargo test --locked -p api-server --test ops_cases` and
 `cargo test --locked -p api-server --test ops_openapi`.
 
+Investigation-result and QA-result pilot writeback paths now reject local
+dry-run/template evidence refs before governed outcome writeback. This is
+verified in `8a3a34f2` by `cargo test --locked -p api-server --test pilot_loop`
+and `cargo test --locked -p api-server --test ops_openapi`.
+
 ## June 2026 Gap Backlog
 
 | Priority | Backlog item | Coverage status |
