@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, fs, path::Path};
 use crate::{
     api_url, json_string, read_json_report, required_non_empty,
     worker_data_pipeline_execution::{
-        validate_worker_data_pipeline_job_kinds, validate_worker_data_pipeline_plan, REPORT_VERSION,
+        canonical_required_evidence_prefixes, validate_worker_data_pipeline_job_kinds,
+        validate_worker_data_pipeline_plan, REPORT_VERSION,
     },
     write_json,
 };
@@ -325,6 +326,7 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
             bail!("worker data pipeline readiness report requires {required_ref} evidence");
         }
     }
+    validate_worker_data_pipeline_readiness_job_evidence(&job_readiness)?;
     evidence_refs.push(format!(
         "worker_data_pipeline_readiness_reports:{published_report_uri}"
     ));
@@ -418,6 +420,117 @@ fn validate_worker_data_pipeline_readiness_counts(
     }
     if review_task_count != review_tasks.len() {
         bail!("review_task_count must match review_tasks length");
+    }
+    Ok(())
+}
+
+fn validate_worker_data_pipeline_readiness_job_evidence(
+    job_readiness: &[serde_json::Value],
+) -> anyhow::Result<()> {
+    for job in job_readiness {
+        let job_kind = json_string(job, "job_kind").context("job_readiness requires job_kind")?;
+        match json_string(job, "readiness_status").as_deref() {
+            Some("ready") => validate_ready_worker_data_pipeline_job(&job_kind, job)?,
+            Some("blocked") => {
+                let has_blockers = job
+                    .get("blockers")
+                    .and_then(|value| value.as_array())
+                    .is_some_and(|blockers| {
+                        !blockers.is_empty()
+                            && blockers.iter().all(|blocker| {
+                                blocker
+                                    .as_str()
+                                    .is_some_and(|value| !value.trim().is_empty())
+                            })
+                    });
+                if !has_blockers {
+                    bail!("blocked job readiness records require non-empty blockers");
+                }
+            }
+            _ => bail!("job_readiness readiness_status must be ready or blocked"),
+        }
+    }
+    Ok(())
+}
+
+fn validate_ready_worker_data_pipeline_job(
+    job_kind: &str,
+    job: &serde_json::Value,
+) -> anyhow::Result<()> {
+    if job
+        .get("blockers")
+        .is_some_and(|value| value.as_array().is_none_or(|blockers| !blockers.is_empty()))
+    {
+        bail!("ready job readiness records must not include blockers");
+    }
+    if job
+        .get("coverage_window_days")
+        .and_then(|value| value.as_u64())
+        .unwrap_or(0)
+        == 0
+    {
+        bail!("ready job readiness records require positive coverage_window_days");
+    }
+    if job
+        .get("source_freshness_status")
+        .and_then(|value| value.as_str())
+        != Some("fresh")
+    {
+        bail!("ready job readiness records require source_freshness_status fresh");
+    }
+    if !json_string(job, "artifact_uri").is_some_and(|value| is_production_artifact_uri(&value)) {
+        bail!(
+            "ready job readiness records require a production artifact_uri, not a local dry-run or placeholder URI"
+        );
+    }
+    let evidence_refs = job
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .context("ready job readiness records require non-empty evidence_refs")?;
+    if evidence_refs.is_empty()
+        || evidence_refs.iter().any(|reference| {
+            reference
+                .as_str()
+                .is_none_or(|value| value.trim().is_empty())
+        })
+    {
+        bail!("ready job readiness records require non-empty evidence_refs");
+    }
+    if evidence_refs.iter().any(|reference| {
+        reference
+            .as_str()
+            .is_some_and(evidence_ref_is_non_production)
+    }) {
+        bail!("ready job evidence_refs must not use local dry-run or placeholder evidence");
+    }
+    let required_evidence_prefixes = job
+        .get("required_evidence_prefixes")
+        .and_then(|value| value.as_array())
+        .context("ready job readiness records require non-empty required_evidence_prefixes")?;
+    if required_evidence_prefixes.is_empty()
+        || required_evidence_prefixes
+            .iter()
+            .any(|prefix| prefix.as_str().is_none_or(|value| value.trim().is_empty()))
+    {
+        bail!("ready job readiness records require non-empty required_evidence_prefixes");
+    }
+    let Some(canonical_prefixes) = canonical_required_evidence_prefixes(job_kind) else {
+        return Ok(());
+    };
+    for prefix in canonical_prefixes {
+        if !required_evidence_prefixes
+            .iter()
+            .any(|value| value.as_str() == Some(prefix))
+        {
+            bail!("{job_kind} required_evidence_prefixes must include {prefix}");
+        }
+        if !evidence_refs.iter().any(|value| {
+            value
+                .as_str()
+                .is_some_and(|reference| reference.starts_with(prefix))
+        }) {
+            bail!("ready job evidence_refs must include required prefix {prefix}");
+        }
     }
     Ok(())
 }

@@ -819,7 +819,9 @@ fn validate_completed_job_evidence_prefixes(
     Ok(())
 }
 
-fn canonical_required_evidence_prefixes(job_kind: &str) -> Option<&'static [&'static str]> {
+pub(crate) fn canonical_required_evidence_prefixes(
+    job_kind: &str,
+) -> Option<&'static [&'static str]> {
     match job_kind {
         "oig_sam_sanctions_snapshot_fetch" => Some(&["oig_sam_snapshot:"]),
         "oig_sam_sanctions_sync" => Some(&["sanctions_sync_reports:"]),
