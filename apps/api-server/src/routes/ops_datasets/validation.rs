@@ -1208,6 +1208,17 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "completed job executions require non-empty reported_artifact_uri",
                 ));
             }
+            if execution
+                .get("reported_artifact_uri")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| value.trim().starts_with("local://template"))
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT",
+                    "completed job executions must not use local://template reported_artifact_uri",
+                ));
+            }
             let has_evidence_refs = execution
                 .get("evidence_refs")
                 .and_then(|value| value.as_array())
@@ -1224,6 +1235,23 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     StatusCode::BAD_REQUEST,
                     "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
                     "completed job executions require non-empty evidence_refs",
+                ));
+            }
+            let has_template_evidence_ref = execution
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .any(|reference| {
+                    reference
+                        .as_str()
+                        .is_some_and(|value| value.trim().contains("local://template"))
+                });
+            if has_template_evidence_ref {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job evidence_refs must not use local://template evidence",
                 ));
             }
             let required_evidence_prefixes = execution

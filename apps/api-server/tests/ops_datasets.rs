@@ -1132,11 +1132,61 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_without_art
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_template_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["reported_artifact_uri"] =
+        serde_json::json!("local://template/worker/provider_profile_window_rollup.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"
+    );
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_rejects_completed_job_without_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
         serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
     payload["job_executions"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_template_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["evidence_refs"] = serde_json::json!([
+        "provider_profile_window_rollups:local://template/worker/provider_profile_window_rollup.json",
+        "provider_profile_claim_snapshot:local://artifacts/worker-data-pipeline/provider_profile_claim_snapshot.json"
+    ]);
 
     let (status, body) = json_request_with_key(
         app,
