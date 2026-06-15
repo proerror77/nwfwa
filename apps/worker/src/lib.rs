@@ -149,7 +149,10 @@ pub use ops_plans::{
 mod worker_data_pipeline_execution;
 pub use worker_data_pipeline_execution::{
     build_worker_data_pipeline_execution_report, build_worker_data_pipeline_execution_submission,
-    submit_worker_data_pipeline_execution_report, WorkerDataPipelineExecutionReportSubmission,
+    build_worker_data_pipeline_execution_submission_with_published_uri,
+    submit_worker_data_pipeline_execution_report,
+    submit_worker_data_pipeline_execution_report_with_published_uri,
+    WorkerDataPipelineExecutionReportSubmission,
 };
 
 mod worker_data_pipeline_run_status;
@@ -159,8 +162,11 @@ mod worker_data_pipeline_readiness;
 pub use worker_data_pipeline_readiness::{
     build_worker_data_pipeline_readiness_input_template,
     build_worker_data_pipeline_readiness_report, build_worker_data_pipeline_readiness_submission,
-    submit_worker_data_pipeline_readiness_report, WorkerDataPipelineReadinessCheck,
-    WorkerDataPipelineReadinessInput, WorkerDataPipelineReadinessReportSubmission,
+    build_worker_data_pipeline_readiness_submission_with_published_uri,
+    submit_worker_data_pipeline_readiness_report,
+    submit_worker_data_pipeline_readiness_report_with_published_uri,
+    WorkerDataPipelineReadinessCheck, WorkerDataPipelineReadinessInput,
+    WorkerDataPipelineReadinessReportSubmission,
 };
 
 mod sanctions;

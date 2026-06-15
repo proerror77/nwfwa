@@ -1250,6 +1250,13 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
             "source_report_uri must point to a JSON worker data pipeline execution report",
         ));
     }
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     for (value, code, message) in [
         (
             request.plan_uri.as_str(),
@@ -1836,6 +1843,13 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             StatusCode::BAD_REQUEST,
             "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_URI",
             "source_report_uri must point to a JSON worker data pipeline readiness report",
+        ));
+    }
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
         ));
     }
     for (value, code, message) in [

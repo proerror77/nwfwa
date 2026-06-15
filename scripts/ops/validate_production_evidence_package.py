@@ -215,6 +215,9 @@ REQUIRED_RUNBOOK_SUBMIT_OUTPUTS = {
     "submit_execution_report": "api:/api/v1/ops/worker-data-pipeline-executions",
 }
 REQUIRED_RUNBOOK_SUBMIT_FLAGS = {
+    "submit_readiness_report": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_report.json",
+    },
     "submit_sanctions_sync_report": {
         "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/sanctions_sync_report.json",
         "--published-source-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/oig_sam_sanctions_snapshot.json",
@@ -250,6 +253,9 @@ REQUIRED_RUNBOOK_SUBMIT_FLAGS = {
         "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json",
         "--published-input-uri": "<customer-labeled-holdout-predictions-uri>",
         "--published-label-uri": "<customer-approved-calibration-labels-uri>",
+    },
+    "submit_execution_report": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/execution/<customer-scheduler-run-id>/worker_data_pipeline_execution_report.json",
     },
 }
 REQUIRED_RUNBOOK_COMMAND_PATHS = {

@@ -657,6 +657,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-worker-data-pipeline-readiness-report "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_report.json "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/worker-data-pipeline-readiness",
@@ -797,6 +798,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-worker-data-pipeline-execution-report "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report artifacts/production-evidence-package/evidence/worker_data_pipeline_execution_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/execution/<customer-scheduler-run-id>/worker_data_pipeline_execution_report.json "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/worker-data-pipeline-executions",

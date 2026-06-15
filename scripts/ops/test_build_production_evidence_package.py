@@ -90,6 +90,14 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn("submit-probability-calibration-report", command_text)
             self.assertIn("submit-worker-data-pipeline-execution-report", command_text)
             self.assertIn(
+                "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_report.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/execution/<customer-scheduler-run-id>/worker_data_pipeline_execution_report.json",
+                command_text,
+            )
+            self.assertIn(
                 "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json",
                 command_text,
             )

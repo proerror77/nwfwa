@@ -191,9 +191,25 @@ pub fn build_worker_data_pipeline_execution_submission(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<WorkerDataPipelineExecutionReportSubmission> {
+    build_worker_data_pipeline_execution_submission_with_published_uri(
+        report_uri, actor, notes, report_uri,
+    )
+}
+
+pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+    published_report_uri: &str,
+) -> anyhow::Result<WorkerDataPipelineExecutionReportSubmission> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
     let actor = required_non_empty("actor", actor)?;
     let notes = required_non_empty("notes", notes)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    ensure_published_report_uri(
+        "worker data pipeline execution published_report_uri",
+        published_report_uri,
+    )?;
     let report = read_json_report(report_uri)?;
     if json_string(&report, "report_kind").as_deref()
         != Some("worker_data_pipeline_execution_report")
@@ -247,12 +263,12 @@ pub fn build_worker_data_pipeline_execution_submission(
         }
     }
     evidence_refs.push(format!(
-        "worker_data_pipeline_execution_reports:{report_uri}"
+        "worker_data_pipeline_execution_reports:{published_report_uri}"
     ));
     Ok(WorkerDataPipelineExecutionReportSubmission {
         actor: actor.into(),
         notes: notes.into(),
-        source_report_uri: report_uri.into(),
+        source_report_uri: published_report_uri.into(),
         report_kind: "worker_data_pipeline_execution_report".into(),
         plan_uri,
         run_status_uri,
@@ -293,7 +309,31 @@ pub async fn submit_worker_data_pipeline_execution_report(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    let payload = build_worker_data_pipeline_execution_submission(report_uri, actor, notes)?;
+    submit_worker_data_pipeline_execution_report_with_published_uri(
+        api_base_url,
+        api_key,
+        report_uri,
+        actor,
+        notes,
+        report_uri,
+    )
+    .await
+}
+
+pub async fn submit_worker_data_pipeline_execution_report_with_published_uri(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+    published_report_uri: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_worker_data_pipeline_execution_submission_with_published_uri(
+        report_uri,
+        actor,
+        notes,
+        published_report_uri,
+    )?;
     let client = reqwest::Client::new();
     let response = client
         .post(api_url(
@@ -468,6 +508,19 @@ fn evidence_ref_is_non_production(value: &str) -> bool {
 
 fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()> {
     if !is_production_lineage_uri(value) {
+        bail!("{field} must use production evidence, not local dry-run or placeholder URI");
+    }
+    Ok(())
+}
+
+fn ensure_published_report_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.starts_with("local://")
+        || !value.contains("://")
+        || value.contains('{')
+        || value.contains('}')
+    {
         bail!("{field} must use production evidence, not local dry-run or placeholder URI");
     }
     Ok(())

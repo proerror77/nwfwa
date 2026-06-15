@@ -712,10 +712,13 @@ fn builds_worker_data_pipeline_execution_submission() {
     )
     .expect("write report");
 
-    let submission = build_worker_data_pipeline_execution_submission(
+    let published_report_uri =
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json";
+    let submission = build_worker_data_pipeline_execution_submission_with_published_uri(
         &report_uri.to_string_lossy(),
         "worker:worker-data-pipeline-scheduler",
         "daily execution evidence",
+        published_report_uri,
     )
     .expect("worker data pipeline submission");
 
@@ -729,12 +732,58 @@ fn builds_worker_data_pipeline_execution_submission() {
     assert_eq!(submission.job_count, 1);
     assert_eq!(submission.review_task_count, 0);
     assert!(submission.evidence_refs.iter().any(|reference| {
-        reference
-            == &format!(
-                "worker_data_pipeline_execution_reports:{}",
-                report_uri.to_string_lossy()
-            )
+        reference == &format!("worker_data_pipeline_execution_reports:{published_report_uri}")
     }));
+}
+
+#[test]
+fn rejects_worker_data_pipeline_execution_submission_without_published_report_uri() {
+    let root = temp_root("worker-data-pipeline-execution-submission-unpublished-report");
+    let report_uri = root.join("worker_data_pipeline_execution_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_execution_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_count": 1,
+            "pending_or_failed_job_count": 0,
+            "job_executions": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "execution_status": "completed",
+                    "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+                    "required_evidence_prefixes": ["sanctions_sync_reports:"],
+                    "evidence_refs": [
+                        "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+                    ],
+                    "submitted": true
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_execution_submission(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-scheduler",
+        "daily execution evidence",
+    )
+    .expect_err("local report path must not be used as published execution URI");
+
+    assert!(error.to_string().contains(
+        "worker data pipeline execution published_report_uri must use production evidence"
+    ));
 }
 
 #[test]
@@ -778,10 +827,11 @@ fn rejects_worker_data_pipeline_execution_submission_without_source_evidence() {
     )
     .expect("write report");
 
-    let error = build_worker_data_pipeline_execution_submission(
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
         &report_uri.to_string_lossy(),
         "worker:worker-data-pipeline-scheduler",
         "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
     )
     .expect_err("execution submission without readiness evidence must fail");
 
@@ -829,10 +879,11 @@ fn rejects_worker_data_pipeline_execution_submission_with_local_lineage_uri() {
     )
     .expect("write report");
 
-    let error = build_worker_data_pipeline_execution_submission(
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
         &report_uri.to_string_lossy(),
         "worker:worker-data-pipeline-scheduler",
         "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
     )
     .expect_err("execution submission with local lineage must fail");
 
@@ -881,10 +932,11 @@ fn rejects_worker_data_pipeline_execution_submission_with_local_top_level_eviden
     )
     .expect("write report");
 
-    let error = build_worker_data_pipeline_execution_submission(
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
         &report_uri.to_string_lossy(),
         "worker:worker-data-pipeline-scheduler",
         "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
     )
     .expect_err("execution submission with local top-level evidence must fail");
 
@@ -931,10 +983,11 @@ fn rejects_worker_data_pipeline_execution_submission_without_canonical_job_linea
     )
     .expect("write report");
 
-    let error = build_worker_data_pipeline_execution_submission(
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
         &report_uri.to_string_lossy(),
         "worker:worker-data-pipeline-scheduler",
         "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
     )
     .expect_err("execution submission without canonical job lineage must fail");
 
@@ -985,10 +1038,11 @@ fn rejects_worker_data_pipeline_execution_submission_with_template_job_evidence(
     )
     .expect("write report");
 
-    let error = build_worker_data_pipeline_execution_submission(
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
         &report_uri.to_string_lossy(),
         "worker:worker-data-pipeline-scheduler",
         "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
     )
     .expect_err("execution submission with template evidence must fail");
 
@@ -1059,12 +1113,13 @@ async fn submits_worker_data_pipeline_execution_report_to_api() {
         .await;
     });
 
-    let response = submit_worker_data_pipeline_execution_report(
+    let response = submit_worker_data_pipeline_execution_report_with_published_uri(
         &format!("http://{addr}"),
         "test-api-key",
         &report_uri.to_string_lossy(),
         "worker:worker-data-pipeline-scheduler",
         "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
     )
     .await
     .expect("submit worker data pipeline execution report");
