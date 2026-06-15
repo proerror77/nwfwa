@@ -2,7 +2,9 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_production_evidence_refs, read_json_report, required_non_empty, write_json,
+};
 
 pub(crate) const REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES: &[&str] = &[
     "scoring_feature_contexts:",
@@ -134,6 +136,11 @@ pub fn build_scoring_readback_report(
     {
         blockers.push("input_template_evidence_refs_not_replaced".to_string());
     }
+    if ensure_production_evidence_refs("scoring readback input evidence_refs", &input.evidence_refs)
+        .is_err()
+    {
+        blockers.push("input_non_production_evidence_refs".to_string());
+    }
     let score_response_uri_is_template = score_response_uri
         .as_deref()
         .is_some_and(|value| value.trim().starts_with("local://template"));
@@ -174,6 +181,14 @@ pub fn build_scoring_readback_report(
         .any(|reference| reference.trim().contains("local://template"))
     {
         blockers.push("score_response_template_evidence_refs_not_replaced".to_string());
+    }
+    if ensure_production_evidence_refs(
+        "scoring readback score response evidence_refs",
+        &observed_evidence_refs,
+    )
+    .is_err()
+    {
+        blockers.push("score_response_non_production_evidence_refs".to_string());
     }
     blockers.sort();
     blockers.dedup();

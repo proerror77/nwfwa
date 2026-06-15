@@ -182,6 +182,50 @@ fn blocks_scoring_readback_when_template_refs_are_not_replaced() {
 }
 
 #[test]
+fn blocks_scoring_readback_when_score_response_refs_are_local_dry_run() {
+    let root = temp_root("scoring-readback-local-refs");
+    let input_uri = root.join("scoring_readback_input.json");
+    let response_uri = root.join("score_response.json");
+    write_json(
+        input_uri.clone(),
+        &serde_json::json!({
+            "customer_scope_id": "customer-alpha",
+            "as_of_date": "2026-06-15",
+            "score_request_uri": "s3://customer-alpha/scoring-readback/2026-06-15/request.json",
+            "score_response_uri": response_uri.to_string_lossy(),
+            "expected_evidence_prefixes": full_expected_prefixes(),
+            "evidence_refs": ["worker_data_pipeline_executions:s3://customer-alpha/worker/execution.json"]
+        }),
+    )
+    .unwrap();
+    write_json(
+        response_uri.clone(),
+        &serde_json::json!({
+            "claim_id": "CLM-1",
+            "evidence_refs": full_expected_prefixes()
+                .into_iter()
+                .map(|prefix| format!("{prefix}local://artifacts/worker/scoring-readback.json"))
+                .collect::<Vec<_>>()
+        }),
+    )
+    .unwrap();
+
+    let report =
+        build_scoring_readback_report(&input_uri.to_string_lossy(), None, root.join("out"))
+            .expect("blocked scoring readback report");
+
+    assert_eq!(report.readback_status, "blocked");
+    assert_eq!(
+        report.matched_evidence_prefix_count,
+        REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES.len()
+    );
+    assert!(report
+        .blockers
+        .contains(&"score_response_non_production_evidence_refs".into()));
+    assert_eq!(report.review_task_count, 1);
+}
+
+#[test]
 fn blocks_scoring_readback_without_score_response_artifact() {
     let root = temp_root("scoring-readback-missing-response");
     let input_uri = root.join("scoring_readback_input.json");
