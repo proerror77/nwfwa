@@ -65,6 +65,11 @@ pub fn build_worker_data_pipeline_readiness_input_template(
                 "job_kind": job_kind,
                 "cadence": json_string(job, "cadence"),
                 "build_command": json_string(job, "build_command"),
+                "submit_command": json_string(job, "submit_command"),
+                "required_submit_flags": job
+                    .get("required_submit_flags")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "score_response_capture_command": json_string(job, "score_response_capture_command"),
                 "source_input": json_string(job, "source_input"),
                 "api_path": json_string(job, "api_path"),
@@ -144,6 +149,11 @@ pub fn build_worker_data_pipeline_readiness_report(
                 "source_input": json_string(job, "source_input"),
                 "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),
+                "submit_command": json_string(job, "submit_command"),
+                "required_submit_flags": job
+                    .get("required_submit_flags")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "required_evidence_prefixes": required_evidence_prefixes,
                 "artifact_uri": check.and_then(|check| check.artifact_uri.clone()),
                 "customer_approved": check.map(|check| check.customer_approved).unwrap_or(false),
@@ -177,6 +187,8 @@ pub fn build_worker_data_pipeline_readiness_report(
                 "job_kind": job["job_kind"].clone(),
                 "api_path": job["api_path"].clone(),
                 "required_permission": job["required_permission"].clone(),
+                "submit_command": job["submit_command"].clone(),
+                "required_submit_flags": job["required_submit_flags"].clone(),
                 "blockers": job["blockers"].clone(),
                 "review_queue": "worker_data_pipeline_ops",
                 "required_review": "resolve customer data, approval, quality, or external-fetch readiness before scheduled writes"

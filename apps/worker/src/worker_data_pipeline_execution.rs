@@ -19,6 +19,23 @@ pub fn validate_worker_data_pipeline_plan(
         .and_then(|value| value.as_array())
         .context("worker data pipeline plan requires jobs")?
         .as_slice();
+    for job in jobs {
+        if let Some(submit_command) = json_string(job, "submit_command") {
+            let flags = job
+                .get("required_submit_flags")
+                .and_then(|value| value.as_array())
+                .with_context(|| {
+                    format!("{submit_command} requires non-empty required_submit_flags")
+                })?;
+            if flags.is_empty()
+                || flags
+                    .iter()
+                    .any(|flag| flag.as_str().map(str::is_empty).unwrap_or(true))
+            {
+                bail!("{submit_command} requires non-empty required_submit_flags");
+            }
+        }
+    }
     Ok((customer_scope_id, jobs))
 }
 
@@ -82,6 +99,10 @@ pub fn build_worker_data_pipeline_execution_report(
                 "cadence": json_string(job, "cadence"),
                 "build_command": json_string(job, "build_command"),
                 "submit_command": json_string(job, "submit_command"),
+                "required_submit_flags": job
+                    .get("required_submit_flags")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "api_path": json_string(job, "api_path"),
                 "required_permission": json_string(job, "required_permission"),
                 "planned_report_uri": json_string(job, "report_uri"),
@@ -129,6 +150,7 @@ pub fn build_worker_data_pipeline_execution_report(
                 "execution_status": execution["execution_status"].clone(),
                 "api_path": execution["api_path"].clone(),
                 "required_permission": execution["required_permission"].clone(),
+                "required_submit_flags": execution["required_submit_flags"].clone(),
                 "review_queue": "worker_data_pipeline_ops",
                 "required_review": "review missing, failed, or unsubmitted worker data pipeline artifact before downstream scoring use"
             })

@@ -96,10 +96,18 @@ fn builds_worker_data_pipeline_execution_report() {
     assert_eq!(executions[0]["execution_status"], "completed");
     assert_eq!(executions[0]["submit_command"], serde_json::Value::Null);
     assert_eq!(
+        executions[0]["required_submit_flags"],
+        serde_json::json!([])
+    );
+    assert_eq!(
         executions[0]["required_permission"],
         serde_json::Value::Null
     );
     assert_eq!(executions[1]["execution_status"], "completed");
+    assert_eq!(
+        executions[1]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri", "--published-source-uri"])
+    );
     assert_eq!(executions[1]["required_permission"], "ops:providers:write");
     assert_eq!(
         executions[1]["reported_artifact_uri"],
@@ -131,6 +139,8 @@ fn builds_worker_data_pipeline_execution_report() {
         .iter()
         .any(|task| task["job_kind"] == "provider_profile_window_rollup"
             && task["api_path"] == "/api/v1/ops/providers/profile-window-rollups"
+            && task["required_submit_flags"]
+                == serde_json::json!(["--published-report-uri", "--published-source-uri"])
             && task["required_permission"] == "ops:providers:write"));
     assert!(report["review_tasks"]
         .as_array()
@@ -147,6 +157,48 @@ fn builds_worker_data_pipeline_execution_report() {
     assert!(output_dir
         .join("worker_data_pipeline_execution_review_tasks.json")
         .exists());
+}
+
+#[test]
+fn rejects_submit_job_without_required_submit_flags() {
+    let root = temp_root("worker-data-pipeline-execution-missing-submit-flags");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let run_status_uri = root.join("worker_data_pipeline_run_status.json");
+    let output_dir = root.join("output");
+    let mut plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    plan["jobs"][1]
+        .as_object_mut()
+        .expect("job object")
+        .remove("required_submit_flags");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    write_json(
+        run_status_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_statuses": []
+        }),
+    )
+    .expect("write run status");
+
+    let error = build_worker_data_pipeline_execution_report(
+        &plan_uri.to_string_lossy(),
+        &run_status_uri.to_string_lossy(),
+        &output_dir,
+    )
+    .expect_err("missing required submit flags should fail");
+
+    assert!(error
+        .to_string()
+        .contains("submit-sanctions-sync-report requires non-empty required_submit_flags"));
 }
 
 #[test]

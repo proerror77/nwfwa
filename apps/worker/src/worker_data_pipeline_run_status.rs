@@ -41,6 +41,10 @@ pub fn build_worker_data_pipeline_run_status_template(
                 "artifact_kind": json_string(job, "artifact_kind"),
                 "planned_report_uri": json_string(job, "report_uri"),
                 "submit_command": json_string(job, "submit_command"),
+                "required_submit_flags": job
+                    .get("required_submit_flags")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "api_path": json_string(job, "api_path"),
                 "required_evidence_prefixes": job
                     .get("required_evidence_prefixes")

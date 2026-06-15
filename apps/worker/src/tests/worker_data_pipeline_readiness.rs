@@ -41,6 +41,7 @@ fn builds_worker_data_pipeline_readiness_input_template() {
     assert_eq!(checks[0]["external_fetch_configured"], false);
     assert_eq!(checks[0]["api_path"], serde_json::Value::Null);
     assert_eq!(checks[0]["required_permission"], serde_json::Value::Null);
+    assert_eq!(checks[0]["required_submit_flags"], serde_json::json!([]));
     assert_eq!(checks[0]["minimum_row_count"], 1);
     assert_eq!(checks[0]["coverage_window_days"], serde_json::Value::Null);
     assert_eq!(
@@ -54,6 +55,11 @@ fn builds_worker_data_pipeline_readiness_input_template() {
     assert_eq!(
         checks[1]["api_path"],
         "/api/v1/ops/providers/sanctions-sync-reports"
+    );
+    assert_eq!(checks[1]["submit_command"], "submit-sanctions-sync-report");
+    assert_eq!(
+        checks[1]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri", "--published-source-uri"])
     );
     assert_eq!(checks[1]["required_permission"], "ops:providers:write");
     assert_eq!(
@@ -81,6 +87,10 @@ fn builds_worker_data_pipeline_readiness_input_template() {
             "clinical_compatibility:",
             "unbundling_candidates:"
         ])
+    );
+    assert_eq!(
+        checks[8]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri"])
     );
     assert_eq!(checks[9]["job_kind"], "scoring_online_readback");
     assert_eq!(
@@ -240,6 +250,10 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         "/api/v1/ops/providers/profile-window-rollups"
     );
     assert_eq!(jobs[2]["required_permission"], "ops:providers:write");
+    assert_eq!(
+        jobs[2]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri", "--published-source-uri"])
+    );
     assert!(jobs[2]["blockers"]
         .as_array()
         .unwrap()
@@ -256,6 +270,13 @@ fn blocks_worker_data_pipeline_when_customer_inputs_are_not_ready() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("source_freshness_not_confirmed")));
+    assert!(report["review_tasks"]
+        .as_array()
+        .expect("review tasks")
+        .iter()
+        .any(|task| task["job_kind"] == "provider_profile_window_rollup"
+            && task["required_submit_flags"]
+                == serde_json::json!(["--published-report-uri", "--published-source-uri"])));
     assert!(jobs[4]["blockers"]
         .as_array()
         .unwrap()

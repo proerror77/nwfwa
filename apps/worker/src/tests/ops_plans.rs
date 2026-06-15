@@ -160,11 +160,20 @@ fn builds_scheduled_worker_data_pipeline_plan() {
     assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
     assert_eq!(jobs[0]["build_command"], "fetch-oig-sam-sanctions-snapshot");
     assert_eq!(jobs[0]["artifact_kind"], "source_snapshot");
+    assert_eq!(jobs[0]["required_submit_flags"], serde_json::Value::Null);
     assert_eq!(jobs[1]["job_kind"], "oig_sam_sanctions_sync");
     assert_eq!(jobs[1]["submit_command"], "submit-sanctions-sync-report");
+    assert_eq!(
+        jobs[1]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri", "--published-source-uri"])
+    );
     assert_eq!(jobs[1]["required_permission"], "ops:providers:write");
     assert_eq!(jobs[1]["depends_on"][0], "oig_sam_sanctions_snapshot_fetch");
     assert_eq!(jobs[2]["job_kind"], "provider_profile_window_rollup");
+    assert_eq!(
+        jobs[2]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri", "--published-source-uri"])
+    );
     assert_eq!(
         jobs[2]["required_evidence_prefixes"],
         serde_json::json!([
@@ -215,6 +224,10 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         jobs[8]["job_kind"],
         "scoring_feature_context_materialization"
     );
+    assert_eq!(
+        jobs[8]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri"])
+    );
     assert!(jobs[8]["depends_on"]
         .as_array()
         .unwrap()
@@ -232,6 +245,7 @@ fn builds_scheduled_worker_data_pipeline_plan() {
     );
     assert_eq!(jobs[9]["job_kind"], "scoring_online_readback");
     assert_eq!(jobs[9]["build_command"], "build-scoring-readback-report");
+    assert_eq!(jobs[9]["required_submit_flags"], serde_json::Value::Null);
     assert_eq!(
         jobs[9]["score_response_capture_command"],
         "fetch-scoring-readback-response"
@@ -259,6 +273,14 @@ fn builds_scheduled_worker_data_pipeline_plan() {
         ])
     );
     assert_eq!(jobs[10]["job_kind"], "probability_calibration_evidence");
+    assert_eq!(
+        jobs[10]["required_submit_flags"],
+        serde_json::json!([
+            "--published-report-uri",
+            "--published-input-uri",
+            "--published-label-uri"
+        ])
+    );
     assert_eq!(jobs[10]["required_permission"], "ops:models:review");
     assert_eq!(
         jobs[10]["api_path"],

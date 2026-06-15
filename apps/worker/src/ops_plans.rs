@@ -332,6 +332,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "daily",
                 "build_command": "sync-oig-sam-sanctions",
                 "submit_command": "submit-sanctions-sync-report",
+                "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                 "source_input": "governed_oig_sam_sanctions_snapshot",
                 "depends_on": ["oig_sam_sanctions_snapshot_fetch"],
                 "required_permission": "ops:providers:write",
@@ -344,6 +345,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "daily",
                 "build_command": "build-provider-profile-windows",
                 "submit_command": "submit-provider-profile-window-rollup",
+                "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                 "source_input": "customer_claim_history_30_90_365d",
                 "required_permission": "ops:providers:write",
                 "required_evidence_prefixes": [
@@ -358,6 +360,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "daily",
                 "build_command": "build-provider-graph-signals",
                 "submit_command": "submit-provider-graph-signal-rollup",
+                "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                 "source_input": "customer_claim_and_referral_history_with_service_dates",
                 "required_permission": "ops:providers:write",
                 "required_evidence_prefixes": [
@@ -372,6 +375,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "monthly",
                 "build_command": "build-peer-benchmarks",
                 "submit_command": "submit-peer-benchmark",
+                "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                 "source_input": "customer_claim_history_grouped_by_specialty_region_service_segment",
                 "required_permission": "ops:providers:write",
                 "required_evidence_prefixes": [
@@ -386,6 +390,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "daily",
                 "build_command": "build-episode-aggregation",
                 "submit_command": "submit-episode-aggregation",
+                "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                 "source_input": "customer_member_provider_claim_history",
                 "required_permission": "ops:providers:write",
                 "required_evidence_prefixes": [
@@ -400,6 +405,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "on_reference_update",
                 "build_command": "build-clinical-compatibility-reference",
                 "submit_command": "submit-clinical-compatibility-reference",
+                "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                 "source_input": "customer_approved_icd_cpt_or_medical_policy_reference",
                 "required_permission": "ops:datasets:write",
                 "required_evidence_prefixes": [
@@ -415,6 +421,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "daily",
                 "build_command": "build-unbundling-comparator",
                 "submit_command": "submit-unbundling-comparator",
+                "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                 "source_input": "customer_approved_unbundling_rule_pack_plus_episode_procedure_codes",
                 "depends_on": ["episode_aggregation"],
                 "required_permission": "ops:datasets:write",
@@ -430,6 +437,7 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "daily",
                 "build_command": "build-scoring-feature-contexts",
                 "submit_command": "submit-scoring-feature-contexts",
+                "required_submit_flags": ["--published-report-uri"],
                 "source_input": "persisted_or_approved_episode_peer_clinical_and_unbundling_artifacts",
                 "depends_on": [
                     "episode_aggregation",
@@ -478,6 +486,11 @@ pub fn build_worker_data_pipeline_plan(
                 "cadence": "monthly",
                 "build_command": "build-probability-calibration-report",
                 "submit_command": "submit-probability-calibration-report",
+                "required_submit_flags": [
+                    "--published-report-uri",
+                    "--published-input-uri",
+                    "--published-label-uri"
+                ],
                 "source_input": "customer_labeled_holdout_predictions",
                 "required_permission": "ops:models:review",
                 "required_evidence_prefixes": [
