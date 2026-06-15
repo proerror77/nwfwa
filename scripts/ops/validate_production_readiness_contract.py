@@ -432,7 +432,13 @@ def is_production_artifact_uri(value: object) -> bool:
     if not isinstance(value, str):
         return False
     uri = value.strip()
-    return bool(uri) and not uri.startswith("local://") and "{" not in uri and "}" not in uri
+    return (
+        bool(uri)
+        and not uri.startswith("local://")
+        and not uri.startswith("file://")
+        and "{" not in uri
+        and "}" not in uri
+    )
 
 
 def evidence_refs_include_prefix(job: dict, prefix: str) -> bool:
@@ -930,10 +936,16 @@ def validate_ocr_vector_analytics_execution_evidence(report: dict) -> None:
 def require_no_template_evidence_refs(evidence_refs: list, owner: str) -> None:
     require(
         not any(
-            isinstance(reference, str) and "local://template" in reference
+            isinstance(reference, str)
+            and (
+                "local://" in reference
+                or "file://" in reference
+                or "{" in reference
+                or "}" in reference
+            )
             for reference in evidence_refs
         ),
-        f"{owner} evidence_refs must not use local://template evidence",
+        f"{owner} evidence_refs must not use local://template, local dry-run, file://, or placeholder evidence",
     )
 
 
