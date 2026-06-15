@@ -46,7 +46,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_retraining_job/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.31}}
             }}"#
         ),
@@ -315,7 +315,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
           "model_serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
           "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
-          "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+          "model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
           "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
           "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
           "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
@@ -332,7 +332,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "accuracy": "0.79",
           "threshold": "0.52",
           "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
-          "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+          "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
           "permutation_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
           "metrics_json": {{
             "out_of_time_auc": 0.82,

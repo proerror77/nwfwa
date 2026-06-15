@@ -22,7 +22,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
           "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
           "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
           "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
-          "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+          "model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
           "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
           "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
           "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
@@ -39,7 +39,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "accuracy": "0.79",
         "threshold": "0.52",
         "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
-        "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
         "permutation_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "metrics_json": {
           "out_of_time_auc": 0.82,
@@ -213,6 +213,21 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
 
+    let mut local_feature_importance = valid_request.clone();
+    local_feature_importance["feature_importance_uri"] = serde_json::json!(
+        "local://template/fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet"
+    );
+    let payload = local_feature_importance.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
+
     let mut invalid_training_artifact = valid_request.clone();
     invalid_training_artifact["training_artifact_uri"] =
         serde_json::json!("s3://fwa-models/baseline_fwa/0.2.0-candidate/model.csv");
@@ -286,7 +301,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "model_artifact_evaluations:/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/model_artifact_evaluation_report.json",
-        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
         "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
         "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
@@ -318,7 +333,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
-        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
         "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "automl_factor_rankings:/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
         "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
@@ -350,7 +365,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
-        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
         "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
         "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
@@ -449,7 +464,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
-        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
         "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
         "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
@@ -506,7 +521,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         .unwrap()
         .retain(|reference| {
             reference.as_str()
-                != Some("model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet")
+                != Some("model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet")
         });
     let payload = missing_feature_importance_evidence.to_string();
     let (status, body) = json_request(
@@ -723,7 +738,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
-        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_feature_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
         "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "automl_factor_rankings:s3://fwa-models/baseline_fwa/0.2.0-candidate/automl_factor_ranking_report.json",
         "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",

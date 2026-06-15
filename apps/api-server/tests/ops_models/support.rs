@@ -229,7 +229,7 @@ pub(crate) async fn register_activation_candidate(app: axum::Router) -> String {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_activation/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.31}}
             }}"#
         ),
@@ -313,7 +313,7 @@ pub(crate) async fn register_activation_candidate(app: axum::Router) -> String {
                 "model_artifacts:s3://fwa-models/baseline_fwa/{candidate_version}/model.onnx",
                 "model_validation_reports:s3://fwa-models/baseline_fwa/{candidate_version}/validation.json",
                 "model_artifact_evaluations:s3://fwa-models/baseline_fwa/{candidate_version}/artifact-evaluation/model_artifact_evaluation_report.json",
-                "model_feature_importance:data/eval/claims_model_eval_activation_candidate/v1/feature_importance.parquet",
+                "model_feature_importance:s3://fwa-models/baseline_fwa/{candidate_version}/feature_importance.parquet",
                 "model_permutation_importance:s3://fwa-models/baseline_fwa/{candidate_version}/permutation_importance.parquet",
                 "automl_factor_rankings:s3://fwa-models/baseline_fwa/{candidate_version}/automl_factor_ranking_report.json",
                 "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/{candidate_version}/overfitting_diagnostics_report.json",
@@ -329,7 +329,7 @@ pub(crate) async fn register_activation_candidate(app: axum::Router) -> String {
               "accuracy": "0.79",
               "threshold": "0.52",
               "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
-              "feature_importance_uri": "data/eval/claims_model_eval_activation_candidate/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/feature_importance.parquet",
               "permutation_importance_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/permutation_importance.parquet",
               "metrics_json": {{
                 "score_psi": 0.04,

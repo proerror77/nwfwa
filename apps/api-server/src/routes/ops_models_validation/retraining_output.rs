@@ -164,6 +164,10 @@ pub(in crate::routes) fn validate_retraining_output_request(
             feature_importance_uri,
             "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
         )?;
+        validate_production_artifact_uri(
+            feature_importance_uri,
+            "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
+        )?;
     }
     if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
         if permutation_importance_uri.trim().is_empty() {

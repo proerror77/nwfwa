@@ -286,7 +286,7 @@ pub(super) fn retraining_schemas() -> Value {
                 "feature_importance_uri": {
                     "type": ["string", "null"],
                     "minLength": 1,
-                    "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
+                    "description": "Production feature importance artifact URI. Must be a Parquet file or Parquet partition directory."
                 },
                 "permutation_importance_uri": {
                     "type": ["string", "null"],
