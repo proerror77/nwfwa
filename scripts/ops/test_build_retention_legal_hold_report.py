@@ -46,6 +46,20 @@ class RetentionLegalHoldReportTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "six retention years"):
             validate_retention_legal_hold_evidence(report)
 
+    def test_template_evidence_refs_do_not_configure_retention(self) -> None:
+        source = _configured_source()
+        source["evidence_refs"] = [
+            "retention_policy:local://template/sources/retention-legal-hold-source.json",
+            "legal_hold_policy:s3://customer-prod/retention/legal-hold.json",
+        ]
+
+        report = build_retention_legal_hold_report(source)
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("template_evidence_refs_not_replaced", report["blockers"])
+        with self.assertRaisesRegex(AssertionError, "local://template"):
+            validate_retention_legal_hold_evidence(report)
+
     def test_cli_builder_writes_standard_artifact_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

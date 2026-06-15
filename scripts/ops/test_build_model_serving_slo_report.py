@@ -48,6 +48,23 @@ class ModelServingSloReportTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "p95 latency"):
             validate_model_serving_slo_evidence(report)
 
+    def test_template_evidence_refs_do_not_pass_model_serving_slo(self) -> None:
+        source = _passing_source()
+        source["evidence_refs"] = [
+            "model_serving:local://template/sources/model-serving-slo-source.json",
+            "model_artifact:s3://customer-prod/models/baseline.onnx",
+            "probability_calibration_reports:s3://customer-prod/calibration/report.json",
+            "probability_calibration_input:s3://customer-prod/calibration/input.json",
+            "calibration_labels:s3://customer-prod/calibration/labels.json",
+        ]
+
+        report = build_model_serving_slo_report(source)
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("template_evidence_refs_not_replaced", report["blockers"])
+        with self.assertRaisesRegex(AssertionError, "local://template"):
+            validate_model_serving_slo_evidence(report)
+
     def test_cli_builder_writes_standard_artifact_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

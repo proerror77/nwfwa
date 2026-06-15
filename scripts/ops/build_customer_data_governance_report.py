@@ -50,6 +50,8 @@ def build_customer_data_governance_report(source: dict) -> dict:
     for prefix in REQUIRED_EVIDENCE_PREFIXES:
         if not any(isinstance(ref, str) and ref.startswith(prefix) for ref in evidence_refs):
             blockers.append(f"missing_{prefix.rstrip(':')}_evidence_ref")
+    if any(isinstance(ref, str) and "local://template" in ref for ref in evidence_refs):
+        blockers.append("template_evidence_refs_not_replaced")
 
     return {
         "artifact_kind": "customer_data_governance_report",

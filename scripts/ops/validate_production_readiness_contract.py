@@ -693,6 +693,7 @@ def validate_retention_legal_hold_evidence(report: dict) -> None:
         isinstance(evidence_refs, list) and evidence_refs,
         "retention legal-hold evidence must include evidence_refs",
     )
+    require_no_template_evidence_refs(evidence_refs, "retention legal-hold evidence")
     for prefix in ("retention_policy:", "legal_hold_policy:"):
         require(
             any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
@@ -759,6 +760,7 @@ def validate_model_serving_slo_evidence(report: dict) -> None:
         isinstance(evidence_refs, list) and evidence_refs,
         "model serving SLO evidence must include evidence_refs",
     )
+    require_no_template_evidence_refs(evidence_refs, "model serving SLO evidence")
     for prefix in MODEL_SERVING_SLO_EVIDENCE_PREFIXES:
         require(
             any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
@@ -796,6 +798,7 @@ def validate_customer_data_governance_evidence(report: dict) -> None:
         isinstance(evidence_refs, list) and evidence_refs,
         "customer data governance evidence must include evidence_refs",
     )
+    require_no_template_evidence_refs(evidence_refs, "customer data governance evidence")
     for prefix in (
         "dataset_provenance:",
         "label_provenance:",
@@ -844,6 +847,7 @@ def validate_ocr_vector_analytics_execution_evidence(report: dict) -> None:
         isinstance(evidence_refs, list) and evidence_refs,
         "OCR/vector/analytics evidence must include evidence_refs",
     )
+    require_no_template_evidence_refs(evidence_refs, "OCR/vector/analytics evidence")
     for prefix in (
         "ai_evidence_execution:",
         "ocr_outputs:",
@@ -856,6 +860,16 @@ def validate_ocr_vector_analytics_execution_evidence(report: dict) -> None:
             any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
             f"OCR/vector/analytics evidence_refs missing {prefix}",
         )
+
+
+def require_no_template_evidence_refs(evidence_refs: list, owner: str) -> None:
+    require(
+        not any(
+            isinstance(reference, str) and "local://template" in reference
+            for reference in evidence_refs
+        ),
+        f"{owner} evidence_refs must not use local://template evidence",
+    )
 
 
 def main() -> int:

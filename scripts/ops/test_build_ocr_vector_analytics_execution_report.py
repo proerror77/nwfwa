@@ -46,6 +46,24 @@ class OcrVectorAnalyticsExecutionReportTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "retrieval_ranking_status completed"):
             validate_ocr_vector_analytics_execution_evidence(report)
 
+    def test_template_evidence_refs_do_not_complete_execution(self) -> None:
+        source = _completed_source()
+        source["evidence_refs"] = [
+            "ai_evidence_execution:local://template/sources/ocr-vector-analytics-source.json",
+            "ocr_outputs:s3://customer-prod/ocr/output.json",
+            "embedding_jobs:s3://customer-prod/vector/jobs.json",
+            "retrieval_audits:s3://customer-prod/retrieval/audit.json",
+            "analytics_exports:s3://customer-prod/clickhouse/export.json",
+            "clickhouse_dashboard:s3://customer-prod/clickhouse/dashboard.json",
+        ]
+
+        report = build_ocr_vector_analytics_execution_report(source)
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("template_evidence_refs_not_replaced", report["blockers"])
+        with self.assertRaisesRegex(AssertionError, "local://template"):
+            validate_ocr_vector_analytics_execution_evidence(report)
+
     def test_cli_builder_writes_standard_artifact_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
