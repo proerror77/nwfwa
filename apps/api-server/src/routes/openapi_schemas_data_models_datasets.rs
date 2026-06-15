@@ -509,6 +509,11 @@ pub(super) fn dataset_schemas() -> Value {
                                 "items": { "type": "string", "minLength": 1 },
                                 "description": "Required and non-empty when execution_status is completed. Worker-plan prefixes that scheduler-provided evidence_refs must satisfy for this job, including submit/write and source-lineage prefixes for provider, dataset, and scoring-context artifacts when applicable."
                             },
+                            "required_submit_flags": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Published URI flags required by governed submit jobs before API artifact submission, for example --published-report-uri and source/input/label lineage flags."
+                            },
                             "required_permission": {
                                 "type": ["string", "null"],
                                 "enum": [
@@ -646,6 +651,11 @@ pub(super) fn dataset_schemas() -> Value {
                                 "minItems": 1,
                                 "items": { "type": "string", "minLength": 1 },
                                 "description": "Required and non-empty when readiness_status is ready. Worker-plan prefixes that per-job customer evidence_refs must satisfy before this job can be considered ready, including submit/write and source-lineage prefixes when applicable."
+                            },
+                            "required_submit_flags": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Published URI flags required by governed submit jobs before API artifact submission, for example --published-report-uri and source/input/label lineage flags."
                             },
                             "blockers": {
                                 "type": "array",

@@ -186,6 +186,17 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             .contains("source-lineage prefixes"),
         "missing readiness required_evidence_prefixes description"
     );
+    assert_eq!(
+        readiness_job_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        readiness_job_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing readiness required_submit_flags description"
+    );
     let execution_job_properties = &schema["components"]["schemas"]
         ["WorkerDataPipelineExecutionReportSubmissionRequest"]["properties"]["job_executions"]
         ["items"]["properties"];
@@ -199,6 +210,17 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             .unwrap_or_default()
             .contains("source-lineage prefixes"),
         "missing execution required_evidence_prefixes description"
+    );
+    assert_eq!(
+        execution_job_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        execution_job_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing execution required_submit_flags description"
     );
     assert_eq!(
         schema["paths"]["/api/v1/ops/clinical-compatibility-references"]["post"]["requestBody"]

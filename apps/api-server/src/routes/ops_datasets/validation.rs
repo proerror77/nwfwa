@@ -151,6 +151,27 @@ fn worker_data_pipeline_submit_job_contract(
     }
 }
 
+fn worker_data_pipeline_submit_job_required_flags(
+    job_kind: &str,
+) -> Option<&'static [&'static str]> {
+    match job_kind {
+        "oig_sam_sanctions_sync"
+        | "provider_profile_window_rollup"
+        | "provider_graph_signal_rollup"
+        | "peer_percentile_benchmark"
+        | "episode_aggregation"
+        | "clinical_compatibility_reference"
+        | "unbundling_comparator" => Some(&["--published-report-uri", "--published-source-uri"]),
+        "scoring_feature_context_materialization" => Some(&["--published-report-uri"]),
+        "probability_calibration_evidence" => Some(&[
+            "--published-report-uri",
+            "--published-input-uri",
+            "--published-label-uri",
+        ]),
+        _ => None,
+    }
+}
+
 fn validate_worker_data_pipeline_submit_job_contract(
     job_kind: &str,
     job: &serde_json::Value,
@@ -177,6 +198,30 @@ fn validate_worker_data_pipeline_submit_job_contract(
             StatusCode::BAD_REQUEST,
             error_code,
             format!("{job_kind} requires required_permission {expected_permission}"),
+        ));
+    }
+    let Some(expected_flags) = worker_data_pipeline_submit_job_required_flags(job_kind) else {
+        return Ok(true);
+    };
+    let Some(required_submit_flags) = job
+        .get("required_submit_flags")
+        .and_then(|value| value.as_array())
+    else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_submit_flags {expected_flags:?}"),
+        ));
+    };
+    let submitted_flags = required_submit_flags
+        .iter()
+        .filter_map(|value| value.as_str())
+        .collect::<Vec<_>>();
+    if submitted_flags.as_slice() != expected_flags {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_submit_flags {expected_flags:?}"),
         ));
     }
     Ok(true)
