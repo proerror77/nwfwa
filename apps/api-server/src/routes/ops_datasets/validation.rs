@@ -286,17 +286,24 @@ fn validate_no_template_evidence_refs(
 fn is_production_artifact_uri(value: &str) -> bool {
     let value = value.trim();
     !value.is_empty()
-        && !value.starts_with("local://")
-        && !value.starts_with("file://")
+        && !artifact_reference_is_non_production(value)
         && value.contains("://")
         && !value.contains('{')
         && !value.contains('}')
 }
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
-    let value = value.trim();
-    value.contains("local://")
-        || value.contains("file://")
+    artifact_reference_is_non_production(value)
+}
+
+fn artifact_reference_is_non_production(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    normalized.contains("local://")
+        || normalized.contains("file://")
+        || normalized.contains("://localhost")
+        || normalized.contains("://127.")
+        || normalized.contains("://0.0.0.0")
+        || normalized.contains("://[::1]")
         || value.contains('{')
         || value.contains('}')
 }

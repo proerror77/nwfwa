@@ -626,6 +626,56 @@ async fn dataset_write_paths_reject_local_source_uris() {
 }
 
 #[tokio::test]
+async fn dataset_write_paths_reject_localhost_source_uris() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, field, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_report_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_report_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload[field] = serde_json::json!("http://127.0.0.1:9000/datasets/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+        assert!(body["message"]
+            .as_str()
+            .unwrap()
+            .contains("production evidence"));
+    }
+}
+
+#[tokio::test]
 async fn dataset_write_paths_reject_template_top_level_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     for (path, payload, code) in [
@@ -683,6 +733,43 @@ async fn dataset_write_paths_reject_file_top_level_evidence_refs() {
             .unwrap()
             .push(serde_json::json!(
                 "worker_report:file://tmp/datasets/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_localhost_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_report:http://localhost:9000/datasets/source.json"
             ));
 
         let (status, body) = json_request_with_key(
@@ -3402,6 +3489,27 @@ async fn scoring_feature_context_materialization_rejects_local_source_uri() {
         serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
     payload["source_uris"]["episode_rollups_uri"] =
         serde_json::json!("local://episode_aggregation_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_localhost_source_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["source_uris"]["episode_rollups_uri"] =
+        serde_json::json!("http://localhost:9000/episode_aggregation_report.json");
 
     let (status, body) = json_request_with_key(
         app,

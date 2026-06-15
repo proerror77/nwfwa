@@ -602,8 +602,7 @@ fn validate_production_artifact_uri(
 ) -> Result<(), ApiError> {
     let value = value.trim();
     if value.is_empty()
-        || value.starts_with("local://")
-        || value.starts_with("file://")
+        || artifact_reference_is_non_production(value)
         || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
@@ -640,14 +639,23 @@ fn validate_production_evidence_refs(
 ) -> Result<(), ApiError> {
     if evidence_refs.iter().any(|reference| {
         let reference = reference.trim();
-        reference.contains("local://")
-            || reference.contains("file://")
-            || reference.contains('{')
-            || reference.contains('}')
+        artifact_reference_is_non_production(reference)
     }) {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
     }
     Ok(())
+}
+
+fn artifact_reference_is_non_production(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    normalized.contains("local://")
+        || normalized.contains("file://")
+        || normalized.contains("://localhost")
+        || normalized.contains("://127.")
+        || normalized.contains("://0.0.0.0")
+        || normalized.contains("://[::1]")
+        || value.contains('{')
+        || value.contains('}')
 }
 
 pub(super) fn validate_provider_graph_signal_rollup_submission(
