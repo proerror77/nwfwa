@@ -150,6 +150,12 @@ evidence refs, and local dry-run/template evidence before document evidence
 status can feed label bootstrap. This is verified in `4c7c02e8` by
 `cargo test --locked -p api-server --test ops_bootstrap`.
 
+MLOps alert delivery submissions and alert-delivery task reviews now reject
+local dry-run/template evidence refs even when required production scheduler
+and task refs are present. This is verified in `49560e8f` by
+`cargo test --locked -p api-server --test ops_models mlops_monitoring` and
+`cargo test --locked -p api-server --test ops_openapi`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
