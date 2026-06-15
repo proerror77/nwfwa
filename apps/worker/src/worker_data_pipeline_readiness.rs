@@ -4,7 +4,9 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use crate::{
     api_url, json_string, read_json_report, required_non_empty,
-    worker_data_pipeline_execution::{validate_worker_data_pipeline_plan, REPORT_VERSION},
+    worker_data_pipeline_execution::{
+        validate_worker_data_pipeline_job_kinds, validate_worker_data_pipeline_plan, REPORT_VERSION,
+    },
     write_json,
 };
 
@@ -276,6 +278,7 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
         .and_then(|value| value.as_array())
         .cloned()
         .context("worker data pipeline readiness report requires job_readiness")?;
+    validate_worker_data_pipeline_job_kinds(&job_readiness, "job_readiness")?;
     let review_tasks = report
         .get("review_tasks")
         .and_then(|value| value.as_array())

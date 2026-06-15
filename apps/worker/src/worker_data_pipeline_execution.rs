@@ -1,6 +1,10 @@
 use anyhow::{bail, Context};
 use serde::Serialize;
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
 
 use crate::{api_url, json_string, read_json_report, required_non_empty, write_json};
 
@@ -253,6 +257,7 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
         .and_then(|value| value.as_array())
         .cloned()
         .context("worker data pipeline execution report requires job_executions")?;
+    validate_worker_data_pipeline_job_kinds(&job_executions, "job_executions")?;
     validate_completed_job_evidence_prefixes(&job_executions)?;
     let review_tasks = report
         .get("review_tasks")
@@ -602,6 +607,24 @@ fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json
                     .is_some_and(|value| value.starts_with(prefix))
             })
     })
+}
+
+pub(crate) fn validate_worker_data_pipeline_job_kinds(
+    records: &[serde_json::Value],
+    field_name: &str,
+) -> anyhow::Result<()> {
+    let mut seen_job_kinds = BTreeSet::new();
+    for record in records {
+        let job_kind = json_string(record, "job_kind")
+            .with_context(|| format!("{field_name} requires job_kind"))?;
+        if canonical_required_evidence_prefixes(&job_kind).is_none() {
+            bail!("unknown worker data pipeline job_kind {job_kind}");
+        }
+        if !seen_job_kinds.insert(job_kind.clone()) {
+            bail!("duplicate worker data pipeline job_kind {job_kind}");
+        }
+    }
+    Ok(())
 }
 
 fn validate_completed_job_evidence_prefixes(
