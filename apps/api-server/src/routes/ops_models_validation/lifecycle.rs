@@ -120,13 +120,10 @@ fn validate_production_evidence_refs(
     code: &'static str,
     message: &'static str,
 ) -> Result<(), ApiError> {
-    if evidence_refs.iter().any(|reference| {
-        let reference = reference.trim();
-        reference.contains("local://")
-            || reference.contains("file://")
-            || reference.contains('{')
-            || reference.contains('}')
-    }) {
+    if evidence_refs
+        .iter()
+        .any(|reference| super::artifact_reference_is_non_production(reference))
+    {
         Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
     } else {
         Ok(())

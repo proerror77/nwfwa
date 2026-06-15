@@ -291,6 +291,27 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
 
+    let mut localhost_artifact_uri = valid_request.clone();
+    localhost_artifact_uri["artifact_uri"] =
+        serde_json::json!("http://localhost:8080/baseline_fwa/0.2.0-candidate/model.onnx");
+    localhost_artifact_uri["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:http://localhost:8080/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = localhost_artifact_uri.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
+
     let mut local_validation_report = valid_request.clone();
     local_validation_report["validation_report_uri"] = serde_json::json!(
         "local://template/fwa-models/baseline_fwa/0.2.0-candidate/validation.json"
@@ -746,6 +767,26 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifact_evaluations:file://tmp/model_artifact_evaluation_report.json"
     ]);
     let payload = file_evidence_refs.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_EVIDENCE");
+
+    let mut localhost_evidence_refs = valid_request.clone();
+    localhost_evidence_refs["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate",
+        "model_artifact_evaluations:http://127.0.0.1:8080/model_artifact_evaluation_report.json"
+    ]);
+    let payload = localhost_evidence_refs.to_string();
     let (status, body) = json_request(
         app.clone(),
         "POST",

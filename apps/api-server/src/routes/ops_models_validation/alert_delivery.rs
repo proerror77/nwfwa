@@ -14,11 +14,8 @@ use axum::http::StatusCode;
 fn is_production_artifact_uri(value: &str) -> bool {
     let value = value.trim();
     !value.is_empty()
-        && !value.starts_with("local://")
-        && !value.starts_with("file://")
         && value.contains("://")
-        && !value.contains('{')
-        && !value.contains('}')
+        && !super::artifact_reference_is_non_production(value)
 }
 
 pub(in crate::routes) fn validate_mlops_alert_delivery_request(
@@ -206,13 +203,10 @@ fn validate_alert_delivery_production_evidence_refs(
     code: &'static str,
     message: &'static str,
 ) -> Result<(), ApiError> {
-    if evidence_refs.iter().any(|reference| {
-        let reference = reference.trim();
-        reference.contains("local://")
-            || reference.contains("file://")
-            || reference.contains('{')
-            || reference.contains('}')
-    }) {
+    if evidence_refs
+        .iter()
+        .any(|reference| super::artifact_reference_is_non_production(reference))
+    {
         Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
     } else {
         Ok(())

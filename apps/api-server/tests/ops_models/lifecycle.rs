@@ -215,6 +215,24 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
           "notes": "Approved for continued shadow evaluation only.",
           "evidence_refs": [
             "model_versions:baseline_fwa:0.1.0",
+            "model_promotion_reviews:http://localhost:8080/model-promotion-review.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PROMOTION_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
+          "notes": "Approved for continued shadow evaluation only.",
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
             "model_promotion_reviews:file://tmp/model-promotion-review.json"
           ]
         }"#,
@@ -411,6 +429,16 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
         "POST",
         "/api/v1/ops/models/baseline_fwa/activate",
         r#"{"evidence_refs": ["model_versions:baseline_fwa:0.1.0", "model_activation:{candidate_version}"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_LIFECYCLE_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        r#"{"evidence_refs": ["model_versions:baseline_fwa:0.1.0", "model_activation:http://127.0.0.1:8080/activation.json"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);

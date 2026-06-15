@@ -4,6 +4,18 @@ mod monitoring;
 mod retraining_output;
 mod rule_candidates;
 
+pub(in crate::routes) fn artifact_reference_is_non_production(value: &str) -> bool {
+    let value = value.trim().to_ascii_lowercase();
+    value.contains("local://")
+        || value.contains("file://")
+        || value.contains("://localhost")
+        || value.contains("://127.")
+        || value.contains("://0.0.0.0")
+        || value.contains("://[::1]")
+        || value.contains('{')
+        || value.contains('}')
+}
+
 pub(super) use self::alert_delivery::{
     validate_alert_delivery_evidence, validate_alert_delivery_task_evidence,
     validate_alert_delivery_task_review_request, validate_mlops_alert_delivery_request,

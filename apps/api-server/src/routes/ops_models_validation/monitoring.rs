@@ -16,19 +16,12 @@ use serde_json::Value;
 fn is_production_artifact_uri(value: &str) -> bool {
     let value = value.trim();
     !value.is_empty()
-        && !value.starts_with("local://")
-        && !value.starts_with("file://")
         && value.contains("://")
-        && !value.contains('{')
-        && !value.contains('}')
+        && !super::artifact_reference_is_non_production(value)
 }
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
-    let value = value.trim();
-    value.contains("local://")
-        || value.contains("file://")
-        || value.contains('{')
-        || value.contains('}')
+    super::artifact_reference_is_non_production(value)
 }
 
 pub(in crate::routes) fn validate_mlops_monitoring_report_request(

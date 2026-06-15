@@ -270,13 +270,11 @@ fn validate_retraining_output_evidence_refs(
             "model retraining output evidence_refs must not contain PII",
         ));
     }
-    if request.evidence_refs.iter().any(|reference| {
-        let reference = reference.trim();
-        reference.contains("local://")
-            || reference.contains("file://")
-            || reference.contains('{')
-            || reference.contains('}')
-    }) {
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| super::artifact_reference_is_non_production(reference))
+    {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_RETRAINING_OUTPUT_EVIDENCE",
@@ -565,11 +563,8 @@ pub(in crate::routes) fn validate_json_artifact_uri(
 fn validate_production_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
     let value = value.trim();
     if value.is_empty()
-        || value.starts_with("local://")
-        || value.starts_with("file://")
         || !value.contains("://")
-        || value.contains('{')
-        || value.contains('}')
+        || super::artifact_reference_is_non_production(value)
     {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
