@@ -360,6 +360,48 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                 ],
             },
         )
+    if gate_id == "alert_router_delivery":
+        worker_output_uri = (
+            "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/"
+            "mlops-alert-receiver/<customer-scheduler-run-id>/"
+            "mlops_alert_receiver_delivery_report.json"
+        )
+        return blocked_template(
+            generated_at=generated_at,
+            gate_id=gate_id,
+            artifact_name=artifact_name,
+            artifact_kind="alert_router_delivery_report",
+            customer_data_required=customer_data_required,
+            fields={
+                "report_kind": "mlops_alert_receiver_delivery_report",
+                "delivery_status": "pending_customer_delivery",
+                "http_status": None,
+                "receiver_auth_configured": False,
+                "receiver_signature_configured": False,
+                "scheduler_execution_report_uri": (
+                    "local://template/worker/mlops-monitoring/"
+                    "mlops_scheduler_execution_report.json"
+                ),
+                "worker_output_report_uri": worker_output_uri,
+                "readiness_artifact_mapping": {
+                    "source_report": worker_output_uri,
+                    "contract_artifact": "evidence/alert_router_delivery_report.json",
+                    "required_customer_action": (
+                        "copy the delivered mlops_alert_receiver_delivery_report.json "
+                        "content into evidence/alert_router_delivery_report.json before "
+                        "running production readiness contract validation"
+                    ),
+                },
+                "governance_boundary": (
+                    "must not create retraining jobs, activate models, rollback models, "
+                    "assign fraud labels, or write rules"
+                ),
+                "evidence_refs": [
+                    "mlops_alert_receiver_delivery_reports:local://template/evidence/alert_router_delivery_report.json",
+                    "mlops_scheduler_execution_reports:local://template/worker/mlops-monitoring/mlops_scheduler_execution_report.json",
+                ],
+            },
+        )
     if gate_id == "retention_legal_hold":
         return blocked_template(
             generated_at=generated_at,
@@ -869,6 +911,12 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-alert-receiver/<customer-scheduler-run-id>"
                 ),
                 "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-alert-receiver/<customer-scheduler-run-id>/mlops_alert_receiver_delivery_report.json",
+                "readiness_artifact": "evidence/alert_router_delivery_report.json",
+                "post_run_action": (
+                    "Copy the delivered mlops_alert_receiver_delivery_report.json content "
+                    "to evidence/alert_router_delivery_report.json before running "
+                    "validate_production_readiness_contract.py."
+                ),
             },
         ],
         "validation_command": (

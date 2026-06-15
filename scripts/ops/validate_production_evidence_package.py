@@ -96,6 +96,15 @@ REQUIRED_MODEL_SERVING_SLO_TEMPLATE_EVIDENCE_REFS = {
     "probability_calibration_input:local://template/sources/probability-calibration-input.json",
     "calibration_labels:local://template/sources/calibration-labels.json",
 }
+REQUIRED_ALERT_ROUTER_DELIVERY_WORKER_OUTPUT = (
+    "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/"
+    "mlops-alert-receiver/<customer-scheduler-run-id>/"
+    "mlops_alert_receiver_delivery_report.json"
+)
+REQUIRED_ALERT_ROUTER_DELIVERY_TEMPLATE_EVIDENCE_REFS = {
+    "mlops_alert_receiver_delivery_reports:local://template/evidence/alert_router_delivery_report.json",
+    "mlops_scheduler_execution_reports:local://template/worker/mlops-monitoring/mlops_scheduler_execution_report.json",
+}
 REQUIRED_WORKER_RUN_STATUS_TEMPLATE_URIS = {
     "plan_uri": "local://template/worker/worker_data_pipeline_plan.json",
     "readiness_report_uri": "local://template/worker/worker_data_pipeline_readiness_report.json",
@@ -409,6 +418,13 @@ def validate_evidence_templates(artifacts: dict[str, dict]) -> None:
         "model serving SLO template must be present",
     )
     validate_model_serving_slo_template(model_serving_slo)
+    alert_router_delivery = artifacts.get("alert_router_delivery_report.json")
+    require(
+        alert_router_delivery is not None
+        and alert_router_delivery.get("artifact_kind") == "alert_router_delivery_report",
+        "alert router delivery template must be present",
+    )
+    validate_alert_router_delivery_template(alert_router_delivery)
 
 
 def validate_source_templates(package_dir: Path) -> None:
@@ -613,6 +629,58 @@ def validate_model_serving_slo_template(report: dict) -> None:
     require(
         REQUIRED_MODEL_SERVING_SLO_TEMPLATE_EVIDENCE_REFS.issubset(observed_refs),
         "model serving SLO template evidence_refs must use package-relative template URIs",
+    )
+
+
+def validate_alert_router_delivery_template(report: dict) -> None:
+    require(
+        report.get("report_kind") == "mlops_alert_receiver_delivery_report",
+        "alert router delivery template has wrong report_kind",
+    )
+    require(
+        report.get("delivery_status") == "pending_customer_delivery",
+        "alert router delivery template must stay pending customer delivery",
+    )
+    require(
+        report.get("receiver_auth_configured") is False,
+        "alert router delivery template must not claim receiver auth is configured",
+    )
+    require(
+        report.get("receiver_signature_configured") is False,
+        "alert router delivery template must not claim receiver signature is configured",
+    )
+    require(
+        report.get("scheduler_execution_report_uri")
+        == "local://template/worker/mlops-monitoring/mlops_scheduler_execution_report.json",
+        "alert router delivery template must use the scheduler execution template URI",
+    )
+    require(
+        report.get("worker_output_report_uri")
+        == REQUIRED_ALERT_ROUTER_DELIVERY_WORKER_OUTPUT,
+        "alert router delivery template must point at the worker receiver delivery output",
+    )
+    mapping = report.get("readiness_artifact_mapping")
+    require(
+        isinstance(mapping, dict),
+        "alert router delivery template requires readiness_artifact_mapping",
+    )
+    require(
+        mapping.get("source_report") == REQUIRED_ALERT_ROUTER_DELIVERY_WORKER_OUTPUT,
+        "alert router delivery mapping source_report must be the worker receiver delivery output",
+    )
+    require(
+        mapping.get("contract_artifact") == "evidence/alert_router_delivery_report.json",
+        "alert router delivery mapping contract_artifact must be the readiness evidence artifact",
+    )
+    require(
+        "mlops_alert_receiver_delivery_report.json"
+        in mapping.get("required_customer_action", ""),
+        "alert router delivery mapping must tell the customer which worker report to copy",
+    )
+    observed_refs = set(report.get("evidence_refs") or [])
+    require(
+        REQUIRED_ALERT_ROUTER_DELIVERY_TEMPLATE_EVIDENCE_REFS.issubset(observed_refs),
+        "alert router delivery template evidence_refs must use package-relative template URIs",
     )
 
 
@@ -926,6 +994,23 @@ def validate_runbook(package_dir: Path) -> None:
                 f"{flag} {expected_uri}" in step_command_text,
                 f"runbook step {step} {flag} must be {expected_uri}",
             )
+    alert_receiver_command = commands_by_step.get("deliver_mlops_alert_receiver_webhook")
+    require(
+        alert_receiver_command is not None,
+        "runbook missing artifact build step deliver_mlops_alert_receiver_webhook",
+    )
+    require(
+        alert_receiver_command.get("readiness_artifact")
+        == "evidence/alert_router_delivery_report.json",
+        "runbook alert receiver delivery must map to evidence/alert_router_delivery_report.json",
+    )
+    post_run_action = alert_receiver_command.get("post_run_action")
+    require(
+        isinstance(post_run_action, str)
+        and "mlops_alert_receiver_delivery_report.json" in post_run_action
+        and "validate_production_readiness_contract.py" in post_run_action,
+        "runbook alert receiver delivery must explain the readiness artifact copy action",
+    )
     validate_command_includes_package_validator(runbook.get("validation_command"), "runbook")
 
 

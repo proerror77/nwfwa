@@ -133,6 +133,23 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
                 "--published-score-response-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_response.json",
                 command_text,
             )
+            alert_receiver_command = next(
+                command
+                for command in runbook["commands"]
+                if command["step"] == "deliver_mlops_alert_receiver_webhook"
+            )
+            self.assertEqual(
+                alert_receiver_command["readiness_artifact"],
+                "evidence/alert_router_delivery_report.json",
+            )
+            self.assertIn(
+                "mlops_alert_receiver_delivery_report.json",
+                alert_receiver_command["post_run_action"],
+            )
+            self.assertIn(
+                "validate_production_readiness_contract.py",
+                alert_receiver_command["post_run_action"],
+            )
             self.assertIn(
                 "--published-label-uri <customer-approved-calibration-labels-uri>",
                 command_text,
@@ -236,6 +253,27 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn(
                 "calibration_labels:local://template/sources/calibration-labels.json",
                 model_slo["evidence_refs"],
+            )
+            alert_router_delivery = artifacts["alert_router_delivery_report.json"]
+            self.assertEqual(
+                alert_router_delivery["report_kind"],
+                "mlops_alert_receiver_delivery_report",
+            )
+            self.assertEqual(
+                alert_router_delivery["delivery_status"],
+                "pending_customer_delivery",
+            )
+            self.assertEqual(
+                alert_router_delivery["worker_output_report_uri"],
+                "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-alert-receiver/<customer-scheduler-run-id>/mlops_alert_receiver_delivery_report.json",
+            )
+            self.assertEqual(
+                alert_router_delivery["readiness_artifact_mapping"]["contract_artifact"],
+                "evidence/alert_router_delivery_report.json",
+            )
+            self.assertIn(
+                "mlops_alert_receiver_delivery_reports:local://template/evidence/alert_router_delivery_report.json",
+                alert_router_delivery["evidence_refs"],
             )
             retention = artifacts["retention_legal_hold_report.json"]
             self.assertIn("destruction_workflow", retention)

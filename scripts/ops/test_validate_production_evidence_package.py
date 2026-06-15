@@ -554,6 +554,28 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_missing_alert_receiver_readiness_mapping(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            command = next(
+                command
+                for command in runbook["commands"]
+                if command["step"] == "deliver_mlops_alert_receiver_webhook"
+            )
+            command.pop("readiness_artifact")
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "alert receiver delivery must map",
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_missing_governed_submit_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
