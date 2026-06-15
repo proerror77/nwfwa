@@ -120,6 +120,10 @@ fn validate_label_review(request: &ReviewLabelBootstrapItemRequest) -> Result<()
         || request.feedback_target.trim().is_empty()
         || request.notes.trim().is_empty()
         || request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -137,7 +141,34 @@ fn validate_label_review(request: &ReviewLabelBootstrapItemRequest) -> Result<()
             "governance_status must be needs_review, approved_for_training, or rejected_for_training",
         ));
     }
-    validate_optional_notes(Some(&request.notes), "LABEL_REVIEW_NOTES_CONTAIN_PII")
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_LABEL_BOOTSTRAP_REVIEW",
+            "label bootstrap review notes and evidence_refs must not contain PII",
+        ));
+    }
+    validate_label_review_production_evidence_refs(&request.evidence_refs)
+}
+
+fn validate_label_review_production_evidence_refs(
+    evidence_refs: &[String],
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_LABEL_BOOTSTRAP_REVIEW_EVIDENCE",
+            "label bootstrap review evidence_refs must not use local dry-run or placeholder evidence",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn validate_label_training_approval(

@@ -193,6 +193,60 @@ async fn backfill_evidence_request_and_label_bootstrap_flow() {
           "governance_status": "approved_for_training",
           "feedback_target": "model",
           "notes": "Evidence was reviewed and can be used as a supervised label.",
+          "evidence_refs": [" "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{review}");
+    assert_eq!(review["code"], "INVALID_LABEL_BOOTSTRAP_REVIEW");
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/label-bootstrap/items/{item_id}/review"),
+        r#"{
+          "reviewer": "label-governance",
+          "label_name": "clinical_evidence_sufficient",
+          "label_value": "true",
+          "governance_status": "rejected_for_training",
+          "feedback_target": "model",
+          "notes": "Reject this label for model training.",
+          "evidence_refs": ["email:alice@example.com"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{review}");
+    assert_eq!(review["code"], "PII_NOT_ALLOWED_IN_LABEL_BOOTSTRAP_REVIEW");
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/label-bootstrap/items/{item_id}/review"),
+        r#"{
+          "reviewer": "label-governance",
+          "label_name": "clinical_evidence_sufficient",
+          "label_value": "true",
+          "governance_status": "approved_for_training",
+          "feedback_target": "model",
+          "notes": "Evidence was reviewed and can be used as a supervised label.",
+          "evidence_refs": ["evidence_documents:local://template/doc-bootstrap.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{review}");
+    assert_eq!(review["code"], "INVALID_LABEL_BOOTSTRAP_REVIEW_EVIDENCE");
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/label-bootstrap/items/{item_id}/review"),
+        r#"{
+          "reviewer": "label-governance",
+          "label_name": "clinical_evidence_sufficient",
+          "label_value": "true",
+          "governance_status": "approved_for_training",
+          "feedback_target": "model",
+          "notes": "Evidence was reviewed and can be used as a supervised label.",
           "evidence_refs": ["evidence_documents:doc_bootstrap_1"]
         }"#,
     )
