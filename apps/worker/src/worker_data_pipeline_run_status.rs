@@ -84,7 +84,7 @@ pub fn build_worker_data_pipeline_run_status_template(
     write_json(
         output_dir
             .as_ref()
-            .join("worker_data_pipeline_run_status_template.json"),
+            .join("worker_data_pipeline_run_status.json"),
         &report,
     )?;
     Ok(report)

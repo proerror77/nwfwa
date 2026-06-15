@@ -141,6 +141,6 @@ fn builds_worker_data_pipeline_run_status_template() {
         .any(|reference| reference
             == "worker_data_pipeline_readiness_reports:s3://nwfwa-production-artifacts/worker-data-pipelines/production-customer/readiness/2026-06-14/worker_data_pipeline_readiness_report.json"));
     assert!(output_dir
-        .join("worker_data_pipeline_run_status_template.json")
+        .join("worker_data_pipeline_run_status.json")
         .exists());
 }

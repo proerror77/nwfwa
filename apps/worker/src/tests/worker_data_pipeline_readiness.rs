@@ -115,7 +115,7 @@ fn builds_worker_data_pipeline_readiness_input_template() {
         ])
     );
     assert!(output_dir
-        .join("worker_data_pipeline_readiness_input_template.json")
+        .join("worker_data_pipeline_readiness_input.json")
         .exists());
 }
 
@@ -125,7 +125,7 @@ fn readiness_input_template_remains_blocked_until_customer_evidence_is_filled() 
     let plan_uri = root.join("worker_data_pipeline_plan.json");
     let template_dir = root.join("template");
     let report_dir = root.join("report");
-    let template_uri = template_dir.join("worker_data_pipeline_readiness_input_template.json");
+    let template_uri = template_dir.join("worker_data_pipeline_readiness_input.json");
     let plan = build_worker_data_pipeline_plan(
         "http://api-server:8080",
         "s3://nwfwa-production-artifacts",
@@ -181,8 +181,7 @@ fn builds_worker_data_pipeline_readiness_report_with_published_lineage() {
     let plan_uri = root.join("worker_data_pipeline_plan.json");
     let template_dir = root.join("template");
     let report_dir = root.join("report");
-    let readiness_input_uri =
-        template_dir.join("worker_data_pipeline_readiness_input_template.json");
+    let readiness_input_uri = template_dir.join("worker_data_pipeline_readiness_input.json");
     let plan = build_worker_data_pipeline_plan(
         "http://api-server:8080",
         "s3://nwfwa-production-artifacts",
@@ -232,8 +231,7 @@ fn rejects_worker_data_pipeline_readiness_report_with_partial_published_lineage(
     let plan_uri = root.join("worker_data_pipeline_plan.json");
     let template_dir = root.join("template");
     let report_dir = root.join("report");
-    let readiness_input_uri =
-        template_dir.join("worker_data_pipeline_readiness_input_template.json");
+    let readiness_input_uri = template_dir.join("worker_data_pipeline_readiness_input.json");
     let plan = build_worker_data_pipeline_plan(
         "http://api-server:8080",
         "s3://nwfwa-production-artifacts",
