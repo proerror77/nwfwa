@@ -226,6 +226,14 @@ fn validate_no_template_evidence_refs(
     Ok(())
 }
 
+fn is_production_artifact_uri(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && !value.starts_with("local://")
+        && !value.contains('{')
+        && !value.contains('}')
+}
+
 pub(super) fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiError> {
     if request.external_field.trim().is_empty()
         || request.canonical_target.trim().is_empty()
@@ -1324,6 +1332,17 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                     "completed job executions must not use local://template reported_artifact_uri",
                 ));
             }
+            if !execution
+                .get("reported_artifact_uri")
+                .and_then(|value| value.as_str())
+                .is_some_and(is_production_artifact_uri)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT",
+                    "completed job executions require a production reported_artifact_uri, not a local dry-run or placeholder URI",
+                ));
+            }
             let has_evidence_refs = execution
                 .get("evidence_refs")
                 .and_then(|value| value.as_array())
@@ -1823,6 +1842,17 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         StatusCode::BAD_REQUEST,
                         "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT",
                         "ready job readiness records must not use local://template artifact_uri",
+                    ));
+                }
+                if !readiness
+                    .get("artifact_uri")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(is_production_artifact_uri)
+                {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT",
+                        "ready job readiness records require a production artifact_uri, not a local dry-run or placeholder URI",
                     ));
                 }
                 let has_template_evidence_ref = readiness

@@ -238,7 +238,7 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
           "reported_status": "succeeded",
           "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
           "required_permission": "ops:providers:write",
-          "reported_artifact_uri": "local://artifacts/worker-data-pipeline/sanctions_sync_report.json",
+          "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
           "required_evidence_prefixes": ["sanctions_sync_reports:"],
           "evidence_refs": [
             "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
@@ -291,6 +291,7 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
           "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
           "required_permission": "ops:providers:write",
           "required_evidence_prefixes": ["sanctions_sync_reports:"],
+          "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
           "coverage_window_days": 1,
           "source_freshness_status": "fresh",
           "readiness_status": "ready",
@@ -792,7 +793,7 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
             "reported_status": "succeeded",
             "api_path": "/api/v1/ops/providers/profile-window-rollups",
             "required_permission": "ops:providers:write",
-            "reported_artifact_uri": "local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
             "required_evidence_prefixes": [
                 "provider_profile_window_rollups:",
                 "provider_profile_claim_snapshot:"
@@ -1298,6 +1299,34 @@ async fn worker_data_pipeline_execution_report_rejects_completed_job_template_ar
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_local_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["reported_artifact_uri"] =
+        serde_json::json!("local://artifacts/worker-data-pipeline/sanctions_sync_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("production reported_artifact_uri"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_rejects_completed_job_without_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -1422,7 +1451,7 @@ async fn worker_data_pipeline_execution_report_requires_full_scoring_readback_pr
             "job_kind": "scoring_online_readback",
             "execution_status": "completed",
             "reported_status": "succeeded",
-            "reported_artifact_uri": "local://artifacts/worker-data-pipeline/scoring_readback_report.json",
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
             "required_evidence_prefixes": [
                 "scoring_readback_reports:",
                 "scoring_readback_inputs:",
@@ -1473,7 +1502,7 @@ async fn worker_data_pipeline_execution_report_requires_probability_calibration_
             "job_kind": "probability_calibration_evidence",
             "execution_status": "completed",
             "reported_status": "succeeded",
-            "reported_artifact_uri": "local://artifacts/worker-data-pipeline/probability_calibration_report.json",
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
             "required_evidence_prefixes": [
                 "probability_calibration_reports:"
             ],
@@ -1520,7 +1549,7 @@ async fn worker_data_pipeline_execution_report_requires_provider_profile_lineage
             "reported_status": "succeeded",
             "api_path": "/api/v1/ops/providers/profile-window-rollups",
             "required_permission": "ops:providers:write",
-            "reported_artifact_uri": "local://artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
             "required_evidence_prefixes": [
                 "provider_profile_window_rollups:"
             ],
@@ -2202,6 +2231,34 @@ async fn worker_data_pipeline_readiness_report_rejects_ready_job_template_artifa
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_local_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["artifact_uri"] =
+        serde_json::json!("local://artifacts/worker-data-pipeline/sanctions_sync_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("production artifact_uri"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_readiness_report_rejects_ready_job_template_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -2322,6 +2379,7 @@ async fn worker_data_pipeline_readiness_report_requires_full_scoring_readback_pr
             "coverage_window_days": 1,
             "source_freshness_status": "fresh",
             "data_quality_status": "ready",
+            "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
             "required_evidence_prefixes": [
                 "scoring_readback_reports:",
                 "scoring_readback_inputs:",
@@ -2375,6 +2433,7 @@ async fn worker_data_pipeline_readiness_report_requires_probability_calibration_
             "coverage_window_days": 1,
             "source_freshness_status": "fresh",
             "data_quality_status": "ready",
+            "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
             "required_evidence_prefixes": [
                 "probability_calibration_reports:"
             ],
@@ -2424,6 +2483,7 @@ async fn worker_data_pipeline_readiness_report_requires_provider_profile_lineage
             "coverage_window_days": 30,
             "source_freshness_status": "fresh",
             "data_quality_status": "ready",
+            "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
             "required_evidence_prefixes": [
                 "provider_profile_window_rollups:"
             ],
