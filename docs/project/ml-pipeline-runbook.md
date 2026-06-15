@@ -809,6 +809,7 @@ cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
   --api-url "$FWA_API_BASE_URL" \
   --api-key "$FWA_API_KEY" \
   --scheduler-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --published-scheduler-report-uri s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
   --actor mlops-worker \
   --notes "Rust scheduler alert-router delivery submitted for governance audit."
 ```
@@ -817,6 +818,8 @@ The API records `model.mlops_alert_delivery.submitted` with model-version and
 scheduler-execution evidence refs. This is a customer alert-router handoff
 record; it does not create retraining jobs, activate models, rollback models,
 or assign fraud labels.
+The worker reads `--scheduler-report` locally; API-visible evidence refs use
+`--published-scheduler-report-uri`.
 
 Alert delivery tasks are also exposed as a human-confirmed queue:
 

@@ -445,6 +445,7 @@ cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
   --api-url "$FWA_API_BASE_URL" \
   --api-key "$FWA_API_KEY" \
   --scheduler-report artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --published-scheduler-report-uri s3://customer-prod-artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
   --actor mlops-worker \
   --notes "MLOps scheduler alert-router handoff submitted."
 ```
@@ -452,6 +453,9 @@ cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
 This records delivery handoff evidence only. It does not replace the customer
 alert receiver, create retraining jobs, activate models, rollback models, or
 assign fraud labels.
+The worker reads `--scheduler-report` from the local run workspace; the API
+handoff evidence must use `--published-scheduler-report-uri` so governance
+records never depend on local filesystem paths.
 
 Run the Alertmanager adapter when Kubernetes Alertmanager should submit native
 webhooks into the same governed FWA API handoff:
