@@ -158,6 +158,21 @@ async fn updates_case_status_with_audit_trail() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_CASE_WORKFLOW");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        r#"{
+          "status": "investigating",
+          "actor_id": "siu-reviewer-2",
+          "notes": "Investigation started with provider history review.",
+          "evidence_refs": ["case_workflow:local://template/status.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_CASE_STATUS_EVIDENCE");
+
     let (status, update) = json_request(
         app.clone(),
         "POST",

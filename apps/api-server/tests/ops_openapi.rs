@@ -47,6 +47,16 @@ async fn openapi_includes_operations_paths() {
     lifecycle_contract::assert_lifecycle_contract(&schema);
     case_agent_audit_contract::assert_case_agent_audit_contract(&schema);
     provider_anomaly_medical_contract::assert_provider_anomaly_medical_contract(&schema);
+    for schema_name in ["TriageLeadRequest", "UpdateCaseStatusRequest"] {
+        let evidence_description = schema["components"]["schemas"][schema_name]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            evidence_description.contains("not local/template refs"),
+            "missing {schema_name}.evidence_refs production-ref contract"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
         "string"

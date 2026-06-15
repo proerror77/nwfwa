@@ -112,6 +112,11 @@ fn validate_triage_request(lead_id: &str, request: &TriageLeadInput) -> Result<(
             "case workflow notes and evidence_refs must not contain PII",
         ));
     }
+    validate_case_workflow_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_TRIAGE_REVIEW_EVIDENCE",
+        "triage evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -176,6 +181,11 @@ pub async fn update_case_status(
             "case workflow notes and evidence_refs must not contain PII",
         ));
     }
+    validate_case_workflow_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_CASE_STATUS_EVIDENCE",
+        "case status evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
         .repository
@@ -191,6 +201,21 @@ fn is_supported_case_status(status: &str) -> bool {
         status,
         "triage" | "investigating" | "pending_evidence" | "confirmed" | "rejected" | "closed"
     )
+}
+
+fn validate_case_workflow_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    } else {
+        Ok(())
+    }
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
