@@ -518,3 +518,42 @@ async fn rejects_pii_in_medical_review_writeback() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_WRITEBACK");
 }
+
+#[tokio::test]
+async fn rejects_local_or_placeholder_medical_review_evidence_refs() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-MEDICAL-LOCAL-EVIDENCE",
+          "scoring_audit_id": "audit_scoring_local",
+          "reviewer": "medical-reviewer-1",
+          "decision": "request_more_evidence",
+          "notes": "Medical record is required before necessity can be confirmed.",
+          "evidence_refs": ["audit:scoring.completed", "medical_review:local://template/review.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MEDICAL_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-MEDICAL-TEMPLATE-EVIDENCE",
+          "scoring_audit_id": "audit_scoring_template",
+          "reviewer": "medical-reviewer-1",
+          "decision": "request_more_evidence",
+          "notes": "Medical record is required before necessity can be confirmed.",
+          "evidence_refs": ["audit:scoring.completed", "medical_review:{review_id}"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MEDICAL_REVIEW_EVIDENCE");
+}

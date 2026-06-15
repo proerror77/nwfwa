@@ -28,7 +28,7 @@ pub(super) fn provider_medical_schemas() -> Value {
                 },
                 "evidence_refs": {
                     "type": "array",
-                    "description": "Structured evidence references must not contain PII. For claims with the referenced normalized scoring trace, canonical evidence refs from that trace are merged into the persisted medical review and response.",
+                    "description": "Structured evidence references must not contain PII and must be production refs, not local/template refs. For claims with the referenced normalized scoring trace, canonical evidence refs from that trace are merged into the persisted medical review and response.",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 }
                 }

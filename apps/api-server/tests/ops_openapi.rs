@@ -310,6 +310,14 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["items"]["minLength"],
         1
     );
+    assert!(
+        schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("not local/template refs"),
+        "missing SubmitMedicalReviewResultRequest.evidence_refs production-ref contract"
+    );
     assert_writeback_pii_contract(&schema, "SubmitMedicalReviewResultRequest");
     for schema_name in [
         "SubmitRulePromotionReviewRequest",
