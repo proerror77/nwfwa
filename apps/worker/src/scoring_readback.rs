@@ -135,6 +135,18 @@ pub fn build_scoring_readback_report_with_published_uris(
     let as_of_date = required_non_empty("as_of_date", &input.as_of_date)?;
     let score_request_uri = required_non_empty("score_request_uri", &input.score_request_uri)?;
     let expected_prefixes = normalized_expected_prefixes(&input.expected_evidence_prefixes)?;
+    let published_uri_count = [
+        published_report_uri,
+        published_input_uri,
+        published_score_request_uri,
+        published_score_response_uri,
+    ]
+    .iter()
+    .filter(|value| value.is_some())
+    .count();
+    if published_uri_count != 0 && published_uri_count != 4 {
+        bail!("scoring readback published URIs must be provided together");
+    }
     let score_response_uri = score_response_uri_override
         .map(|value| required_non_empty("score_response_uri", value).map(str::to_string))
         .transpose()?

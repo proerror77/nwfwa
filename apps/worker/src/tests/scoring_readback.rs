@@ -203,6 +203,48 @@ fn writes_published_scoring_readback_uris_into_report() {
 }
 
 #[test]
+fn rejects_partial_published_scoring_readback_uris() {
+    let root = temp_root("scoring-readback-partial-published-uris");
+    let input_uri = root.join("scoring_readback_input.json");
+    let response_uri = root.join("score_response.json");
+    write_json(
+        input_uri.clone(),
+        &serde_json::json!({
+            "customer_scope_id": "customer-alpha",
+            "as_of_date": "2026-06-15",
+            "score_request_uri": "artifacts/production-evidence-package/worker/score_request.json",
+            "score_response_uri": response_uri.to_string_lossy(),
+            "expected_evidence_prefixes": full_expected_prefixes(),
+            "evidence_refs": ["worker_data_pipeline_executions:s3://customer-alpha/worker/execution.json"]
+        }),
+    )
+    .unwrap();
+    write_json(
+        response_uri.clone(),
+        &serde_json::json!({
+            "claim_id": "CLM-1",
+            "evidence_refs": []
+        }),
+    )
+    .unwrap();
+
+    let error = build_scoring_readback_report_with_published_uris(
+        &input_uri.to_string_lossy(),
+        Some(&response_uri.to_string_lossy()),
+        Some("s3://customer-alpha/scoring-readback/report.json"),
+        None,
+        None,
+        None,
+        root.join("out"),
+    )
+    .expect_err("partial published URIs should fail fast");
+
+    assert!(error
+        .to_string()
+        .contains("published URIs must be provided together"));
+}
+
+#[test]
 fn blocks_scoring_readback_when_template_refs_are_not_replaced() {
     let root = temp_root("scoring-readback-template-refs");
     let input_uri = root.join("scoring_readback_input.json");
