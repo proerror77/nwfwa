@@ -98,6 +98,18 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
                 command_text,
             )
             self.assertIn(
+                "--published-plan-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/plan/<customer-scheduler-run-id>/worker_data_pipeline_plan.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-run-status-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/run-status/<customer-scheduler-run-id>/worker_data_pipeline_run_status.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-readiness-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_report.json",
+                command_text,
+            )
+            self.assertIn(
                 "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json",
                 command_text,
             )

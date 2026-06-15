@@ -655,6 +655,101 @@ fn builds_worker_data_pipeline_execution_report_with_ready_gate() {
 }
 
 #[test]
+fn builds_worker_data_pipeline_execution_report_with_published_lineage() {
+    let root = temp_root("worker-data-pipeline-execution-published-lineage");
+    let plan_uri = root.join("worker_data_pipeline_plan.json");
+    let readiness_report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    let run_status_uri = root.join("worker_data_pipeline_run_status.json");
+    let output_dir = root.join("output");
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+    write_json(plan_uri.clone(), &plan).expect("write plan");
+    write_json(
+        readiness_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "readiness_status": "ready"
+        }),
+    )
+    .expect("write readiness report");
+    let job_statuses = plan["jobs"]
+        .as_array()
+        .expect("jobs")
+        .iter()
+        .map(|job| {
+            let job_kind = job["job_kind"].as_str().expect("job kind");
+            serde_json::json!({
+                "job_kind": job_kind,
+                "status": "succeeded",
+                "artifact_uri": format!("s3://nwfwa-production-artifacts/{job_kind}.json"),
+                "evidence_refs": evidence_refs_for_job(job),
+                "submitted": true
+            })
+        })
+        .collect::<Vec<_>>();
+    write_json(
+        run_status_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_run_status",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "readiness_report_uri": readiness_report_uri.to_string_lossy(),
+            "job_statuses": job_statuses
+        }),
+    )
+    .expect("write run status");
+
+    let published_plan_uri =
+        "s3://customer-prod-artifacts/worker/plan/worker_data_pipeline_plan.json";
+    let published_run_status_uri =
+        "s3://customer-prod-artifacts/worker/run-status/worker_data_pipeline_run_status.json";
+    let published_readiness_report_uri =
+        "s3://customer-prod-artifacts/worker/readiness/worker_data_pipeline_readiness_report.json";
+    let report = build_worker_data_pipeline_execution_report_with_published_uris(
+        &plan_uri.to_string_lossy(),
+        &run_status_uri.to_string_lossy(),
+        &output_dir,
+        Some(published_plan_uri),
+        Some(published_run_status_uri),
+        Some(published_readiness_report_uri),
+    )
+    .expect("worker data pipeline execution report");
+
+    assert_eq!(report["plan_uri"], published_plan_uri);
+    assert_eq!(report["run_status_uri"], published_run_status_uri);
+    assert_eq!(
+        report["readiness_report_uri"],
+        published_readiness_report_uri
+    );
+    let evidence_refs = report["evidence_refs"].as_array().expect("evidence refs");
+    assert!(evidence_refs.iter().all(|reference| !reference
+        .as_str()
+        .unwrap_or_default()
+        .contains(&*root.to_string_lossy())));
+    assert!(evidence_refs.iter().any(|reference| {
+        reference == &serde_json::json!(format!("worker_data_pipeline_plans:{published_plan_uri}"))
+    }));
+    assert!(evidence_refs.iter().any(|reference| {
+        reference
+            == &serde_json::json!(format!(
+                "worker_data_pipeline_run_status:{published_run_status_uri}"
+            ))
+    }));
+    assert!(evidence_refs.iter().any(|reference| {
+        reference
+            == &serde_json::json!(format!(
+                "worker_data_pipeline_readiness_reports:{published_readiness_report_uri}"
+            ))
+    }));
+}
+
+#[test]
 fn builds_worker_data_pipeline_execution_report_with_blocked_gate() {
     let root = temp_root("worker-data-pipeline-execution-blocked");
     let plan_uri = root.join("worker_data_pipeline_plan.json");

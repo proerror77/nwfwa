@@ -529,6 +529,26 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "published-score-response-uri"):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_missing_execution_published_lineage_uri(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            command = next(
+                command
+                for command in runbook["commands"]
+                if command["step"] == "build_execution_report"
+            )
+            command["command"] = command["command"].replace(
+                "--published-plan-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/plan/<customer-scheduler-run-id>/worker_data_pipeline_plan.json ",
+                "",
+            )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(AssertionError, "published-plan-uri"):
+                validate_package(package_dir)
+
     def test_rejects_runbook_missing_alert_receiver_published_scheduler_uri(
         self,
     ) -> None:

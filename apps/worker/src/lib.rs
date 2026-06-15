@@ -150,7 +150,9 @@ pub use ops_plans::{
 
 mod worker_data_pipeline_execution;
 pub use worker_data_pipeline_execution::{
-    build_worker_data_pipeline_execution_report, build_worker_data_pipeline_execution_submission,
+    build_worker_data_pipeline_execution_report,
+    build_worker_data_pipeline_execution_report_with_published_uris,
+    build_worker_data_pipeline_execution_submission,
     build_worker_data_pipeline_execution_submission_with_published_uri,
     submit_worker_data_pipeline_execution_report,
     submit_worker_data_pipeline_execution_report_with_published_uri,

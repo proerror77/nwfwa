@@ -70,6 +70,24 @@ pub fn build_worker_data_pipeline_execution_report(
     run_status_uri: &str,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<serde_json::Value> {
+    build_worker_data_pipeline_execution_report_with_published_uris(
+        plan_uri,
+        run_status_uri,
+        output_dir,
+        None,
+        None,
+        None,
+    )
+}
+
+pub fn build_worker_data_pipeline_execution_report_with_published_uris(
+    plan_uri: &str,
+    run_status_uri: &str,
+    output_dir: impl AsRef<Path>,
+    published_plan_uri: Option<&str>,
+    published_run_status_uri: Option<&str>,
+    published_readiness_report_uri: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
     let plan_uri = required_non_empty("plan_uri", plan_uri)?;
     let run_status_uri = required_non_empty("run_status_uri", run_status_uri)?;
     let plan = read_json_report(plan_uri)?;
@@ -86,6 +104,30 @@ pub fn build_worker_data_pipeline_execution_report(
         .context("worker data pipeline run status requires execution_date")?;
     let readiness_report_uri = json_string(&run_status, "readiness_report_uri");
     let readiness_gate_status = readiness_gate_status(readiness_report_uri.as_deref())?;
+    let published_plan_uri =
+        output_lineage_uri("published_plan_uri", plan_uri, published_plan_uri)?;
+    let published_run_status_uri = output_lineage_uri(
+        "published_run_status_uri",
+        run_status_uri,
+        published_run_status_uri,
+    )?;
+    let published_readiness_report_uri = match (
+        readiness_report_uri.as_deref(),
+        published_readiness_report_uri,
+    ) {
+        (Some(readiness_report_uri), Some(published_readiness_report_uri)) => {
+            Some(output_lineage_uri(
+                "published_readiness_report_uri",
+                readiness_report_uri,
+                Some(published_readiness_report_uri),
+            )?)
+        }
+        (Some(readiness_report_uri), None) => Some(readiness_report_uri.to_string()),
+        (None, Some(_)) => {
+            bail!("published_readiness_report_uri requires readiness_report_uri in run status")
+        }
+        (None, None) => None,
+    };
     let reported_jobs = reported_job_statuses(&run_status);
     let jobs_by_kind = jobs
         .iter()
@@ -165,17 +207,17 @@ pub fn build_worker_data_pipeline_execution_report(
             "task_kind": "worker_data_pipeline_readiness_gate_review",
             "customer_scope_id": customer_scope_id,
             "run_id": run_id,
-            "readiness_report_uri": readiness_report_uri,
+            "readiness_report_uri": published_readiness_report_uri,
             "readiness_gate_status": readiness_gate_status,
             "review_queue": "worker_data_pipeline_ops",
             "required_review": "resolve worker data pipeline readiness gate before downstream scoring use"
         }));
     }
     let mut evidence_refs = vec![
-        format!("worker_data_pipeline_plans:{plan_uri}"),
-        format!("worker_data_pipeline_run_status:{run_status_uri}"),
+        format!("worker_data_pipeline_plans:{published_plan_uri}"),
+        format!("worker_data_pipeline_run_status:{published_run_status_uri}"),
     ];
-    if let Some(readiness_report_uri) = &readiness_report_uri {
+    if let Some(readiness_report_uri) = &published_readiness_report_uri {
         evidence_refs.push(format!(
             "worker_data_pipeline_readiness_reports:{readiness_report_uri}"
         ));
@@ -183,9 +225,9 @@ pub fn build_worker_data_pipeline_execution_report(
     let report = serde_json::json!({
         "report_kind": "worker_data_pipeline_execution_report",
         "report_version": REPORT_VERSION,
-        "plan_uri": plan_uri,
-        "run_status_uri": run_status_uri,
-        "readiness_report_uri": readiness_report_uri,
+        "plan_uri": published_plan_uri,
+        "run_status_uri": published_run_status_uri,
+        "readiness_report_uri": published_readiness_report_uri,
         "readiness_gate_status": readiness_gate_status,
         "customer_scope_id": customer_scope_id,
         "run_id": run_id,
@@ -220,6 +262,19 @@ pub fn build_worker_data_pipeline_execution_report(
         &report["review_tasks"],
     )?;
     Ok(report)
+}
+
+fn output_lineage_uri(
+    field: &str,
+    local_uri: &str,
+    published_uri: Option<&str>,
+) -> anyhow::Result<String> {
+    let Some(published_uri) = published_uri else {
+        return Ok(local_uri.to_string());
+    };
+    let published_uri = required_non_empty(field, published_uri)?;
+    ensure_production_lineage_uri(field, published_uri)?;
+    Ok(published_uri.into())
 }
 
 pub fn build_worker_data_pipeline_execution_submission(

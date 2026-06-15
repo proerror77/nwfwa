@@ -273,6 +273,11 @@ REQUIRED_RUNBOOK_SUBMIT_FLAGS = {
     },
 }
 REQUIRED_RUNBOOK_BUILD_FLAGS = {
+    "build_execution_report": {
+        "--published-plan-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/plan/<customer-scheduler-run-id>/worker_data_pipeline_plan.json",
+        "--published-run-status-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/run-status/<customer-scheduler-run-id>/worker_data_pipeline_run_status.json",
+        "--published-readiness-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/readiness/<as-of-date>/worker_data_pipeline_readiness_report.json",
+    },
     "build_probability_calibration_report": {
         "--expected-label-source-uri": "<customer-approved-calibration-labels-uri>",
     },
