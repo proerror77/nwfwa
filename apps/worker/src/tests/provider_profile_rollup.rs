@@ -133,8 +133,10 @@ fn builds_provider_profile_window_rollup_submission() {
     )
     .unwrap();
 
-    let submission = build_provider_profile_window_rollup_submission(
+    let submission = build_provider_profile_window_rollup_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json",
         "worker:build-provider-profile-windows",
         "daily rollup",
     )
@@ -143,10 +145,16 @@ fn builds_provider_profile_window_rollup_submission() {
     assert_eq!(submission.report_kind, "provider_profile_window_rollup");
     assert_eq!(submission.provider_count, 1);
     assert_eq!(submission.provider_profiles[0].provider_id, "PRV-PROFILE-1");
-    assert!(submission.evidence_refs.contains(&format!(
-        "provider_profile_window_rollups:{}",
-        report_uri.to_string_lossy()
-    )));
+    assert_eq!(
+        submission.source_report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+    );
+    assert_eq!(
+        submission.source_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json"
+    );
+    assert!(submission.evidence_refs.contains(&"provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"provider_profile_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json".to_string()));
 }
 
 #[test]
@@ -191,8 +199,10 @@ fn rejects_provider_profile_submission_without_claim_snapshot_evidence() {
     )
     .unwrap();
 
-    let error = build_provider_profile_window_rollup_submission(
+    let error = build_provider_profile_window_rollup_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json",
         "worker:build-provider-profile-windows",
         "daily rollup",
     )
@@ -243,16 +253,18 @@ fn rejects_provider_profile_submission_with_template_record_evidence() {
     )
     .unwrap();
 
-    let error = build_provider_profile_window_rollup_submission(
+    let error = build_provider_profile_window_rollup_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json",
         "worker:build-provider-profile-windows",
         "daily rollup",
     )
     .expect_err("provider profile submission with template evidence must fail");
 
-    assert!(error
-        .to_string()
-        .contains("provider profile record evidence_refs must not use local://template evidence"));
+    assert!(error.to_string().contains(
+        "provider profile record evidence_refs must not use local dry-run or placeholder evidence"
+    ));
 }
 
 #[tokio::test]
@@ -315,10 +327,12 @@ async fn submits_provider_profile_window_rollup_to_api() {
         request
     });
 
-    let response = submit_provider_profile_window_rollup(
+    let response = submit_provider_profile_window_rollup_with_published_uris(
         &api_url,
         "provider-write-secret",
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json",
         "worker:build-provider-profile-windows",
         "daily rollup",
     )
@@ -330,5 +344,10 @@ async fn submits_provider_profile_window_rollup_to_api() {
     assert!(request.starts_with("POST /api/v1/ops/providers/profile-window-rollups HTTP/1.1"));
     assert!(request.contains("x-api-key: provider-write-secret"));
     assert!(request.contains(r#""provider_id":"PRV-PROFILE-1""#));
-    assert!(request.contains("provider_profile_window_rollups:"));
+    assert!(request.contains(
+        "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+    ));
+    assert!(request.contains(
+        r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json""#
+    ));
 }

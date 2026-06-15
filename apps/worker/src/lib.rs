@@ -158,39 +158,47 @@ pub use worker_data_pipeline_readiness::{
 mod sanctions;
 pub use sanctions::{
     build_sanctions_sync_report, build_sanctions_sync_report_submission,
-    fetch_oig_sam_sanctions_snapshot, submit_sanctions_sync_report, SanctionsProviderUpsert,
-    SanctionsSourceRecord, SanctionsSourceSnapshot, SanctionsSyncReport,
+    build_sanctions_sync_report_submission_with_published_uris, fetch_oig_sam_sanctions_snapshot,
+    submit_sanctions_sync_report, submit_sanctions_sync_report_with_published_uris,
+    SanctionsProviderUpsert, SanctionsSourceRecord, SanctionsSourceSnapshot, SanctionsSyncReport,
     SanctionsSyncReportSubmission, SanctionsSyncReviewTask,
 };
 
 mod provider_profile_rollup;
 pub use provider_profile_rollup::{
     build_provider_profile_window_rollup, build_provider_profile_window_rollup_submission,
-    submit_provider_profile_window_rollup, ProviderProfileClaimInput, ProviderProfileRollup,
-    ProviderProfileRollupInput, ProviderProfileWindowOutput, ProviderProfileWindowRollupReport,
-    ProviderProfileWindowRollupSubmission,
+    build_provider_profile_window_rollup_submission_with_published_uris,
+    submit_provider_profile_window_rollup,
+    submit_provider_profile_window_rollup_with_published_uris, ProviderProfileClaimInput,
+    ProviderProfileRollup, ProviderProfileRollupInput, ProviderProfileWindowOutput,
+    ProviderProfileWindowRollupReport, ProviderProfileWindowRollupSubmission,
 };
 
 mod provider_graph_rollup;
 pub use provider_graph_rollup::{
     build_provider_graph_signal_rollup, build_provider_graph_signal_rollup_submission,
-    submit_provider_graph_signal_rollup, ProviderGraphClaimInput, ProviderGraphRollupInput,
-    ProviderGraphSignalRollup, ProviderGraphSignalRollupReport,
-    ProviderGraphSignalRollupSubmission, ProviderReferralInput, ProviderRiskInput,
+    build_provider_graph_signal_rollup_submission_with_published_uris,
+    submit_provider_graph_signal_rollup, submit_provider_graph_signal_rollup_with_published_uris,
+    ProviderGraphClaimInput, ProviderGraphRollupInput, ProviderGraphSignalRollup,
+    ProviderGraphSignalRollupReport, ProviderGraphSignalRollupSubmission, ProviderReferralInput,
+    ProviderRiskInput,
 };
 
 mod peer_benchmark;
 pub use peer_benchmark::{
-    build_peer_benchmark_submission, build_peer_percentile_benchmark, submit_peer_benchmark,
-    PeerBenchmarkClaimInput, PeerBenchmarkGroup, PeerBenchmarkInput, PeerBenchmarkReport,
-    PeerBenchmarkSubmission,
+    build_peer_benchmark_submission, build_peer_benchmark_submission_with_published_uris,
+    build_peer_percentile_benchmark, submit_peer_benchmark,
+    submit_peer_benchmark_with_published_uris, PeerBenchmarkClaimInput, PeerBenchmarkGroup,
+    PeerBenchmarkInput, PeerBenchmarkReport, PeerBenchmarkSubmission,
 };
 
 mod episode_rollup;
 pub use episode_rollup::{
     build_episode_aggregation_report, build_episode_aggregation_submission,
-    submit_episode_aggregation, EpisodeAggregationReport, EpisodeAggregationSubmission,
-    EpisodeClaimInput, EpisodeRollupInput, EpisodeWindowRollup, MemberProviderEpisodeRollup,
+    build_episode_aggregation_submission_with_published_uris, submit_episode_aggregation,
+    submit_episode_aggregation_with_published_uris, EpisodeAggregationReport,
+    EpisodeAggregationSubmission, EpisodeClaimInput, EpisodeRollupInput, EpisodeWindowRollup,
+    MemberProviderEpisodeRollup,
 };
 
 mod clinical_compatibility;
@@ -415,6 +423,37 @@ fn ensure_production_evidence_refs(field: &str, evidence_refs: &[String]) -> any
         bail!("{field} must not use local dry-run or placeholder evidence");
     }
     Ok(())
+}
+
+fn published_submission_evidence_refs(
+    field: &str,
+    report_evidence_refs: &[String],
+    source_evidence_prefix: &str,
+    report_source_uri: &str,
+    published_source_uri: &str,
+    report_evidence_prefix: &str,
+    published_report_uri: &str,
+) -> anyhow::Result<Vec<String>> {
+    let source_ref = format!("{source_evidence_prefix}:{report_source_uri}");
+    if !report_evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == source_ref)
+    {
+        bail!("{field} requires {source_ref} evidence");
+    }
+
+    let mut evidence_refs = report_evidence_refs
+        .iter()
+        .map(|reference| reference.trim())
+        .filter(|reference| !reference.is_empty() && *reference != source_ref)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    evidence_refs.push(format!("{source_evidence_prefix}:{published_source_uri}"));
+    evidence_refs.push(format!("{report_evidence_prefix}:{published_report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    ensure_production_evidence_refs(field, &evidence_refs)?;
+    Ok(evidence_refs)
 }
 
 fn required_optional<'a>(field: &str, value: Option<&'a str>) -> anyhow::Result<&'a str> {

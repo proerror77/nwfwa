@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
-    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
-    required_non_empty, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
+    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,43 +168,78 @@ pub fn build_peer_benchmark_submission(
     notes: &str,
 ) -> anyhow::Result<PeerBenchmarkSubmission> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
-    let actor = required_non_empty("actor", actor)?;
-    let notes = required_non_empty("notes", notes)?;
     let report: PeerBenchmarkReport = serde_json::from_value(read_json_report(report_uri)?)
         .context("parse peer benchmark report")?;
+    let published_source_uri = report.source_uri.clone();
+    build_peer_benchmark_submission_from_report(
+        report_uri,
+        &published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+pub fn build_peer_benchmark_submission_with_published_uris(
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<PeerBenchmarkSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    let published_source_uri = required_non_empty("published_source_uri", published_source_uri)?;
+    let report: PeerBenchmarkReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse peer benchmark report")?;
+    build_peer_benchmark_submission_from_report(
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+fn build_peer_benchmark_submission_from_report(
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: PeerBenchmarkReport,
+) -> anyhow::Result<PeerBenchmarkSubmission> {
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
     if report.report_kind != "peer_percentile_benchmark" {
         bail!("report_kind must be peer_percentile_benchmark");
     }
     if report.peer_groups.is_empty() {
         bail!("peer benchmark requires peer_groups before API submission");
     }
-    ensure_no_template_uri("peer benchmark source_uri", &report.source_uri)?;
-    ensure_no_template_evidence_refs("peer benchmark evidence_refs", &report.evidence_refs)?;
+    ensure_production_artifact_uri("peer benchmark published_report_uri", published_report_uri)?;
+    ensure_production_artifact_uri("peer benchmark published_source_uri", published_source_uri)?;
     for group in &report.peer_groups {
-        ensure_no_template_evidence_refs(
+        ensure_production_evidence_refs(
             "peer benchmark group evidence_refs",
             &group.evidence_refs,
         )?;
     }
-    let required_ref = format!("peer_benchmark_claim_snapshot:{}", report.source_uri);
-    if !report
-        .evidence_refs
-        .iter()
-        .any(|reference| reference.trim() == required_ref)
-    {
-        bail!("peer benchmark requires {required_ref} evidence");
-    }
-    let mut evidence_refs = report.evidence_refs;
-    evidence_refs.push(format!("peer_benchmarks:{report_uri}"));
-    evidence_refs.sort();
-    evidence_refs.dedup();
+    let evidence_refs = published_submission_evidence_refs(
+        "peer benchmark evidence_refs",
+        &report.evidence_refs,
+        "peer_benchmark_claim_snapshot",
+        &report.source_uri,
+        published_source_uri,
+        "peer_benchmarks",
+        published_report_uri,
+    )?;
     Ok(PeerBenchmarkSubmission {
         actor: actor.into(),
         notes: notes.into(),
-        source_report_uri: report_uri.into(),
+        source_report_uri: published_report_uri.into(),
         report_kind: report.report_kind,
         benchmark_month: report.benchmark_month,
-        source_uri: report.source_uri,
+        source_uri: published_source_uri.into(),
         claim_count: report.claim_count,
         peer_group_count: report.peer_group_count,
         peer_groups: report.peer_groups,
@@ -221,6 +256,33 @@ pub async fn submit_peer_benchmark(
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let payload = build_peer_benchmark_submission(report_uri, actor, notes)?;
+    submit_peer_benchmark_payload(api_base_url, api_key, &payload).await
+}
+
+pub async fn submit_peer_benchmark_with_published_uris(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_peer_benchmark_submission_with_published_uris(
+        report_uri,
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+    )?;
+    submit_peer_benchmark_payload(api_base_url, api_key, &payload).await
+}
+
+async fn submit_peer_benchmark_payload(
+    api_base_url: &str,
+    api_key: &str,
+    payload: &PeerBenchmarkSubmission,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,

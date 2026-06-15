@@ -191,8 +191,10 @@ fn builds_sanctions_sync_report_submission() {
     )
     .unwrap();
 
-    let submission = build_sanctions_sync_report_submission(
+    let submission = build_sanctions_sync_report_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
         "worker:sync-oig-sam-sanctions",
         "daily sync",
     )
@@ -203,10 +205,16 @@ fn builds_sanctions_sync_report_submission() {
     assert_eq!(submission.valid_record_count, 1);
     assert_eq!(submission.invalid_record_count, 0);
     assert_eq!(submission.provider_upserts[0].sanction_key, "OIG:PRV-1");
-    assert!(submission.evidence_refs.contains(&format!(
-        "sanctions_sync_reports:{}",
-        report_uri.to_string_lossy()
-    )));
+    assert_eq!(
+        submission.source_report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    );
+    assert_eq!(
+        submission.source_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json"
+    );
+    assert!(submission.evidence_refs.contains(&"sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"sanctions_source_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json".to_string()));
 }
 
 #[test]
@@ -248,8 +256,10 @@ fn rejects_sanctions_submission_without_source_snapshot_evidence() {
     )
     .unwrap();
 
-    let error = build_sanctions_sync_report_submission(
+    let error = build_sanctions_sync_report_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
         "worker:sync-oig-sam-sanctions",
         "daily sync",
     )
@@ -299,16 +309,18 @@ fn rejects_sanctions_submission_with_template_evidence_refs() {
     )
     .unwrap();
 
-    let error = build_sanctions_sync_report_submission(
+    let error = build_sanctions_sync_report_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
         "worker:sync-oig-sam-sanctions",
         "daily sync",
     )
     .expect_err("sanctions submission with template evidence must fail");
 
-    assert!(error
-        .to_string()
-        .contains("sanctions sync evidence_refs must not use local://template evidence"));
+    assert!(error.to_string().contains(
+        "sanctions sync evidence_refs must not use local dry-run or placeholder evidence"
+    ));
 }
 
 #[tokio::test]
@@ -368,10 +380,12 @@ async fn submits_sanctions_sync_report_to_api() {
         request
     });
 
-    let response = submit_sanctions_sync_report(
+    let response = submit_sanctions_sync_report_with_published_uris(
         &api_url,
         "provider-write-secret",
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
         "worker:sync-oig-sam-sanctions",
         "daily sync",
     )
@@ -383,5 +397,10 @@ async fn submits_sanctions_sync_report_to_api() {
     assert!(request.starts_with("POST /api/v1/ops/providers/sanctions-sync-reports HTTP/1.1"));
     assert!(request.contains("x-api-key: provider-write-secret"));
     assert!(request.contains(r#""sanction_key":"OIG:PRV-1""#));
-    assert!(request.contains("sanctions_sync_reports:"));
+    assert!(request.contains(
+        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    ));
+    assert!(request.contains(
+        r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json""#
+    ));
 }

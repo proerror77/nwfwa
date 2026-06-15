@@ -81,8 +81,10 @@ fn builds_peer_benchmark_submission() {
     )
     .unwrap();
 
-    let submission = build_peer_benchmark_submission(
+    let submission = build_peer_benchmark_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json",
         "worker:build-peer-benchmarks",
         "monthly benchmark",
     )
@@ -94,9 +96,16 @@ fn builds_peer_benchmark_submission() {
         submission.peer_groups[0].peer_group_key,
         "dental|SH|outpatient"
     );
-    assert!(submission
-        .evidence_refs
-        .contains(&format!("peer_benchmarks:{}", report_uri.to_string_lossy())));
+    assert_eq!(
+        submission.source_report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json"
+    );
+    assert_eq!(
+        submission.source_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json"
+    );
+    assert!(submission.evidence_refs.contains(&"peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"peer_benchmark_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json".to_string()));
 }
 
 #[test]
@@ -133,8 +142,10 @@ fn rejects_peer_benchmark_submission_without_claim_snapshot_evidence() {
     )
     .unwrap();
 
-    let error = build_peer_benchmark_submission(
+    let error = build_peer_benchmark_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json",
         "worker:build-peer-benchmarks",
         "monthly benchmark",
     )
@@ -179,16 +190,18 @@ fn rejects_peer_benchmark_submission_with_template_group_evidence() {
     )
     .unwrap();
 
-    let error = build_peer_benchmark_submission(
+    let error = build_peer_benchmark_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json",
         "worker:build-peer-benchmarks",
         "monthly benchmark",
     )
     .expect_err("peer benchmark submission with template evidence must fail");
 
-    assert!(error
-        .to_string()
-        .contains("peer benchmark group evidence_refs must not use local://template evidence"));
+    assert!(error.to_string().contains(
+        "peer benchmark group evidence_refs must not use local dry-run or placeholder evidence"
+    ));
 }
 
 #[tokio::test]
@@ -243,10 +256,12 @@ async fn submits_peer_benchmark_to_api() {
         request
     });
 
-    let response = submit_peer_benchmark(
+    let response = submit_peer_benchmark_with_published_uris(
         &api_url,
         "provider-write-secret",
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json",
         "worker:build-peer-benchmarks",
         "monthly benchmark",
     )
@@ -258,5 +273,10 @@ async fn submits_peer_benchmark_to_api() {
     assert!(request.starts_with("POST /api/v1/ops/providers/peer-benchmarks HTTP/1.1"));
     assert!(request.contains("x-api-key: provider-write-secret"));
     assert!(request.contains(r#""peer_group_key":"dental|SH|outpatient""#));
-    assert!(request.contains("peer_benchmarks:"));
+    assert!(request.contains(
+        "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json"
+    ));
+    assert!(request.contains(
+        r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/peer_claims.json""#
+    ));
 }

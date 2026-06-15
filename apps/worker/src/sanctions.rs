@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 use crate::{
-    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    api_url, ensure_production_artifact_uri, published_submission_evidence_refs, read_json_report,
     required_non_empty, write_json,
 };
 
@@ -221,37 +221,72 @@ pub fn build_sanctions_sync_report_submission(
     notes: &str,
 ) -> anyhow::Result<SanctionsSyncReportSubmission> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
-    let actor = required_non_empty("actor", actor)?;
-    let notes = required_non_empty("notes", notes)?;
     let report: SanctionsSyncReport = serde_json::from_value(read_json_report(report_uri)?)
         .context("parse sanctions sync report")?;
+    let published_source_uri = report.source_uri.clone();
+    build_sanctions_sync_report_submission_from_report(
+        report_uri,
+        &published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+pub fn build_sanctions_sync_report_submission_with_published_uris(
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<SanctionsSyncReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    let published_source_uri = required_non_empty("published_source_uri", published_source_uri)?;
+    let report: SanctionsSyncReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse sanctions sync report")?;
+    build_sanctions_sync_report_submission_from_report(
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+fn build_sanctions_sync_report_submission_from_report(
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: SanctionsSyncReport,
+) -> anyhow::Result<SanctionsSyncReportSubmission> {
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
     if report.report_kind != "oig_sam_sanctions_sync_report" {
         bail!("report_kind must be oig_sam_sanctions_sync_report");
     }
     if report.provider_upserts.is_empty() {
         bail!("sanctions sync report requires provider_upserts before API submission");
     }
-    ensure_no_template_uri("sanctions sync source_uri", &report.source_uri)?;
-    ensure_no_template_evidence_refs("sanctions sync evidence_refs", &report.evidence_refs)?;
-    let required_ref = format!("sanctions_source_snapshot:{}", report.source_uri);
-    if !report
-        .evidence_refs
-        .iter()
-        .any(|reference| reference.trim() == required_ref)
-    {
-        bail!("sanctions sync report requires {required_ref} evidence");
-    }
-    let mut evidence_refs = report.evidence_refs;
-    evidence_refs.push(format!("sanctions_sync_reports:{report_uri}"));
-    evidence_refs.sort();
-    evidence_refs.dedup();
+    ensure_production_artifact_uri("sanctions sync published_report_uri", published_report_uri)?;
+    ensure_production_artifact_uri("sanctions sync published_source_uri", published_source_uri)?;
+    let evidence_refs = published_submission_evidence_refs(
+        "sanctions sync evidence_refs",
+        &report.evidence_refs,
+        "sanctions_source_snapshot",
+        &report.source_uri,
+        published_source_uri,
+        "sanctions_sync_reports",
+        published_report_uri,
+    )?;
     Ok(SanctionsSyncReportSubmission {
         actor: actor.into(),
         notes: notes.into(),
-        source_report_uri: report_uri.into(),
+        source_report_uri: published_report_uri.into(),
         report_kind: report.report_kind,
         run_date: report.run_date,
-        source_uri: report.source_uri,
+        source_uri: published_source_uri.into(),
         source_date: report.source_date,
         sync_status: report.sync_status,
         source_record_count: report.source_record_count,
@@ -276,6 +311,33 @@ pub async fn submit_sanctions_sync_report(
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let payload = build_sanctions_sync_report_submission(report_uri, actor, notes)?;
+    submit_sanctions_sync_report_payload(api_base_url, api_key, &payload).await
+}
+
+pub async fn submit_sanctions_sync_report_with_published_uris(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_sanctions_sync_report_submission_with_published_uris(
+        report_uri,
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+    )?;
+    submit_sanctions_sync_report_payload(api_base_url, api_key, &payload).await
+}
+
+async fn submit_sanctions_sync_report_payload(
+    api_base_url: &str,
+    api_key: &str,
+    payload: &SanctionsSyncReportSubmission,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,

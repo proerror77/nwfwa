@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
-    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
-    required_non_empty, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs,
+    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,44 +208,80 @@ pub fn build_provider_graph_signal_rollup_submission(
     notes: &str,
 ) -> anyhow::Result<ProviderGraphSignalRollupSubmission> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
-    let actor = required_non_empty("actor", actor)?;
-    let notes = required_non_empty("notes", notes)?;
     let report: ProviderGraphSignalRollupReport =
         serde_json::from_value(read_json_report(report_uri)?)
             .context("parse provider graph signal rollup report")?;
+    let published_source_uri = report.source_uri.clone();
+    build_provider_graph_signal_rollup_submission_from_report(
+        report_uri,
+        &published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+pub fn build_provider_graph_signal_rollup_submission_with_published_uris(
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<ProviderGraphSignalRollupSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    let published_source_uri = required_non_empty("published_source_uri", published_source_uri)?;
+    let report: ProviderGraphSignalRollupReport =
+        serde_json::from_value(read_json_report(report_uri)?)
+            .context("parse provider graph signal rollup report")?;
+    build_provider_graph_signal_rollup_submission_from_report(
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+fn build_provider_graph_signal_rollup_submission_from_report(
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: ProviderGraphSignalRollupReport,
+) -> anyhow::Result<ProviderGraphSignalRollupSubmission> {
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
     if report.report_kind != "provider_graph_signal_rollup" {
         bail!("report_kind must be provider_graph_signal_rollup");
     }
     if report.provider_relationships.is_empty() {
         bail!("provider graph signal rollup requires provider_relationships before API submission");
     }
-    ensure_no_template_uri("provider graph source_uri", &report.source_uri)?;
-    ensure_no_template_evidence_refs("provider graph evidence_refs", &report.evidence_refs)?;
+    ensure_production_artifact_uri("provider graph published_report_uri", published_report_uri)?;
+    ensure_production_artifact_uri("provider graph published_source_uri", published_source_uri)?;
     for relationship in &report.provider_relationships {
-        ensure_no_template_evidence_refs(
+        ensure_production_evidence_refs(
             "provider graph record evidence_refs",
             &relationship.evidence_refs,
         )?;
     }
-    let required_ref = format!("provider_graph_claim_snapshot:{}", report.source_uri);
-    if !report
-        .evidence_refs
-        .iter()
-        .any(|reference| reference.trim() == required_ref)
-    {
-        bail!("provider graph signal rollup requires {required_ref} evidence");
-    }
-    let mut evidence_refs = report.evidence_refs;
-    evidence_refs.push(format!("provider_graph_signal_rollups:{report_uri}"));
-    evidence_refs.sort();
-    evidence_refs.dedup();
+    let evidence_refs = published_submission_evidence_refs(
+        "provider graph evidence_refs",
+        &report.evidence_refs,
+        "provider_graph_claim_snapshot",
+        &report.source_uri,
+        published_source_uri,
+        "provider_graph_signal_rollups",
+        published_report_uri,
+    )?;
     Ok(ProviderGraphSignalRollupSubmission {
         actor: actor.into(),
         notes: notes.into(),
-        source_report_uri: report_uri.into(),
+        source_report_uri: published_report_uri.into(),
         report_kind: report.report_kind,
         as_of_date: report.as_of_date,
-        source_uri: report.source_uri,
+        source_uri: published_source_uri.into(),
         provider_count: report.provider_count,
         claim_count: report.claim_count,
         provider_relationships: report.provider_relationships,
@@ -262,6 +298,33 @@ pub async fn submit_provider_graph_signal_rollup(
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let payload = build_provider_graph_signal_rollup_submission(report_uri, actor, notes)?;
+    submit_provider_graph_signal_rollup_payload(api_base_url, api_key, &payload).await
+}
+
+pub async fn submit_provider_graph_signal_rollup_with_published_uris(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_provider_graph_signal_rollup_submission_with_published_uris(
+        report_uri,
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+    )?;
+    submit_provider_graph_signal_rollup_payload(api_base_url, api_key, &payload).await
+}
+
+async fn submit_provider_graph_signal_rollup_payload(
+    api_base_url: &str,
+    api_key: &str,
+    payload: &ProviderGraphSignalRollupSubmission,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,
