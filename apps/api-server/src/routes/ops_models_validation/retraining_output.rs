@@ -272,7 +272,10 @@ fn validate_retraining_output_evidence_refs(
     }
     if request.evidence_refs.iter().any(|reference| {
         let reference = reference.trim();
-        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+        reference.contains("local://")
+            || reference.contains("file://")
+            || reference.contains('{')
+            || reference.contains('}')
     }) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -563,6 +566,7 @@ fn validate_production_artifact_uri(value: &str, code: &'static str) -> Result<(
     let value = value.trim();
     if value.is_empty()
         || value.starts_with("local://")
+        || value.starts_with("file://")
         || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
