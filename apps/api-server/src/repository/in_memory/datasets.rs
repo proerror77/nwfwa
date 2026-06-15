@@ -556,7 +556,7 @@ fn scoring_context_materialization_key(
     customer_scope_id: &str,
     materialization_id: &str,
 ) -> String {
-    format!("{customer_scope_id}::{materialization_id}")
+    format!("{}\x00{}", customer_scope_id, materialization_id)
 }
 
 fn clinical_compatibility_key(
@@ -564,7 +564,7 @@ fn clinical_compatibility_key(
     compatibility_key: &str,
     reference_version: &str,
 ) -> String {
-    format!("{customer_scope_id}::{compatibility_key}::{reference_version}")
+    format!("{}\x00{}\x00{}", customer_scope_id, compatibility_key, reference_version)
 }
 
 fn unbundling_candidate_key(
@@ -572,9 +572,9 @@ fn unbundling_candidate_key(
     candidate_id: &str,
     as_of_date: &str,
 ) -> String {
-    format!("{customer_scope_id}::{candidate_id}::{as_of_date}")
+    format!("{}\x00{}\x00{}", customer_scope_id, candidate_id, as_of_date)
 }
 
 fn worker_data_pipeline_report_key(customer_scope_id: &str, source_report_uri: &str) -> String {
-    format!("{customer_scope_id}::{source_report_uri}")
+    format!("{}\x00{}", customer_scope_id, source_report_uri)
 }

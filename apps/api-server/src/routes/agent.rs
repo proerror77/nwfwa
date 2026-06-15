@@ -179,12 +179,17 @@ pub async fn investigate_case(
         &context_json["canonical_claim_context_trace"]["source_refs"],
     ));
 
+    // Scope any caller-supplied investigation_id under the authenticated tenant to prevent
+    // cross-tenant audit poisoning via the ON CONFLICT upsert on the investigations table.
+    let scoped_investigation_id = request.investigation_id.as_ref().and_then(|value| {
+        let trimmed = value.trim().to_string();
+        if trimmed.is_empty() {
+            return None;
+        }
+        Some(format!("{}:{}", actor.customer_scope_id, trimmed))
+    });
     let investigation_request = InvestigationRequest {
-        investigation_id: request
-            .investigation_id
-            .as_ref()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty()),
+        investigation_id: scoped_investigation_id,
         claim_id: masked_claim_ref,
         risk_score: request.risk_score,
         rag: request.rag,

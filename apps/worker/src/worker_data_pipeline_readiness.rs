@@ -2,7 +2,10 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::Path};
 
-use crate::{api_url, json_string, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, json_string, read_json_report, required_non_empty, write_json,
+    worker_data_pipeline_execution::{validate_worker_data_pipeline_plan, REPORT_VERSION},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerDataPipelineReadinessInput {
@@ -52,17 +55,7 @@ pub fn build_worker_data_pipeline_readiness_input_template(
 ) -> anyhow::Result<serde_json::Value> {
     let plan_uri = required_non_empty("plan_uri", plan_uri)?;
     let plan = read_json_report(plan_uri)?;
-    if json_string(&plan, "plan_kind").as_deref() != Some("scheduled_worker_data_pipeline") {
-        bail!(
-            "worker data pipeline readiness input template requires a scheduled_worker_data_pipeline plan"
-        );
-    }
-    let customer_scope_id = json_string(&plan, "customer_scope_id")
-        .context("worker data pipeline plan requires customer_scope_id")?;
-    let jobs = plan
-        .get("jobs")
-        .and_then(|value| value.as_array())
-        .context("worker data pipeline plan requires jobs")?;
+    let (customer_scope_id, jobs) = validate_worker_data_pipeline_plan(&plan)?;
     let checks = jobs
         .iter()
         .map(|job| {
@@ -97,7 +90,7 @@ pub fn build_worker_data_pipeline_readiness_input_template(
         .collect::<Vec<_>>();
     let template = serde_json::json!({
         "report_kind": "worker_data_pipeline_readiness_input_template",
-        "report_version": 1,
+        "report_version": REPORT_VERSION,
         "template_only": true,
         "plan_uri": plan_uri,
         "customer_scope_id": customer_scope_id,
@@ -128,18 +121,10 @@ pub fn build_worker_data_pipeline_readiness_report(
     let plan_uri = required_non_empty("plan_uri", plan_uri)?;
     let readiness_input_uri = required_non_empty("readiness_input_uri", readiness_input_uri)?;
     let plan = read_json_report(plan_uri)?;
-    if json_string(&plan, "plan_kind").as_deref() != Some("scheduled_worker_data_pipeline") {
-        bail!("worker data pipeline readiness requires a scheduled_worker_data_pipeline plan");
-    }
     let input: WorkerDataPipelineReadinessInput =
         serde_json::from_value(read_json_report(readiness_input_uri)?)
             .context("parse worker data pipeline readiness input")?;
-    let customer_scope_id = json_string(&plan, "customer_scope_id")
-        .context("worker data pipeline plan requires customer_scope_id")?;
-    let jobs = plan
-        .get("jobs")
-        .and_then(|value| value.as_array())
-        .context("worker data pipeline plan requires jobs")?;
+    let (customer_scope_id, jobs) = validate_worker_data_pipeline_plan(&plan)?;
     let checks_by_job = input
         .checks
         .iter()
@@ -204,7 +189,7 @@ pub fn build_worker_data_pipeline_readiness_report(
     };
     let report = serde_json::json!({
         "report_kind": "worker_data_pipeline_readiness_report",
-        "report_version": 1,
+        "report_version": REPORT_VERSION,
         "plan_uri": plan_uri,
         "readiness_input_uri": readiness_input_uri,
         "customer_scope_id": customer_scope_id,

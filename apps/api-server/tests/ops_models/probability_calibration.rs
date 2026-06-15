@@ -1,7 +1,11 @@
 use api_server::app::build_app;
-use axum::http::StatusCode;
+use axum::{
+    body::{to_bytes, Body},
+    http::{Request, StatusCode},
+};
+use tower::ServiceExt;
 
-use super::support::{json_request, test_config};
+use super::support::{json_request, restricted_test_config, test_config};
 
 fn probability_calibration_payload(evidence_refs: &str) -> String {
     format!(
@@ -271,4 +275,28 @@ async fn rejects_probability_calibration_local_evidence_refs() {
         .as_str()
         .unwrap()
         .contains("local dry-run"));
+}
+
+#[tokio::test]
+async fn rejects_probability_calibration_report_without_ops_models_review_permission() {
+    let (config, restricted_key) = restricted_test_config(&["tpa:*"]);
+    let app = build_app(config).unwrap();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/models/baseline_fwa/probability-calibration-reports")
+        .header("content-type", "application/json")
+        .header("x-api-key", restricted_key)
+        .body(Body::from(
+            probability_calibration_payload(complete_probability_calibration_evidence_refs()),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value =
+        serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
 }

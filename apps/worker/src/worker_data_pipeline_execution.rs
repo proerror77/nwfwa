@@ -4,6 +4,24 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use crate::{api_url, json_string, read_json_report, required_non_empty, write_json};
 
+pub const REPORT_VERSION: u64 = 1;
+
+pub fn validate_worker_data_pipeline_plan(
+    plan: &serde_json::Value,
+) -> anyhow::Result<(String, &[serde_json::Value])> {
+    if json_string(plan, "plan_kind").as_deref() != Some("scheduled_worker_data_pipeline") {
+        bail!("worker data pipeline requires a scheduled_worker_data_pipeline plan");
+    }
+    let customer_scope_id = json_string(plan, "customer_scope_id")
+        .context("worker data pipeline plan requires customer_scope_id")?;
+    let jobs = plan
+        .get("jobs")
+        .and_then(|value| value.as_array())
+        .context("worker data pipeline plan requires jobs")?
+        .as_slice();
+    Ok((customer_scope_id, jobs))
+}
+
 #[derive(Debug, Serialize)]
 pub struct WorkerDataPipelineExecutionReportSubmission {
     pub actor: String,
@@ -35,26 +53,18 @@ pub fn build_worker_data_pipeline_execution_report(
     let run_status_uri = required_non_empty("run_status_uri", run_status_uri)?;
     let plan = read_json_report(plan_uri)?;
     let run_status = read_json_report(run_status_uri)?;
-    if json_string(&plan, "plan_kind").as_deref() != Some("scheduled_worker_data_pipeline") {
-        bail!("worker data pipeline execution requires a scheduled_worker_data_pipeline plan");
-    }
     if json_string(&run_status, "report_kind").as_deref() != Some("worker_data_pipeline_run_status")
     {
         bail!("worker data pipeline execution requires a worker_data_pipeline_run_status report");
     }
 
-    let customer_scope_id = json_string(&plan, "customer_scope_id")
-        .context("worker data pipeline plan requires customer_scope_id")?;
+    let (customer_scope_id, jobs) = validate_worker_data_pipeline_plan(&plan)?;
     let run_id = json_string(&run_status, "run_id")
         .context("worker data pipeline run status requires run_id")?;
     let execution_date = json_string(&run_status, "execution_date")
         .context("worker data pipeline run status requires execution_date")?;
     let readiness_report_uri = json_string(&run_status, "readiness_report_uri");
     let readiness_gate_status = readiness_gate_status(readiness_report_uri.as_deref())?;
-    let jobs = plan
-        .get("jobs")
-        .and_then(|value| value.as_array())
-        .context("worker data pipeline plan requires jobs")?;
     let reported_jobs = reported_job_statuses(&run_status);
     let jobs_by_kind = jobs
         .iter()
@@ -146,7 +156,7 @@ pub fn build_worker_data_pipeline_execution_report(
     }
     let report = serde_json::json!({
         "report_kind": "worker_data_pipeline_execution_report",
-        "report_version": 1,
+        "report_version": REPORT_VERSION,
         "plan_uri": plan_uri,
         "run_status_uri": run_status_uri,
         "readiness_report_uri": readiness_report_uri,
@@ -540,6 +550,7 @@ fn is_production_lineage_uri(value: &str) -> bool {
     let value = value.trim();
     !value.is_empty()
         && !value.starts_with("local://")
+        && !value.starts_with("file://")
         && !value.contains('{')
         && !value.contains('}')
 }

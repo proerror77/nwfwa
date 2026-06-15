@@ -25,6 +25,33 @@ pub(crate) fn test_config() -> AppConfig {
     }
 }
 
+pub(crate) fn restricted_test_config(permissions: &[&str]) -> (AppConfig, String) {
+    let restricted_key = "restricted-test-key";
+    let permission_spec = permissions.join(",");
+    let principal_spec = format!(
+        "{}|restricted-actor|fwa_operator|tpa-demo|demo-customer|{}",
+        restricted_key, permission_spec
+    );
+    let config = AppConfig {
+        api_key: "dev-secret".into(),
+        api_key_principals: vec![principal_spec],
+        source_system: "tpa-demo".into(),
+        database_url: "postgres://unused".into(),
+        model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    };
+    (config, restricted_key.into())
+}
+
 pub(crate) async fn get_json(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method("GET")

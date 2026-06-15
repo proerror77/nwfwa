@@ -230,6 +230,7 @@ fn is_production_artifact_uri(value: &str) -> bool {
     let value = value.trim();
     !value.is_empty()
         && !value.starts_with("local://")
+        && !value.starts_with("file://")
         && value.contains("://")
         && !value.contains('{')
         && !value.contains('}')
