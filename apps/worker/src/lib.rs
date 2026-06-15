@@ -439,7 +439,10 @@ fn ensure_production_json_artifact_uri(field: &str, value: &str) -> anyhow::Resu
 fn ensure_production_evidence_refs(field: &str, evidence_refs: &[String]) -> anyhow::Result<()> {
     if evidence_refs.iter().any(|reference| {
         let reference = reference.trim();
-        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+        reference.contains("local://")
+            || reference.contains("file://")
+            || reference.contains('{')
+            || reference.contains('}')
     }) {
         bail!("{field} must not use local dry-run or placeholder evidence");
     }

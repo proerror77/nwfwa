@@ -1246,6 +1246,52 @@ fn rejects_worker_data_pipeline_readiness_submission_with_local_top_level_eviden
         .contains("evidence_refs must not use local dry-run"));
 }
 
+#[test]
+fn rejects_worker_data_pipeline_readiness_submission_with_file_top_level_evidence() {
+    let root = temp_root("worker-data-pipeline-readiness-submission-file-evidence");
+    let report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "readiness_input_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+            "customer_scope_id": "production-customer",
+            "readiness_status": "ready",
+            "job_count": 1,
+            "ready_job_count": 1,
+            "blocked_job_count": 0,
+            "job_readiness": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "readiness_status": "ready"
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_readiness_inputs:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+                "customer_readiness_notes:file://tmp/readiness.txt"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_readiness_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-readiness",
+        "daily readiness evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+    )
+    .expect_err("readiness submission with file top-level evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("evidence_refs must not use local dry-run"));
+}
+
 #[tokio::test]
 async fn submits_worker_data_pipeline_readiness_report_to_api() {
     let root = temp_root("worker-data-pipeline-readiness-submit-api");

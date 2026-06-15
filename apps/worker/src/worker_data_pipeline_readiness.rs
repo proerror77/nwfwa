@@ -729,7 +729,10 @@ fn is_production_artifact_uri(value: &str) -> bool {
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
     let value = value.trim();
-    value.contains("local://") || value.contains('{') || value.contains('}')
+    value.contains("local://")
+        || value.contains("file://")
+        || value.contains('{')
+        || value.contains('}')
 }
 
 fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()> {

@@ -564,7 +564,10 @@ fn has_non_production_evidence_refs(reported: &serde_json::Value) -> bool {
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
     let value = value.trim();
-    value.contains("local://") || value.contains('{') || value.contains('}')
+    value.contains("local://")
+        || value.contains("file://")
+        || value.contains('{')
+        || value.contains('}')
 }
 
 fn ensure_production_lineage_uri(field: &str, value: &str) -> anyhow::Result<()> {
