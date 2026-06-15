@@ -543,15 +543,15 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
               "materialization_id": "sfc-mat-claims-score-2026-06-13",
               "actor": "worker:scoring-feature-contexts",
               "notes": "claims scoring materialized context test",
-              "report_uri": "local://artifacts/scoring/scoring_feature_context_report.json",
+              "report_uri": "s3://customer-prod-artifacts/scoring/scoring_feature_context_report.json",
               "report_kind": "scoring_feature_context_materialization",
               "as_of_date": "2026-06-13",
               "source_uris": {
-                "claims_uri": "local://inputs/scoring-claims.json",
-                "episode_rollups_uri": "local://artifacts/episode/episode_aggregation_report.json",
-                "peer_benchmarks_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
-                "clinical_compatibility_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
-                "unbundling_candidates_uri": "local://artifacts/unbundling/unbundling_comparator_report.json"
+                "claims_uri": "s3://customer-prod-artifacts/inputs/scoring-claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
               },
               "claim_count": 1,
               "context_count": 1,
@@ -580,12 +580,12 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
                 }
               ],
               "evidence_refs": [
-                "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json",
-                "scoring_feature_context_claim_snapshot:local://inputs/scoring-claims.json",
-                "episode_rollups:local://artifacts/episode/episode_aggregation_report.json",
-                "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json",
-                "clinical_compatibility:local://artifacts/clinical/clinical_compatibility_reference_report.json",
-                "unbundling_candidates:local://artifacts/unbundling/unbundling_comparator_report.json"
+                "scoring_feature_contexts:s3://customer-prod-artifacts/scoring/scoring_feature_context_report.json",
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/inputs/scoring-claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
+                "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
               ],
               "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
             }"#,
@@ -681,22 +681,22 @@ async fn scores_full_payload_with_persisted_worker_feature_context() {
         "scoring_feature_context_materializations:sfc-mat-claims-score-2026-06-13"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json"
+        "scoring_feature_contexts:s3://customer-prod-artifacts/scoring/scoring_feature_context_report.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "scoring_feature_context_claim_snapshot:local://inputs/scoring-claims.json"
+        "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/inputs/scoring-claims.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json"
+        "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json"
+        "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "clinical_compatibility:local://artifacts/clinical/clinical_compatibility_reference_report.json"
+        "clinical_compatibility:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "unbundling_candidates:local://artifacts/unbundling/unbundling_comparator_report.json"
+        "unbundling_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
     )));
 }
 
@@ -710,10 +710,10 @@ async fn score_response_contains_all_worker_readback_prefixes() {
         r#"{
           "actor": "worker:sync-oig-sam-sanctions",
           "notes": "readback prefix sanctions evidence",
-          "source_report_uri": "local://artifacts/readback/sanctions_sync_report.json",
+          "source_report_uri": "s3://customer-prod-artifacts/readback/sanctions_sync_report.json",
           "report_kind": "oig_sam_sanctions_sync_report",
           "run_date": "2026-06-14",
-          "source_uri": "local://inputs/readback/oig-sam-snapshot.json",
+          "source_uri": "s3://customer-prod-artifacts/inputs/readback/oig-sam-snapshot.json",
           "source_date": "2026-06-14",
           "sync_status": "completed",
           "source_record_count": 1,
@@ -733,8 +733,8 @@ async fn score_response_contains_all_worker_readback_prefixes() {
             }
           ],
           "evidence_refs": [
-            "sanctions_sync_reports:local://artifacts/readback/sanctions_sync_report.json",
-            "sanctions_source_snapshot:local://inputs/readback/oig-sam-snapshot.json"
+            "sanctions_sync_reports:s3://customer-prod-artifacts/readback/sanctions_sync_report.json",
+            "sanctions_source_snapshot:s3://customer-prod-artifacts/inputs/readback/oig-sam-snapshot.json"
           ],
           "governance_boundary": "sanctions sync submission writes provider sanctions only; it must not change scoring policy, assign fraud labels, or adjudicate claims"
         }"#,
@@ -748,10 +748,10 @@ async fn score_response_contains_all_worker_readback_prefixes() {
         r#"{
           "actor": "worker:build-provider-profile-windows",
           "notes": "readback prefix provider profile evidence",
-          "source_report_uri": "local://artifacts/readback/provider_profile_window_rollup.json",
+          "source_report_uri": "s3://customer-prod-artifacts/readback/provider_profile_window_rollup.json",
           "report_kind": "provider_profile_window_rollup",
           "as_of_date": "2026-06-14",
-          "source_uri": "local://inputs/readback/provider-profile-claims.json",
+          "source_uri": "s3://customer-prod-artifacts/inputs/readback/provider-profile-claims.json",
           "provider_count": 1,
           "claim_count": 3,
           "provider_profiles": [
@@ -777,8 +777,8 @@ async fn score_response_contains_all_worker_readback_prefixes() {
             }
           ],
           "evidence_refs": [
-            "provider_profile_window_rollups:local://artifacts/readback/provider_profile_window_rollup.json",
-            "provider_profile_claim_snapshot:local://inputs/readback/provider-profile-claims.json"
+            "provider_profile_window_rollups:s3://customer-prod-artifacts/readback/provider_profile_window_rollup.json",
+            "provider_profile_claim_snapshot:s3://customer-prod-artifacts/inputs/readback/provider-profile-claims.json"
           ],
           "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
         }"#,
@@ -792,10 +792,10 @@ async fn score_response_contains_all_worker_readback_prefixes() {
         r#"{
           "actor": "worker:build-provider-graph-signals",
           "notes": "readback prefix provider graph evidence",
-          "source_report_uri": "local://artifacts/readback/provider_graph_signal_rollup.json",
+          "source_report_uri": "s3://customer-prod-artifacts/readback/provider_graph_signal_rollup.json",
           "report_kind": "provider_graph_signal_rollup",
           "as_of_date": "2026-06-14",
-          "source_uri": "local://inputs/readback/provider-graph-claims.json",
+          "source_uri": "s3://customer-prod-artifacts/inputs/readback/provider-graph-claims.json",
           "provider_count": 1,
           "claim_count": 3,
           "provider_relationships": [
@@ -814,8 +814,8 @@ async fn score_response_contains_all_worker_readback_prefixes() {
             }
           ],
           "evidence_refs": [
-            "provider_graph_signal_rollups:local://artifacts/readback/provider_graph_signal_rollup.json",
-            "provider_graph_claim_snapshot:local://inputs/readback/provider-graph-claims.json"
+            "provider_graph_signal_rollups:s3://customer-prod-artifacts/readback/provider_graph_signal_rollup.json",
+            "provider_graph_claim_snapshot:s3://customer-prod-artifacts/inputs/readback/provider-graph-claims.json"
           ],
           "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
         }"#,
@@ -830,15 +830,15 @@ async fn score_response_contains_all_worker_readback_prefixes() {
           "materialization_id": "sfc-mat-readback-all-2026-06-14",
           "actor": "worker:scoring-feature-contexts",
           "notes": "readback prefix scoring context evidence",
-          "report_uri": "local://artifacts/readback/scoring_feature_context_report.json",
+          "report_uri": "s3://customer-prod-artifacts/readback/scoring_feature_context_report.json",
           "report_kind": "scoring_feature_context_materialization",
           "as_of_date": "2026-06-14",
           "source_uris": {
-            "claims_uri": "local://inputs/readback/scoring-claims.json",
-            "episode_rollups_uri": "local://artifacts/readback/episode_aggregation_report.json",
-            "peer_benchmarks_uri": "local://artifacts/readback/peer_percentile_benchmark.json",
-            "clinical_compatibility_uri": "local://artifacts/readback/clinical_compatibility_reference_report.json",
-            "unbundling_candidates_uri": "local://artifacts/readback/unbundling_comparator_report.json"
+            "claims_uri": "s3://customer-prod-artifacts/inputs/readback/scoring-claims.json",
+            "episode_rollups_uri": "s3://customer-prod-artifacts/readback/episode_aggregation_report.json",
+            "peer_benchmarks_uri": "s3://customer-prod-artifacts/readback/peer_percentile_benchmark.json",
+            "clinical_compatibility_uri": "s3://customer-prod-artifacts/readback/clinical_compatibility_reference_report.json",
+            "unbundling_candidates_uri": "s3://customer-prod-artifacts/readback/unbundling_comparator_report.json"
           },
           "claim_count": 1,
           "context_count": 1,
@@ -865,12 +865,12 @@ async fn score_response_contains_all_worker_readback_prefixes() {
             }
           ],
           "evidence_refs": [
-            "scoring_feature_contexts:local://artifacts/readback/scoring_feature_context_report.json",
-            "scoring_feature_context_claim_snapshot:local://inputs/readback/scoring-claims.json",
-            "episode_rollups:local://artifacts/readback/episode_aggregation_report.json",
-            "peer_benchmarks:local://artifacts/readback/peer_percentile_benchmark.json",
-            "clinical_compatibility:local://artifacts/readback/clinical_compatibility_reference_report.json",
-            "unbundling_candidates:local://artifacts/readback/unbundling_comparator_report.json"
+            "scoring_feature_contexts:s3://customer-prod-artifacts/readback/scoring_feature_context_report.json",
+            "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/inputs/readback/scoring-claims.json",
+            "episode_rollups:s3://customer-prod-artifacts/readback/episode_aggregation_report.json",
+            "peer_benchmarks:s3://customer-prod-artifacts/readback/peer_percentile_benchmark.json",
+            "clinical_compatibility:s3://customer-prod-artifacts/readback/clinical_compatibility_reference_report.json",
+            "unbundling_candidates:s3://customer-prod-artifacts/readback/unbundling_comparator_report.json"
           ],
           "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
         }"#,
@@ -956,12 +956,12 @@ async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
             r#"{
               "actor": "worker:build-clinical-compatibility-reference",
               "notes": "customer policy board approved clinical reference",
-              "source_report_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
+              "source_report_uri": "s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
               "report_kind": "clinical_compatibility_reference",
               "reference_version": "clinical-policy-2026-06",
               "effective_date": "2026-06-01",
               "source_authority": "customer-medical-policy-board",
-              "source_uri": "local://inputs/clinical-reference.json",
+              "source_uri": "s3://customer-prod-artifacts/inputs/clinical-reference.json",
               "record_count": 1,
               "records": [
                 {
@@ -984,8 +984,8 @@ async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
                 }
               ],
               "evidence_refs": [
-                "clinical_compatibility_references:local://artifacts/clinical/clinical_compatibility_reference_report.json",
-                "clinical_compatibility_reference:local://inputs/clinical-reference.json",
+                "clinical_compatibility_references:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
+                "clinical_compatibility_reference:s3://customer-prod-artifacts/inputs/clinical-reference.json",
                 "clinical_policy_authority:customer-medical-policy-board"
               ],
               "governance_boundary": "clinical compatibility reference data can feed ClinicalCompatibilityFeatureContext; it must not deny claims or replace medical review without customer-approved policy authority"
@@ -1068,7 +1068,7 @@ async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
         .as_array()
         .expect("response should include evidence refs");
     assert!(evidence_refs.contains(&serde_json::json!(
-        "clinical_compatibility_references:local://artifacts/clinical/clinical_compatibility_reference_report.json"
+        "clinical_compatibility_references:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
         "clinical_compatibility_reference:J|IMG-900:clinical-policy-2026-06"
@@ -1089,10 +1089,10 @@ async fn scores_full_payload_with_persisted_peer_benchmark() {
             r#"{
               "actor": "worker:build-peer-benchmarks",
               "notes": "monthly peer percentile benchmark",
-              "source_report_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
+              "source_report_uri": "s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
               "report_kind": "peer_percentile_benchmark",
               "benchmark_month": "2026-06",
-              "source_uri": "local://inputs/peer-claims.json",
+              "source_uri": "s3://customer-prod-artifacts/inputs/peer-claims.json",
               "claim_count": 5,
               "peer_group_count": 1,
               "peer_groups": [
@@ -1111,8 +1111,8 @@ async fn scores_full_payload_with_persisted_peer_benchmark() {
                 }
               ],
               "evidence_refs": [
-                "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json",
-                "peer_benchmark_claim_snapshot:local://inputs/peer-claims.json"
+                "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
+                "peer_benchmark_claim_snapshot:s3://customer-prod-artifacts/inputs/peer-claims.json"
               ],
               "governance_boundary": "benchmark computes peer percentile reference data only; it must not score claims, assign labels, or change routing policy"
             }"#,
@@ -1212,7 +1212,7 @@ async fn scores_full_payload_with_persisted_peer_benchmark() {
         "peer_benchmark_groups:dental|SH|outpatient"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json"
+        "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
         "peer_benchmark_group:dental|SH|outpatient:2026-06"
@@ -1232,10 +1232,10 @@ async fn scores_full_payload_with_persisted_episode_rollup() {
             r#"{
               "actor": "worker:build-episode-aggregation",
               "notes": "daily member-provider episode rollup",
-              "source_report_uri": "local://artifacts/episode/episode_aggregation_report.json",
+              "source_report_uri": "s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
               "report_kind": "member_provider_episode_aggregation",
               "as_of_date": "2026-06-14",
-              "source_uri": "local://inputs/episode-claims.json",
+              "source_uri": "s3://customer-prod-artifacts/inputs/episode-claims.json",
               "episode_count": 1,
               "claim_count": 3,
               "episodes": [
@@ -1265,8 +1265,8 @@ async fn scores_full_payload_with_persisted_episode_rollup() {
                 }
               ],
               "evidence_refs": [
-                "episode_rollups:local://artifacts/episode/episode_aggregation_report.json",
-                "episode_claim_snapshot:local://inputs/episode-claims.json"
+                "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
+                "episode_claim_snapshot:s3://customer-prod-artifacts/inputs/episode-claims.json"
               ],
               "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
             }"#,
@@ -1357,7 +1357,7 @@ async fn scores_full_payload_with_persisted_episode_rollup() {
         .expect("response should include evidence refs");
     assert!(evidence_refs.contains(&serde_json::json!("claims:CLM-EPISODE-1")));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json"
+        "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
         "episode_rollup:MBR-EPISODE-1|PRV-EPISODE-1:2026-06-14"
@@ -1377,10 +1377,10 @@ async fn scores_full_payload_with_persisted_unbundling_candidates() {
             r#"{
               "actor": "worker:build-unbundling-comparator",
               "notes": "customer-approved unbundling comparator candidates",
-              "source_report_uri": "local://artifacts/unbundling/unbundling_comparator_report.json",
+              "source_report_uri": "s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json",
               "report_kind": "unbundling_comparator",
               "as_of_date": "2026-06-13",
-              "source_uri": "local://inputs/unbundling-reference.json",
+              "source_uri": "s3://customer-prod-artifacts/inputs/unbundling-reference.json",
               "rule_count": 1,
               "episode_count": 1,
               "candidate_count": 1,
@@ -1401,8 +1401,8 @@ async fn scores_full_payload_with_persisted_unbundling_candidates() {
                 }
               ],
               "evidence_refs": [
-                "unbundling_comparator_candidates:local://artifacts/unbundling/unbundling_comparator_report.json",
-                "unbundling_comparator_input:local://inputs/unbundling-reference.json"
+                "unbundling_comparator_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json",
+                "unbundling_comparator_input:s3://customer-prod-artifacts/inputs/unbundling-reference.json"
               ],
               "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
             }"#,
@@ -1488,7 +1488,7 @@ async fn scores_full_payload_with_persisted_unbundling_candidates() {
         .expect("response should include evidence refs");
     assert!(evidence_refs.contains(&serde_json::json!("unbundling:MBR-UNB-1|PRV-UNB-1")));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "unbundling_comparator_candidates:local://artifacts/unbundling/unbundling_comparator_report.json"
+        "unbundling_comparator_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
         "unbundling_comparator_candidate:unbundling:UNBUNDLE-KNEE-001:MBR-UNB-1|PRV-UNB-1:2026-06-13"

@@ -319,10 +319,10 @@ async fn returns_persisted_provider_profile_rollup_for_network_risk() {
             r#"{
               "actor": "worker:build-provider-profile-windows",
               "notes": "claims scoring provider profile test",
-              "source_report_uri": "local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
+              "source_report_uri": "s3://customer-prod-artifacts/provider-profile/provider_profile_window_rollup_report.json",
               "report_kind": "provider_profile_window_rollup",
               "as_of_date": "2026-06-14",
-              "source_uri": "local://inputs/provider-claims.json",
+              "source_uri": "s3://customer-prod-artifacts/inputs/provider-claims.json",
               "provider_count": 1,
               "claim_count": 3,
               "provider_profiles": [
@@ -348,8 +348,8 @@ async fn returns_persisted_provider_profile_rollup_for_network_risk() {
                 }
               ],
               "evidence_refs": [
-                "provider_profile_window_rollups:local://artifacts/provider-profile/provider_profile_window_rollup_report.json",
-                "provider_profile_claim_snapshot:local://inputs/provider-claims.json"
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/provider-profile/provider_profile_window_rollup_report.json",
+                "provider_profile_claim_snapshot:s3://customer-prod-artifacts/inputs/provider-claims.json"
               ],
               "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
             }"#,
@@ -434,7 +434,7 @@ async fn returns_persisted_provider_profile_rollup_for_network_risk() {
         "provider_profile_windows:PRV-PERSISTED-PROFILE:2026-06-14"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "provider_profile_window_rollups:local://artifacts/provider-profile/provider_profile_window_rollup_report.json"
+        "provider_profile_window_rollups:s3://customer-prod-artifacts/provider-profile/provider_profile_window_rollup_report.json"
     )));
 }
 
@@ -545,10 +545,10 @@ async fn returns_persisted_provider_sanctions_for_excluded_provider() {
             r#"{
               "actor": "worker:sync-oig-sam-sanctions",
               "notes": "claims scoring sanctions test",
-              "source_report_uri": "local://artifacts/sanctions/sanctions_sync_report.json",
+              "source_report_uri": "s3://customer-prod-artifacts/sanctions/sanctions_sync_report.json",
               "report_kind": "oig_sam_sanctions_sync_report",
               "run_date": "2026-06-14",
-              "source_uri": "local://inputs/oig-sam-snapshot.json",
+              "source_uri": "s3://customer-prod-artifacts/inputs/oig-sam-snapshot.json",
               "source_date": "2026-06-13",
               "sync_status": "ready_to_apply",
               "provider_upserts": [
@@ -567,8 +567,8 @@ async fn returns_persisted_provider_sanctions_for_excluded_provider() {
               ],
               "review_tasks": [],
               "evidence_refs": [
-                "sanctions_sync_reports:local://artifacts/sanctions/sanctions_sync_report.json",
-                "sanctions_source_snapshot:local://inputs/oig-sam-snapshot.json"
+                "sanctions_sync_reports:s3://customer-prod-artifacts/sanctions/sanctions_sync_report.json",
+                "sanctions_source_snapshot:s3://customer-prod-artifacts/inputs/oig-sam-snapshot.json"
               ],
               "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
             }"#,
@@ -648,7 +648,7 @@ async fn returns_persisted_provider_sanctions_for_excluded_provider() {
         "provider_sanctions:OIG:PRV-PERSISTED-SANCTIONED"
     )));
     assert!(evidence_refs.contains(&serde_json::json!(
-        "sanctions_sync_reports:local://artifacts/sanctions/sanctions_sync_report.json"
+        "sanctions_sync_reports:s3://customer-prod-artifacts/sanctions/sanctions_sync_report.json"
     )));
 }
 
@@ -790,10 +790,10 @@ async fn returns_persisted_provider_graph_signal_for_l6_network_risk() {
             r#"{
               "actor": "worker:build-provider-graph-signals",
               "notes": "claims scoring provider graph test",
-              "source_report_uri": "local://artifacts/provider-graph/provider_graph_signal_rollup.json",
+              "source_report_uri": "s3://customer-prod-artifacts/provider-graph/provider_graph_signal_rollup.json",
               "report_kind": "provider_graph_signal_rollup",
               "as_of_date": "2026-06-14",
-              "source_uri": "local://inputs/provider-graph-input.json",
+              "source_uri": "s3://customer-prod-artifacts/inputs/provider-graph-input.json",
               "provider_count": 1,
               "claim_count": 3,
               "provider_relationships": [
@@ -812,8 +812,8 @@ async fn returns_persisted_provider_graph_signal_for_l6_network_risk() {
                 }
               ],
               "evidence_refs": [
-                "provider_graph_signal_rollups:local://artifacts/provider-graph/provider_graph_signal_rollup.json",
-                "provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"
+                "provider_graph_signal_rollups:s3://customer-prod-artifacts/provider-graph/provider_graph_signal_rollup.json",
+                "provider_graph_claim_snapshot:s3://customer-prod-artifacts/inputs/provider-graph-input.json"
               ],
               "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
             }"#,
@@ -895,7 +895,7 @@ async fn returns_persisted_provider_graph_signal_for_l6_network_risk() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!(
-            "provider_graph_signal_rollups:local://artifacts/provider-graph/provider_graph_signal_rollup.json"
+            "provider_graph_signal_rollups:s3://customer-prod-artifacts/provider-graph/provider_graph_signal_rollup.json"
         )));
 }
 
