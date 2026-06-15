@@ -118,6 +118,10 @@ dry-run/template evidence refs before governed outcome writeback. This is
 verified in `8a3a34f2` by `cargo test --locked -p api-server --test pilot_loop`
 and `cargo test --locked -p api-server --test ops_openapi`.
 
+Agent investigation packages now expose an independent `investigation_id`
+separate from `agent_run_id`; callers can reuse that id to group multiple agent
+runs under one investigation, and agent run logs preserve that grouping.
+
 ## June 2026 Gap Backlog
 
 | Priority | Backlog item | Coverage status |
