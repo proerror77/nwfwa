@@ -2,7 +2,10 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClinicalCompatibilityReferenceInput {
@@ -166,6 +169,17 @@ pub fn build_clinical_compatibility_reference_submission(
     }
     if report.records.is_empty() {
         bail!("clinical compatibility reference requires records before API submission");
+    }
+    ensure_no_template_uri("clinical compatibility source_uri", &report.source_uri)?;
+    ensure_no_template_evidence_refs(
+        "clinical compatibility evidence_refs",
+        &report.evidence_refs,
+    )?;
+    for record in &report.records {
+        ensure_no_template_evidence_refs(
+            "clinical compatibility record evidence_refs",
+            &record.evidence_refs,
+        )?;
     }
     for required_ref in [
         format!("clinical_compatibility_reference:{}", report.source_uri),

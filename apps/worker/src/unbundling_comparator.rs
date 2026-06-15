@@ -2,7 +2,10 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
-use crate::{api_url, read_json_report, required_non_empty, write_json};
+use crate::{
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnbundlingComparatorInput {
@@ -143,6 +146,14 @@ pub fn build_unbundling_comparator_submission(
     }
     if report.candidates.is_empty() {
         bail!("unbundling comparator requires candidates before API submission");
+    }
+    ensure_no_template_uri("unbundling comparator source_uri", &report.source_uri)?;
+    ensure_no_template_evidence_refs("unbundling comparator evidence_refs", &report.evidence_refs)?;
+    for candidate in &report.candidates {
+        ensure_no_template_evidence_refs(
+            "unbundling comparator candidate evidence_refs",
+            &candidate.evidence_refs,
+        )?;
     }
     let required_ref = format!("unbundling_comparator_input:{}", report.source_uri);
     if !report

@@ -195,6 +195,58 @@ fn rejects_unbundling_comparator_submission_without_input_evidence() {
     assert!(error.to_string().contains("unbundling_comparator_input:"));
 }
 
+#[test]
+fn rejects_unbundling_comparator_submission_with_template_candidate_evidence() {
+    let root = temp_root("unbundling-comparator-submission-template-candidate");
+    let report_uri = root.join("unbundling_comparator_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "unbundling_comparator",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/unbundling-input.json",
+            "rule_count": 1,
+            "episode_count": 1,
+            "candidate_count": 1,
+            "candidates": [
+                {
+                    "candidate_id": "unbundling:UNBUNDLE-KNEE-001:MBR-1|PRV-A",
+                    "rule_id": "UNBUNDLE-KNEE-001",
+                    "episode_key": "MBR-1|PRV-A",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-A",
+                    "window_days": 30,
+                    "bundled_code": "KNEE-BUNDLE",
+                    "matched_component_codes": ["SCOPE-A"],
+                    "claim_ids": ["CLM-1", "CLM-2"],
+                    "policy_authority_ref": "policy:unbundling:knee:v1",
+                    "evidence_refs": [
+                        "policy:unbundling:knee:v1",
+                        "claims:CLM-1",
+                        "claims:local://template/unbundling/claim.json"
+                    ],
+                    "recommended_review": "medical_review_candidate"
+                }
+            ],
+            "evidence_refs": ["unbundling_comparator_input:local://inputs/unbundling-input.json"],
+            "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
+        }),
+    )
+    .unwrap();
+
+    let error = build_unbundling_comparator_submission(
+        &report_uri.to_string_lossy(),
+        "worker:build-unbundling-comparator",
+        "customer approved unbundling candidates",
+    )
+    .expect_err("template candidate evidence must fail");
+
+    assert!(error.to_string().contains(
+        "unbundling comparator candidate evidence_refs must not use local://template evidence"
+    ));
+}
+
 #[tokio::test]
 async fn submits_unbundling_comparator_candidates_to_api() {
     use tokio::net::TcpListener;

@@ -10,8 +10,9 @@ use std::{
 };
 
 use crate::{
-    api_url, read_json_report, required_non_empty, write_json, ClinicalCompatibilityRecord,
-    EpisodeAggregationReport, MemberProviderEpisodeRollup, PeerBenchmarkGroup, PeerBenchmarkReport,
+    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    required_non_empty, write_json, ClinicalCompatibilityRecord, EpisodeAggregationReport,
+    MemberProviderEpisodeRollup, PeerBenchmarkGroup, PeerBenchmarkReport,
     UnbundlingComparatorCandidate, UnbundlingComparatorReport,
 };
 
@@ -194,6 +195,37 @@ pub fn build_scoring_feature_context_materialization_submission(
     }
     if report.evidence_refs.is_empty() {
         bail!("scoring feature context materialization requires evidence_refs");
+    }
+    ensure_no_template_uri("scoring feature context report_uri", report_uri)?;
+    ensure_no_template_uri(
+        "scoring feature context claims_uri",
+        &report.source_uris.claims_uri,
+    )?;
+    ensure_no_template_uri(
+        "scoring feature context episode_rollups_uri",
+        &report.source_uris.episode_rollups_uri,
+    )?;
+    ensure_no_template_uri(
+        "scoring feature context peer_benchmarks_uri",
+        &report.source_uris.peer_benchmarks_uri,
+    )?;
+    ensure_no_template_uri(
+        "scoring feature context clinical_compatibility_uri",
+        &report.source_uris.clinical_compatibility_uri,
+    )?;
+    ensure_no_template_uri(
+        "scoring feature context unbundling_candidates_uri",
+        &report.source_uris.unbundling_candidates_uri,
+    )?;
+    ensure_no_template_evidence_refs(
+        "scoring feature context evidence_refs",
+        &report.evidence_refs,
+    )?;
+    for context in &report.contexts {
+        ensure_no_template_evidence_refs(
+            "scoring feature context record evidence_refs",
+            &context.evidence_refs,
+        )?;
     }
     for required_ref in [
         format!(

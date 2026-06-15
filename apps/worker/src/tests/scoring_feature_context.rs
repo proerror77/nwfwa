@@ -313,6 +313,181 @@ fn rejects_scoring_feature_context_submission_without_source_evidence() {
         .contains("episode_rollups:local://episode.json"));
 }
 
+#[test]
+fn rejects_scoring_feature_context_submission_with_template_source_uri() {
+    let root = temp_root("scoring-feature-context-submission-template-source");
+    let report_uri = root.join("scoring_feature_context_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "scoring_feature_context_materialization",
+            "report_version": 1,
+            "as_of_date": "2026-06-13",
+            "source_uris": {
+                "claims_uri": "local://claims.json",
+                "episode_rollups_uri": "local://episode.json",
+                "peer_benchmarks_uri": "local://template/peer.json",
+                "clinical_compatibility_uri": "local://clinical.json",
+                "unbundling_candidates_uri": "local://unbundling.json"
+            },
+            "claim_count": 1,
+            "context_count": 1,
+            "contexts": [
+                {
+                    "claim_id": "CLM-1",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-1",
+                    "peer_context": {"claim_amount_peer_percentile": 90},
+                    "clinical_compatibility_context": null,
+                    "episode_utilization_context": null,
+                    "evidence_refs": ["scoring_feature_contexts:CLM-1"],
+                    "data_sources": ["worker.peer_percentile_benchmark_rollup"],
+                    "missing_contexts": []
+                }
+            ],
+            "evidence_refs": [
+                "scoring_feature_context_claim_snapshot:local://claims.json",
+                "episode_rollups:local://episode.json",
+                "peer_benchmarks:local://template/peer.json",
+                "clinical_compatibility:local://clinical.json",
+                "unbundling_candidates:local://unbundling.json"
+            ],
+            "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
+        }),
+    )
+    .unwrap();
+
+    let error = build_scoring_feature_context_materialization_submission(
+        &report_uri.to_string_lossy(),
+        "sfc-mat-1",
+        "worker:scoring-contexts",
+        "pilot materialization",
+    )
+    .expect_err("template source uri must fail");
+
+    assert!(error.to_string().contains(
+        "scoring feature context peer_benchmarks_uri must not use local://template evidence"
+    ));
+}
+
+#[test]
+fn rejects_scoring_feature_context_submission_with_template_top_level_evidence() {
+    let root = temp_root("scoring-feature-context-submission-template-evidence");
+    let report_uri = root.join("scoring_feature_context_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "scoring_feature_context_materialization",
+            "report_version": 1,
+            "as_of_date": "2026-06-13",
+            "source_uris": {
+                "claims_uri": "local://claims.json",
+                "episode_rollups_uri": "local://episode.json",
+                "peer_benchmarks_uri": "local://peer.json",
+                "clinical_compatibility_uri": "local://clinical.json",
+                "unbundling_candidates_uri": "local://unbundling.json"
+            },
+            "claim_count": 1,
+            "context_count": 1,
+            "contexts": [
+                {
+                    "claim_id": "CLM-1",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-1",
+                    "peer_context": {"claim_amount_peer_percentile": 90},
+                    "clinical_compatibility_context": null,
+                    "episode_utilization_context": null,
+                    "evidence_refs": ["scoring_feature_contexts:CLM-1"],
+                    "data_sources": ["worker.peer_percentile_benchmark_rollup"],
+                    "missing_contexts": []
+                }
+            ],
+            "evidence_refs": [
+                "scoring_feature_context_claim_snapshot:local://claims.json",
+                "episode_rollups:local://episode.json",
+                "peer_benchmarks:local://peer.json",
+                "clinical_compatibility:local://clinical.json",
+                "unbundling_candidates:local://unbundling.json",
+                "worker_report:local://template/scoring/context.json"
+            ],
+            "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
+        }),
+    )
+    .unwrap();
+
+    let error = build_scoring_feature_context_materialization_submission(
+        &report_uri.to_string_lossy(),
+        "sfc-mat-1",
+        "worker:scoring-contexts",
+        "pilot materialization",
+    )
+    .expect_err("template top-level evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("scoring feature context evidence_refs must not use local://template evidence"));
+}
+
+#[test]
+fn rejects_scoring_feature_context_submission_with_template_record_evidence() {
+    let root = temp_root("scoring-feature-context-submission-template-record");
+    let report_uri = root.join("scoring_feature_context_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "scoring_feature_context_materialization",
+            "report_version": 1,
+            "as_of_date": "2026-06-13",
+            "source_uris": {
+                "claims_uri": "local://claims.json",
+                "episode_rollups_uri": "local://episode.json",
+                "peer_benchmarks_uri": "local://peer.json",
+                "clinical_compatibility_uri": "local://clinical.json",
+                "unbundling_candidates_uri": "local://unbundling.json"
+            },
+            "claim_count": 1,
+            "context_count": 1,
+            "contexts": [
+                {
+                    "claim_id": "CLM-1",
+                    "member_id": "MBR-1",
+                    "provider_id": "PRV-1",
+                    "peer_context": {"claim_amount_peer_percentile": 90},
+                    "clinical_compatibility_context": null,
+                    "episode_utilization_context": null,
+                    "evidence_refs": [
+                        "scoring_feature_contexts:CLM-1",
+                        "claims:local://template/scoring/claim.json"
+                    ],
+                    "data_sources": ["worker.peer_percentile_benchmark_rollup"],
+                    "missing_contexts": []
+                }
+            ],
+            "evidence_refs": [
+                "scoring_feature_context_claim_snapshot:local://claims.json",
+                "episode_rollups:local://episode.json",
+                "peer_benchmarks:local://peer.json",
+                "clinical_compatibility:local://clinical.json",
+                "unbundling_candidates:local://unbundling.json"
+            ],
+            "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
+        }),
+    )
+    .unwrap();
+
+    let error = build_scoring_feature_context_materialization_submission(
+        &report_uri.to_string_lossy(),
+        "sfc-mat-1",
+        "worker:scoring-contexts",
+        "pilot materialization",
+    )
+    .expect_err("template record evidence must fail");
+
+    assert!(error.to_string().contains(
+        "scoring feature context record evidence_refs must not use local://template evidence"
+    ));
+}
+
 #[tokio::test]
 async fn submits_scoring_feature_context_materialization_to_api() {
     use tokio::net::TcpListener;
