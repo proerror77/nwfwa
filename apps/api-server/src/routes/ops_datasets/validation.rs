@@ -1709,6 +1709,34 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
                         "ready job readiness records require non-empty evidence_refs",
                     ));
                 }
+                if readiness
+                    .get("artifact_uri")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(|value| value.trim().starts_with("local://template"))
+                {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT",
+                        "ready job readiness records must not use local://template artifact_uri",
+                    ));
+                }
+                let has_template_evidence_ref = readiness
+                    .get("evidence_refs")
+                    .and_then(|value| value.as_array())
+                    .into_iter()
+                    .flatten()
+                    .any(|reference| {
+                        reference
+                            .as_str()
+                            .is_some_and(|value| value.trim().contains("local://template"))
+                    });
+                if has_template_evidence_ref {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job evidence_refs must not use local://template evidence",
+                    ));
+                }
                 if required_evidence_prefixes.is_empty() {
                     return Err(ApiError::new(
                         StatusCode::BAD_REQUEST,
