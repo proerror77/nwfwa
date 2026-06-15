@@ -70,6 +70,7 @@ pub(in crate::routes) fn validate_retraining_output_request(
         }
     }
     validate_model_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
+    validate_production_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
     if let Some(artifact_sha256) = &request.artifact_sha256 {
         validate_sha256_digest(
             artifact_sha256,
@@ -86,6 +87,7 @@ pub(in crate::routes) fn validate_retraining_output_request(
             ));
         }
         validate_training_artifact_uri(training_artifact_uri, "INVALID_TRAINING_ARTIFACT_URI")?;
+        validate_production_artifact_uri(training_artifact_uri, "INVALID_TRAINING_ARTIFACT_URI")?;
     }
     if let Some(training_artifact_sha256) = &request.training_artifact_sha256 {
         if request.training_artifact_uri.is_none() {
@@ -114,8 +116,13 @@ pub(in crate::routes) fn validate_retraining_output_request(
             "INVALID_SERVING_MANIFEST_URI",
             "serving_manifest_uri must point to a JSON serving manifest",
         )?;
+        validate_production_artifact_uri(serving_manifest_uri, "INVALID_SERVING_MANIFEST_URI")?;
     }
     validate_json_report_uri(
+        &request.validation_report_uri,
+        "INVALID_VALIDATION_REPORT_URI",
+    )?;
+    validate_production_artifact_uri(
         &request.validation_report_uri,
         "INVALID_VALIDATION_REPORT_URI",
     )?;
@@ -171,6 +178,10 @@ pub(in crate::routes) fn validate_retraining_output_request(
             ));
         }
         validate_parquet_artifact_uri(
+            permutation_importance_uri,
+            "INVALID_RETRAINING_OUTPUT_PERMUTATION_IMPORTANCE",
+        )?;
+        validate_production_artifact_uri(
             permutation_importance_uri,
             "INVALID_RETRAINING_OUTPUT_PERMUTATION_IMPORTANCE",
         )?;
@@ -254,6 +265,16 @@ fn validate_retraining_output_evidence_refs(
             StatusCode::BAD_REQUEST,
             "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB",
             "model retraining output evidence_refs must not contain PII",
+        ));
+    }
+    if request.evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_EVIDENCE",
+            "model retraining output evidence_refs must not use local dry-run or placeholder evidence",
         ));
     }
     for expected_ref in [
@@ -516,6 +537,24 @@ pub(in crate::routes) fn validate_json_artifact_uri(
         Ok(())
     } else {
         Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    }
+}
+
+fn validate_production_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.starts_with("local://")
+        || !value.contains("://")
+        || value.contains('{')
+        || value.contains('}')
+    {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "model retraining output artifact URIs must use production evidence, not local dry-run or placeholder URIs",
+        ))
+    } else {
+        Ok(())
     }
 }
 

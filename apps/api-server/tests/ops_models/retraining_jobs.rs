@@ -296,7 +296,8 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         app.clone(),
         "POST",
         &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
-        r#"{
+        &format!(
+            r#"{{
           "actor": "trainer-worker",
           "notes": "Candidate model and validation report registered.",
           "candidate_model_version": "0.2.0-candidate",
@@ -330,10 +331,10 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "f1": "0.74",
           "accuracy": "0.79",
           "threshold": "0.52",
-          "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
+          "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
           "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
           "permutation_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
-          "metrics_json": {
+          "metrics_json": {{
             "out_of_time_auc": 0.82,
             "out_of_time_precision": 0.76,
             "out_of_time_recall": 0.71,
@@ -359,60 +360,62 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             "rule_candidate_backtest_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
             "rule_candidate_review_tasks_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json",
             "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval"
-          },
+          }},
           "mined_rule_candidates": [
-            {
+            {{
               "rule_id": "candidate_retraining_amount_ratio",
               "version": 1,
               "name": "Retraining mined amount ratio candidate",
               "review_mode": "both",
               "scheme_family": "high_risk_claim",
               "conditions": [
-                {
+                {{
                   "field": "claim_amount_to_limit_ratio",
                   "operator": ">=",
                   "value": 0.82
-                }
+                }}
               ],
-              "action": {
+              "action": {{
                 "score": 22,
                 "alert_code": "RETRAINING_AMOUNT_RATIO_CANDIDATE",
                 "recommended_action": "ManualReview",
                 "reason": "External training platform mined this explainable candidate from feature importance and backtest evidence."
-              }
-            },
-            {
+              }}
+            }},
+            {{
               "rule_id": "candidate_tree_provider_profile_and_amount",
               "version": 1,
               "name": "Decision tree mined provider profile and amount candidate",
               "review_mode": "both",
               "scheme_family": "high_risk_claim",
               "conditions": [
-                {
+                {{
                   "field": "provider_profile_score",
                   "operator": ">",
                   "value": 47.5
-                },
-                {
+                }},
+                {{
                   "field": "claim_amount_to_limit_ratio",
                   "operator": "<",
                   "value": 0.56
-                },
-                {
+                }},
+                {{
                   "field": "provider_region",
                   "operator": "in",
                   "value": ["SH", "BJ"]
-                }
+                }}
               ],
-              "action": {
+              "action": {{
                 "score": 34,
                 "alert_code": "TREE_MINED_PROVIDER_AMOUNT",
                 "recommended_action": "ManualReview",
                 "reason": "External training platform mined this shallow decision-tree path from training data. Human review is required."
-              }
-            }
+              }}
+            }}
           ]
-        }"#,
+        }}"#
+        )
+        .as_str(),
     )
     .await;
     assert_eq!(status, StatusCode::OK);

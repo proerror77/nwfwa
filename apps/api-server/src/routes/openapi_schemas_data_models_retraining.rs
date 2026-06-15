@@ -240,7 +240,7 @@ pub(super) fn retraining_schemas() -> Value {
                 "artifact_uri": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Supported serving model artifact formats: .onnx, .pkl, .joblib, or .json. Rust serving exports should use rust_serving_artifact.json."
+                    "description": "Production artifact URI for the serving model artifact. Supported formats: .onnx, .pkl, .joblib, or .json. Rust serving exports should use rust_serving_artifact.json."
                 },
                 "artifact_sha256": {
                     "type": ["string", "null"],
@@ -250,7 +250,7 @@ pub(super) fn retraining_schemas() -> Value {
                 "training_artifact_uri": {
                     "type": ["string", "null"],
                     "minLength": 1,
-                    "description": "Optional Python training artifact URI for audit and fallback reproducibility. Supported formats: .pkl or .joblib."
+                    "description": "Optional production artifact URI for Python training artifact audit and fallback reproducibility. Supported formats: .pkl or .joblib."
                 },
                 "training_artifact_sha256": {
                     "type": ["string", "null"],
@@ -260,20 +260,20 @@ pub(super) fn retraining_schemas() -> Value {
                 "serving_manifest_uri": {
                     "type": ["string", "null"],
                     "minLength": 1,
-                    "description": "Optional Rust serving manifest URI. Must point to serving_manifest.json when provided."
+                    "description": "Optional production artifact URI for the Rust serving manifest. Must point to serving_manifest.json when provided."
                 },
                 "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
                 "validation_report_uri": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Validation report URI must point to a JSON report."
+                    "description": "Production artifact URI for the validation report. Must point to a JSON report."
                 },
                 "evaluation_run_id": { "type": "string", "minLength": 1 },
                 "evidence_refs": {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, model_feature_importance, model_permutation_importance, model_training_artifacts when training_artifact_uri is present, and model_serving_manifests or serving_manifests when serving_manifest_uri is present."
+                    "description": "Model retraining output evidence_refs must not contain PII or local dry-run/template refs, and must include model_artifacts, model_validation_reports, model_evaluations, model_feature_importance, model_permutation_importance, model_training_artifacts when training_artifact_uri is present, and model_serving_manifests or serving_manifests when serving_manifest_uri is present."
                 },
                 "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                 "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },

@@ -234,6 +234,49 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_TRAINING_ARTIFACT_URI");
 
+    let mut local_artifact_uri = valid_request.clone();
+    local_artifact_uri["artifact_uri"] =
+        serde_json::json!("/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/model.onnx");
+    local_artifact_uri["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:/tmp/nwfwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = local_artifact_uri.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
+
+    let mut local_validation_report = valid_request.clone();
+    local_validation_report["validation_report_uri"] = serde_json::json!(
+        "local://template/fwa-models/baseline_fwa/0.2.0-candidate/validation.json"
+    );
+    local_validation_report["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_validation_reports:local://template/fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = local_validation_report.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_VALIDATION_REPORT_URI");
+
     let mut invalid_training_artifact_sha = valid_request.clone();
     invalid_training_artifact_sha["training_artifact_sha256"] = serde_json::json!("not-sha");
     let payload = invalid_training_artifact_sha.to_string();
@@ -540,6 +583,26 @@ async fn rejects_invalid_model_retraining_output_contract() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB");
+
+    let mut local_evidence_refs = valid_request.clone();
+    local_evidence_refs["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate",
+        "model_artifact_evaluations:local://template/model_artifact_evaluation_report.json"
+    ]);
+    let payload = local_evidence_refs.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_EVIDENCE");
 
     let mut csv_model_artifact = valid_request.clone();
     csv_model_artifact["artifact_uri"] =
