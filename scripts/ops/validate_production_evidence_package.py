@@ -795,6 +795,11 @@ def validate_render_summary_if_present(package_dir: Path, index: dict) -> None:
         summary.get("pending_worker_template_count") == len(index.get("worker_templates") or []),
         "render summary must keep worker templates pending until customer execution",
     )
+    require(
+        summary.get("status")
+        in {"rendered_with_blockers", "rendered_with_pending_worker_templates"},
+        "render summary must not report rendered_without_blockers while worker templates remain pending",
+    )
 
 
 def main() -> int:

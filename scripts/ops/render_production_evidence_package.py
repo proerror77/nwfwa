@@ -99,6 +99,12 @@ def render_package(package_dir: Path) -> dict:
                 "blocker_count": len(blockers),
             }
         )
+    if blocked_count or missing_sources:
+        status = "rendered_with_blockers"
+    elif pending_worker_template_count:
+        status = "rendered_with_pending_worker_templates"
+    else:
+        status = "rendered_without_blockers"
     summary = {
         "artifact_kind": "production_evidence_package_render_summary",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -108,11 +114,7 @@ def render_package(package_dir: Path) -> dict:
         "blocked_report_count": blocked_count,
         "worker_template_count": len(worker_templates),
         "pending_worker_template_count": pending_worker_template_count,
-        "status": (
-            "rendered_with_blockers"
-            if blocked_count or missing_sources
-            else "rendered_without_blockers"
-        ),
+        "status": status,
         "readiness_claim": False,
         "rendered_reports": rendered,
         "worker_templates": worker_templates,

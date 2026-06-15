@@ -364,6 +364,19 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "worker_template_count"):
                 validate_package(package_dir)
 
+    def test_rejects_render_summary_claiming_no_blockers_while_workers_are_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            render_package(package_dir)
+            summary_uri = package_dir / "render_summary.json"
+            summary = _read_json(summary_uri)
+            summary["status"] = "rendered_without_blockers"
+            _write_json(summary_uri, summary)
+
+            with self.assertRaisesRegex(AssertionError, "rendered_without_blockers"):
+                validate_package(package_dir)
+
     def test_rejects_runbook_missing_scoring_readback_step(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

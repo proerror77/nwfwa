@@ -57,7 +57,8 @@ class ProductionEvidencePackageRendererTests(unittest.TestCase):
 
             summary = render_package(package_dir)
 
-            self.assertEqual(summary["status"], "rendered_without_blockers")
+            self.assertEqual(summary["status"], "rendered_with_pending_worker_templates")
+            self.assertEqual(summary["pending_worker_template_count"], 4)
             validate_customer_data_governance_evidence(
                 _read_json(evidence_dir / "customer_data_governance_report.json")
             )
