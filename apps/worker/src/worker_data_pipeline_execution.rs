@@ -332,6 +332,7 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
             bail!("worker data pipeline execution report requires {required_ref} evidence");
         }
     }
+    validate_completed_job_submit_contracts(&job_executions)?;
     evidence_refs.push(format!(
         "worker_data_pipeline_execution_reports:{published_report_uri}"
     ));
@@ -815,6 +816,58 @@ fn validate_completed_job_evidence_prefixes(
                 bail!("{job_kind} evidence_refs must include {prefix}");
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_completed_job_submit_contracts(
+    job_executions: &[serde_json::Value],
+) -> anyhow::Result<()> {
+    for job in job_executions {
+        if json_string(job, "execution_status").as_deref() != Some("completed") {
+            continue;
+        }
+        let Some(job_kind) = json_string(job, "job_kind") else {
+            continue;
+        };
+        validate_completed_job_submit_contract(&job_kind, job)?;
+    }
+    Ok(())
+}
+
+fn validate_completed_job_submit_contract(
+    job_kind: &str,
+    job: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let Some((expected_api_path, expected_permission)) =
+        worker_data_pipeline_submit_job_contract(job_kind)
+    else {
+        return Ok(());
+    };
+    if json_string(job, "api_path").as_deref() != Some(expected_api_path) {
+        bail!("{job_kind} requires api_path {expected_api_path}");
+    }
+    if json_string(job, "required_permission").as_deref() != Some(expected_permission) {
+        bail!("{job_kind} requires required_permission {expected_permission}");
+    }
+    let Some(expected_flags) = worker_data_pipeline_submit_job_required_flags(job_kind) else {
+        return Ok(());
+    };
+    let Some(required_submit_flags) = job
+        .get("required_submit_flags")
+        .and_then(|value| value.as_array())
+    else {
+        bail!("{job_kind} requires required_submit_flags {expected_flags:?}");
+    };
+    let submitted_flags = required_submit_flags
+        .iter()
+        .map(|value| value.as_str())
+        .collect::<Option<Vec<_>>>();
+    if submitted_flags.as_deref() != Some(expected_flags) {
+        bail!("{job_kind} requires required_submit_flags {expected_flags:?}");
+    }
+    if job.get("submitted").and_then(|value| value.as_bool()) != Some(true) {
+        bail!("completed governed submit job executions require submitted true");
     }
     Ok(())
 }
