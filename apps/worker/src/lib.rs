@@ -409,6 +409,7 @@ fn ensure_production_artifact_uri(field: &str, value: &str) -> anyhow::Result<()
     let value = value.trim();
     if value.is_empty()
         || value.starts_with("local://")
+        || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
     {
