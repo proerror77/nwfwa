@@ -68,7 +68,7 @@ fn builds_provider_graph_signal_rollup_contract() {
         .expect("PRV-B rollup");
     assert!(provider_b.referral_concentration_entropy.unwrap() > 0.95);
     assert!(output_dir
-        .join("provider_graph_signal_rollup.json")
+        .join("provider_graph_signal_rollup_report.json")
         .exists());
     assert!(output_dir
         .join("provider_relationship_inputs.json")
@@ -78,7 +78,7 @@ fn builds_provider_graph_signal_rollup_contract() {
 #[test]
 fn builds_provider_graph_signal_rollup_submission() {
     let root = temp_root("provider-graph-rollup-submission");
-    let report_uri = root.join("provider_graph_signal_rollup.json");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
     write_json(
         report_uri.clone(),
         &serde_json::json!({
@@ -111,7 +111,7 @@ fn builds_provider_graph_signal_rollup_submission() {
 
     let submission = build_provider_graph_signal_rollup_submission_with_published_uris(
         &report_uri.to_string_lossy(),
-        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
         "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
         "worker:build-provider-graph-signals",
         "daily graph rollup",
@@ -126,20 +126,20 @@ fn builds_provider_graph_signal_rollup_submission() {
     );
     assert_eq!(
         submission.source_report_uri,
-        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json"
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json"
     );
     assert_eq!(
         submission.source_uri,
         "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json"
     );
-    assert!(submission.evidence_refs.contains(&"provider_graph_signal_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"provider_graph_signal_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json".to_string()));
     assert!(submission.evidence_refs.contains(&"provider_graph_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json".to_string()));
 }
 
 #[test]
 fn rejects_provider_graph_submission_without_claim_snapshot_evidence() {
     let root = temp_root("provider-graph-rollup-submission-missing-source-evidence");
-    let report_uri = root.join("provider_graph_signal_rollup.json");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
     write_json(
         report_uri.clone(),
         &serde_json::json!({
@@ -172,7 +172,7 @@ fn rejects_provider_graph_submission_without_claim_snapshot_evidence() {
 
     let error = build_provider_graph_signal_rollup_submission_with_published_uris(
         &report_uri.to_string_lossy(),
-        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
         "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
         "worker:build-provider-graph-signals",
         "daily graph rollup",
@@ -187,7 +187,7 @@ fn rejects_provider_graph_submission_without_claim_snapshot_evidence() {
 #[test]
 fn rejects_provider_graph_submission_with_template_record_evidence() {
     let root = temp_root("provider-graph-rollup-submission-template-evidence");
-    let report_uri = root.join("provider_graph_signal_rollup.json");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
     write_json(
         report_uri.clone(),
         &serde_json::json!({
@@ -220,7 +220,7 @@ fn rejects_provider_graph_submission_with_template_record_evidence() {
 
     let error = build_provider_graph_signal_rollup_submission_with_published_uris(
         &report_uri.to_string_lossy(),
-        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
         "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
         "worker:build-provider-graph-signals",
         "daily graph rollup",
@@ -237,7 +237,7 @@ async fn submits_provider_graph_signal_rollup_to_api() {
     use tokio::net::TcpListener;
 
     let root = temp_root("provider-graph-rollup-submit-api");
-    let report_uri = root.join("provider_graph_signal_rollup.json");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
     write_json(
         report_uri.clone(),
         &serde_json::json!({
@@ -288,7 +288,7 @@ async fn submits_provider_graph_signal_rollup_to_api() {
         &api_url,
         "provider-write-secret",
         &report_uri.to_string_lossy(),
-        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
         "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
         "worker:build-provider-graph-signals",
         "daily graph rollup",
@@ -302,7 +302,7 @@ async fn submits_provider_graph_signal_rollup_to_api() {
     assert!(request.contains("x-api-key: provider-write-secret"));
     assert!(request.contains(r#""provider_id":"PRV-GRAPH-1""#));
     assert!(request.contains(
-        "provider_graph_signal_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup.json"
+        "provider_graph_signal_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json"
     ));
     assert!(request.contains(
         r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json""#

@@ -191,7 +191,7 @@ pub fn build_provider_graph_signal_rollup(
     write_json(
         output_dir
             .as_ref()
-            .join("provider_graph_signal_rollup.json"),
+            .join("provider_graph_signal_rollup_report.json"),
         &report,
     )?;
     write_json(
