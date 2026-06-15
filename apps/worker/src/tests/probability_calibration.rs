@@ -154,7 +154,38 @@ fn rejects_probability_calibration_report_with_template_label_lineage() {
 
     assert!(error
         .to_string()
-        .contains("label_source_uri must not use local://template evidence"));
+        .contains("label_source_uri must use production evidence"));
+}
+
+#[test]
+fn rejects_probability_calibration_report_with_file_label_lineage() {
+    let root = temp_root("probability-calibration-file-labels");
+    let source_uri = root.join("probability-calibration-input.json");
+    write_json(
+        source_uri.clone(),
+        &serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "as_of_date": "2026-06-13",
+            "label_source_uri": "file://tmp/calibration-labels.json",
+            "rows": [
+                {
+                    "observation_id": "OBS-1",
+                    "predicted_probability": 0.7,
+                    "actual_label": 1
+                }
+            ]
+        }),
+    )
+    .unwrap();
+
+    let error =
+        build_probability_calibration_report(&source_uri.to_string_lossy(), root.join("out"), None)
+            .expect_err("file label source must fail");
+
+    assert!(error
+        .to_string()
+        .contains("label_source_uri must use production evidence"));
 }
 
 #[test]

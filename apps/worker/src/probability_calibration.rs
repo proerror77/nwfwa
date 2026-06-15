@@ -131,11 +131,10 @@ pub fn build_probability_calibration_report_with_expected_label_source_uri(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| anyhow::anyhow!("probability calibration input requires label_source_uri"))?
         .to_string();
-    if label_source_uri.starts_with("local://template") {
-        bail!(
-            "probability calibration input label_source_uri must not use local://template evidence"
-        );
-    }
+    ensure_production_artifact_uri(
+        "probability calibration input label_source_uri",
+        &label_source_uri,
+    )?;
     if let Some(expected_label_source_uri) = expected_label_source_uri {
         let expected_label_source_uri =
             required_non_empty("expected_label_source_uri", expected_label_source_uri)?;
