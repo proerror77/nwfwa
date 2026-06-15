@@ -128,6 +128,12 @@ before feedback workflow state changes. This is verified in `39db76d5` by
 `cargo test --locked -p api-server --test pilot_loop` and
 `cargo test --locked -p api-server --test ops_openapi`.
 
+Knowledge case publish writebacks now reject local dry-run/template evidence
+refs in submitted review-source evidence before preserving any canonical
+scoring trace evidence. This is verified in `3eea6430` by
+`cargo test --locked -p api-server --test knowledge_agent knowledge_cases` and
+`cargo test --locked -p api-server --test ops_openapi`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
