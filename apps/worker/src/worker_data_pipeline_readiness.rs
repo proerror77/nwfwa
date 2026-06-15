@@ -379,6 +379,7 @@ fn validate_worker_data_pipeline_readiness_review_tasks(
         }
         let job_kind = json_string(task, "job_kind")
             .context("worker_data_pipeline_readiness_review requires job_kind")?;
+        validate_worker_data_pipeline_submit_contract_fields(&job_kind, task)?;
         let matches_blocked_job = job_readiness.iter().any(|job| {
             json_string(job, "job_kind").as_deref() == Some(job_kind.as_str())
                 && json_string(job, "readiness_status").as_deref() == Some("blocked")
@@ -533,11 +534,11 @@ fn validate_ready_worker_data_pipeline_job(
             bail!("ready job evidence_refs must include required prefix {prefix}");
         }
     }
-    validate_ready_worker_data_pipeline_submit_contract(job_kind, job)?;
+    validate_worker_data_pipeline_submit_contract_fields(job_kind, job)?;
     Ok(())
 }
 
-fn validate_ready_worker_data_pipeline_submit_contract(
+fn validate_worker_data_pipeline_submit_contract_fields(
     job_kind: &str,
     job: &serde_json::Value,
 ) -> anyhow::Result<()> {
