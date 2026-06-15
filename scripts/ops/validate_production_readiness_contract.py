@@ -193,6 +193,14 @@ SCORING_READBACK_ACCEPTANCE_CHECK_IDS = {
     "no_scoring_readback_review_tasks",
 }
 
+ALERT_ROUTER_DELIVERY_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_mlops_alert_receiver_delivery_report",
+    "customer_receiver_delivery_succeeded",
+    "receiver_auth_and_signature_configured",
+    "published_scheduler_report_evidence_present",
+    "alert_delivery_boundary_no_model_actions",
+}
+
 RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECK_IDS = {
     "report_kind_is_retention_legal_hold_report",
     "minimum_six_year_retention_configured",
@@ -386,6 +394,26 @@ def validate_contract(contract: dict) -> list[dict]:
                 require(
                     check.get("description"),
                     f"scoring online readback acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "alert_router_delivery":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "alert router delivery gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == ALERT_ROUTER_DELIVERY_ACCEPTANCE_CHECK_IDS,
+                "alert router delivery gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"alert router delivery acceptance check {check.get('check_id')} missing description",
                 )
         if gate.get("gate_id") == "ocr_vector_analytics_execution":
             acceptance_checks = gate.get("acceptance_checks")
@@ -729,6 +757,62 @@ def validate_scoring_readback_evidence(report: dict) -> None:
         )
 
 
+def validate_alert_router_delivery_evidence(report: dict) -> None:
+    require(
+        report.get("report_kind") == "mlops_alert_receiver_delivery_report",
+        "alert router delivery evidence has wrong report_kind",
+    )
+    require(
+        report.get("delivery_status") == "delivered",
+        "alert router delivery evidence must have delivery_status delivered",
+    )
+    http_status = report.get("http_status")
+    require(
+        isinstance(http_status, int) and 200 <= http_status < 300,
+        "alert router delivery evidence must include a 2xx http_status",
+    )
+    require(
+        report.get("receiver_auth_configured") is True,
+        "alert router delivery evidence must configure receiver auth",
+    )
+    require(
+        report.get("receiver_signature_configured") is True,
+        "alert router delivery evidence must configure receiver signature",
+    )
+    require(
+        is_production_artifact_uri(report.get("scheduler_execution_report_uri")),
+        "alert router delivery evidence scheduler_execution_report_uri must be a production artifact URI, not a local dry-run or template URI",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "alert router delivery evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(evidence_refs, "alert router delivery evidence")
+    expected_scheduler_ref = (
+        f"mlops_scheduler_execution_reports:{report.get('scheduler_execution_report_uri')}"
+    )
+    require(
+        expected_scheduler_ref in evidence_refs,
+        f"alert router delivery evidence_refs must include {expected_scheduler_ref}",
+    )
+    boundary = report.get("governance_boundary", "")
+    require(
+        isinstance(boundary, str)
+        and all(
+            phrase in boundary
+            for phrase in (
+                "must not create retraining jobs",
+                "activate models",
+                "rollback models",
+                "assign fraud labels",
+                "write rules",
+            )
+        ),
+        "alert router delivery evidence must preserve the no model-action governance boundary",
+    )
+
+
 def validate_retention_legal_hold_evidence(report: dict) -> None:
     require(
         report.get("artifact_kind") == "retention_legal_hold_report",
@@ -986,6 +1070,9 @@ def main() -> int:
             artifacts["worker_data_pipeline_execution_report.json"]
         )
         validate_scoring_readback_evidence(artifacts["scoring_readback_report.json"])
+        validate_alert_router_delivery_evidence(
+            artifacts["alert_router_delivery_report.json"]
+        )
     print("production readiness contract validation passed")
     return 0
 

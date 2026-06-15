@@ -134,6 +134,29 @@ SCORING_READBACK_ACCEPTANCE_CHECKS = [
     },
 ]
 
+ALERT_ROUTER_DELIVERY_ACCEPTANCE_CHECKS = [
+    {
+        "check_id": "report_kind_is_mlops_alert_receiver_delivery_report",
+        "description": "Alert delivery evidence artifact has report_kind = mlops_alert_receiver_delivery_report.",
+    },
+    {
+        "check_id": "customer_receiver_delivery_succeeded",
+        "description": "Alert delivery evidence has delivery_status = delivered and a 2xx HTTP status from the customer receiver.",
+    },
+    {
+        "check_id": "receiver_auth_and_signature_configured",
+        "description": "Customer receiver delivery used bearer auth and HMAC signature configuration.",
+    },
+    {
+        "check_id": "published_scheduler_report_evidence_present",
+        "description": "Alert delivery evidence references a published scheduler execution report URI, not a local dry-run or template path.",
+    },
+    {
+        "check_id": "alert_delivery_boundary_no_model_actions",
+        "description": "Alert delivery evidence preserves the no retraining, activation, rollback, label assignment, or rule-writeback boundary.",
+    },
+]
+
 RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECKS = [
     {
         "check_id": "report_kind_is_retention_legal_hold_report",
@@ -265,6 +288,7 @@ REQUIRED_EVIDENCE = [
         "gate_id": "alert_router_delivery",
         "required_artifact": "alert_router_delivery_report.json",
         "description": "MLOps alert delivery reached the customer alert router and receipt was reviewed.",
+        "acceptance_checks": ALERT_ROUTER_DELIVERY_ACCEPTANCE_CHECKS,
     },
     {
         "gate_id": "retention_legal_hold",

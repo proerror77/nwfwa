@@ -16,6 +16,7 @@ from scripts.ops.validate_production_readiness_contract import (
     WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS,
     WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS,
+    validate_alert_router_delivery_evidence,
     validate_model_serving_slo_evidence,
     validate_retention_legal_hold_evidence,
     validate_scoring_readback_evidence,
@@ -180,6 +181,35 @@ def retention_legal_hold_report() -> dict:
         "evidence_refs": [
             "retention_policy:s3://customer-prod-artifacts/policies/retention.json",
             "legal_hold_policy:s3://customer-prod-artifacts/policies/legal-hold.json",
+        ],
+    }
+
+
+def alert_router_delivery_report() -> dict:
+    return {
+        "report_kind": "mlops_alert_receiver_delivery_report",
+        "report_version": 1,
+        "receiver_id": "customer-alert-router-v1",
+        "model_key": "baseline_fwa",
+        "model_version": "0.2.0",
+        "scheduler_execution_report_uri": "s3://customer-prod-artifacts/mlops/scheduler.json",
+        "alert_delivery_task_count": 1,
+        "receiver_url_configured": True,
+        "receiver_auth_configured": True,
+        "receiver_signature_configured": True,
+        "max_attempts": 3,
+        "attempt_count": 1,
+        "delivery_status": "delivered",
+        "http_status": 202,
+        "response_body_excerpt": "accepted",
+        "governance_boundary": (
+            "alert receiver delivery may notify an external receiver only; it "
+            "must not create retraining jobs, activate models, rollback models, "
+            "assign fraud labels, or write rules"
+        ),
+        "evidence_refs": [
+            "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/mlops/scheduler.json",
+            "model_versions:baseline_fwa:0.2.0",
         ],
     }
 
@@ -478,6 +508,31 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AssertionError, "archive_storage_uri"):
             validate_retention_legal_hold_evidence(report)
+
+    def test_alert_router_delivery_accepts_customer_receiver_receipt(self) -> None:
+        validate_alert_router_delivery_evidence(alert_router_delivery_report())
+
+    def test_alert_router_delivery_rejects_local_scheduler_report_uri(self) -> None:
+        report = alert_router_delivery_report()
+        report["scheduler_execution_report_uri"] = "file://tmp/scheduler.json"
+
+        with self.assertRaisesRegex(AssertionError, "scheduler_execution_report_uri"):
+            validate_alert_router_delivery_evidence(report)
+
+    def test_alert_router_delivery_requires_published_scheduler_evidence_ref(
+        self,
+    ) -> None:
+        report = alert_router_delivery_report()
+        report["evidence_refs"] = [
+            reference
+            for reference in report["evidence_refs"]
+            if not reference.startswith("mlops_scheduler_execution_reports:")
+        ]
+
+        with self.assertRaisesRegex(
+            AssertionError, "mlops_scheduler_execution_reports:"
+        ):
+            validate_alert_router_delivery_evidence(report)
 
     def test_scoring_readback_rejects_blocked_contract_only_report(self) -> None:
         report = scoring_readback_report()
