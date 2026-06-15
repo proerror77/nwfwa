@@ -356,6 +356,13 @@ fn readiness_blockers(
     {
         blockers.push("missing_artifact_uri".into());
     }
+    if check
+        .artifact_uri
+        .as_deref()
+        .is_some_and(|value| value.trim().starts_with("local://template"))
+    {
+        blockers.push("template_artifact_uri_not_replaced".into());
+    }
     if !check.customer_approved {
         blockers.push("customer_approval_missing".into());
     }
@@ -387,6 +394,13 @@ fn readiness_blockers(
             .any(|reference| reference.trim().is_empty())
     {
         blockers.push("missing_evidence_refs".into());
+    }
+    if check
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        blockers.push("template_evidence_refs_not_replaced".into());
     }
     if required_evidence_prefixes
         .iter()
