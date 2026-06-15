@@ -63,7 +63,7 @@ WORKER_DATA_PIPELINE_ACCEPTANCE_CHECKS = [
     },
     {
         "check_id": "review_task_count_zero",
-        "description": "Execution evidence has review_task_count = 0.",
+        "description": "Execution evidence has review_task_count = 0 and review_tasks = [].",
     },
     {
         "check_id": "required_job_kinds_completed",
@@ -130,7 +130,7 @@ SCORING_READBACK_ACCEPTANCE_CHECKS = [
     },
     {
         "check_id": "no_scoring_readback_review_tasks",
-        "description": "Scoring readback evidence has zero blockers and zero review tasks.",
+        "description": "Scoring readback evidence has zero blockers, review_task_count = 0, and review_tasks = [].",
     },
 ]
 

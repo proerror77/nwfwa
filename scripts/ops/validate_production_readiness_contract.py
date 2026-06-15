@@ -480,6 +480,10 @@ def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
         report.get("review_task_count") == 0,
         "worker data pipeline execution evidence must have zero review tasks",
     )
+    require(
+        report.get("review_tasks") == [],
+        "worker data pipeline execution evidence review_tasks must be empty",
+    )
     job_executions = report.get("job_executions")
     require(
         isinstance(job_executions, list) and job_executions,
@@ -693,6 +697,10 @@ def validate_scoring_readback_evidence(report: dict) -> None:
     require(
         report.get("review_task_count") == 0,
         "scoring readback evidence must have zero review tasks",
+    )
+    require(
+        report.get("review_tasks") == [],
+        "scoring readback evidence review_tasks must be empty",
     )
     evidence_refs = report.get("evidence_refs")
     require(

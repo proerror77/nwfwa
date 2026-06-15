@@ -83,6 +83,7 @@ def worker_execution_report(include_snapshot_evidence: bool = True) -> dict:
         "scheduler_status": "completed",
         "pending_or_failed_job_count": 0,
         "review_task_count": 0,
+        "review_tasks": [],
         "job_count": len(jobs),
         "job_executions": jobs,
         "evidence_refs": [
@@ -176,6 +177,19 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         report = worker_execution_report(include_snapshot_evidence=True)
 
         validate_worker_data_pipeline_execution_evidence(copy.deepcopy(report))
+
+    def test_worker_execution_requires_no_review_tasks(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        report["review_tasks"] = [
+            {
+                "task_kind": "worker_data_pipeline_execution_review",
+                "job_kind": "provider_profile_window_rollup",
+                "review_queue": "worker_data_pipeline_ops",
+            }
+        ]
+
+        with self.assertRaisesRegex(AssertionError, "review_tasks"):
+            validate_worker_data_pipeline_execution_evidence(report)
 
     def test_worker_execution_requires_submit_job_source_lineage(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=True)
@@ -284,6 +298,18 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
 
     def test_scoring_readback_accepts_verified_response_artifact(self) -> None:
         validate_scoring_readback_evidence(scoring_readback_report())
+
+    def test_scoring_readback_requires_no_review_tasks(self) -> None:
+        report = scoring_readback_report()
+        report["review_tasks"] = [
+            {
+                "task_kind": "scoring_online_readback_review",
+                "review_queue": "worker_data_pipeline_ops",
+            }
+        ]
+
+        with self.assertRaisesRegex(AssertionError, "review_tasks"):
+            validate_scoring_readback_evidence(report)
 
     def test_scoring_readback_requires_all_worker_score_response_prefixes(self) -> None:
         report = scoring_readback_report()
