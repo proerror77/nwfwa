@@ -163,6 +163,14 @@ pub(crate) fn assert_lifecycle_contract(schema: &serde_json::Value) {
             .any(|field| field == "status")
     );
     assert!(
+        schema["components"]["schemas"]["SubmitMlopsAlertDeliveryRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local dry-run/template refs"),
+        "missing SubmitMlopsAlertDeliveryRequest.evidence_refs production-ref contract"
+    );
+    assert!(
         schema["components"]["schemas"]["RulePromotionGatesResponse"]["required"]
             .as_array()
             .unwrap()

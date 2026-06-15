@@ -172,7 +172,7 @@ pub(super) fn retraining_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include model_versions:{model_key}:{model_version} and mlops_scheduler_execution_reports:{scheduler_execution_report_uri}."
+                    "description": "Must include model_versions:{model_key}:{model_version} and mlops_scheduler_execution_reports:{scheduler_execution_report_uri}; values must not contain PII or local dry-run/template refs."
                 }
             }
         },
