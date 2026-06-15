@@ -472,7 +472,7 @@ async fn nonpassing_probability_calibration_blocks_model_activation() {
             r#"{{
               "actor": "worker:build-probability-calibration-report",
               "notes": "non-passing holdout calibration evidence",
-              "report_uri": "data/model-artifacts/baseline_fwa/{candidate_version}/calibration/probability_calibration_report.json",
+              "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/{candidate_version}/calibration/probability_calibration_report.json",
               "report_kind": "probability_calibration_report",
               "model_version": "{candidate_version}",
               "as_of_date": "2026-06-14",
@@ -513,7 +513,7 @@ async fn nonpassing_probability_calibration_blocks_model_activation() {
               ],
               "evidence_refs": [
                 "model_versions:baseline_fwa:{candidate_version}",
-                "probability_calibration_reports:data/model-artifacts/baseline_fwa/{candidate_version}/calibration/probability_calibration_report.json",
+                "probability_calibration_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/{candidate_version}/calibration/probability_calibration_report.json",
                 "probability_calibration_input:s3://customer-prod-artifacts/baseline_fwa/{candidate_version}/calibration/holdout-predictions.json",
                 "calibration_labels:s3://customer-prod-artifacts/baseline_fwa/{candidate_version}/calibration/holdout-labels.json"
               ],

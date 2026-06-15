@@ -8,7 +8,7 @@ fn probability_calibration_payload(evidence_refs: &str) -> String {
         r#"{{
           "actor": "worker:build-probability-calibration-report",
           "notes": "labeled holdout calibration evidence",
-          "report_uri": "data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+          "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
           "report_kind": "probability_calibration_report",
           "model_version": "0.1.0",
           "as_of_date": "2026-06-14",
@@ -49,7 +49,7 @@ fn probability_calibration_payload(evidence_refs: &str) -> String {
 
 fn complete_probability_calibration_evidence_refs() -> &'static str {
     r#""model_versions:baseline_fwa:0.1.0",
-            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "probability_calibration_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
             "probability_calibration_input:s3://customer-prod-artifacts/calibration/holdout-predictions.json",
             "calibration_labels:s3://customer-prod-artifacts/calibration/holdout-labels.json""#
 }
@@ -77,7 +77,7 @@ async fn submits_probability_calibration_report_as_review_only_governance_event(
         "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
         &probability_calibration_payload(
             r#""model_versions:baseline_fwa:0.1.0",
-            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json""#,
+            "probability_calibration_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json""#,
         ),
     )
     .await;
@@ -113,7 +113,7 @@ async fn submits_probability_calibration_report_as_review_only_governance_event(
     assert_eq!(response["persisted_report"]["model_version"], "0.1.0");
     assert_eq!(
         response["persisted_report"]["report_uri"],
-        "data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json"
+        "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json"
     );
     assert_eq!(response["persisted_report"]["row_count"], 100);
     assert_eq!(response["persisted_report"]["calibration_status"], "passed");
@@ -178,7 +178,7 @@ async fn rejects_probability_calibration_report_template_uri() {
     let app = build_app(test_config()).unwrap();
     let payload = probability_calibration_payload(complete_probability_calibration_evidence_refs())
         .replace(
-            "data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
             "local://template/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
         );
 
@@ -202,7 +202,7 @@ async fn rejects_probability_calibration_report_local_uri() {
     let app = build_app(test_config()).unwrap();
     let payload = probability_calibration_payload(complete_probability_calibration_evidence_refs())
         .replace(
-            "data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
             "local://inputs/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
         );
 
@@ -230,7 +230,7 @@ async fn rejects_probability_calibration_template_evidence_refs() {
     let app = build_app(test_config()).unwrap();
     let payload = probability_calibration_payload(
         r#""model_versions:baseline_fwa:0.1.0",
-            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "probability_calibration_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
             "probability_calibration_input:local://template/calibration/holdout-predictions.json",
             "calibration_labels:s3://customer-prod-artifacts/calibration/holdout-labels.json""#,
     );
@@ -252,7 +252,7 @@ async fn rejects_probability_calibration_local_evidence_refs() {
     let app = build_app(test_config()).unwrap();
     let payload = probability_calibration_payload(
         r#""model_versions:baseline_fwa:0.1.0",
-            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "probability_calibration_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
             "probability_calibration_input:local://inputs/calibration/holdout-predictions.json",
             "calibration_labels:s3://customer-prod-artifacts/calibration/holdout-labels.json""#,
     );

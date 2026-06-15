@@ -407,7 +407,7 @@ pub(crate) async fn submit_probability_calibration_report_for_test(
     model_version: &str,
 ) {
     let report_uri =
-        format!("data/model-artifacts/baseline_fwa/{model_version}/calibration/probability_calibration_report.json");
+        format!("s3://customer-prod-artifacts/model-artifacts/baseline_fwa/{model_version}/calibration/probability_calibration_report.json");
     let (status, response) = json_request(
         app,
         "POST",
