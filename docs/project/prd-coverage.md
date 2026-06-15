@@ -134,6 +134,12 @@ scoring trace evidence. This is verified in `3eea6430` by
 `cargo test --locked -p api-server --test knowledge_agent knowledge_cases` and
 `cargo test --locked -p api-server --test ops_openapi`.
 
+Rule candidate review writebacks now reject local dry-run/template evidence
+refs before candidate decisions are audited or accepted into draft governance
+review. This is verified in `88be67bd` by
+`cargo test --locked -p api-server --test ops_rules candidate_reviews` and
+`cargo test --locked -p api-server --test ops_openapi`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
