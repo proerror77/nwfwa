@@ -277,6 +277,23 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_TRIAGE_REVIEW_EVIDENCE");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "siu-reviewer-1",
+          "reviewer": "medical-reviewer-1",
+          "priority": "high",
+          "notes": "Open investigation from high-risk FWA lead.",
+          "evidence_refs": ["triage_decisions:http://localhost:8080/open-case.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_TRIAGE_REVIEW_EVIDENCE");
+
     let (status, triage) = json_request(
         app.clone(),
         "POST",

@@ -295,6 +295,21 @@ async fn updates_qa_feedback_item_status_with_audit_trail() {
           "status": "resolved",
           "actor_id": "rule-ops",
           "notes": "Rule threshold reviewed and accepted.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-FEEDBACK-STATUS-1", "qa_feedback:http://[::1]:8080/status.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_QA_FEEDBACK_STATUS_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-FEEDBACK-STATUS-1/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "rule-ops",
+          "notes": "Rule threshold reviewed and accepted.",
           "evidence_refs": ["qa_feedback:qa_feedback_QA-FEEDBACK-STATUS-1", "qa_feedback:file://tmp/status.json"]
         }"#,
     )
