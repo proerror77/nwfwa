@@ -2,6 +2,8 @@ use super::flags::{take_flag_value, take_optional_flag_value, take_optional_u64_
 
 pub async fn run(mut args: Vec<String>) -> anyhow::Result<()> {
     let scheduler_report = take_flag_value(&mut args, "--scheduler-report")?;
+    let published_scheduler_report_uri =
+        take_flag_value(&mut args, "--published-scheduler-report-uri")?;
     let receiver_url = take_flag_value(&mut args, "--receiver-url")?;
     let receiver_id = take_flag_value(&mut args, "--receiver-id")?;
     let receiver_token = take_optional_flag_value(&mut args, "--receiver-token")?;
@@ -16,6 +18,7 @@ pub async fn run(mut args: Vec<String>) -> anyhow::Result<()> {
     }
     let report = crate::deliver_mlops_alert_receiver_webhook(
         &scheduler_report,
+        &published_scheduler_report_uri,
         &receiver_url,
         &receiver_id,
         receiver_token.as_deref(),

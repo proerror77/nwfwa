@@ -342,11 +342,20 @@ fn evidence_ref_is_production(reference: &str) -> bool {
 
 pub fn build_mlops_alert_receiver_payload(
     scheduler_execution_report_uri: &str,
+    published_scheduler_execution_report_uri: &str,
     receiver_id: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let scheduler_execution_report_uri = required_non_empty(
         "scheduler_execution_report_uri",
         scheduler_execution_report_uri,
+    )?;
+    let published_scheduler_execution_report_uri = required_non_empty(
+        "published_scheduler_execution_report_uri",
+        published_scheduler_execution_report_uri,
+    )?;
+    ensure_published_artifact_uri(
+        "MLOps alert receiver published_scheduler_execution_report_uri",
+        published_scheduler_execution_report_uri,
     )?;
     let receiver_id = required_non_empty("receiver_id", receiver_id)?;
     let report = read_json_report(scheduler_execution_report_uri)?;
@@ -373,12 +382,17 @@ pub fn build_mlops_alert_receiver_payload(
         .into_iter()
         .flatten()
         .filter_map(|value| value.as_str().map(str::to_string))
+        .filter(|reference| evidence_ref_is_production(reference))
         .chain(std::iter::once(format!(
-            "mlops_scheduler_execution_reports:{scheduler_execution_report_uri}"
+            "mlops_scheduler_execution_reports:{published_scheduler_execution_report_uri}"
         )))
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+    let alert_delivery_tasks = sanitize_alert_receiver_tasks(
+        alert_delivery_tasks,
+        published_scheduler_execution_report_uri,
+    );
 
     Ok(serde_json::json!({
         "event_kind": "mlops_alert_receiver_delivery",
@@ -386,7 +400,7 @@ pub fn build_mlops_alert_receiver_payload(
         "receiver_id": receiver_id,
         "model_key": model_key,
         "model_version": model_version,
-        "scheduler_execution_report_uri": scheduler_execution_report_uri,
+        "scheduler_execution_report_uri": published_scheduler_execution_report_uri,
         "alert_delivery_status": alert_delivery_status,
         "alert_delivery_task_count": alert_delivery_tasks.len(),
         "alert_delivery_tasks": alert_delivery_tasks,
@@ -395,8 +409,39 @@ pub fn build_mlops_alert_receiver_payload(
     }))
 }
 
+fn sanitize_alert_receiver_tasks(
+    tasks: Vec<serde_json::Value>,
+    published_scheduler_execution_report_uri: &str,
+) -> Vec<serde_json::Value> {
+    tasks
+        .into_iter()
+        .map(|mut task| {
+            let Some(object) = task.as_object_mut() else {
+                return task;
+            };
+            let mut evidence_refs = object
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .filter(|reference| evidence_ref_is_production(reference))
+                .collect::<BTreeSet<_>>();
+            evidence_refs.insert(format!(
+                "mlops_scheduler_execution_reports:{published_scheduler_execution_report_uri}"
+            ));
+            object.insert(
+                "evidence_refs".into(),
+                serde_json::json!(evidence_refs.into_iter().collect::<Vec<_>>()),
+            );
+            task
+        })
+        .collect()
+}
+
 pub async fn deliver_mlops_alert_receiver_webhook(
     scheduler_execution_report_uri: &str,
+    published_scheduler_execution_report_uri: &str,
     receiver_url: &str,
     receiver_id: &str,
     receiver_token: Option<&str>,
@@ -412,7 +457,11 @@ pub async fn deliver_mlops_alert_receiver_webhook(
         .map(str::trim)
         .filter(|value| !value.is_empty());
     let max_attempts = max_attempts.clamp(1, 5);
-    let payload = build_mlops_alert_receiver_payload(scheduler_execution_report_uri, receiver_id)?;
+    let payload = build_mlops_alert_receiver_payload(
+        scheduler_execution_report_uri,
+        published_scheduler_execution_report_uri,
+        receiver_id,
+    )?;
     let payload_body =
         serde_json::to_string(&payload).context("serialize MLOps alert receiver payload")?;
     let signature = receiver_secret

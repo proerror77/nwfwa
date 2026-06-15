@@ -443,17 +443,23 @@ async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
                         "trigger": "model_drift_detected",
                         "severity": "high",
                         "route_key": "mlops_retraining_readiness",
-                        "delivery_status": "queued_for_external_alert_router"
+                        "delivery_status": "queued_for_external_alert_router",
+                        "evidence_refs": [
+                            "mlops_monitoring_plans:local://template/mlops_monitoring_plan.json",
+                            "model_versions:baseline_fwa:0.2.0"
+                        ]
                     }
                 ],
                 "evidence_refs": [
                     "mlops_monitoring_plans:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json",
-                    "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json"
+                    "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json",
+                    "mlops_scheduler_execution_reports:file://tmp/mlops_scheduler_execution_report.json"
                 ],
                 "governance_boundary": "scheduler execution evidence may queue alert delivery and review work only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels"
             }),
         )
         .unwrap();
+    let published_scheduler_report_uri = "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json";
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let receiver_url = format!("http://{}/mlops-alerts", listener.local_addr().unwrap());
     let receiver = tokio::spawn(async move {
@@ -501,6 +507,7 @@ async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
 
     let report = deliver_mlops_alert_receiver_webhook(
         &scheduler_report.to_string_lossy(),
+        published_scheduler_report_uri,
         &receiver_url,
         "customer-alpha-alert-router",
         Some("receiver-token"),
@@ -531,6 +538,10 @@ async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
         .contains("x-fwa-signature-sha256: hmac-sha256="));
     assert!(request.contains("\"event_kind\":\"mlops_alert_receiver_delivery\""));
     assert!(request.contains("\"trigger\":\"model_drift_detected\""));
+    assert!(request.contains(published_scheduler_report_uri));
+    assert!(!request.contains("local://template"));
+    assert!(!request.contains("file://tmp"));
+    assert!(!request.contains(root.to_string_lossy().as_ref()));
     assert_eq!(report["delivery_status"], "delivered");
     assert_eq!(report["http_status"], 202);
     assert_eq!(report["attempt_count"], 2);

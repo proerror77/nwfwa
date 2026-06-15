@@ -109,3 +109,27 @@ async fn mlops_alert_delivery_submit_command_requires_published_scheduler_report
         "unexpected error: {error}"
     );
 }
+
+#[tokio::test]
+async fn mlops_alert_receiver_delivery_command_requires_published_scheduler_report_uri() {
+    let error = commands::dispatch(vec![
+        "deliver-mlops-alert-receiver-webhook".into(),
+        "--scheduler-report".into(),
+        "local-scheduler-report.json".into(),
+        "--receiver-url".into(),
+        "http://127.0.0.1:1/mlops-alerts".into(),
+        "--receiver-id".into(),
+        "customer-alert-router-v1".into(),
+        "--output-dir".into(),
+        "out".into(),
+    ])
+    .await
+    .expect_err("receiver delivery command must fail before webhook delivery");
+
+    assert!(
+        error
+            .to_string()
+            .contains("missing required flag --published-scheduler-report-uri"),
+        "unexpected error: {error}"
+    );
+}

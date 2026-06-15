@@ -480,6 +480,7 @@ Send queued MLOps alert tasks to a customer receiver webhook:
 ```bash
 cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook \
   --scheduler-report artifacts/mlops-monitoring/cycle/scheduler/mlops_scheduler_execution_report.json \
+  --published-scheduler-report-uri s3://customer-prod-artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
   --receiver-url "$FWA_ALERT_RECEIVER_URL" \
   --receiver-id customer-alert-router-v1 \
   --receiver-token "$FWA_ALERT_RECEIVER_TOKEN" \
@@ -493,6 +494,10 @@ delivery evidence and keeps the receiver payload governance-only. The worker can
 attach bearer auth, HMAC signature, and bounded retry evidence; the customer
 receiver still owns downstream notification policy, escalation, and
 acknowledgement.
+The worker reads `--scheduler-report` from the local run workspace, but the
+payload sent to the customer receiver uses
+`--published-scheduler-report-uri`; do not send local filesystem paths as
+customer evidence.
 
 Analytics-scale export proof:
 
