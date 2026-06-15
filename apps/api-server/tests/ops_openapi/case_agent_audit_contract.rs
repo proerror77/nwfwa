@@ -258,11 +258,25 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
             .contains("must not contain PII")
     );
     assert!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
+    );
+    assert!(
         schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
             ["description"]
             .as_str()
             .unwrap()
             .contains("must not contain PII")
+    );
+    assert!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
     );
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["scheme_family"]
