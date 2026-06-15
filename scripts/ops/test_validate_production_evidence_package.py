@@ -529,6 +529,31 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "published-score-response-uri"):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_missing_alert_receiver_published_scheduler_uri(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            command = next(
+                command
+                for command in runbook["commands"]
+                if command["step"] == "deliver_mlops_alert_receiver_webhook"
+            )
+            command["command"] = command["command"].replace(
+                "--published-scheduler-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json ",
+                "",
+            )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "published-scheduler-report-uri",
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_missing_governed_submit_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

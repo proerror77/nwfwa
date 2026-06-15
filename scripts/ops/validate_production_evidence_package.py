@@ -140,6 +140,10 @@ REQUIRED_RUNBOOK_STEPS = {
         "build-scoring-readback-report",
         "evidence/scoring_readback_report.json",
     ),
+    "deliver_mlops_alert_receiver_webhook": (
+        "deliver-mlops-alert-receiver-webhook",
+        "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-alert-receiver/<customer-scheduler-run-id>/mlops_alert_receiver_delivery_report.json",
+    ),
 }
 REQUIRED_RUNBOOK_ARTIFACT_BUILD_COMMANDS = {
     "fetch-oig-sam-sanctions-snapshot",
@@ -268,6 +272,9 @@ REQUIRED_RUNBOOK_BUILD_FLAGS = {
         "--published-input-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_input.json",
         "--published-score-request-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_request.json",
         "--published-score-response-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_response.json",
+    },
+    "deliver_mlops_alert_receiver_webhook": {
+        "--published-scheduler-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json",
     },
 }
 REQUIRED_RUNBOOK_COMMAND_PATHS = {

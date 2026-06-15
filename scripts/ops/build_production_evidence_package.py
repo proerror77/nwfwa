@@ -547,6 +547,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
             "filled worker readiness input",
             "customer scheduler run-status artifact",
             "customer-authorized scoring request and score response artifacts",
+            "customer alert receiver URL and published scheduler execution report URI",
         ],
         "commands": [
             {
@@ -853,6 +854,21 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "--output-dir artifacts/production-evidence-package/evidence"
                 ),
                 "output": "evidence/scoring_readback_report.json",
+            },
+            {
+                "step": "deliver_mlops_alert_receiver_webhook",
+                "command": (
+                    "cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook "
+                    "--scheduler-report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json "
+                    "--published-scheduler-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json "
+                    "--receiver-url <customer-approved-alert-receiver-url> "
+                    "--receiver-id <customer-alert-receiver-id> "
+                    "--receiver-token <runtime-secret-not-persisted> "
+                    "--receiver-secret <runtime-secret-not-persisted> "
+                    "--max-attempts 3 "
+                    "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-alert-receiver/<customer-scheduler-run-id>"
+                ),
+                "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-alert-receiver/<customer-scheduler-run-id>/mlops_alert_receiver_delivery_report.json",
             },
         ],
         "validation_command": (
