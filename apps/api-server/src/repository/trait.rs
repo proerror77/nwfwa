@@ -308,6 +308,11 @@ pub trait DatasetsRepository: Send + Sync {
         model_dataset_id: &str,
     ) -> anyhow::Result<Option<DatasetRecord>>;
 
+    async fn get_model_dataset_lineage(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<ModelDatasetLineageRecord>>;
+
     async fn register_model_evaluation(
         &self,
         input: RegisterModelEvaluationInput,

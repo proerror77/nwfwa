@@ -152,6 +152,16 @@ impl InMemoryScoringRepository {
         &self,
         model_dataset_id: &str,
     ) -> anyhow::Result<Option<DatasetRecord>> {
+        Ok(self
+            .in_memory_get_model_dataset_lineage(model_dataset_id)
+            .await?
+            .map(|lineage| lineage.source_dataset))
+    }
+
+    pub(super) async fn in_memory_get_model_dataset_lineage(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<ModelDatasetLineageRecord>> {
         let model_dataset = self
             .model_datasets
             .lock()
@@ -170,7 +180,14 @@ impl InMemoryScoringRepository {
         let Some(feature_set) = feature_set else {
             return Ok(None);
         };
-        self.in_memory_get_dataset(&feature_set.dataset_id).await
+        let source_dataset = self.in_memory_get_dataset(&feature_set.dataset_id).await?;
+        Ok(
+            source_dataset.map(|source_dataset| ModelDatasetLineageRecord {
+                model_dataset,
+                feature_set,
+                source_dataset,
+            }),
+        )
     }
 
     pub(super) async fn in_memory_register_model_evaluation(
@@ -564,7 +581,10 @@ fn clinical_compatibility_key(
     compatibility_key: &str,
     reference_version: &str,
 ) -> String {
-    format!("{}\x00{}\x00{}", customer_scope_id, compatibility_key, reference_version)
+    format!(
+        "{}\x00{}\x00{}",
+        customer_scope_id, compatibility_key, reference_version
+    )
 }
 
 fn unbundling_candidate_key(
@@ -572,7 +592,10 @@ fn unbundling_candidate_key(
     candidate_id: &str,
     as_of_date: &str,
 ) -> String {
-    format!("{}\x00{}\x00{}", customer_scope_id, candidate_id, as_of_date)
+    format!(
+        "{}\x00{}\x00{}",
+        customer_scope_id, candidate_id, as_of_date
+    )
 }
 
 fn worker_data_pipeline_report_key(customer_scope_id: &str, source_report_uri: &str) -> String {

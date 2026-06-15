@@ -432,6 +432,14 @@ impl DatasetsRepository for InMemoryScoringRepository {
             .await
     }
 
+    async fn get_model_dataset_lineage(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<ModelDatasetLineageRecord>> {
+        self.in_memory_get_model_dataset_lineage(model_dataset_id)
+            .await
+    }
+
     async fn register_model_evaluation(
         &self,
         input: RegisterModelEvaluationInput,

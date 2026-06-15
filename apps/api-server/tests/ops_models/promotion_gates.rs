@@ -2,8 +2,10 @@ use api_server::app::build_app;
 use axum::http::StatusCode;
 
 use super::support::{
-    get_json, json_request, register_activation_candidate, register_draft_model_dataset_for_test,
-    register_model_dataset_for_test, register_unhealthy_model_dataset_for_test, test_config,
+    get_json, json_request, register_activation_candidate,
+    register_inactive_feature_set_model_dataset_for_test, register_inactive_model_dataset_for_test,
+    register_inactive_source_dataset_for_test, register_model_dataset_for_test,
+    register_unhealthy_model_dataset_for_test, test_config,
 };
 
 #[tokio::test]
@@ -168,7 +170,7 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
 async fn model_promotion_gates_block_draft_source_datasets() {
     let app = build_app(test_config()).unwrap();
     let model_dataset_id =
-        register_draft_model_dataset_for_test(app.clone(), "draft_source_gate").await;
+        register_inactive_source_dataset_for_test(app.clone(), "draft_source_gate").await;
 
     let (status, _) = json_request(
         app.clone(),
@@ -218,7 +220,106 @@ async fn model_promotion_gates_block_draft_source_datasets() {
         .find(|gate| gate["label"] == "Source data quality")
         .unwrap();
     assert_eq!(source_gate["passed"], false);
-    assert_eq!(source_gate["evidence_source"], "dataset");
+    assert_eq!(source_gate["evidence_source"], "dataset_lineage");
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_inactive_feature_sets() {
+    let app = build_app(test_config()).unwrap();
+    let model_dataset_id =
+        register_inactive_feature_set_model_dataset_for_test(app.clone(), "draft_feature_set_gate")
+            .await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_draft_feature_set_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/draft_feature_set_gate/feature_importance.parquet",
+              "metrics_json": {{"data_quality_score": 0.91}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("feature set is not active")));
+    let dataset_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Immutable dataset")
+        .unwrap();
+    assert_eq!(dataset_gate["passed"], false);
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_inactive_model_datasets() {
+    let app = build_app(test_config()).unwrap();
+    let model_dataset_id =
+        register_inactive_model_dataset_for_test(app.clone(), "draft_model_dataset_gate").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_draft_model_dataset_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/draft_model_dataset_gate/feature_importance.parquet",
+              "metrics_json": {{"data_quality_score": 0.91}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model dataset is not active")));
+    let dataset_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Immutable dataset")
+        .unwrap();
+    assert_eq!(dataset_gate["passed"], false);
 }
 
 #[tokio::test]

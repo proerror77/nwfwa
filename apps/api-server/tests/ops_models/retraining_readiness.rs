@@ -2,8 +2,8 @@ use api_server::app::build_app;
 use axum::http::StatusCode;
 
 use super::support::{
-    get_json, json_request, register_draft_model_dataset_for_test, register_model_dataset_for_test,
-    test_config,
+    get_json, json_request, register_inactive_model_dataset_for_test,
+    register_model_dataset_for_test, test_config,
 };
 
 #[tokio::test]
@@ -178,10 +178,11 @@ async fn model_retraining_readiness_prepares_when_drift_and_labels_are_ready() {
 }
 
 #[tokio::test]
-async fn model_retraining_readiness_blocks_draft_source_datasets() {
+async fn model_retraining_readiness_blocks_inactive_model_datasets() {
     let app = build_app(test_config()).unwrap();
     let model_dataset_id =
-        register_draft_model_dataset_for_test(app.clone(), "retraining_draft_source").await;
+        register_inactive_model_dataset_for_test(app.clone(), "retraining_draft_model_dataset")
+            .await;
 
     let (status, _) = json_request(
         app.clone(),
@@ -189,7 +190,7 @@ async fn model_retraining_readiness_blocks_draft_source_datasets() {
         "/api/v1/ops/model-evaluations",
         &format!(
             r#"{{
-              "evaluation_run_id": "eval_baseline_retraining_draft_source",
+              "evaluation_run_id": "eval_baseline_retraining_draft_model_dataset",
               "model_key": "baseline_fwa",
               "model_version": "0.1.0",
               "model_dataset_id": "{model_dataset_id}",
@@ -202,7 +203,7 @@ async fn model_retraining_readiness_blocks_draft_source_datasets() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/retraining_draft_source/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/retraining_draft_model_dataset/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.31, "data_quality_score": 0.91}}
             }}"#
         ),
@@ -238,7 +239,7 @@ async fn model_retraining_readiness_blocks_draft_source_datasets() {
     assert!(body["blockers"]
         .as_array()
         .unwrap()
-        .contains(&serde_json::json!("source dataset is not active")));
+        .contains(&serde_json::json!("model dataset is not active")));
     assert!(body["retraining_triggers"]
         .as_array()
         .unwrap()

@@ -446,10 +446,10 @@ async fn load_model_promotion_gates_for_optional_version(
     let latest_evaluation = evaluations.iter().find(|evaluation| {
         evaluation.model_key == model.model_key && evaluation.model_version == model.version
     });
-    let source_dataset = match latest_evaluation {
+    let model_dataset_lineage = match latest_evaluation {
         Some(evaluation) => state
             .repository
-            .get_model_dataset_source_dataset(&evaluation.model_dataset_id)
+            .get_model_dataset_lineage(&evaluation.model_dataset_id)
             .await
             .map_err(internal_error("MODEL_DATASET_LINEAGE_FAILED"))?,
         None => None,
@@ -482,7 +482,7 @@ async fn load_model_promotion_gates_for_optional_version(
         &feedback_items,
         latest_review.as_ref(),
         latest_calibration_report.as_ref(),
-        source_dataset.as_ref(),
+        model_dataset_lineage.as_ref(),
     );
     Ok((model, gates))
 }

@@ -94,22 +94,6 @@ pub(crate) async fn register_model_dataset_for_test(app: axum::Router, suffix: &
     register_active_model_dataset_for_test(app, suffix).await
 }
 
-pub(crate) async fn register_draft_model_dataset_for_test(
-    app: axum::Router,
-    suffix: &str,
-) -> String {
-    register_model_dataset_for_test_with_profiles(
-        app,
-        suffix,
-        "draft",
-        "data/eval",
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-    )
-    .await
-}
-
 pub(crate) async fn register_active_model_dataset_for_test(
     app: axum::Router,
     suffix: &str,
@@ -117,6 +101,8 @@ pub(crate) async fn register_active_model_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
+        "active",
+        "active",
         "active",
         "s3://fwa-model-data",
         r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
@@ -134,6 +120,8 @@ pub(crate) async fn register_unhealthy_model_dataset_for_test(
         app,
         suffix,
         "active",
+        "active",
+        "active",
         "s3://fwa-model-data",
         "{}",
         r#"{"allowed_values": [0, 1]}"#,
@@ -142,10 +130,66 @@ pub(crate) async fn register_unhealthy_model_dataset_for_test(
     .await
 }
 
+pub(crate) async fn register_inactive_feature_set_model_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        "active",
+        "draft",
+        "active",
+        "s3://fwa-model-data",
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+    )
+    .await
+}
+
+pub(crate) async fn register_inactive_source_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        "draft",
+        "active",
+        "active",
+        "s3://fwa-model-data",
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+    )
+    .await
+}
+
+pub(crate) async fn register_inactive_model_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        "active",
+        "active",
+        "draft",
+        "s3://fwa-model-data",
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+    )
+    .await
+}
+
 async fn register_model_dataset_for_test_with_profiles(
     app: axum::Router,
     suffix: &str,
-    status: &str,
+    dataset_status: &str,
+    feature_set_status: &str,
+    model_dataset_status: &str,
     uri_prefix: &str,
     key_profile: &str,
     label_profile: &str,
@@ -173,7 +217,7 @@ async fn register_model_dataset_for_test_with_profiles(
               "storage_format": "parquet",
               "schema_hash": "sha256:model-{suffix}",
               "row_count": 100,
-              "status": "{status}",
+              "status": "{dataset_status}",
               "splits": [
                 {{
                   "split_name": "validation",
@@ -230,7 +274,7 @@ async fn register_model_dataset_for_test_with_profiles(
               "feature_list_json": ["claim_amount_to_limit_ratio"],
               "row_count": 100,
               "label_column": "confirmed_fwa",
-              "status": "{status}"
+              "status": "{feature_set_status}"
             }}"#
         ),
     )
@@ -252,7 +296,7 @@ async fn register_model_dataset_for_test_with_profiles(
               "test_uri": null,
               "row_counts_json": {{"train": 80, "validation": 20}},
               "label_distribution_json": {{"train": {{"1": 20, "0": 60}}, "validation": {{"1": 5, "0": 15}}}},
-              "status": "{status}"
+              "status": "{model_dataset_status}"
             }}"#
         ),
     )

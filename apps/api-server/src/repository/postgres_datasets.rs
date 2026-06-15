@@ -268,8 +268,37 @@ pub(super) async fn get_model_dataset_source_dataset(
     repository: &PostgresScoringRepository,
     model_dataset_id: &str,
 ) -> anyhow::Result<Option<DatasetRecord>> {
-    let row: Option<(String,)> = sqlx::query_as(
-        "SELECT fs.dataset_id::text
+    Ok(get_model_dataset_lineage(repository, model_dataset_id)
+        .await?
+        .map(|lineage| lineage.source_dataset))
+}
+
+pub(super) async fn get_model_dataset_lineage(
+    repository: &PostgresScoringRepository,
+    model_dataset_id: &str,
+) -> anyhow::Result<Option<ModelDatasetLineageRecord>> {
+    let row = sqlx::query(
+        "SELECT md.id::text AS model_dataset_id,
+                md.business_domain AS model_business_domain,
+                md.task_type,
+                md.label_name,
+                md.feature_set_id::text AS model_feature_set_id,
+                md.train_uri,
+                md.validation_uri,
+                md.test_uri,
+                md.row_counts_json,
+                md.label_distribution_json,
+                md.status AS model_dataset_status,
+                fs.id::text AS feature_set_id,
+                fs.business_domain AS feature_business_domain,
+                fs.feature_set_key,
+                fs.version AS feature_set_version,
+                fs.dataset_id::text AS source_dataset_id,
+                fs.features_uri,
+                fs.feature_list_json,
+                fs.row_count AS feature_row_count,
+                fs.label_column AS feature_label_column,
+                fs.status AS feature_set_status
              FROM model_dataset_versions md
              JOIN feature_set_versions fs ON fs.id = md.feature_set_id
              WHERE md.id = $1::uuid",
@@ -278,10 +307,41 @@ pub(super) async fn get_model_dataset_source_dataset(
     .fetch_optional(&repository.pool)
     .await?;
 
-    let Some((dataset_id,)) = row else {
+    let Some(row) = row else {
         return Ok(None);
     };
-    load_dataset_record(&repository.pool, &dataset_id).await
+    let dataset_id: String = row.try_get("source_dataset_id")?;
+    let Some(source_dataset) = load_dataset_record(&repository.pool, &dataset_id).await? else {
+        return Ok(None);
+    };
+    Ok(Some(ModelDatasetLineageRecord {
+        model_dataset: ModelDatasetRecord {
+            model_dataset_id: row.try_get("model_dataset_id")?,
+            business_domain: row.try_get("model_business_domain")?,
+            task_type: row.try_get("task_type")?,
+            label_name: row.try_get("label_name")?,
+            feature_set_id: row.try_get("model_feature_set_id")?,
+            train_uri: row.try_get("train_uri")?,
+            validation_uri: row.try_get("validation_uri")?,
+            test_uri: row.try_get("test_uri")?,
+            row_counts_json: row.try_get("row_counts_json")?,
+            label_distribution_json: row.try_get("label_distribution_json")?,
+            status: row.try_get("model_dataset_status")?,
+        },
+        feature_set: FeatureSetRecord {
+            feature_set_id: row.try_get("feature_set_id")?,
+            business_domain: row.try_get("feature_business_domain")?,
+            feature_set_key: row.try_get("feature_set_key")?,
+            version: row.try_get("feature_set_version")?,
+            dataset_id,
+            features_uri: row.try_get("features_uri")?,
+            feature_list_json: row.try_get("feature_list_json")?,
+            row_count: row.try_get::<i64, _>("feature_row_count")? as u64,
+            label_column: row.try_get("feature_label_column")?,
+            status: row.try_get("feature_set_status")?,
+        },
+        source_dataset,
+    }))
 }
 
 pub(super) async fn register_model_evaluation(

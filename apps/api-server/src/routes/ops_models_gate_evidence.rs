@@ -1,5 +1,5 @@
 use super::{ops_datasets::build_dataset_health_record, ops_models::ModelArtifactEvidenceSummary};
-use crate::repository::DatasetRecord;
+use crate::repository::ModelDatasetLineageRecord;
 use serde_json::Value;
 
 pub(super) struct SourceDataQualityGate {
@@ -35,18 +35,39 @@ pub(super) fn model_artifact_evidence_summary(metrics: &Value) -> ModelArtifactE
 
 pub(super) fn source_data_quality_gate(
     metrics: &serde_json::Value,
-    source_dataset: Option<&DatasetRecord>,
+    model_dataset_lineage: Option<&ModelDatasetLineageRecord>,
 ) -> SourceDataQualityGate {
-    if let Some(dataset) = source_dataset {
+    if let Some(lineage) = model_dataset_lineage {
+        let dataset = &lineage.source_dataset;
         let health = build_dataset_health_record(dataset);
-        if dataset.status != "active" {
+        if lineage.model_dataset.status != "active" {
+            return SourceDataQualityGate {
+                dataset_id: health.dataset_id,
+                score: Some(health.data_quality_score),
+                status: "not_active".into(),
+                passed: false,
+                blocker: "model dataset is not active",
+                evidence_source: "dataset_lineage",
+            };
+        }
+        if lineage.feature_set.status != "active" {
+            return SourceDataQualityGate {
+                dataset_id: health.dataset_id,
+                score: Some(health.data_quality_score),
+                status: "not_active".into(),
+                passed: false,
+                blocker: "feature set is not active",
+                evidence_source: "dataset_lineage",
+            };
+        }
+        if lineage.source_dataset.status != "active" {
             return SourceDataQualityGate {
                 dataset_id: health.dataset_id,
                 score: Some(health.data_quality_score),
                 status: "not_active".into(),
                 passed: false,
                 blocker: "source dataset is not active",
-                evidence_source: "dataset",
+                evidence_source: "dataset_lineage",
             };
         }
         return SourceDataQualityGate {

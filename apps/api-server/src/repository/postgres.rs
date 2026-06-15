@@ -484,6 +484,13 @@ impl DatasetsRepository for PostgresScoringRepository {
         postgres_datasets::get_model_dataset_source_dataset(self, model_dataset_id).await
     }
 
+    async fn get_model_dataset_lineage(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<ModelDatasetLineageRecord>> {
+        postgres_datasets::get_model_dataset_lineage(self, model_dataset_id).await
+    }
+
     async fn register_model_evaluation(
         &self,
         input: RegisterModelEvaluationInput,

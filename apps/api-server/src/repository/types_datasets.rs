@@ -133,6 +133,13 @@ pub struct ModelDatasetRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelDatasetLineageRecord {
+    pub model_dataset: ModelDatasetRecord,
+    pub feature_set: FeatureSetRecord,
+    pub source_dataset: DatasetRecord,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterModelDatasetInput {
     pub business_domain: String,
     pub task_type: String,
