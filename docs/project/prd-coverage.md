@@ -108,6 +108,11 @@ This is verified in `a9b9160d` by
 `cargo test --locked -p api-server --test knowledge_agent` and
 `cargo test --locked -p api-server --test ops_openapi`.
 
+Case triage and case-status workflow write paths now reject local dry-run or
+template evidence refs before case state changes. This is verified in
+`22c8b7e5` by `cargo test --locked -p api-server --test ops_cases` and
+`cargo test --locked -p api-server --test ops_openapi`.
+
 ## June 2026 Gap Backlog
 
 | Priority | Backlog item | Coverage status |
