@@ -295,7 +295,10 @@ fn is_production_artifact_uri(value: &str) -> bool {
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
     let value = value.trim();
-    value.contains("local://") || value.contains('{') || value.contains('}')
+    value.contains("local://")
+        || value.contains("file://")
+        || value.contains('{')
+        || value.contains('}')
 }
 
 pub(super) fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiError> {

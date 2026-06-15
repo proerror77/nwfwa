@@ -663,6 +663,43 @@ async fn dataset_write_paths_reject_template_top_level_evidence_refs() {
 }
 
 #[tokio::test]
+async fn dataset_write_paths_reject_file_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_report:file://tmp/datasets/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
 async fn dataset_write_paths_reject_template_record_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
 
@@ -689,6 +726,46 @@ async fn dataset_write_paths_reject_template_record_evidence_refs() {
         "policy:unbundling:BUNDLE-900",
         "claims:CLM-001",
         "claims:local://template/datasets/claim.json"
+    ]);
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        &unbundling_payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE");
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_file_record_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let mut clinical_payload: serde_json::Value =
+        serde_json::from_str(clinical_compatibility_reference_payload()).unwrap();
+    clinical_payload["records"][0]["evidence_refs"] = serde_json::json!([
+        "policy:clinical:J:IMG-900",
+        "medical_policy:file://tmp/clinical-policy.json"
+    ]);
+    let (status, body) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        &clinical_payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE");
+
+    let mut unbundling_payload: serde_json::Value =
+        serde_json::from_str(unbundling_comparator_payload()).unwrap();
+    unbundling_payload["candidates"][0]["evidence_refs"] = serde_json::json!([
+        "policy:unbundling:BUNDLE-900",
+        "claims:CLM-001",
+        "claims:file://tmp/claim.json"
     ]);
     let (status, body) = json_request_with_key(
         app,
@@ -3419,6 +3496,31 @@ async fn scoring_feature_context_materialization_rejects_local_top_level_evidenc
 }
 
 #[tokio::test]
+async fn scoring_feature_context_materialization_rejects_file_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!(
+            "worker_report:file://tmp/scoring/context.json"
+        ));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
 async fn scoring_feature_context_materialization_requires_claim_snapshot_evidence() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -3475,6 +3577,29 @@ async fn scoring_feature_context_materialization_rejects_template_context_eviden
     payload["contexts"][0]["evidence_refs"] = serde_json::json!([
         "claims:CLM-WORKER-CONTEXT-1",
         "scoring_feature_contexts:local://template/scoring/context.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_file_context_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["contexts"][0]["evidence_refs"] = serde_json::json!([
+        "claims:CLM-WORKER-CONTEXT-1",
+        "scoring_feature_contexts:file://tmp/scoring/context.json"
     ]);
 
     let (status, body) = json_request_with_key(
