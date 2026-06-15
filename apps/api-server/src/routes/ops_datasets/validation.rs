@@ -101,11 +101,7 @@ fn missing_required_worker_data_pipeline_prefix(
     required_worker_data_pipeline_prefixes(job_kind)?
         .iter()
         .copied()
-        .find(|required_prefix| {
-            !required_evidence_prefixes
-                .iter()
-                .any(|prefix| *prefix == *required_prefix)
-        })
+        .find(|required_prefix| !required_evidence_prefixes.contains(required_prefix))
 }
 
 fn is_known_worker_data_pipeline_job_kind(job_kind: &str) -> bool {

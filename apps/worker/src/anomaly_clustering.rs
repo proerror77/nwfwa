@@ -73,7 +73,7 @@ fn build_anomaly_clustering_report_submission_from_report(
     notes: &str,
     report: &serde_json::Value,
 ) -> anyhow::Result<AnomalyClusteringReportSubmission> {
-    let report_kind = json_string(&report, "report_kind")
+    let report_kind = json_string(report, "report_kind")
         .filter(|value| {
             matches!(
                 value.as_str(),
@@ -83,16 +83,16 @@ fn build_anomaly_clustering_report_submission_from_report(
             )
         })
         .context("report_kind must be provider_peer_clustering, provider_graph_community_clustering, or claim_entity_clustering")?;
-    let dataset_key = json_string(&report, "dataset_key")
+    let dataset_key = json_string(report, "dataset_key")
         .filter(|value| !value.trim().is_empty())
         .context("anomaly clustering report requires dataset_key")?;
-    let dataset_version = json_string(&report, "dataset_version")
+    let dataset_version = json_string(report, "dataset_version")
         .filter(|value| !value.trim().is_empty())
         .context("anomaly clustering report requires dataset_version")?;
-    let label_policy = json_string(&report, "label_policy")
+    let label_policy = json_string(report, "label_policy")
         .filter(|value| !value.trim().is_empty())
         .context("anomaly clustering report requires label_policy")?;
-    let governance_boundary = json_string(&report, "governance_boundary")
+    let governance_boundary = json_string(report, "governance_boundary")
         .filter(|value| !value.trim().is_empty())
         .context("anomaly clustering report requires governance_boundary")?;
     let mut evidence_refs = report

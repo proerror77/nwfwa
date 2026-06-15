@@ -624,7 +624,7 @@ fn has_non_production_evidence_refs(reported: &serde_json::Value) -> bool {
         .any(|reference| {
             reference
                 .as_str()
-                .is_some_and(|value| evidence_ref_is_non_production(value))
+                .is_some_and(evidence_ref_is_non_production)
         })
 }
 
@@ -852,11 +852,7 @@ fn validate_completed_job_evidence_prefixes(
             .and_then(|value| value.as_array())
             .into_iter()
             .flatten()
-            .any(|value| {
-                value
-                    .as_str()
-                    .is_some_and(|reference| evidence_ref_is_non_production(reference))
-            })
+            .any(|value| value.as_str().is_some_and(evidence_ref_is_non_production))
         {
             bail!("{job_kind} evidence_refs must not use local or placeholder evidence");
         }

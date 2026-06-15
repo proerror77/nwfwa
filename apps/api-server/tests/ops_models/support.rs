@@ -101,13 +101,15 @@ pub(crate) async fn register_active_model_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
-        "active",
-        "active",
-        "active",
-        "s3://fwa-model-data",
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "active",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
     )
     .await
 }
@@ -119,13 +121,15 @@ pub(crate) async fn register_unhealthy_model_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
-        "active",
-        "active",
-        "active",
-        "s3://fwa-model-data",
-        "{}",
-        r#"{"allowed_values": [0, 1]}"#,
-        "{}",
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "active",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: "{}",
+            label_profile: r#"{"allowed_values": [0, 1]}"#,
+            feature_profile: "{}",
+        },
     )
     .await
 }
@@ -137,13 +141,15 @@ pub(crate) async fn register_inactive_feature_set_model_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
-        "active",
-        "draft",
-        "active",
-        "s3://fwa-model-data",
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "draft",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
     )
     .await
 }
@@ -155,13 +161,15 @@ pub(crate) async fn register_inactive_source_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
-        "draft",
-        "active",
-        "active",
-        "s3://fwa-model-data",
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        ModelDatasetProfileConfig {
+            dataset_status: "draft",
+            feature_set_status: "active",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
     )
     .await
 }
@@ -173,28 +181,43 @@ pub(crate) async fn register_inactive_model_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
-        "active",
-        "active",
-        "draft",
-        "s3://fwa-model-data",
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "active",
+            model_dataset_status: "draft",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
     )
     .await
+}
+
+struct ModelDatasetProfileConfig<'a> {
+    dataset_status: &'a str,
+    feature_set_status: &'a str,
+    model_dataset_status: &'a str,
+    uri_prefix: &'a str,
+    key_profile: &'a str,
+    label_profile: &'a str,
+    feature_profile: &'a str,
 }
 
 async fn register_model_dataset_for_test_with_profiles(
     app: axum::Router,
     suffix: &str,
-    dataset_status: &str,
-    feature_set_status: &str,
-    model_dataset_status: &str,
-    uri_prefix: &str,
-    key_profile: &str,
-    label_profile: &str,
-    feature_profile: &str,
+    config: ModelDatasetProfileConfig<'_>,
 ) -> String {
+    let ModelDatasetProfileConfig {
+        dataset_status,
+        feature_set_status,
+        model_dataset_status,
+        uri_prefix,
+        key_profile,
+        label_profile,
+        feature_profile,
+    } = config;
     let (_, dataset) = json_request(
         app.clone(),
         "POST",

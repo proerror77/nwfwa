@@ -292,12 +292,8 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB");
 
-    let (status, completed) = json_request(
-        app.clone(),
-        "POST",
-        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
-        &format!(
-            r#"{{
+    let completion_payload = format!(
+        r#"{{
           "actor": "trainer-worker",
           "notes": "Candidate model and validation report registered.",
           "candidate_model_version": "0.2.0-candidate",
@@ -414,8 +410,12 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             }}
           ]
         }}"#
-        )
-        .as_str(),
+    );
+    let (status, completed) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
+        &completion_payload,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
