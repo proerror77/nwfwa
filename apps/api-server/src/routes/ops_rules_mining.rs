@@ -8,8 +8,9 @@ use super::ops_rules_types::{
     RuleDiscoveryRequest, RuleDiscoveryResponse, SaveRuleCandidateRequest,
 };
 use super::ops_rules_validation::{
-    candidate_review_outcome, validate_candidate_review_backtest_evidence,
-    validate_candidate_review_shadow_evidence, validate_rule_candidate,
+    candidate_review_outcome, production_evidence_ref_is_non_production,
+    validate_candidate_review_backtest_evidence, validate_candidate_review_shadow_evidence,
+    validate_rule_candidate,
 };
 use crate::{
     app::AppState,
@@ -713,13 +714,10 @@ pub async fn review_rule_candidate(
 fn validate_candidate_review_production_evidence_refs(
     evidence_refs: &[String],
 ) -> Result<(), ApiError> {
-    if evidence_refs.iter().any(|reference| {
-        let reference = reference.trim();
-        reference.contains("local://")
-            || reference.contains("file://")
-            || reference.contains('{')
-            || reference.contains('}')
-    }) {
+    if evidence_refs
+        .iter()
+        .any(|reference| production_evidence_ref_is_non_production(reference))
+    {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_CANDIDATE_REVIEW_EVIDENCE",
