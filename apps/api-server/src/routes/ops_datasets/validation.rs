@@ -213,10 +213,17 @@ fn validate_worker_data_pipeline_submit_job_contract(
             format!("{job_kind} requires required_submit_flags {expected_flags:?}"),
         ));
     };
-    let submitted_flags = required_submit_flags
+    let Some(submitted_flags) = required_submit_flags
         .iter()
-        .filter_map(|value| value.as_str())
-        .collect::<Vec<_>>();
+        .map(|value| value.as_str())
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_submit_flags {expected_flags:?}"),
+        ));
+    };
     if submitted_flags.as_slice() != expected_flags {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
