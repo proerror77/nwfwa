@@ -307,6 +307,18 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "production artifact URI"):
             validate_worker_data_pipeline_execution_evidence(report)
 
+    def test_worker_execution_rejects_localhost_job_artifact_uri(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        peer_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "peer_percentile_benchmark"
+        )
+        peer_job["reported_artifact_uri"] = "http://127.0.0.1:9000/peer.json"
+
+        with self.assertRaisesRegex(AssertionError, "production artifact URI"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
     def test_worker_execution_rejects_relative_job_artifact_uri(self) -> None:
         report = worker_execution_report(include_snapshot_evidence=True)
         peer_job = next(
@@ -331,6 +343,20 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(AssertionError, "file://"):
+            validate_worker_data_pipeline_execution_evidence(report)
+
+    def test_worker_execution_rejects_localhost_job_evidence_refs(self) -> None:
+        report = worker_execution_report(include_snapshot_evidence=True)
+        peer_job = next(
+            job
+            for job in report["job_executions"]
+            if job["job_kind"] == "peer_percentile_benchmark"
+        )
+        peer_job["evidence_refs"].append(
+            "peer_benchmarks:http://localhost:9000/peer_percentile_benchmark.json"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "local dry-run"):
             validate_worker_data_pipeline_execution_evidence(report)
 
     def test_worker_execution_rejects_template_top_level_evidence_refs(self) -> None:
@@ -442,6 +468,13 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "input_uri"):
             validate_scoring_readback_evidence(report)
 
+    def test_scoring_readback_rejects_localhost_input_uri(self) -> None:
+        report = scoring_readback_report()
+        report["input_uri"] = "http://localhost:9000/scoring_readback_input.json"
+
+        with self.assertRaisesRegex(AssertionError, "input_uri"):
+            validate_scoring_readback_evidence(report)
+
     def test_scoring_readback_rejects_relative_input_uri(self) -> None:
         report = scoring_readback_report()
         report["input_uri"] = "artifacts/scoring_readback_input.json"
@@ -465,6 +498,15 @@ class ProductionReadinessContractValidationTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(AssertionError, "file://"):
+            validate_scoring_readback_evidence(report)
+
+    def test_scoring_readback_rejects_localhost_matched_evidence_refs(self) -> None:
+        report = scoring_readback_report()
+        report["checks"][0]["matched_evidence_refs"].append(
+            "peer_benchmarks:http://127.0.0.1:9000/peer.json"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "local dry-run"):
             validate_scoring_readback_evidence(report)
 
     def test_scoring_readback_rejects_template_top_level_evidence_refs(self) -> None:
