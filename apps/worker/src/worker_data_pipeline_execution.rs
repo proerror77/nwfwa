@@ -332,6 +332,7 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
             bail!("worker data pipeline execution report requires {required_ref} evidence");
         }
     }
+    validate_completed_job_scheduler_statuses(&job_executions)?;
     validate_completed_job_submit_contracts(&job_executions)?;
     evidence_refs.push(format!(
         "worker_data_pipeline_execution_reports:{published_report_uri}"
@@ -815,6 +816,27 @@ fn validate_completed_job_evidence_prefixes(
             {
                 bail!("{job_kind} evidence_refs must include {prefix}");
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_completed_job_scheduler_statuses(
+    job_executions: &[serde_json::Value],
+) -> anyhow::Result<()> {
+    for job in job_executions {
+        if json_string(job, "execution_status").as_deref() != Some("completed") {
+            continue;
+        }
+        if json_string(job, "reported_status").as_deref() != Some("succeeded") {
+            bail!("completed job executions require reported_status succeeded");
+        }
+        let has_blocked_dependencies = job
+            .get("blocked_dependencies")
+            .and_then(|value| value.as_array())
+            .is_some_and(|dependencies| !dependencies.is_empty());
+        if has_blocked_dependencies {
+            bail!("completed job executions must not include blocked_dependencies");
         }
     }
     Ok(())
