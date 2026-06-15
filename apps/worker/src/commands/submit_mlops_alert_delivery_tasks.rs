@@ -1,12 +1,11 @@
-use super::flags::{take_flag_value, take_optional_flag_value};
+use super::flags::take_flag_value;
 
 pub async fn run(mut args: Vec<String>) -> anyhow::Result<()> {
     let api_url = take_flag_value(&mut args, "--api-url")?;
     let api_key = take_flag_value(&mut args, "--api-key")?;
     let scheduler_report = take_flag_value(&mut args, "--scheduler-report")?;
     let published_scheduler_report =
-        take_optional_flag_value(&mut args, "--published-scheduler-report-uri")?
-            .unwrap_or(scheduler_report.clone());
+        take_flag_value(&mut args, "--published-scheduler-report-uri")?;
     let actor = take_flag_value(&mut args, "--actor")?;
     let notes = take_flag_value(&mut args, "--notes")?;
     if !args.is_empty() {

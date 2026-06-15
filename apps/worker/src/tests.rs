@@ -8,6 +8,7 @@ mod automl_lifecycle;
 mod automl_ranking;
 mod clinical_compatibility;
 mod clustering;
+mod command_submit_contracts;
 mod dataset;
 mod episode_rollup;
 mod mlops_monitoring_reports;
