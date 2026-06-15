@@ -17,6 +17,7 @@ fn is_production_artifact_uri(value: &str) -> bool {
     let value = value.trim();
     !value.is_empty()
         && !value.starts_with("local://")
+        && !value.starts_with("file://")
         && value.contains("://")
         && !value.contains('{')
         && !value.contains('}')
@@ -24,7 +25,10 @@ fn is_production_artifact_uri(value: &str) -> bool {
 
 fn evidence_ref_is_non_production(value: &str) -> bool {
     let value = value.trim();
-    value.contains("local://") || value.contains('{') || value.contains('}')
+    value.contains("local://")
+        || value.contains("file://")
+        || value.contains('{')
+        || value.contains('}')
 }
 
 pub(in crate::routes) fn validate_mlops_monitoring_report_request(
