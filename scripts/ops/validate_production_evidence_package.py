@@ -132,6 +132,12 @@ REQUIRED_RUNBOOK_ARTIFACT_BUILD_OUTPUTS = {
     "build_scoring_feature_contexts": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json",
     "build_probability_calibration_report": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json",
 }
+REQUIRED_SCORING_CONTEXT_INPUT_URIS = {
+    "--episode-rollups-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json",
+    "--peer-benchmarks-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json",
+    "--clinical-compatibility-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json",
+    "--unbundling-candidates-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json",
+}
 REQUIRED_RUNBOOK_SUBMIT_COMMANDS = {
     "submit-worker-data-pipeline-readiness-report",
     "submit-sanctions-sync-report",
@@ -654,6 +660,21 @@ def validate_runbook(package_dir: Path) -> None:
         require(
             command.get("output") == expected_output,
             f"runbook step {step} output must be {expected_output}",
+        )
+    scoring_context_command = commands_by_step.get("build_scoring_feature_contexts")
+    require(
+        scoring_context_command is not None,
+        "runbook missing artifact build step build_scoring_feature_contexts",
+    )
+    scoring_context_command_text = scoring_context_command.get("command")
+    require(
+        isinstance(scoring_context_command_text, str),
+        "runbook step build_scoring_feature_contexts command must be text",
+    )
+    for flag, expected_uri in REQUIRED_SCORING_CONTEXT_INPUT_URIS.items():
+        require(
+            f"{flag} {expected_uri}" in scoring_context_command_text,
+            f"runbook step build_scoring_feature_contexts {flag} must be {expected_uri}",
         )
     for submit_command in REQUIRED_RUNBOOK_SUBMIT_COMMANDS:
         require(

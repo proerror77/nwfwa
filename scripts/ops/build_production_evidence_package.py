@@ -633,10 +633,10 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                 "command": (
                     "cargo run --locked -p worker -- build-scoring-feature-contexts "
                     "--claims-uri <customer-approved-scoring-context-claims-snapshot-uri> "
-                    "--episode-rollups-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_rollups.json "
-                    "--peer-benchmarks-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_benchmarks.json "
-                    "--clinical-compatibility-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_references.json "
-                    "--unbundling-candidates-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_candidates.json "
+                    "--episode-rollups-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json "
+                    "--peer-benchmarks-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json "
+                    "--clinical-compatibility-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json "
+                    "--unbundling-candidates-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json "
                     "--output-dir <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>"
                 ),
                 "output": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json",

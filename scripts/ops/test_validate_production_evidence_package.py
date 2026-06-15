@@ -364,6 +364,27 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_scoring_context_with_wrong_peer_input_uri(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            for command in runbook["commands"]:
+                if command["step"] == "build_scoring_feature_contexts":
+                    command["command"] = command["command"].replace(
+                        "peer_percentile_benchmark.json",
+                        "peer_benchmarks.json",
+                    )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "--peer-benchmarks-uri must be "
+                "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json",
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_submit_step_with_wrong_api_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)
