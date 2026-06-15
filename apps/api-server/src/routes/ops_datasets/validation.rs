@@ -318,6 +318,13 @@ pub(super) fn validate_feature_set_registration(
             "status must be draft, active, or deprecated",
         ));
     }
+    if request.status == "active" && !is_production_artifact_uri(&request.features_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "FEATURE_SET_FORMAT_INVALID",
+            "active feature sets require production features_uri evidence, not local dry-run or placeholder URI",
+        ));
+    }
     Ok(())
 }
 
@@ -370,6 +377,9 @@ pub(super) fn validate_model_dataset_registration(
             "INVALID_MODEL_DATASET",
             "status must be draft, active, or deprecated",
         ));
+    }
+    if request.status == "active" {
+        validate_active_model_dataset_production_uris(request)?;
     }
     Ok(())
 }
@@ -2369,6 +2379,9 @@ pub(super) fn validate_dataset_contract(request: &RegisterDatasetInput) -> Resul
             "dataset split URIs must point to parquet files or parquet partition directories",
         ));
     }
+    if request.status == "active" {
+        validate_active_dataset_production_uris(request)?;
+    }
 
     let split_rows = request
         .splits
@@ -2419,6 +2432,65 @@ pub(super) fn validate_dataset_contract(request: &RegisterDatasetInput) -> Resul
         }
     }
 
+    Ok(())
+}
+
+fn validate_active_dataset_production_uris(request: &RegisterDatasetInput) -> Result<(), ApiError> {
+    for (uri, code, field_name) in [
+        (
+            request.manifest_uri.as_str(),
+            "DATASET_MANIFEST_INVALID",
+            "manifest_uri",
+        ),
+        (
+            request.schema_uri.as_str(),
+            "DATASET_SCHEMA_INVALID",
+            "schema_uri",
+        ),
+        (
+            request.profile_uri.as_str(),
+            "DATASET_PROFILE_INVALID",
+            "profile_uri",
+        ),
+    ] {
+        if !is_production_artifact_uri(uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                code,
+                format!("active datasets require production {field_name} evidence, not local dry-run or placeholder URI"),
+            ));
+        }
+    }
+    if request
+        .splits
+        .iter()
+        .any(|split| !is_production_artifact_uri(&split.data_uri))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "DATASET_SPLIT_FORMAT_INVALID",
+            "active datasets require production split data_uri evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_active_model_dataset_production_uris(
+    request: &RegisterModelDatasetInput,
+) -> Result<(), ApiError> {
+    if !is_production_artifact_uri(&request.train_uri)
+        || !is_production_artifact_uri(&request.validation_uri)
+        || request
+            .test_uri
+            .as_ref()
+            .is_some_and(|test_uri| !is_production_artifact_uri(test_uri))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_DATASET",
+            "active model datasets require production train_uri, validation_uri, and test_uri evidence, not local dry-run or placeholder URI",
+        ));
+    }
     Ok(())
 }
 

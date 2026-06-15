@@ -7,7 +7,10 @@ pub(super) fn dataset_schemas() -> Value {
             "required": ["split_name", "data_uri", "row_count", "label_distribution_json"],
             "properties": {
                 "split_name": { "type": "string" },
-                "data_uri": { "type": "string" },
+                "data_uri": {
+                    "type": "string",
+                    "description": "Parquet split artifact URI. Active datasets require production artifact URI evidence."
+                },
                 "row_count": { "type": "integer" },
                 "positive_count": { "type": ["integer", "null"] },
                 "negative_count": { "type": ["integer", "null"] },
@@ -56,9 +59,18 @@ pub(super) fn dataset_schemas() -> Value {
                 "sample_grain": { "type": "string" },
                 "label_column": { "type": "string" },
                 "entity_keys": { "type": "array", "items": { "type": "string" } },
-                "manifest_uri": { "type": "string" },
-                "schema_uri": { "type": "string" },
-                "profile_uri": { "type": "string" },
+                "manifest_uri": {
+                    "type": "string",
+                    "description": "Dataset manifest URI. Active datasets require production artifact URI evidence."
+                },
+                "schema_uri": {
+                    "type": "string",
+                    "description": "Dataset schema URI. Active datasets require production artifact URI evidence."
+                },
+                "profile_uri": {
+                    "type": "string",
+                    "description": "Dataset profile URI. Active datasets require production artifact URI evidence."
+                },
                 "storage_format": { "type": "string", "const": "parquet" },
                 "schema_hash": { "type": "string" },
                 "row_count": { "type": "integer" },

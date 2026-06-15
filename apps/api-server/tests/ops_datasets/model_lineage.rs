@@ -83,7 +83,7 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/predictions/renewal_automl_20211105/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/renewal_baseline/0.1.0/feature_importance.parquet",
               "metrics_json": {{"data_status": "validation"}}
             }}"#
         ),

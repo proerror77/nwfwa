@@ -26,7 +26,11 @@ pub(super) fn factor_schemas() -> Value {
                 "feature_set_key": { "type": "string", "minLength": 1 },
                 "version": { "type": "string", "minLength": 1 },
                 "dataset_id": { "type": "string", "minLength": 1 },
-                "features_uri": { "type": "string", "minLength": 1 },
+                "features_uri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Feature matrix artifact URI. Active feature sets require production artifact URI evidence."
+                },
                 "feature_list_json": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
                 "row_count": { "type": "integer", "minimum": 1 },
                 "label_column": { "type": "string", "minLength": 1 },
@@ -58,9 +62,21 @@ pub(super) fn factor_schemas() -> Value {
                 "task_type": { "type": "string", "minLength": 1 },
                 "label_name": { "type": "string", "minLength": 1 },
                 "feature_set_id": { "type": "string", "minLength": 1 },
-                "train_uri": { "type": "string", "minLength": 1 },
-                "validation_uri": { "type": "string", "minLength": 1 },
-                "test_uri": { "type": ["string", "null"], "minLength": 1 },
+                "train_uri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Training split artifact URI. Active model datasets require production artifact URI evidence."
+                },
+                "validation_uri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Validation split artifact URI. Active model datasets require production artifact URI evidence."
+                },
+                "test_uri": {
+                    "type": ["string", "null"],
+                    "minLength": 1,
+                    "description": "Optional test split artifact URI. Active model datasets require production artifact URI evidence when provided."
+                },
                 "row_counts_json": { "type": "object", "minProperties": 1, "additionalProperties": true },
                 "label_distribution_json": { "type": "object", "minProperties": 1, "additionalProperties": true },
                 "status": { "type": "string", "enum": ["draft", "active", "deprecated"] }

@@ -3419,6 +3419,18 @@ async fn rejects_csv_split_uri_even_when_storage_format_says_parquet() {
 }
 
 #[tokio::test]
+async fn active_dataset_registration_requires_production_artifact_uris() {
+    let app = build_app(test_config()).unwrap();
+    let payload =
+        renewal_dataset_payload("parquet").replace(r#""status": "draft""#, r#""status": "active""#);
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_MANIFEST_INVALID");
+}
+
+#[tokio::test]
 async fn requires_split_row_counts_to_match_dataset_total() {
     let app = build_app(test_config()).unwrap();
     let payload =
@@ -3678,6 +3690,28 @@ async fn rejects_csv_feature_matrix_uri() {
     assert_eq!(body["code"], "INVALID_FEATURE_SET");
 
     let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": ["member_age"],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "active"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "FEATURE_SET_FORMAT_INVALID");
+
+    let (status, body) = json_request(
         app,
         "POST",
         "/api/v1/ops/feature-sets",
@@ -3778,6 +3812,14 @@ async fn rejects_invalid_model_dataset_registration() {
     let mut empty_label_distribution = valid_request.clone();
     empty_label_distribution["label_distribution_json"] = serde_json::json!({});
     let payload = empty_label_distribution.to_string();
+    let (status, body) =
+        json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_DATASET");
+
+    let mut active_local_uris = valid_request.clone();
+    active_local_uris["status"] = serde_json::json!("active");
+    let payload = active_local_uris.to_string();
     let (status, body) =
         json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
