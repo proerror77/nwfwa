@@ -17,7 +17,7 @@ pub(super) fn candidate_review_schemas() -> Value {
                 "evidence_refs": {
                     "type": "array",
                     "minItems": 1,
-                    "description": "Structured evidence references must not contain PII. Accepted candidates must include backtest evidence.",
+                    "description": "Structured evidence references must not contain PII and must be production refs, not local/template refs. Accepted candidates must include backtest evidence.",
                     "items": { "type": "string", "minLength": 1 }
                 }
             }

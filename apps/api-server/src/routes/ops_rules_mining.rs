@@ -589,6 +589,7 @@ pub async fn review_rule_candidate(
             "candidate review notes and evidence_refs must not contain PII",
         ));
     }
+    validate_candidate_review_production_evidence_refs(&request.evidence_refs)?;
     validate_candidate_review_backtest_evidence(&request.decision, &request.evidence_refs)?;
     let mut saved_draft_rule_id = None;
     if request.decision == "accepted" {
@@ -707,4 +708,21 @@ pub async fn review_rule_candidate(
         active_rule_writeback: outcome.active_rule_writeback,
         evidence_refs: request.evidence_refs,
     }))
+}
+
+fn validate_candidate_review_production_evidence_refs(
+    evidence_refs: &[String],
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CANDIDATE_REVIEW_EVIDENCE",
+            "candidate review evidence_refs must not use local dry-run or placeholder evidence",
+        ))
+    } else {
+        Ok(())
+    }
 }

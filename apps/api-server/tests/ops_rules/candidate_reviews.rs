@@ -127,6 +127,76 @@ async fn records_rejected_discovered_candidate_review_without_saving_rule() {
           "decision": "rejected",
           "reviewer": "rule-review",
           "notes": "Rejected because this candidate is not explainable enough for the governed rule library.",
+          "evidence_refs": ["dataset:inline", "rule_candidate_reviews:local://template/review.json"],
+          "rule": {
+            "rule_id": "candidate_tree_local_review",
+            "version": 1,
+            "name": "Local evidence tree candidate",
+            "scheme_family": "high_risk_claim",
+            "conditions": [
+              {
+                "field": "claim_amount_to_limit_ratio",
+                "operator": ">=",
+                "value": 0.8
+              }
+            ],
+            "action": {
+              "score": 30,
+              "alert_code": "TREE_LOCAL_REVIEW",
+              "recommended_action": "ManualReview",
+              "reason": "测试本地证据候选规则"
+            }
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_CANDIDATE_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-review",
+          "notes": "Rejected because this candidate is not explainable enough for the governed rule library.",
+          "evidence_refs": ["dataset:inline", "rule_candidate_reviews:{review_id}"],
+          "rule": {
+            "rule_id": "candidate_tree_template_review",
+            "version": 1,
+            "name": "Template evidence tree candidate",
+            "scheme_family": "high_risk_claim",
+            "conditions": [
+              {
+                "field": "claim_amount_to_limit_ratio",
+                "operator": ">=",
+                "value": 0.8
+              }
+            ],
+            "action": {
+              "score": 30,
+              "alert_code": "TREE_TEMPLATE_REVIEW",
+              "recommended_action": "ManualReview",
+              "reason": "测试模板证据候选规则"
+            }
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_CANDIDATE_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-review",
+          "notes": "Rejected because this candidate is not explainable enough for the governed rule library.",
           "evidence_refs": ["dataset:inline", "backtest:manual-review"],
           "rule": {
             "rule_id": "candidate_tree_rejected_review",
