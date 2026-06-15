@@ -145,6 +145,11 @@ PII in evidence refs, and reject local dry-run/template evidence before labels
 can be approved for training. This is verified in `03e8a048` by
 `cargo test --locked -p api-server --test ops_bootstrap`.
 
+Evidence request status writebacks now reject blank evidence refs, PII in
+evidence refs, and local dry-run/template evidence before document evidence
+status can feed label bootstrap. This is verified in `4c7c02e8` by
+`cargo test --locked -p api-server --test ops_bootstrap`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
