@@ -264,6 +264,28 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
         .and_then(|value| value.as_array())
         .cloned()
         .unwrap_or_default();
+    let job_count = report
+        .get("job_count")
+        .and_then(|value| value.as_u64())
+        .context("worker data pipeline execution report requires job_count")?
+        as usize;
+    let pending_or_failed_job_count = report
+        .get("pending_or_failed_job_count")
+        .and_then(|value| value.as_u64())
+        .context("worker data pipeline execution report requires pending_or_failed_job_count")?
+        as usize;
+    let review_task_count = report
+        .get("review_task_count")
+        .and_then(|value| value.as_u64())
+        .context("worker data pipeline execution report requires review_task_count")?
+        as usize;
+    validate_worker_data_pipeline_execution_counts(
+        &job_executions,
+        &review_tasks,
+        job_count,
+        pending_or_failed_job_count,
+        review_task_count,
+    )?;
     let mut evidence_refs = report
         .get("evidence_refs")
         .and_then(|value| value.as_array())
@@ -316,21 +338,9 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
             .context("worker data pipeline execution report requires run_id")?,
         execution_date: json_string(&report, "execution_date")
             .context("worker data pipeline execution report requires execution_date")?,
-        job_count: report
-            .get("job_count")
-            .and_then(|value| value.as_u64())
-            .context("worker data pipeline execution report requires job_count")?
-            as usize,
-        pending_or_failed_job_count: report
-            .get("pending_or_failed_job_count")
-            .and_then(|value| value.as_u64())
-            .context("worker data pipeline execution report requires pending_or_failed_job_count")?
-            as usize,
-        review_task_count: report
-            .get("review_task_count")
-            .and_then(|value| value.as_u64())
-            .context("worker data pipeline execution report requires review_task_count")?
-            as usize,
+        job_count,
+        pending_or_failed_job_count,
+        review_task_count,
         job_executions,
         review_tasks,
         evidence_refs,
@@ -607,6 +617,29 @@ fn has_required_evidence_prefixes(job: &serde_json::Value, reported: &serde_json
                     .is_some_and(|value| value.starts_with(prefix))
             })
     })
+}
+
+fn validate_worker_data_pipeline_execution_counts(
+    job_executions: &[serde_json::Value],
+    review_tasks: &[serde_json::Value],
+    job_count: usize,
+    pending_or_failed_job_count: usize,
+    review_task_count: usize,
+) -> anyhow::Result<()> {
+    if job_count != job_executions.len() {
+        bail!("job_count must match job_executions length");
+    }
+    let actual_pending_or_failed = job_executions
+        .iter()
+        .filter(|job| json_string(job, "execution_status").as_deref() != Some("completed"))
+        .count();
+    if pending_or_failed_job_count != actual_pending_or_failed {
+        bail!("pending_or_failed_job_count must match non-completed job_executions");
+    }
+    if review_task_count != review_tasks.len() {
+        bail!("review_task_count must match review_tasks length");
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_worker_data_pipeline_job_kinds(

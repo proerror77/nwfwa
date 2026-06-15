@@ -284,6 +284,18 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
         .and_then(|value| value.as_array())
         .cloned()
         .unwrap_or_default();
+    let job_count = json_usize(&report, "job_count")?;
+    let ready_job_count = json_usize(&report, "ready_job_count")?;
+    let blocked_job_count = json_usize(&report, "blocked_job_count")?;
+    let review_task_count = json_usize(&report, "review_task_count")?;
+    validate_worker_data_pipeline_readiness_counts(
+        &job_readiness,
+        &review_tasks,
+        job_count,
+        ready_job_count,
+        blocked_job_count,
+        review_task_count,
+    )?;
     let mut evidence_refs = report
         .get("evidence_refs")
         .and_then(|value| value.as_array())
@@ -321,16 +333,45 @@ pub fn build_worker_data_pipeline_readiness_submission_with_published_uri(
         readiness_input_uri,
         readiness_status: json_string(&report, "readiness_status")
             .context("worker data pipeline readiness report requires readiness_status")?,
-        job_count: json_usize(&report, "job_count")?,
-        ready_job_count: json_usize(&report, "ready_job_count")?,
-        blocked_job_count: json_usize(&report, "blocked_job_count")?,
-        review_task_count: json_usize(&report, "review_task_count")?,
+        job_count,
+        ready_job_count,
+        blocked_job_count,
+        review_task_count,
         job_readiness,
         review_tasks,
         evidence_refs,
         governance_boundary: json_string(&report, "governance_boundary")
             .context("worker data pipeline readiness report requires governance_boundary")?,
     })
+}
+
+fn validate_worker_data_pipeline_readiness_counts(
+    job_readiness: &[serde_json::Value],
+    review_tasks: &[serde_json::Value],
+    job_count: usize,
+    ready_job_count: usize,
+    blocked_job_count: usize,
+    review_task_count: usize,
+) -> anyhow::Result<()> {
+    if job_count != job_readiness.len() {
+        bail!("job_count must match job_readiness length");
+    }
+    let mut actual_ready = 0usize;
+    let mut actual_blocked = 0usize;
+    for job in job_readiness {
+        match json_string(job, "readiness_status").as_deref() {
+            Some("ready") => actual_ready += 1,
+            Some("blocked") => actual_blocked += 1,
+            _ => bail!("job_readiness readiness_status must be ready or blocked"),
+        }
+    }
+    if ready_job_count != actual_ready || blocked_job_count != actual_blocked {
+        bail!("ready_job_count and blocked_job_count must match job_readiness statuses");
+    }
+    if review_task_count != review_tasks.len() {
+        bail!("review_task_count must match review_tasks length");
+    }
+    Ok(())
 }
 
 pub async fn submit_worker_data_pipeline_readiness_report(

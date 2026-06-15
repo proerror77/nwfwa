@@ -837,6 +837,50 @@ fn rejects_worker_data_pipeline_execution_submission_with_duplicate_job_kind() {
 }
 
 #[test]
+fn rejects_worker_data_pipeline_execution_submission_with_job_count_drift() {
+    let root = temp_root("worker-data-pipeline-execution-submission-count-drift");
+    let report_uri = root.join("worker_data_pipeline_execution_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_execution_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+            "run_id": "wdp_2026_06_14",
+            "execution_date": "2026-06-14",
+            "job_count": 2,
+            "pending_or_failed_job_count": 0,
+            "job_executions": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "execution_status": "artifact_pending_submission"
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_execution_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-scheduler",
+        "daily execution evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+    )
+    .expect_err("job_count drift should fail before API submission");
+
+    assert!(error
+        .to_string()
+        .contains("job_count must match job_executions length"));
+}
+
+#[test]
 fn rejects_worker_data_pipeline_execution_submission_without_published_report_uri() {
     let root = temp_root("worker-data-pipeline-execution-submission-unpublished-report");
     let report_uri = root.join("worker_data_pipeline_execution_report.json");
