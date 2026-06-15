@@ -192,11 +192,11 @@ fn builds_scoring_feature_context_materialization_submission_payload() {
             "report_version": 1,
             "as_of_date": "2026-06-13",
             "source_uris": {
-                "claims_uri": "local://claims.json",
-                "episode_rollups_uri": "local://episode.json",
-                "peer_benchmarks_uri": "local://peer.json",
-                "clinical_compatibility_uri": "local://clinical.json",
-                "unbundling_candidates_uri": "local://unbundling.json"
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             },
             "claim_count": 1,
             "context_count": 1,
@@ -214,19 +214,20 @@ fn builds_scoring_feature_context_materialization_submission_payload() {
                 }
             ],
             "evidence_refs": [
-                "scoring_feature_context_claim_snapshot:local://claims.json",
-                "episode_rollups:local://episode.json",
-                "peer_benchmarks:local://peer.json",
-                "clinical_compatibility:local://clinical.json",
-                "unbundling_candidates:local://unbundling.json"
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             ],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
         }),
     )
     .unwrap();
 
-    let submission = build_scoring_feature_context_materialization_submission(
+    let submission = build_scoring_feature_context_materialization_submission_with_published_uri(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
         "sfc-mat-1",
         "worker:scoring-contexts",
         "pilot materialization",
@@ -240,23 +241,26 @@ fn builds_scoring_feature_context_materialization_submission_payload() {
     );
     assert_eq!(submission.context_count, 1);
     assert_eq!(submission.contexts[0]["claim_id"], "CLM-1");
-    assert_eq!(submission.source_uris["claims_uri"], "local://claims.json");
-    assert!(submission.evidence_refs.contains(&format!(
-        "scoring_feature_contexts:{}",
-        report_uri.to_string_lossy()
-    )));
+    assert_eq!(
+        submission.source_uris["claims_uri"],
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json"
+    );
+    assert!(submission.evidence_refs.contains(
+        &"scoring_feature_contexts:s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json"
+            .to_string()
+    ));
     assert!(submission
         .evidence_refs
-        .contains(&"episode_rollups:local://episode.json".to_string()));
+        .contains(&"episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json".to_string()));
     assert!(submission
         .evidence_refs
-        .contains(&"peer_benchmarks:local://peer.json".to_string()));
+        .contains(&"peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json".to_string()));
     assert!(submission
         .evidence_refs
-        .contains(&"clinical_compatibility:local://clinical.json".to_string()));
+        .contains(&"clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json".to_string()));
     assert!(submission
         .evidence_refs
-        .contains(&"unbundling_candidates:local://unbundling.json".to_string()));
+        .contains(&"unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json".to_string()));
     assert!(submission
         .governance_boundary
         .contains("must not assign fraud labels"));
@@ -273,11 +277,11 @@ fn rejects_scoring_feature_context_submission_without_source_evidence() {
             "report_version": 1,
             "as_of_date": "2026-06-13",
             "source_uris": {
-                "claims_uri": "local://claims.json",
-                "episode_rollups_uri": "local://episode.json",
-                "peer_benchmarks_uri": "local://peer.json",
-                "clinical_compatibility_uri": "local://clinical.json",
-                "unbundling_candidates_uri": "local://unbundling.json"
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             },
             "claim_count": 1,
             "context_count": 1,
@@ -294,14 +298,15 @@ fn rejects_scoring_feature_context_submission_without_source_evidence() {
                     "missing_contexts": []
                 }
             ],
-            "evidence_refs": ["scoring_feature_context_claim_snapshot:local://claims.json"],
+            "evidence_refs": ["scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json"],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
         }),
     )
     .unwrap();
 
-    let error = build_scoring_feature_context_materialization_submission(
+    let error = build_scoring_feature_context_materialization_submission_with_published_uri(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
         "sfc-mat-1",
         "worker:scoring-contexts",
         "pilot materialization",
@@ -310,7 +315,7 @@ fn rejects_scoring_feature_context_submission_without_source_evidence() {
 
     assert!(error
         .to_string()
-        .contains("episode_rollups:local://episode.json"));
+        .contains("episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json"));
 }
 
 #[test]
@@ -324,11 +329,11 @@ fn rejects_scoring_feature_context_submission_with_template_source_uri() {
             "report_version": 1,
             "as_of_date": "2026-06-13",
             "source_uris": {
-                "claims_uri": "local://claims.json",
-                "episode_rollups_uri": "local://episode.json",
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
                 "peer_benchmarks_uri": "local://template/peer.json",
-                "clinical_compatibility_uri": "local://clinical.json",
-                "unbundling_candidates_uri": "local://unbundling.json"
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             },
             "claim_count": 1,
             "context_count": 1,
@@ -346,28 +351,29 @@ fn rejects_scoring_feature_context_submission_with_template_source_uri() {
                 }
             ],
             "evidence_refs": [
-                "scoring_feature_context_claim_snapshot:local://claims.json",
-                "episode_rollups:local://episode.json",
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
                 "peer_benchmarks:local://template/peer.json",
-                "clinical_compatibility:local://clinical.json",
-                "unbundling_candidates:local://unbundling.json"
+                "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             ],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
         }),
     )
     .unwrap();
 
-    let error = build_scoring_feature_context_materialization_submission(
+    let error = build_scoring_feature_context_materialization_submission_with_published_uri(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
         "sfc-mat-1",
         "worker:scoring-contexts",
         "pilot materialization",
     )
     .expect_err("template source uri must fail");
 
-    assert!(error.to_string().contains(
-        "scoring feature context peer_benchmarks_uri must not use local://template evidence"
-    ));
+    assert!(error
+        .to_string()
+        .contains("scoring feature context peer_benchmarks_uri must use production evidence"));
 }
 
 #[test]
@@ -381,11 +387,11 @@ fn rejects_scoring_feature_context_submission_with_template_top_level_evidence()
             "report_version": 1,
             "as_of_date": "2026-06-13",
             "source_uris": {
-                "claims_uri": "local://claims.json",
-                "episode_rollups_uri": "local://episode.json",
-                "peer_benchmarks_uri": "local://peer.json",
-                "clinical_compatibility_uri": "local://clinical.json",
-                "unbundling_candidates_uri": "local://unbundling.json"
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             },
             "claim_count": 1,
             "context_count": 1,
@@ -403,11 +409,11 @@ fn rejects_scoring_feature_context_submission_with_template_top_level_evidence()
                 }
             ],
             "evidence_refs": [
-                "scoring_feature_context_claim_snapshot:local://claims.json",
-                "episode_rollups:local://episode.json",
-                "peer_benchmarks:local://peer.json",
-                "clinical_compatibility:local://clinical.json",
-                "unbundling_candidates:local://unbundling.json",
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
                 "worker_report:local://template/scoring/context.json"
             ],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
@@ -415,8 +421,9 @@ fn rejects_scoring_feature_context_submission_with_template_top_level_evidence()
     )
     .unwrap();
 
-    let error = build_scoring_feature_context_materialization_submission(
+    let error = build_scoring_feature_context_materialization_submission_with_published_uri(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
         "sfc-mat-1",
         "worker:scoring-contexts",
         "pilot materialization",
@@ -425,7 +432,7 @@ fn rejects_scoring_feature_context_submission_with_template_top_level_evidence()
 
     assert!(error
         .to_string()
-        .contains("scoring feature context evidence_refs must not use local://template evidence"));
+        .contains("scoring feature context evidence_refs must not use local dry-run"));
 }
 
 #[test]
@@ -439,11 +446,11 @@ fn rejects_scoring_feature_context_submission_with_template_record_evidence() {
             "report_version": 1,
             "as_of_date": "2026-06-13",
             "source_uris": {
-                "claims_uri": "local://claims.json",
-                "episode_rollups_uri": "local://episode.json",
-                "peer_benchmarks_uri": "local://peer.json",
-                "clinical_compatibility_uri": "local://clinical.json",
-                "unbundling_candidates_uri": "local://unbundling.json"
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             },
             "claim_count": 1,
             "context_count": 1,
@@ -464,28 +471,29 @@ fn rejects_scoring_feature_context_submission_with_template_record_evidence() {
                 }
             ],
             "evidence_refs": [
-                "scoring_feature_context_claim_snapshot:local://claims.json",
-                "episode_rollups:local://episode.json",
-                "peer_benchmarks:local://peer.json",
-                "clinical_compatibility:local://clinical.json",
-                "unbundling_candidates:local://unbundling.json"
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             ],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
         }),
     )
     .unwrap();
 
-    let error = build_scoring_feature_context_materialization_submission(
+    let error = build_scoring_feature_context_materialization_submission_with_published_uri(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
         "sfc-mat-1",
         "worker:scoring-contexts",
         "pilot materialization",
     )
     .expect_err("template record evidence must fail");
 
-    assert!(error.to_string().contains(
-        "scoring feature context record evidence_refs must not use local://template evidence"
-    ));
+    assert!(error
+        .to_string()
+        .contains("scoring feature context record evidence_refs must not use local dry-run"));
 }
 
 #[tokio::test]
@@ -501,11 +509,11 @@ async fn submits_scoring_feature_context_materialization_to_api() {
             "report_version": 1,
             "as_of_date": "2026-06-13",
             "source_uris": {
-                "claims_uri": "local://claims.json",
-                "episode_rollups_uri": "local://episode.json",
-                "peer_benchmarks_uri": "local://peer.json",
-                "clinical_compatibility_uri": "local://clinical.json",
-                "unbundling_candidates_uri": "local://unbundling.json"
+                "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             },
             "claim_count": 1,
             "context_count": 1,
@@ -523,11 +531,11 @@ async fn submits_scoring_feature_context_materialization_to_api() {
                 }
             ],
             "evidence_refs": [
-                "scoring_feature_context_claim_snapshot:local://claims.json",
-                "episode_rollups:local://episode.json",
-                "peer_benchmarks:local://peer.json",
-                "clinical_compatibility:local://clinical.json",
-                "unbundling_candidates:local://unbundling.json"
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+                "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
             ],
             "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels"
         }),
@@ -552,10 +560,11 @@ async fn submits_scoring_feature_context_materialization_to_api() {
         request
     });
 
-    let response = submit_scoring_feature_context_materialization(
+    let response = submit_scoring_feature_context_materialization_with_published_uri(
         &api_url,
         "dataset-write-secret",
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
         "sfc-mat-1",
         "worker:scoring-contexts",
         "pilot materialization",
@@ -574,12 +583,11 @@ async fn submits_scoring_feature_context_materialization_to_api() {
     assert!(request.contains("x-api-key: dataset-write-secret"));
     assert!(request.contains(r#""materialization_id":"sfc-mat-1""#));
     assert!(request.contains(r#""claim_id":"CLM-1""#));
-    assert!(request.contains(&format!(
-        r#""scoring_feature_contexts:{}""#,
-        report_uri.to_string_lossy()
-    )));
-    assert!(request.contains(r#""episode_rollups:local://episode.json""#));
-    assert!(request.contains(r#""peer_benchmarks:local://peer.json""#));
-    assert!(request.contains(r#""clinical_compatibility:local://clinical.json""#));
-    assert!(request.contains(r#""unbundling_candidates:local://unbundling.json""#));
+    assert!(request.contains(
+        r#""scoring_feature_contexts:s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json""#
+    ));
+    assert!(request.contains(r#""episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json""#));
+    assert!(request.contains(r#""peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json""#));
+    assert!(request.contains(r#""clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json""#));
+    assert!(request.contains(r#""unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json""#));
 }

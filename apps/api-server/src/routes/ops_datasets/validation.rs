@@ -480,6 +480,13 @@ pub(super) fn validate_scoring_feature_context_materialization(
         "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
         "report_uri",
     )?;
+    if !is_production_artifact_uri(&request.report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     if !request.source_uris.is_object() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -515,6 +522,20 @@ pub(super) fn validate_scoring_feature_context_materialization(
             "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI",
             source_key,
         )?;
+        if !request
+            .source_uris
+            .get(source_key)
+            .and_then(|value| value.as_str())
+            .is_some_and(is_production_artifact_uri)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI",
+                format!(
+                    "source_uris.{source_key} must use production evidence, not local dry-run or placeholder URI"
+                ),
+            ));
+        }
     }
     if request.context_count != request.contexts.len() as u64 {
         return Err(ApiError::new(
@@ -547,6 +568,17 @@ pub(super) fn validate_scoring_feature_context_materialization(
         "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
         "scoring feature context evidence_refs must not use local://template evidence",
     )?;
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+            "scoring feature context evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     let required_evidence_refs = [
         format!("scoring_feature_contexts:{}", request.report_uri),
         format!(
@@ -641,6 +673,23 @@ pub(super) fn validate_scoring_feature_context_materialization(
                 StatusCode::BAD_REQUEST,
                 "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
                 "context evidence_refs must not use local://template evidence",
+            ));
+        }
+        let has_non_production_context_evidence_ref = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .any(|reference| {
+                reference
+                    .as_str()
+                    .is_some_and(evidence_ref_is_non_production)
+            });
+        if has_non_production_context_evidence_ref {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                "context evidence_refs must not use local dry-run or placeholder evidence",
             ));
         }
         let expected_claim_ref = format!("claims:{}", claim_id.trim());

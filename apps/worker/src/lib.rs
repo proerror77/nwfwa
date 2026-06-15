@@ -212,8 +212,10 @@ pub use unbundling_comparator::{
 
 mod scoring_feature_context;
 pub use scoring_feature_context::{
-    build_scoring_feature_context_materialization_submission, build_scoring_feature_context_report,
-    submit_scoring_feature_context_materialization, ClaimScoringFeatureContext,
+    build_scoring_feature_context_materialization_submission,
+    build_scoring_feature_context_materialization_submission_with_published_uri,
+    build_scoring_feature_context_report, submit_scoring_feature_context_materialization,
+    submit_scoring_feature_context_materialization_with_published_uri, ClaimScoringFeatureContext,
     ScoringFeatureContextClaimInput, ScoringFeatureContextInput,
     ScoringFeatureContextMaterializationSubmission, ScoringFeatureContextReport,
     ScoringFeatureContextSourceUris,
@@ -389,6 +391,28 @@ fn ensure_no_template_evidence_refs(field: &str, evidence_refs: &[String]) -> an
         .any(|reference| reference.trim().contains("local://template"))
     {
         bail!("{field} must not use local://template evidence");
+    }
+    Ok(())
+}
+
+fn ensure_production_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.starts_with("local://")
+        || value.contains('{')
+        || value.contains('}')
+    {
+        bail!("{field} must use production evidence, not local dry-run or placeholder URI");
+    }
+    Ok(())
+}
+
+fn ensure_production_evidence_refs(field: &str, evidence_refs: &[String]) -> anyhow::Result<()> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        bail!("{field} must not use local dry-run or placeholder evidence");
     }
     Ok(())
 }

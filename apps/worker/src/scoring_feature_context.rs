@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    api_url, ensure_no_template_evidence_refs, ensure_no_template_uri, read_json_report,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, read_json_report,
     required_non_empty, write_json, ClinicalCompatibilityRecord, EpisodeAggregationReport,
     MemberProviderEpisodeRollup, PeerBenchmarkGroup, PeerBenchmarkReport,
     UnbundlingComparatorCandidate, UnbundlingComparatorReport,
@@ -178,7 +178,24 @@ pub fn build_scoring_feature_context_materialization_submission(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<ScoringFeatureContextMaterializationSubmission> {
+    build_scoring_feature_context_materialization_submission_with_published_uri(
+        report_uri,
+        report_uri,
+        materialization_id,
+        actor,
+        notes,
+    )
+}
+
+pub fn build_scoring_feature_context_materialization_submission_with_published_uri(
+    report_uri: &str,
+    published_report_uri: &str,
+    materialization_id: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<ScoringFeatureContextMaterializationSubmission> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
     let materialization_id = required_non_empty("materialization_id", materialization_id)?;
     let actor = required_non_empty("actor", actor)?;
     let notes = required_non_empty("notes", notes)?;
@@ -196,33 +213,36 @@ pub fn build_scoring_feature_context_materialization_submission(
     if report.evidence_refs.is_empty() {
         bail!("scoring feature context materialization requires evidence_refs");
     }
-    ensure_no_template_uri("scoring feature context report_uri", report_uri)?;
-    ensure_no_template_uri(
+    ensure_production_artifact_uri(
+        "scoring feature context published_report_uri",
+        published_report_uri,
+    )?;
+    ensure_production_artifact_uri(
         "scoring feature context claims_uri",
         &report.source_uris.claims_uri,
     )?;
-    ensure_no_template_uri(
+    ensure_production_artifact_uri(
         "scoring feature context episode_rollups_uri",
         &report.source_uris.episode_rollups_uri,
     )?;
-    ensure_no_template_uri(
+    ensure_production_artifact_uri(
         "scoring feature context peer_benchmarks_uri",
         &report.source_uris.peer_benchmarks_uri,
     )?;
-    ensure_no_template_uri(
+    ensure_production_artifact_uri(
         "scoring feature context clinical_compatibility_uri",
         &report.source_uris.clinical_compatibility_uri,
     )?;
-    ensure_no_template_uri(
+    ensure_production_artifact_uri(
         "scoring feature context unbundling_candidates_uri",
         &report.source_uris.unbundling_candidates_uri,
     )?;
-    ensure_no_template_evidence_refs(
+    ensure_production_evidence_refs(
         "scoring feature context evidence_refs",
         &report.evidence_refs,
     )?;
     for context in &report.contexts {
-        ensure_no_template_evidence_refs(
+        ensure_production_evidence_refs(
             "scoring feature context record evidence_refs",
             &context.evidence_refs,
         )?;
@@ -252,13 +272,13 @@ pub fn build_scoring_feature_context_materialization_submission(
         }
     }
     let mut evidence_refs = report.evidence_refs;
-    evidence_refs.push(format!("scoring_feature_contexts:{report_uri}"));
+    evidence_refs.push(format!("scoring_feature_contexts:{published_report_uri}"));
 
     Ok(ScoringFeatureContextMaterializationSubmission {
         materialization_id: materialization_id.into(),
         actor: actor.into(),
         notes: notes.into(),
-        report_uri: report_uri.into(),
+        report_uri: published_report_uri.into(),
         report_kind: report.report_kind,
         as_of_date: report.as_of_date,
         source_uris: serde_json::to_value(report.source_uris)?,
@@ -282,8 +302,30 @@ pub async fn submit_scoring_feature_context_materialization(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    let payload = build_scoring_feature_context_materialization_submission(
+    submit_scoring_feature_context_materialization_with_published_uri(
+        api_base_url,
+        api_key,
         report_uri,
+        report_uri,
+        materialization_id,
+        actor,
+        notes,
+    )
+    .await
+}
+
+pub async fn submit_scoring_feature_context_materialization_with_published_uri(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    materialization_id: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_scoring_feature_context_materialization_submission_with_published_uri(
+        report_uri,
+        published_report_uri,
         materialization_id,
         actor,
         notes,

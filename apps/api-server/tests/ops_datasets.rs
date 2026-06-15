@@ -86,15 +86,15 @@ fn scoring_feature_context_materialization_payload() -> &'static str {
       "materialization_id": "sfc-mat-2026-06-13",
       "actor": "worker:scoring-feature-contexts",
       "notes": "pilot worker materialization",
-      "report_uri": "local://artifacts/scoring/scoring_feature_context_report.json",
+      "report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
       "report_kind": "scoring_feature_context_materialization",
       "as_of_date": "2026-06-13",
       "source_uris": {
-        "claims_uri": "local://inputs/scoring-claims.json",
-        "episode_rollups_uri": "local://artifacts/episode/episode_aggregation_report.json",
-        "peer_benchmarks_uri": "local://artifacts/peer/peer_percentile_benchmark.json",
-        "clinical_compatibility_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
-        "unbundling_candidates_uri": "local://artifacts/unbundling/unbundling_comparator_report.json"
+        "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+        "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+        "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
       },
       "claim_count": 1,
       "context_count": 1,
@@ -117,12 +117,12 @@ fn scoring_feature_context_materialization_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json",
-        "scoring_feature_context_claim_snapshot:local://inputs/scoring-claims.json",
-        "episode_rollups:local://artifacts/episode/episode_aggregation_report.json",
-        "peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json",
-        "clinical_compatibility:local://artifacts/clinical/clinical_compatibility_reference_report.json",
-        "unbundling_candidates:local://artifacts/unbundling/unbundling_comparator_report.json"
+        "scoring_feature_contexts:s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
+        "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+        "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+        "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
       ],
       "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
     }"#
@@ -132,7 +132,7 @@ fn clinical_compatibility_reference_payload() -> &'static str {
     r#"{
       "actor": "worker:build-clinical-compatibility-reference",
       "notes": "customer policy board approved clinical reference",
-      "source_report_uri": "local://artifacts/clinical/clinical_compatibility_reference_report.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
       "report_kind": "clinical_compatibility_reference",
       "reference_version": "clinical-policy-2026-06",
       "effective_date": "2026-06-01",
@@ -160,7 +160,7 @@ fn clinical_compatibility_reference_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "clinical_compatibility_references:local://artifacts/clinical/clinical_compatibility_reference_report.json",
+        "clinical_compatibility_references:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
         "clinical_compatibility_reference:local://inputs/clinical-reference.json",
         "clinical_policy_authority:customer-medical-policy-board"
       ],
@@ -172,7 +172,7 @@ fn unbundling_comparator_payload() -> &'static str {
     r#"{
       "actor": "worker:build-unbundling-comparator",
       "notes": "customer-approved unbundling comparator candidates",
-      "source_report_uri": "local://artifacts/unbundling/unbundling_comparator_report.json",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
       "report_kind": "unbundling_comparator",
       "as_of_date": "2026-06-13",
       "source_uri": "local://inputs/unbundling-reference.json",
@@ -196,7 +196,7 @@ fn unbundling_comparator_payload() -> &'static str {
         }
       ],
       "evidence_refs": [
-        "unbundling_comparator_candidates:local://artifacts/unbundling/unbundling_comparator_report.json",
+        "unbundling_comparator_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
         "unbundling_comparator_input:local://inputs/unbundling-reference.json"
       ],
       "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
@@ -2770,11 +2770,11 @@ async fn submits_and_reads_scoring_feature_context_materialization() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         loaded["materialization"]["report_uri"],
-        "local://artifacts/scoring/scoring_feature_context_report.json"
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json"
     );
     assert_eq!(
         loaded["materialization"]["evidence_refs"][0],
-        "scoring_feature_contexts:local://artifacts/scoring/scoring_feature_context_report.json"
+        "scoring_feature_contexts:s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json"
     );
 }
 
@@ -2847,6 +2847,27 @@ async fn scoring_feature_context_materialization_rejects_template_source_uri() {
 }
 
 #[tokio::test]
+async fn scoring_feature_context_materialization_rejects_local_source_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["source_uris"]["episode_rollups_uri"] =
+        serde_json::json!("local://episode_aggregation_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI");
+}
+
+#[tokio::test]
 async fn scoring_feature_context_materialization_requires_source_evidence_refs() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -2856,7 +2877,7 @@ async fn scoring_feature_context_materialization_requires_source_evidence_refs()
         .unwrap()
         .retain(|reference| {
             reference.as_str()
-                != Some("peer_benchmarks:local://artifacts/peer/peer_percentile_benchmark.json")
+                != Some("peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json")
         });
 
     let (status, body) = json_request_with_key(
@@ -2901,6 +2922,31 @@ async fn scoring_feature_context_materialization_rejects_template_top_level_evid
 }
 
 #[tokio::test]
+async fn scoring_feature_context_materialization_rejects_local_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!(
+            "worker_report:local://scoring/context.json"
+        ));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
 async fn scoring_feature_context_materialization_requires_claim_snapshot_evidence() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -2910,7 +2956,7 @@ async fn scoring_feature_context_materialization_requires_claim_snapshot_evidenc
         .unwrap()
         .retain(|reference| {
             reference.as_str()
-                != Some("scoring_feature_context_claim_snapshot:local://inputs/scoring-claims.json")
+                != Some("scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json")
         });
 
     let (status, body) = json_request_with_key(
