@@ -88,6 +88,20 @@ REQUIRED_SCORING_READBACK_TEMPLATE_EVIDENCE_REFS = {
     "scoring_readback_score_requests:local://template/worker/score_request.json",
     "scoring_readback_score_responses:local://template/worker/scoring-readback/score_response.json",
 }
+REQUIRED_WORKER_RUN_STATUS_TEMPLATE_URIS = {
+    "plan_uri": "local://template/worker/worker_data_pipeline_plan.json",
+    "readiness_report_uri": "local://template/worker/worker_data_pipeline_readiness_report.json",
+}
+REQUIRED_WORKER_EXECUTION_TEMPLATE_URIS = {
+    "plan_uri": "local://template/worker/worker_data_pipeline_plan.json",
+    "run_status_uri": "local://template/worker/worker_data_pipeline_run_status.json",
+    "readiness_report_uri": "local://template/worker/worker_data_pipeline_readiness_report.json",
+}
+REQUIRED_WORKER_EXECUTION_TEMPLATE_EVIDENCE_REFS = {
+    "worker_data_pipeline_plans:local://template/worker/worker_data_pipeline_plan.json",
+    "worker_data_pipeline_run_status:local://template/worker/worker_data_pipeline_run_status.json",
+    "worker_data_pipeline_readiness_reports:local://template/worker/worker_data_pipeline_readiness_report.json",
+}
 REQUIRED_RUNBOOKS = {"runbooks/worker-data-pipeline-commands.json"}
 REQUIRED_RUNBOOK_STEPS = {
     "build_worker_data_pipeline_plan": (
@@ -372,6 +386,7 @@ def validate_worker_execution_template(report: dict) -> None:
         "worker data pipeline execution template job kind set changed unexpectedly",
     )
     for job_kind, job in jobs_by_kind.items():
+        expected_artifact_uri = f"local://template/worker/{job_kind}.json"
         require(
             job.get("execution_status") == "pending_customer_scheduler_run",
             f"worker data pipeline execution template {job_kind} must stay pending",
@@ -381,7 +396,7 @@ def validate_worker_execution_template(report: dict) -> None:
             f"worker data pipeline execution template {job_kind} reported_status must stay pending",
         )
         require(
-            job.get("reported_artifact_uri") == f"local://template/{job_kind}.json",
+            job.get("reported_artifact_uri") == expected_artifact_uri,
             f"worker data pipeline execution template {job_kind} has wrong artifact URI",
         )
         validate_worker_required_prefixes(
@@ -390,6 +405,11 @@ def validate_worker_execution_template(report: dict) -> None:
             job.get("evidence_refs"),
             "worker data pipeline execution template",
         )
+        for prefix in expected_worker_evidence_prefixes(job_kind):
+            require(
+                f"{prefix}{expected_artifact_uri}" in (job.get("evidence_refs") or []),
+                f"worker data pipeline execution template {job_kind} evidence_refs must use package-relative artifact URI",
+            )
         if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
             require(
                 job.get("submitted") is False,
@@ -405,6 +425,16 @@ def validate_worker_execution_template(report: dict) -> None:
                 f"worker data pipeline execution template {job_kind} has wrong required_permission",
             )
     evidence_refs = report.get("evidence_refs")
+    for field, expected_uri in REQUIRED_WORKER_EXECUTION_TEMPLATE_URIS.items():
+        require(
+            report.get(field) == expected_uri,
+            f"worker data pipeline execution template {field} must be {expected_uri}",
+        )
+    observed_refs = set(evidence_refs or [])
+    require(
+        REQUIRED_WORKER_EXECUTION_TEMPLATE_EVIDENCE_REFS.issubset(observed_refs),
+        "worker data pipeline execution template evidence_refs must use package-relative template URIs",
+    )
     for prefix in (
         "worker_data_pipeline_plans:",
         "worker_data_pipeline_run_status:",
@@ -526,6 +556,11 @@ def validate_worker_templates(package_dir: Path) -> None:
         "worker run status template has wrong report_kind",
     )
     require(run_status.get("run_status_template") is True, "run status must remain a template")
+    for field, expected_uri in REQUIRED_WORKER_RUN_STATUS_TEMPLATE_URIS.items():
+        require(
+            run_status.get(field) == expected_uri,
+            f"worker run status {field} must be {expected_uri}",
+        )
     validate_worker_run_status_jobs(run_status.get("job_statuses"))
 
     for path in REQUIRED_WORKER_TEMPLATES:

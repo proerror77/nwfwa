@@ -247,6 +247,34 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_worker_execution_template_with_short_job_artifact_uri(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            job = report["job_executions"][0]
+            job["reported_artifact_uri"] = job["reported_artifact_uri"].replace(
+                "local://template/worker/",
+                "local://template/",
+            )
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(AssertionError, "wrong artifact URI"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_run_status_template_with_short_plan_uri(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            run_status_uri = package_dir / "worker" / "worker_data_pipeline_run_status.json"
+            run_status = _read_json(run_status_uri)
+            run_status["plan_uri"] = "local://template/worker_data_pipeline_plan.json"
+            _write_json(run_status_uri, run_status)
+
+            with self.assertRaisesRegex(AssertionError, "worker run status plan_uri"):
+                validate_package(package_dir)
+
     def test_rejects_scoring_readback_template_missing_response_ref(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

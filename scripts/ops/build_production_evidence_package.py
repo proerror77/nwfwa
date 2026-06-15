@@ -101,14 +101,15 @@ def worker_job_template(job_kind: str) -> dict:
     evidence_refs.extend(
         WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(job_kind, ())
     )
+    artifact_uri = f"local://template/worker/{job_kind}.json"
     job = {
         "job_kind": job_kind,
         "execution_status": "pending_customer_scheduler_run",
         "reported_status": "pending",
         "blocked_dependencies": ["customer_scheduler_not_run"],
-        "reported_artifact_uri": f"local://template/{job_kind}.json",
+        "reported_artifact_uri": artifact_uri,
         "required_evidence_prefixes": worker_required_evidence_prefixes(job_kind),
-        "evidence_refs": [f"{prefix}local://template/{job_kind}.json" for prefix in evidence_refs],
+        "evidence_refs": [f"{prefix}{artifact_uri}" for prefix in evidence_refs],
     }
     if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
         job["submitted"] = False
@@ -222,8 +223,8 @@ def worker_template(template_id: str, generated_at: str) -> dict:
             "artifact_kind": "worker_data_pipeline_run_status_template",
             "report_kind": "worker_data_pipeline_run_status",
             "run_status_template": True,
-            "plan_uri": "local://template/worker_data_pipeline_plan.json",
-            "readiness_report_uri": "local://template/worker_data_pipeline_readiness_report.json",
+            "plan_uri": "local://template/worker/worker_data_pipeline_plan.json",
+            "readiness_report_uri": "local://template/worker/worker_data_pipeline_readiness_report.json",
             "run_id": "<customer-scheduler-run-id>",
             "execution_date": "<yyyy-mm-dd>",
             "job_statuses": [
@@ -231,8 +232,8 @@ def worker_template(template_id: str, generated_at: str) -> dict:
                 for job_kind in sorted(WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS)
             ],
             "evidence_refs": [
-                "worker_data_pipeline_plans:local://template/worker_data_pipeline_plan.json",
-                "worker_data_pipeline_readiness_reports:local://template/worker_data_pipeline_readiness_report.json",
+                "worker_data_pipeline_plans:local://template/worker/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_readiness_reports:local://template/worker/worker_data_pipeline_readiness_report.json",
             ],
             "governance_boundary": (
                 "Run-status inputs report customer scheduler results only; they must not score "
@@ -276,9 +277,9 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
             fields={
                 "report_kind": "worker_data_pipeline_execution_report",
                 "readiness_gate_status": "blocked",
-                "plan_uri": "local://template/worker_data_pipeline_plan.json",
-                "run_status_uri": "local://template/worker_data_pipeline_run_status.json",
-                "readiness_report_uri": "local://template/worker_data_pipeline_readiness_report.json",
+                "plan_uri": "local://template/worker/worker_data_pipeline_plan.json",
+                "run_status_uri": "local://template/worker/worker_data_pipeline_run_status.json",
+                "readiness_report_uri": "local://template/worker/worker_data_pipeline_readiness_report.json",
                 "run_id": "pending_customer_scheduler_run_id",
                 "execution_date": "pending_customer_scheduler_execution_date",
                 "scheduler_status": "pending",
@@ -287,9 +288,9 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                 "job_count": len(jobs),
                 "job_executions": jobs,
                 "evidence_refs": [
-                    "worker_data_pipeline_plans:local://template/worker_data_pipeline_plan.json",
-                    "worker_data_pipeline_run_status:local://template/worker_data_pipeline_run_status.json",
-                    "worker_data_pipeline_readiness_reports:local://template/worker_data_pipeline_readiness_report.json",
+                    "worker_data_pipeline_plans:local://template/worker/worker_data_pipeline_plan.json",
+                    "worker_data_pipeline_run_status:local://template/worker/worker_data_pipeline_run_status.json",
+                    "worker_data_pipeline_readiness_reports:local://template/worker/worker_data_pipeline_readiness_report.json",
                 ],
                 "governance_boundary": (
                     "must not score claims, assign labels, deny claims, activate models, "
