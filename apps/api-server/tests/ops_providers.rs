@@ -484,6 +484,53 @@ async fn provider_write_paths_reject_local_source_report_uri() {
 }
 
 #[tokio::test]
+async fn provider_write_paths_reject_file_source_report_uri() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_URI",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_report_uri"] = serde_json::json!("file://tmp/provider/source_report.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
 async fn provider_write_paths_reject_template_source_uri() {
     let app = build_app(test_config_with_provider_actors()).unwrap();
     for (path, payload, code) in [
@@ -562,6 +609,53 @@ async fn provider_write_paths_reject_local_source_uri() {
     ] {
         let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
         payload["source_uri"] = serde_json::json!("local://provider/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn provider_write_paths_reject_file_source_uri() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_uri"] = serde_json::json!("file://tmp/provider/source.json");
 
         let (status, body) = json_request_with_key(
             app.clone(),
@@ -665,6 +759,58 @@ async fn provider_write_paths_reject_local_top_level_evidence_refs() {
             .unwrap()
             .push(serde_json::json!(
                 "worker_report:local://provider/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "provider-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn provider_write_paths_reject_file_top_level_evidence_refs() {
+    let app = build_app(test_config_with_provider_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            sanctions_sync_report_payload(),
+            "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/profile-window-rollups",
+            provider_profile_window_rollup_payload(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/graph-signal-rollups",
+            provider_graph_signal_rollup_payload(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/peer-benchmarks",
+            peer_benchmark_payload(),
+            "INVALID_PEER_BENCHMARK_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/providers/episode-rollups",
+            episode_rollup_payload(),
+            "INVALID_EPISODE_ROLLUP_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_report:file://tmp/provider/source.json"
             ));
 
         let (status, body) = json_request_with_key(
@@ -1491,6 +1637,54 @@ async fn anomaly_clustering_report_rejects_local_report_uri() {
           ],
           "evidence_refs": [
             "anomaly_clustering_reports:local://worker/provider_peer_clustering_report.json"
+          ]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ANOMALY_CLUSTERING_REPORT_URI");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("production evidence"));
+}
+
+#[tokio::test]
+async fn anomaly_clustering_report_rejects_file_report_uri() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/providers/anomaly-clustering-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "File clustering report must not be submitted as production evidence.",
+          "source_report_uri": "file://tmp/provider_peer_clustering_report.json",
+          "report_kind": "provider_peer_clustering",
+          "dataset_key": "rust_demo_provider_peer_unlabeled",
+          "dataset_version": "2026-06-clustering-demo",
+          "label_policy": "unlabeled_clustering_discovery_only",
+          "governance_boundary": "unlabeled clustering creates anomaly review candidates only",
+          "review_tasks": [
+            {
+              "candidate_kind": "provider_peer_anomaly",
+              "candidate_id": "provider_peer:PRV-042:2026-05",
+              "task_kind": "provider_peer_anomaly_review",
+              "review_queue": "provider_anomaly_candidate_review",
+              "required_review": "human_review_required_before_case_creation_or_label_assignment",
+              "decision_options": ["dismiss_as_peer_variation"],
+              "evidence_refs": [
+                "anomaly_clustering_reports:file://tmp/provider_peer_clustering_report.json"
+              ],
+              "candidate_payload": {
+                "provider_id": "PRV-042"
+              }
+            }
+          ],
+          "evidence_refs": [
+            "anomaly_clustering_reports:file://tmp/provider_peer_clustering_report.json"
           ]
         }"#,
     )

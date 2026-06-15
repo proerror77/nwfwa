@@ -603,6 +603,7 @@ fn validate_production_artifact_uri(
     let value = value.trim();
     if value.is_empty()
         || value.starts_with("local://")
+        || value.starts_with("file://")
         || !value.contains("://")
         || value.contains('{')
         || value.contains('}')
@@ -639,7 +640,10 @@ fn validate_production_evidence_refs(
 ) -> Result<(), ApiError> {
     if evidence_refs.iter().any(|reference| {
         let reference = reference.trim();
-        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+        reference.contains("local://")
+            || reference.contains("file://")
+            || reference.contains('{')
+            || reference.contains('}')
     }) {
         return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
     }
