@@ -13,6 +13,19 @@ use crate::{
 use axum::http::StatusCode;
 use serde_json::Value;
 
+fn is_production_artifact_uri(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && !value.starts_with("local://")
+        && !value.contains('{')
+        && !value.contains('}')
+}
+
+fn evidence_ref_is_non_production(value: &str) -> bool {
+    let value = value.trim();
+    value.contains("local://") || value.contains('{') || value.contains('}')
+}
+
 pub(in crate::routes) fn validate_mlops_monitoring_report_request(
     request: &SubmitMlopsMonitoringReportRequest,
 ) -> Result<(), ApiError> {
@@ -233,6 +246,13 @@ pub(in crate::routes) fn validate_probability_calibration_report_request(
             "probability calibration report_uri must not use local://template evidence",
         ));
     }
+    if !is_production_artifact_uri(&request.report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_REPORT_URI",
+            "probability calibration report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     if request.row_count == 0 || request.minimum_calibration_rows == 0 || request.bin_count == 0 {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -337,6 +357,17 @@ pub(in crate::routes) fn validate_probability_calibration_report_request(
             StatusCode::BAD_REQUEST,
             "INVALID_PROBABILITY_CALIBRATION_EVIDENCE",
             "probability calibration evidence_refs must not use local://template evidence",
+        ));
+    }
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROBABILITY_CALIBRATION_EVIDENCE",
+            "probability calibration evidence_refs must not use local dry-run or placeholder evidence",
         ));
     }
     if pii::contains_pii(

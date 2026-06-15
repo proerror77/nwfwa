@@ -200,8 +200,11 @@ fn builds_probability_calibration_submission() {
     )
     .unwrap();
 
-    let (model_key, submission) = build_probability_calibration_submission(
+    let (model_key, submission) = build_probability_calibration_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_input.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_labels.json",
         "worker:build-probability-calibration-report",
         "labeled holdout calibration evidence",
     )
@@ -214,13 +217,13 @@ fn builds_probability_calibration_submission() {
     assert!(submission
         .evidence_refs
         .contains(&"model_versions:baseline_fwa:0.2.0-rust".into()));
-    assert!(submission
-        .evidence_refs
-        .contains(&"calibration_labels:local://labels/holdout.json".into()));
-    assert!(submission.evidence_refs.contains(&format!(
-        "probability_calibration_reports:{}",
-        report_uri.to_string_lossy()
-    )));
+    assert_eq!(
+        submission.report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json"
+    );
+    assert!(submission.evidence_refs.contains(&"probability_calibration_reports:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json".into()));
+    assert!(submission.evidence_refs.contains(&"probability_calibration_input:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_input.json".into()));
+    assert!(submission.evidence_refs.contains(&"calibration_labels:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_labels.json".into()));
 }
 
 #[test]
@@ -263,8 +266,11 @@ fn rejects_probability_calibration_submission_without_label_lineage() {
     )
     .unwrap();
 
-    let error = build_probability_calibration_submission(
+    let error = build_probability_calibration_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_input.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_labels.json",
         "worker:build-probability-calibration-report",
         "labeled holdout calibration evidence",
     )
@@ -285,8 +291,8 @@ fn rejects_probability_calibration_submission_with_template_evidence_refs() {
             "model_key": "baseline_fwa",
             "model_version": "0.2.0-rust",
             "as_of_date": "2026-06-14",
-            "source_uri": "local://template/sources/probability-calibration-input.json",
-            "label_source_uri": "local://template/sources/calibration-labels.json",
+            "source_uri": "local://inputs/probability-calibration.json",
+            "label_source_uri": "local://labels/holdout.json",
             "row_count": 100,
             "minimum_calibration_rows": 100,
             "bin_count": 1,
@@ -308,16 +314,20 @@ fn rejects_probability_calibration_submission_with_template_evidence_refs() {
             ],
             "review_tasks": [],
             "evidence_refs": [
-                "probability_calibration_input:local://template/sources/probability-calibration-input.json",
-                "calibration_labels:local://template/sources/calibration-labels.json"
+                "probability_calibration_input:local://inputs/probability-calibration.json",
+                "calibration_labels:local://labels/holdout.json",
+                "worker_template:local://template/sources/probability-calibration-input.json"
             ],
             "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
         }),
     )
     .unwrap();
 
-    let error = build_probability_calibration_submission(
+    let error = build_probability_calibration_submission_with_published_uris(
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_input.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_labels.json",
         "worker:build-probability-calibration-report",
         "labeled holdout calibration evidence",
     )
@@ -325,7 +335,7 @@ fn rejects_probability_calibration_submission_with_template_evidence_refs() {
 
     assert!(error
         .to_string()
-        .contains("evidence_refs must not use local://template evidence"));
+        .contains("evidence_refs must not use local dry-run or placeholder evidence"));
 }
 
 #[tokio::test]
@@ -389,10 +399,13 @@ async fn submits_probability_calibration_report_to_api() {
         request
     });
 
-    let response = submit_probability_calibration_report(
+    let response = submit_probability_calibration_report_with_published_uris(
         &api_url,
         "model-review-secret",
         &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_input.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_labels.json",
         "worker:build-probability-calibration-report",
         "labeled holdout calibration evidence",
     )
@@ -406,5 +419,10 @@ async fn submits_probability_calibration_report_to_api() {
     ));
     assert!(request.contains("x-api-key: model-review-secret"));
     assert!(request.contains(r#""report_kind":"probability_calibration_report""#));
-    assert!(request.contains("probability_calibration_reports:"));
+    assert!(request.contains(
+        "probability_calibration_reports:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json"
+    ));
+    assert!(request.contains(
+        "calibration_labels:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_labels.json"
+    ));
 }

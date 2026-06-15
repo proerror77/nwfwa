@@ -2,7 +2,10 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-use crate::{api_url, read_json_report, required_non_empty, round4, write_json};
+use crate::{
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, read_json_report,
+    required_non_empty, round4, write_json,
+};
 
 const DEFAULT_BIN_COUNT: usize = 10;
 const MIN_CALIBRATION_ROWS: usize = 100;
@@ -238,47 +241,126 @@ pub fn build_probability_calibration_submission(
     notes: &str,
 ) -> anyhow::Result<(String, ProbabilityCalibrationSubmission)> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
-    let actor = required_non_empty("actor", actor)?;
-    let notes = required_non_empty("notes", notes)?;
     let report: ProbabilityCalibrationReport =
         serde_json::from_value(read_json_report(report_uri)?)
             .context("parse probability calibration report")?;
+    let published_input_uri = report.source_uri.clone();
+    let published_label_uri = report
+        .label_source_uri
+        .as_deref()
+        .unwrap_or_default()
+        .to_string();
+    build_probability_calibration_submission_from_report(
+        report_uri,
+        &published_input_uri,
+        &published_label_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+pub fn build_probability_calibration_submission_with_published_uris(
+    report_uri: &str,
+    published_report_uri: &str,
+    published_input_uri: &str,
+    published_label_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<(String, ProbabilityCalibrationSubmission)> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    let published_input_uri = required_non_empty("published_input_uri", published_input_uri)?;
+    let published_label_uri = required_non_empty("published_label_uri", published_label_uri)?;
+    let report: ProbabilityCalibrationReport =
+        serde_json::from_value(read_json_report(report_uri)?)
+            .context("parse probability calibration report")?;
+    build_probability_calibration_submission_from_report(
+        published_report_uri,
+        published_input_uri,
+        published_label_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+fn build_probability_calibration_submission_from_report(
+    published_report_uri: &str,
+    published_input_uri: &str,
+    published_label_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: ProbabilityCalibrationReport,
+) -> anyhow::Result<(String, ProbabilityCalibrationSubmission)> {
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
     if report.report_kind != "probability_calibration_report" {
         bail!("report_kind must be probability_calibration_report");
     }
-    if report
-        .evidence_refs
-        .iter()
-        .any(|reference| reference.trim().contains("local://template"))
-    {
-        bail!(
-            "probability calibration report evidence_refs must not use local://template evidence"
-        );
-    }
-    for required_prefix in ["probability_calibration_input:", "calibration_labels:"] {
+    ensure_production_artifact_uri(
+        "probability calibration published_report_uri",
+        published_report_uri,
+    )?;
+    ensure_production_artifact_uri(
+        "probability calibration published_input_uri",
+        published_input_uri,
+    )?;
+    ensure_production_artifact_uri(
+        "probability calibration published_label_uri",
+        published_label_uri,
+    )?;
+    let report_label_uri = report
+        .label_source_uri
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!("probability calibration report requires label_source_uri")
+        })?;
+    let input_ref = format!("probability_calibration_input:{}", report.source_uri);
+    let label_ref = format!("calibration_labels:{report_label_uri}");
+    for required_ref in [&input_ref, &label_ref] {
         if !report
             .evidence_refs
             .iter()
-            .any(|reference| reference.trim().starts_with(required_prefix))
+            .any(|reference| reference.trim() == required_ref.as_str())
         {
-            bail!("probability calibration report requires {required_prefix} evidence");
+            bail!("probability calibration report requires {required_ref} evidence");
         }
     }
-    let mut evidence_refs = report.evidence_refs;
+    let mut evidence_refs = report
+        .evidence_refs
+        .iter()
+        .map(|reference| reference.trim())
+        .filter(|reference| {
+            !reference.is_empty()
+                && *reference != input_ref.as_str()
+                && *reference != label_ref.as_str()
+        })
+        .map(str::to_string)
+        .collect::<Vec<_>>();
     evidence_refs.push(format!(
         "model_versions:{}:{}",
         report.model_key, report.model_version
     ));
-    evidence_refs.push(format!("probability_calibration_reports:{report_uri}"));
+    evidence_refs.push(format!(
+        "probability_calibration_reports:{published_report_uri}"
+    ));
+    evidence_refs.push(format!(
+        "probability_calibration_input:{published_input_uri}"
+    ));
+    evidence_refs.push(format!("calibration_labels:{published_label_uri}"));
     evidence_refs.sort();
     evidence_refs.dedup();
+    ensure_production_evidence_refs("probability calibration evidence_refs", &evidence_refs)?;
     let model_key = report.model_key.clone();
     Ok((
         model_key,
         ProbabilityCalibrationSubmission {
             actor: actor.into(),
             notes: notes.into(),
-            report_uri: report_uri.into(),
+            report_uri: published_report_uri.into(),
             report_kind: report.report_kind,
             model_version: report.model_version,
             as_of_date: report.as_of_date,
@@ -306,6 +388,36 @@ pub async fn submit_probability_calibration_report(
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let (model_key, payload) = build_probability_calibration_submission(report_uri, actor, notes)?;
+    submit_probability_calibration_report_payload(api_base_url, api_key, &model_key, &payload).await
+}
+
+pub async fn submit_probability_calibration_report_with_published_uris(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    published_input_uri: &str,
+    published_label_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let (model_key, payload) = build_probability_calibration_submission_with_published_uris(
+        report_uri,
+        published_report_uri,
+        published_input_uri,
+        published_label_uri,
+        actor,
+        notes,
+    )?;
+    submit_probability_calibration_report_payload(api_base_url, api_key, &model_key, &payload).await
+}
+
+async fn submit_probability_calibration_report_payload(
+    api_base_url: &str,
+    api_key: &str,
+    model_key: &str,
+    payload: &ProbabilityCalibrationSubmission,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,

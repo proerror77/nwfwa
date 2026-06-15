@@ -198,6 +198,34 @@ async fn rejects_probability_calibration_report_template_uri() {
 }
 
 #[tokio::test]
+async fn rejects_probability_calibration_report_local_uri() {
+    let app = build_app(test_config()).unwrap();
+    let payload = probability_calibration_payload(complete_probability_calibration_evidence_refs())
+        .replace(
+            "data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "local://inputs/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+        );
+
+    let (status, response) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &payload,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response["code"],
+        "INVALID_PROBABILITY_CALIBRATION_REPORT_URI"
+    );
+    assert!(response["message"]
+        .as_str()
+        .unwrap()
+        .contains("production evidence"));
+}
+
+#[tokio::test]
 async fn rejects_probability_calibration_template_evidence_refs() {
     let app = build_app(test_config()).unwrap();
     let payload = probability_calibration_payload(
@@ -217,4 +245,30 @@ async fn rejects_probability_calibration_template_evidence_refs() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(response["code"], "INVALID_PROBABILITY_CALIBRATION_EVIDENCE");
+}
+
+#[tokio::test]
+async fn rejects_probability_calibration_local_evidence_refs() {
+    let app = build_app(test_config()).unwrap();
+    let payload = probability_calibration_payload(
+        r#""model_versions:baseline_fwa:0.1.0",
+            "probability_calibration_reports:data/model-artifacts/baseline_fwa/0.1.0/calibration/probability_calibration_report.json",
+            "probability_calibration_input:local://inputs/calibration/holdout-predictions.json",
+            "calibration_labels:s3://customer-prod-artifacts/calibration/holdout-labels.json""#,
+    );
+
+    let (status, response) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &payload,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(response["code"], "INVALID_PROBABILITY_CALIBRATION_EVIDENCE");
+    assert!(response["message"]
+        .as_str()
+        .unwrap()
+        .contains("local dry-run"));
 }
