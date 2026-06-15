@@ -133,6 +133,10 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
                 "--published-score-response-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_response.json",
                 command_text,
             )
+            self.assertIn(
+                "--scheduler-report artifacts/production-evidence-package/worker/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json",
+                command_text,
+            )
             alert_receiver_command = next(
                 command
                 for command in runbook["commands"]

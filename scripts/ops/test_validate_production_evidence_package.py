@@ -554,6 +554,31 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_missing_alert_receiver_staged_scheduler_report(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            command = next(
+                command
+                for command in runbook["commands"]
+                if command["step"] == "deliver_mlops_alert_receiver_webhook"
+            )
+            command["command"] = command["command"].replace(
+                "--scheduler-report artifacts/production-evidence-package/worker/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json ",
+                "",
+            )
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "scheduler-report",
+            ):
+                validate_package(package_dir)
+
     def test_rejects_runbook_missing_alert_receiver_readiness_mapping(
         self,
     ) -> None:

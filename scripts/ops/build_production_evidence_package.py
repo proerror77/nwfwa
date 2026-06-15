@@ -589,7 +589,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
             "filled worker readiness input",
             "customer scheduler run-status artifact",
             "customer-authorized scoring request and score response artifacts",
-            "customer alert receiver URL and published scheduler execution report URI",
+            "staged scheduler execution report and published scheduler execution report URI",
+            "customer alert receiver URL",
         ],
         "commands": [
             {
@@ -901,7 +902,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                 "step": "deliver_mlops_alert_receiver_webhook",
                 "command": (
                     "cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook "
-                    "--scheduler-report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json "
+                    "--scheduler-report artifacts/production-evidence-package/worker/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json "
                     "--published-scheduler-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/mlops-monitoring/<customer-scheduler-run-id>/mlops_scheduler_execution_report.json "
                     "--receiver-url <customer-approved-alert-receiver-url> "
                     "--receiver-id <customer-alert-receiver-id> "
