@@ -60,6 +60,31 @@ class RetentionLegalHoldReportTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "local://template"):
             validate_retention_legal_hold_evidence(report)
 
+    def test_file_evidence_refs_do_not_configure_retention(self) -> None:
+        source = _configured_source()
+        source["evidence_refs"] = [
+            "retention_policy:file://tmp/retention-legal-hold-source.json",
+            "legal_hold_policy:s3://customer-prod/retention/legal-hold.json",
+        ]
+
+        report = build_retention_legal_hold_report(source)
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("non_production_evidence_refs", report["blockers"])
+        with self.assertRaisesRegex(AssertionError, "file://"):
+            validate_retention_legal_hold_evidence(report)
+
+    def test_file_archive_storage_uri_does_not_configure_retention(self) -> None:
+        source = _configured_source()
+        source["archive_storage_uri"] = "file://tmp/archive"
+
+        report = build_retention_legal_hold_report(source)
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("archive_storage_uri_not_production", report["blockers"])
+        with self.assertRaisesRegex(AssertionError, "archive_storage_uri"):
+            validate_retention_legal_hold_evidence(report)
+
     def test_cli_builder_writes_standard_artifact_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

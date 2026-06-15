@@ -89,6 +89,29 @@ class CustomerDataGovernanceReportTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "local://template"):
             validate_customer_data_governance_evidence(report)
 
+    def test_file_evidence_refs_do_not_approve_customer_governance(self) -> None:
+        source = {
+            "dataset_provenance_status": "approved",
+            "label_provenance_status": "approved",
+            "holdout_split_status": "approved",
+            "shadow_traffic_plan_status": "approved",
+            "approved_label_count": 500,
+            "holdout_claim_count": 120,
+            "evidence_refs": [
+                "dataset_provenance:file://tmp/customer-data-governance-source.json",
+                "label_provenance:s3://customer-prod/governance/labels.json",
+                "holdout_split:s3://customer-prod/governance/holdout.json",
+                "shadow_traffic_plan:s3://customer-prod/governance/shadow.json",
+            ],
+        }
+
+        report = build_customer_data_governance_report(source)
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("non_production_evidence_refs", report["blockers"])
+        with self.assertRaisesRegex(AssertionError, "file://"):
+            validate_customer_data_governance_evidence(report)
+
     def test_cli_builder_writes_standard_artifact_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

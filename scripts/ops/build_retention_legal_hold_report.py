@@ -27,6 +27,23 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def evidence_ref_is_non_production(value: object) -> bool:
+    return isinstance(value, str) and (
+        "local://" in value or "file://" in value or "{" in value or "}" in value
+    )
+
+
+def artifact_uri_is_non_production(value: object) -> bool:
+    return not (
+        isinstance(value, str)
+        and "://" in value
+        and not value.startswith("local://")
+        and not value.startswith("file://")
+        and "{" not in value
+        and "}" not in value
+    )
+
+
 def build_retention_legal_hold_report(source: dict) -> dict:
     evidence_refs = source.get("evidence_refs") or []
     blockers = []
@@ -35,6 +52,10 @@ def build_retention_legal_hold_report(source: dict) -> dict:
     for field_name in ("retention_policy_id", "legal_hold_policy_id", "archive_storage_uri"):
         if not isinstance(source.get(field_name), str) or not source[field_name].strip():
             blockers.append(f"{field_name}_missing")
+    if "archive_storage_uri_missing" not in blockers and artifact_uri_is_non_production(
+        source.get("archive_storage_uri")
+    ):
+        blockers.append("archive_storage_uri_not_production")
     if source.get("legal_hold_reconciliation_status") != "completed":
         blockers.append("legal_hold_reconciliation_not_completed")
     if source.get("destruction_workflow") != "human_approval_required_before_destroy":
@@ -46,6 +67,8 @@ def build_retention_legal_hold_report(source: dict) -> dict:
             blockers.append(f"missing_{prefix.rstrip(':')}_evidence_ref")
     if any(isinstance(ref, str) and "local://template" in ref for ref in evidence_refs):
         blockers.append("template_evidence_refs_not_replaced")
+    if any(evidence_ref_is_non_production(ref) for ref in evidence_refs):
+        blockers.append("non_production_evidence_refs")
 
     return {
         "artifact_kind": "retention_legal_hold_report",

@@ -48,6 +48,12 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def evidence_ref_is_non_production(value: object) -> bool:
+    return isinstance(value, str) and (
+        "local://" in value or "file://" in value or "{" in value or "}" in value
+    )
+
+
 def build_ocr_vector_analytics_execution_report(source: dict) -> dict:
     evidence_refs = source.get("evidence_refs") or []
     blockers = []
@@ -64,6 +70,8 @@ def build_ocr_vector_analytics_execution_report(source: dict) -> dict:
             blockers.append(f"missing_{prefix.rstrip(':')}_evidence_ref")
     if any(isinstance(ref, str) and "local://template" in ref for ref in evidence_refs):
         blockers.append("template_evidence_refs_not_replaced")
+    if any(evidence_ref_is_non_production(ref) for ref in evidence_refs):
+        blockers.append("non_production_evidence_refs")
 
     return {
         "artifact_kind": "ocr_vector_analytics_execution_report",
