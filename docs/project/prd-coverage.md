@@ -102,6 +102,12 @@ dry-run/template evidence refs before state transitions. This is verified in
 `de908fa0` by `cargo test --locked -p api-server --test ops_rules` and
 `cargo test --locked -p api-server --test ops_routing_policies`.
 
+Agent approval and cancellation governance write paths now reject local
+dry-run/template evidence refs before approval or kill-switch state changes.
+This is verified in `a9b9160d` by
+`cargo test --locked -p api-server --test knowledge_agent` and
+`cargo test --locked -p api-server --test ops_openapi`.
+
 ## June 2026 Gap Backlog
 
 | Priority | Backlog item | Coverage status |
