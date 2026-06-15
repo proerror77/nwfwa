@@ -288,6 +288,11 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
     )?;
     let readiness_gate_status =
         json_string(&report, "readiness_gate_status").unwrap_or_else(|| "missing".into());
+    let readiness_report_uri = json_string(&report, "readiness_report_uri");
+    validate_worker_data_pipeline_execution_readiness_gate(
+        &readiness_gate_status,
+        readiness_report_uri.as_deref(),
+    )?;
     validate_worker_data_pipeline_execution_review_tasks(
         &job_executions,
         &review_tasks,
@@ -304,7 +309,6 @@ pub fn build_worker_data_pipeline_execution_submission_with_published_uri(
         .context("worker data pipeline execution report requires plan_uri")?;
     let run_status_uri = json_string(&report, "run_status_uri")
         .context("worker data pipeline execution report requires run_status_uri")?;
-    let readiness_report_uri = json_string(&report, "readiness_report_uri");
     ensure_production_lineage_uri("plan_uri", &plan_uri)?;
     ensure_production_lineage_uri("run_status_uri", &run_status_uri)?;
     if let Some(readiness_report_uri) = readiness_report_uri.as_deref() {
@@ -630,7 +634,7 @@ fn validate_worker_data_pipeline_execution_review_tasks(
     review_tasks: &[serde_json::Value],
     readiness_gate_status: &str,
 ) -> anyhow::Result<()> {
-    if readiness_gate_status == "blocked" {
+    if readiness_gate_status != "ready" {
         let has_matching_gate_review = review_tasks.iter().any(|task| {
             json_string(task, "task_kind").as_deref()
                 == Some("worker_data_pipeline_readiness_gate_review")
@@ -693,6 +697,24 @@ fn validate_worker_data_pipeline_execution_review_tasks(
                 "review task kind must be worker_data_pipeline_execution_review or worker_data_pipeline_readiness_gate_review"
             ),
         }
+    }
+    Ok(())
+}
+
+fn validate_worker_data_pipeline_execution_readiness_gate(
+    readiness_gate_status: &str,
+    readiness_report_uri: Option<&str>,
+) -> anyhow::Result<()> {
+    if !matches!(readiness_gate_status, "ready" | "blocked" | "missing") {
+        bail!("readiness_gate_status must be ready, blocked, or missing");
+    }
+    if readiness_report_uri.is_some() && !matches!(readiness_gate_status, "ready" | "blocked") {
+        bail!(
+            "readiness_gate_status must be ready or blocked when readiness_report_uri is supplied"
+        );
+    }
+    if matches!(readiness_gate_status, "ready" | "blocked") && readiness_report_uri.is_none() {
+        bail!("readiness_report_uri is required when readiness_gate_status is ready or blocked");
     }
     Ok(())
 }
