@@ -127,7 +127,7 @@ REQUIRED_RUNBOOK_STEPS = {
     ),
     "build_readiness_input_template": (
         "build-worker-data-pipeline-readiness-input-template",
-        "worker/worker_data_pipeline_readiness_input_template.json",
+        "worker/worker_data_pipeline_readiness_input.json",
     ),
     "build_readiness_report": (
         "build-worker-data-pipeline-readiness-report",
@@ -135,7 +135,7 @@ REQUIRED_RUNBOOK_STEPS = {
     ),
     "build_run_status_template": (
         "build-worker-data-pipeline-run-status-template",
-        "worker/worker_data_pipeline_run_status_template.json",
+        "worker/worker_data_pipeline_run_status.json",
     ),
     "build_execution_report": (
         "build-worker-data-pipeline-execution-report",

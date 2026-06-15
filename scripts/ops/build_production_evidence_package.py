@@ -614,7 +614,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "--plan artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json "
                     "--output-dir artifacts/production-evidence-package/worker"
                 ),
-                "output": "worker/worker_data_pipeline_readiness_input_template.json",
+                "output": "worker/worker_data_pipeline_readiness_input.json",
             },
             {
                 "step": "build_readiness_report",
@@ -855,7 +855,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "--run-id <customer-scheduler-run-id> --execution-date <yyyy-mm-dd> "
                     "--output-dir artifacts/production-evidence-package/worker"
                 ),
-                "output": "worker/worker_data_pipeline_run_status_template.json",
+                "output": "worker/worker_data_pipeline_run_status.json",
             },
             {
                 "step": "build_execution_report",

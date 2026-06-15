@@ -178,6 +178,17 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn("build-scoring-readback-report", command_text)
             self.assertIn("runtime-secret-not-persisted", command_text)
             self.assertIn("No API keys", runbook["secret_boundary"])
+            commands_by_step = {
+                command["step"]: command for command in runbook["commands"]
+            }
+            self.assertEqual(
+                commands_by_step["build_readiness_input_template"]["output"],
+                "worker/worker_data_pipeline_readiness_input.json",
+            )
+            self.assertEqual(
+                commands_by_step["build_run_status_template"]["output"],
+                "worker/worker_data_pipeline_run_status.json",
+            )
             readiness_input = _read_json(
                 Path(temp_dir) / "worker" / "worker_data_pipeline_readiness_input.json"
             )

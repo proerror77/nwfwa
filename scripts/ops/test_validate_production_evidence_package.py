@@ -569,6 +569,23 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "published-readiness-input-uri"):
                 validate_package(package_dir)
 
+    def test_rejects_runbook_template_output_name_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            runbook_uri = package_dir / "runbooks" / "worker-data-pipeline-commands.json"
+            runbook = _read_json(runbook_uri)
+            command = next(
+                command
+                for command in runbook["commands"]
+                if command["step"] == "build_run_status_template"
+            )
+            command["output"] = "worker/worker_data_pipeline_run_status_template.json"
+            _write_json(runbook_uri, runbook)
+
+            with self.assertRaisesRegex(AssertionError, "build_run_status_template output"):
+                validate_package(package_dir)
+
     def test_rejects_runbook_missing_alert_receiver_published_scheduler_uri(
         self,
     ) -> None:
