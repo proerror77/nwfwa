@@ -135,6 +135,74 @@ fn verifies_scoring_readback_response_evidence_prefixes() {
 }
 
 #[test]
+fn writes_published_scoring_readback_uris_into_report() {
+    let root = temp_root("scoring-readback-published-uris");
+    let input_uri = root.join("scoring_readback_input.json");
+    let response_uri = root.join("score_response.json");
+    write_json(
+        input_uri.clone(),
+        &serde_json::json!({
+            "customer_scope_id": "customer-alpha",
+            "as_of_date": "2026-06-15",
+            "score_request_uri": "artifacts/production-evidence-package/worker/score_request.json",
+            "score_response_uri": response_uri.to_string_lossy(),
+            "expected_evidence_prefixes": full_expected_prefixes(),
+            "evidence_refs": ["worker_data_pipeline_executions:s3://customer-alpha/worker/execution.json"]
+        }),
+    )
+    .unwrap();
+    write_json(
+        response_uri.clone(),
+        &serde_json::json!({
+            "claim_id": "CLM-1",
+            "evidence_refs": [
+                "scoring_feature_contexts:s3://ctx/report.json",
+                "provider_profile_window_rollups:s3://provider-profile/report.json",
+                "sanctions_sync_reports:s3://sanctions/report.json",
+                "provider_graph_signal_rollups:s3://provider-graph/report.json",
+                "peer_benchmarks:s3://peer/report.json",
+                "episode_rollups:s3://episode/report.json",
+                "clinical_compatibility:s3://clinical/report.json",
+                "unbundling_candidates:s3://unbundling/report.json"
+            ]
+        }),
+    )
+    .unwrap();
+
+    let report = build_scoring_readback_report_with_published_uris(
+        &input_uri.to_string_lossy(),
+        Some(&response_uri.to_string_lossy()),
+        Some("s3://customer-alpha/scoring-readback/report.json"),
+        Some("s3://customer-alpha/scoring-readback/input.json"),
+        Some("s3://customer-alpha/scoring-readback/request.json"),
+        Some("s3://customer-alpha/scoring-readback/response.json"),
+        root.join("out"),
+    )
+    .expect("scoring readback report");
+
+    assert_eq!(report.readback_status, "verified");
+    assert_eq!(
+        report.input_uri,
+        "s3://customer-alpha/scoring-readback/input.json"
+    );
+    assert_eq!(
+        report.score_request_uri,
+        "s3://customer-alpha/scoring-readback/request.json"
+    );
+    assert_eq!(
+        report.score_response_uri.as_deref(),
+        Some("s3://customer-alpha/scoring-readback/response.json")
+    );
+    assert!(report.evidence_refs.contains(
+        &"scoring_readback_reports:s3://customer-alpha/scoring-readback/report.json".into()
+    ));
+    assert!(report.evidence_refs.contains(
+        &"scoring_readback_score_responses:s3://customer-alpha/scoring-readback/response.json"
+            .into()
+    ));
+}
+
+#[test]
 fn blocks_scoring_readback_when_template_refs_are_not_replaced() {
     let root = temp_root("scoring-readback-template-refs");
     let input_uri = root.join("scoring_readback_input.json");

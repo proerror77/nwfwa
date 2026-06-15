@@ -845,6 +845,10 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- build-scoring-readback-report "
                     "--input-uri artifacts/production-evidence-package/worker/scoring_readback_input.json "
                     "--score-response-uri artifacts/production-evidence-package/worker/scoring-readback/score_response.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_report.json "
+                    "--published-input-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_input.json "
+                    "--published-score-request-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_request.json "
+                    "--published-score-response-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_response.json "
                     "--output-dir artifacts/production-evidence-package/evidence"
                 ),
                 "output": "evidence/scoring_readback_report.json",

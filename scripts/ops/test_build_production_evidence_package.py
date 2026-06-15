@@ -114,6 +114,22 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
                 command_text,
             )
             self.assertIn(
+                "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_report.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-input-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_input.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-score-request-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_request.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-score-response-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_response.json",
+                command_text,
+            )
+            self.assertIn(
                 "--published-label-uri <customer-approved-calibration-labels-uri>",
                 command_text,
             )

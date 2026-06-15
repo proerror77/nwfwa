@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, path::Path};
 
 use crate::{
-    api_url, ensure_production_evidence_refs, read_json_report, required_non_empty, write_json,
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, read_json_report,
+    required_non_empty, write_json,
 };
 
 pub(crate) const REQUIRED_SCORE_RESPONSE_EVIDENCE_PREFIXES: &[&str] = &[
@@ -107,6 +108,26 @@ pub fn build_scoring_readback_report(
     score_response_uri_override: Option<&str>,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<ScoringReadbackReport> {
+    build_scoring_readback_report_with_published_uris(
+        input_uri,
+        score_response_uri_override,
+        None,
+        None,
+        None,
+        None,
+        output_dir,
+    )
+}
+
+pub fn build_scoring_readback_report_with_published_uris(
+    input_uri: &str,
+    score_response_uri_override: Option<&str>,
+    published_report_uri: Option<&str>,
+    published_input_uri: Option<&str>,
+    published_score_request_uri: Option<&str>,
+    published_score_response_uri: Option<&str>,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<ScoringReadbackReport> {
     let input_uri = required_non_empty("input_uri", input_uri)?;
     let input: ScoringReadbackInput = serde_json::from_value(read_json_report(input_uri)?)
         .context("parse scoring readback input")?;
@@ -124,6 +145,32 @@ pub fn build_scoring_readback_report(
                 .and_then(|value| required_non_empty("score_response_uri", value).ok())
                 .map(str::to_string)
         });
+    let published_report_uri = published_report_uri
+        .map(|value| {
+            ensure_production_artifact_uri("scoring readback published_report_uri", value)?;
+            Ok::<_, anyhow::Error>(value.trim().to_string())
+        })
+        .transpose()?;
+    let report_input_uri = published_input_uri
+        .map(|value| {
+            ensure_production_artifact_uri("scoring readback published_input_uri", value)?;
+            Ok::<_, anyhow::Error>(value.trim().to_string())
+        })
+        .transpose()?
+        .unwrap_or_else(|| input_uri.to_string());
+    let report_score_request_uri = published_score_request_uri
+        .map(|value| {
+            ensure_production_artifact_uri("scoring readback published_score_request_uri", value)?;
+            Ok::<_, anyhow::Error>(value.trim().to_string())
+        })
+        .transpose()?
+        .unwrap_or_else(|| score_request_uri.to_string());
+    let report_score_response_uri = published_score_response_uri
+        .map(|value| {
+            ensure_production_artifact_uri("scoring readback published_score_response_uri", value)?;
+            Ok::<_, anyhow::Error>(value.trim().to_string())
+        })
+        .transpose()?;
 
     let mut blockers = Vec::new();
     if score_request_uri.trim().starts_with("local://template") {
@@ -217,11 +264,17 @@ pub fn build_scoring_readback_report(
         }]
     };
     let mut evidence_refs = input.evidence_refs;
-    evidence_refs.push(format!("scoring_readback_inputs:{input_uri}"));
+    if let Some(published_report_uri) = &published_report_uri {
+        evidence_refs.push(format!("scoring_readback_reports:{published_report_uri}"));
+    }
+    evidence_refs.push(format!("scoring_readback_inputs:{report_input_uri}"));
     evidence_refs.push(format!(
-        "scoring_readback_score_requests:{score_request_uri}"
+        "scoring_readback_score_requests:{report_score_request_uri}"
     ));
-    if let Some(score_response_uri) = &score_response_uri {
+    if let Some(score_response_uri) = report_score_response_uri
+        .as_ref()
+        .or(score_response_uri.as_ref())
+    {
         evidence_refs.push(format!(
             "scoring_readback_score_responses:{score_response_uri}"
         ));
@@ -236,9 +289,9 @@ pub fn build_scoring_readback_report(
         as_of_date: as_of_date.into(),
         readback_status: readback_status.into(),
         execution_mode: execution_mode.into(),
-        input_uri: input_uri.into(),
-        score_request_uri: score_request_uri.into(),
-        score_response_uri,
+        input_uri: report_input_uri,
+        score_request_uri: report_score_request_uri,
+        score_response_uri: report_score_response_uri.or(score_response_uri),
         expected_evidence_prefix_count: expected_prefixes.len(),
         matched_evidence_prefix_count,
         checks,

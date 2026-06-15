@@ -259,6 +259,14 @@ REQUIRED_RUNBOOK_SUBMIT_FLAGS = {
         "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/execution/<customer-scheduler-run-id>/worker_data_pipeline_execution_report.json",
     },
 }
+REQUIRED_RUNBOOK_BUILD_FLAGS = {
+    "build_scoring_readback_report": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_report.json",
+        "--published-input-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/scoring_readback_input.json",
+        "--published-score-request-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_request.json",
+        "--published-score-response-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-readback/<customer-scheduler-run-id>/score_response.json",
+    },
+}
 REQUIRED_RUNBOOK_COMMAND_PATHS = {
     "artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json",
     "artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_input.json",
@@ -870,6 +878,19 @@ def validate_runbook(package_dir: Path) -> None:
             f"{flag} {expected_uri}" in scoring_context_command_text,
             f"runbook step build_scoring_feature_contexts {flag} must be {expected_uri}",
         )
+    for step, required_flags in REQUIRED_RUNBOOK_BUILD_FLAGS.items():
+        command = commands_by_step.get(step)
+        require(command is not None, f"runbook missing artifact build step {step}")
+        step_command_text = command.get("command")
+        require(
+            isinstance(step_command_text, str),
+            f"runbook step {step} command must be text",
+        )
+        for flag, expected_uri in required_flags.items():
+            require(
+                f"{flag} {expected_uri}" in step_command_text,
+                f"runbook step {step} {flag} must be {expected_uri}",
+            )
     for submit_command in REQUIRED_RUNBOOK_SUBMIT_COMMANDS:
         require(
             submit_command in command_text,

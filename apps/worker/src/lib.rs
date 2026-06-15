@@ -250,8 +250,9 @@ pub use scoring_feature_context::{
 
 mod scoring_readback;
 pub use scoring_readback::{
-    build_scoring_readback_report, fetch_scoring_readback_response, ScoringReadbackCheck,
-    ScoringReadbackInput, ScoringReadbackReport, ScoringReadbackReviewTask,
+    build_scoring_readback_report, build_scoring_readback_report_with_published_uris,
+    fetch_scoring_readback_response, ScoringReadbackCheck, ScoringReadbackInput,
+    ScoringReadbackReport, ScoringReadbackReviewTask,
 };
 
 mod parquet_utils;
