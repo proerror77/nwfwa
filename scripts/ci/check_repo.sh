@@ -695,6 +695,9 @@ def worker_execution_report(artifact_uri, include_write_refs=True):
                 "blocked_dependencies": [],
                 "api_path": validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS.get(job_kind),
                 "required_permission": validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS.get(job_kind),
+                "required_submit_flags": list(
+                    validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS.get(job_kind, ())
+                ),
             }
         )
     return {
@@ -708,6 +711,7 @@ def worker_execution_report(artifact_uri, include_write_refs=True):
         "scheduler_status": "completed",
         "pending_or_failed_job_count": 0,
         "review_task_count": 0,
+        "review_tasks": [],
         "job_count": len(jobs),
         "job_executions": jobs,
         "evidence_refs": [
