@@ -36,7 +36,23 @@ pub fn build_mlops_monitoring_report_submission(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<(String, MlopsMonitoringReportSubmission)> {
+    build_mlops_monitoring_report_submission_with_published_uri(
+        report_uri, report_uri, actor, notes,
+    )
+}
+
+pub fn build_mlops_monitoring_report_submission_with_published_uri(
+    report_uri: &str,
+    published_report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<(String, MlopsMonitoringReportSubmission)> {
     let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    ensure_published_artifact_uri(
+        "MLOps monitoring published_report_uri",
+        published_report_uri,
+    )?;
     let actor = required_non_empty("actor", actor)?;
     let notes = required_non_empty("notes", notes)?;
     let report = read_json_report(report_uri)?;
@@ -75,7 +91,7 @@ pub fn build_mlops_monitoring_report_submission(
         .filter_map(|value| value.as_str().map(str::to_string))
         .collect::<Vec<_>>();
     evidence_refs.push(format!("model_versions:{model_key}:{model_version}"));
-    evidence_refs.push(format!("model_monitoring_reports:{report_uri}"));
+    evidence_refs.push(format!("model_monitoring_reports:{published_report_uri}"));
     evidence_refs.sort();
     evidence_refs.dedup();
 
@@ -84,7 +100,7 @@ pub fn build_mlops_monitoring_report_submission(
         MlopsMonitoringReportSubmission {
             actor: actor.into(),
             notes: notes.into(),
-            report_uri: report_uri.into(),
+            report_uri: published_report_uri.into(),
             report_kind,
             model_version,
             overall_status,
@@ -103,7 +119,31 @@ pub async fn submit_mlops_monitoring_report(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    let (model_key, payload) = build_mlops_monitoring_report_submission(report_uri, actor, notes)?;
+    submit_mlops_monitoring_report_with_published_uri(
+        api_base_url,
+        api_key,
+        report_uri,
+        report_uri,
+        actor,
+        notes,
+    )
+    .await
+}
+
+pub async fn submit_mlops_monitoring_report_with_published_uri(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let (model_key, payload) = build_mlops_monitoring_report_submission_with_published_uri(
+        report_uri,
+        published_report_uri,
+        actor,
+        notes,
+    )?;
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,
@@ -130,9 +170,31 @@ pub fn build_mlops_alert_delivery_submission(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<(String, MlopsAlertDeliverySubmission)> {
+    build_mlops_alert_delivery_submission_with_published_uri(
+        scheduler_execution_report_uri,
+        scheduler_execution_report_uri,
+        actor,
+        notes,
+    )
+}
+
+pub fn build_mlops_alert_delivery_submission_with_published_uri(
+    scheduler_execution_report_uri: &str,
+    published_scheduler_execution_report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<(String, MlopsAlertDeliverySubmission)> {
     let scheduler_execution_report_uri = required_non_empty(
         "scheduler_execution_report_uri",
         scheduler_execution_report_uri,
+    )?;
+    let published_scheduler_execution_report_uri = required_non_empty(
+        "published_scheduler_execution_report_uri",
+        published_scheduler_execution_report_uri,
+    )?;
+    ensure_published_artifact_uri(
+        "MLOps alert delivery published_scheduler_execution_report_uri",
+        published_scheduler_execution_report_uri,
     )?;
     let actor = required_non_empty("actor", actor)?;
     let notes = required_non_empty("notes", notes)?;
@@ -163,7 +225,7 @@ pub fn build_mlops_alert_delivery_submission(
         .collect::<Vec<_>>();
     evidence_refs.push(format!("model_versions:{model_key}:{model_version}"));
     evidence_refs.push(format!(
-        "mlops_scheduler_execution_reports:{scheduler_execution_report_uri}"
+        "mlops_scheduler_execution_reports:{published_scheduler_execution_report_uri}"
     ));
     evidence_refs.sort();
     evidence_refs.dedup();
@@ -173,7 +235,7 @@ pub fn build_mlops_alert_delivery_submission(
         MlopsAlertDeliverySubmission {
             actor: actor.into(),
             notes: notes.into(),
-            scheduler_execution_report_uri: scheduler_execution_report_uri.into(),
+            scheduler_execution_report_uri: published_scheduler_execution_report_uri.into(),
             report_kind,
             model_version,
             alert_delivery_status,
@@ -190,8 +252,31 @@ pub async fn submit_mlops_alert_delivery_tasks(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    let (model_key, payload) =
-        build_mlops_alert_delivery_submission(scheduler_execution_report_uri, actor, notes)?;
+    submit_mlops_alert_delivery_tasks_with_published_uri(
+        api_base_url,
+        api_key,
+        scheduler_execution_report_uri,
+        scheduler_execution_report_uri,
+        actor,
+        notes,
+    )
+    .await
+}
+
+pub async fn submit_mlops_alert_delivery_tasks_with_published_uri(
+    api_base_url: &str,
+    api_key: &str,
+    scheduler_execution_report_uri: &str,
+    published_scheduler_execution_report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let (model_key, payload) = build_mlops_alert_delivery_submission_with_published_uri(
+        scheduler_execution_report_uri,
+        published_scheduler_execution_report_uri,
+        actor,
+        notes,
+    )?;
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,
@@ -211,6 +296,19 @@ pub async fn submit_mlops_alert_delivery_tasks(
         .json::<serde_json::Value>()
         .await
         .context("parse MLOps alert delivery response")
+}
+
+fn ensure_published_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.starts_with("local://")
+        || !value.contains("://")
+        || value.contains('{')
+        || value.contains('}')
+    {
+        bail!("{field} must use a published production artifact URI");
+    }
+    Ok(())
 }
 
 pub fn build_mlops_alert_receiver_payload(

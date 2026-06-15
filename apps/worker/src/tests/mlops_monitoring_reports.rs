@@ -73,10 +73,11 @@ fn builds_mlops_monitoring_report_from_runtime_reports() {
         .join("out/mlops_monitoring_review_tasks.json")
         .is_file());
 
-    let (model_key, submission) = build_mlops_monitoring_report_submission(
+    let (model_key, submission) = build_mlops_monitoring_report_submission_with_published_uri(
         &root
             .join("out/mlops_monitoring_report.json")
             .to_string_lossy(),
+        "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json",
         "mlops-worker",
         "submit monitoring report",
     )
@@ -92,6 +93,36 @@ fn builds_mlops_monitoring_report_from_runtime_reports() {
         .evidence_refs
         .iter()
         .any(|reference| reference.starts_with("model_monitoring_reports:")));
+}
+
+#[test]
+fn rejects_mlops_monitoring_submission_without_published_uri() {
+    let root = temp_root("mlops-monitoring-report-local-submit");
+    let report_uri = root.join("mlops_monitoring_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_monitoring_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "overall_status": "passed",
+            "retraining_recommendation": "monitor",
+            "triggers": [],
+            "review_tasks": [],
+            "evidence_refs": []
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_monitoring_report_submission(
+        &report_uri.to_string_lossy(),
+        "mlops-worker",
+        "submit monitoring report",
+    )
+    .expect_err("local monitoring report submission must fail");
+    assert!(error
+        .to_string()
+        .contains("published_report_uri must use a published production artifact URI"));
 }
 
 #[test]
@@ -256,10 +287,11 @@ fn builds_mlops_scheduler_execution_report_and_alert_delivery_tasks() {
         .join("scheduler/mlops_alert_delivery_tasks.json")
         .is_file());
 
-    let (_, submission) = build_mlops_alert_delivery_submission(
+    let (_, submission) = build_mlops_alert_delivery_submission_with_published_uri(
         &root
             .join("scheduler/mlops_scheduler_execution_report.json")
             .to_string_lossy(),
+        "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
         "mlops-worker",
         "Submit alert-router delivery tasks.",
     )
@@ -274,6 +306,34 @@ fn builds_mlops_scheduler_execution_report_and_alert_delivery_tasks() {
         .evidence_refs
         .iter()
         .any(|reference| reference.starts_with("mlops_scheduler_execution_reports:")));
+}
+
+#[test]
+fn rejects_mlops_alert_delivery_submission_without_published_uri() {
+    let root = temp_root("mlops-alert-delivery-local-submit");
+    let scheduler_report_uri = root.join("mlops_scheduler_execution_report.json");
+    write_json(
+        scheduler_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_scheduler_execution_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "alert_delivery_status": "no_alerts_required",
+            "alert_delivery_tasks": [],
+            "evidence_refs": []
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_alert_delivery_submission(
+        &scheduler_report_uri.to_string_lossy(),
+        "mlops-worker",
+        "submit alert delivery",
+    )
+    .expect_err("local alert delivery submission must fail");
+    assert!(error.to_string().contains(
+        "published_scheduler_execution_report_uri must use a published production artifact URI"
+    ));
 }
 
 #[test]
@@ -377,8 +437,8 @@ async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
                     }
                 ],
                 "evidence_refs": [
-                    "mlops_monitoring_plans:data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json",
-                    "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json"
+                    "mlops_monitoring_plans:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json",
+                    "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json"
                 ],
                 "governance_boundary": "scheduler execution evidence may queue alert delivery and review work only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels"
             }),

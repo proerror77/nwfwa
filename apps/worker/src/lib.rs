@@ -43,10 +43,14 @@ pub use health::{
 
 mod mlops_delivery;
 pub use mlops_delivery::{
-    build_mlops_alert_delivery_submission, build_mlops_alert_receiver_payload,
-    build_mlops_monitoring_report_submission, deliver_mlops_alert_receiver_webhook,
-    submit_mlops_alert_delivery_tasks, submit_mlops_monitoring_report,
-    MlopsAlertDeliverySubmission, MlopsMonitoringReportSubmission,
+    build_mlops_alert_delivery_submission,
+    build_mlops_alert_delivery_submission_with_published_uri, build_mlops_alert_receiver_payload,
+    build_mlops_monitoring_report_submission,
+    build_mlops_monitoring_report_submission_with_published_uri,
+    deliver_mlops_alert_receiver_webhook, submit_mlops_alert_delivery_tasks,
+    submit_mlops_alert_delivery_tasks_with_published_uri, submit_mlops_monitoring_report,
+    submit_mlops_monitoring_report_with_published_uri, MlopsAlertDeliverySubmission,
+    MlopsMonitoringReportSubmission,
 };
 
 mod anomaly_clustering;
