@@ -298,6 +298,56 @@ class ProductionEvidencePackageValidatorTests(unittest.TestCase):
             ):
                 validate_package(package_dir)
 
+    def test_rejects_worker_execution_template_wrong_job_required_submit_flags(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            provider_profile_job = next(
+                job
+                for job in report["job_executions"]
+                if job["job_kind"] == "provider_profile_window_rollup"
+            )
+            provider_profile_job["required_submit_flags"] = ["--published-report-uri"]
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(AssertionError, "required_submit_flags"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_execution_template_wrong_review_task_submit_flags(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            provider_profile_task = next(
+                task
+                for task in report["review_tasks"]
+                if task["job_kind"] == "provider_profile_window_rollup"
+            )
+            provider_profile_task["required_submit_flags"] = ["--published-report-uri"]
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(AssertionError, "required_submit_flags"):
+                validate_package(package_dir)
+
+    def test_rejects_worker_execution_template_missing_review_tasks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            build_evidence_package(package_dir)
+            report_uri = package_dir / "evidence" / "worker_data_pipeline_execution_report.json"
+            report = _read_json(report_uri)
+            report.pop("review_tasks")
+            _write_json(report_uri, report)
+
+            with self.assertRaisesRegex(AssertionError, "requires review_tasks"):
+                validate_package(package_dir)
+
     def test_rejects_worker_execution_template_with_short_job_artifact_uri(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             package_dir = Path(temp_dir)

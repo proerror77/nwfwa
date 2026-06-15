@@ -163,6 +163,24 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
                 ],
                 ["--published-report-uri"],
             )
+            execution_review_tasks = {
+                task["job_kind"]: task
+                for task in artifacts["worker_data_pipeline_execution_report.json"][
+                    "review_tasks"
+                ]
+            }
+            self.assertEqual(
+                artifacts["worker_data_pipeline_execution_report.json"][
+                    "review_task_count"
+                ],
+                len(execution_review_tasks),
+            )
+            self.assertEqual(
+                execution_review_tasks["provider_profile_window_rollup"][
+                    "required_submit_flags"
+                ],
+                ["--published-report-uri", "--published-source-uri"],
+            )
             self.assertIn(
                 "validate_production_evidence_package.py",
                 runbook["validation_command"],

@@ -463,6 +463,11 @@ def validate_worker_execution_template(report: dict) -> None:
             job.get("evidence_refs"),
             "worker data pipeline execution template",
         )
+        validate_worker_required_submit_flags(
+            job_kind,
+            job.get("required_submit_flags"),
+            "worker data pipeline execution template",
+        )
         for prefix in expected_worker_evidence_prefixes(job_kind):
             require(
                 f"{prefix}{expected_artifact_uri}" in (job.get("evidence_refs") or []),
@@ -481,6 +486,46 @@ def validate_worker_execution_template(report: dict) -> None:
                 job.get("required_permission")
                 == WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind],
                 f"worker data pipeline execution template {job_kind} has wrong required_permission",
+            )
+    review_tasks = report.get("review_tasks")
+    require(
+        isinstance(review_tasks, list) and review_tasks,
+        "worker data pipeline execution template requires review_tasks",
+    )
+    require(
+        report.get("review_task_count") == len(review_tasks) == len(job_executions),
+        "worker data pipeline execution template review_task_count must match review_tasks and job_executions",
+    )
+    review_tasks_by_kind = {
+        task.get("job_kind"): task for task in review_tasks if isinstance(task, dict)
+    }
+    require(
+        set(review_tasks_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+        "worker data pipeline execution template review task job kind set changed unexpectedly",
+    )
+    for job_kind, task in review_tasks_by_kind.items():
+        require(
+            task.get("task_kind") == "worker_data_pipeline_execution_review",
+            f"worker data pipeline execution template {job_kind} review task has wrong task_kind",
+        )
+        require(
+            task.get("execution_status") == "pending_customer_scheduler_run",
+            f"worker data pipeline execution template {job_kind} review task must stay pending",
+        )
+        validate_worker_required_submit_flags(
+            job_kind,
+            task.get("required_submit_flags"),
+            "worker data pipeline execution template review task",
+        )
+        if job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+            require(
+                task.get("api_path") == WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS[job_kind],
+                f"worker data pipeline execution template review task {job_kind} has wrong api_path",
+            )
+            require(
+                task.get("required_permission")
+                == WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind],
+                f"worker data pipeline execution template review task {job_kind} has wrong required_permission",
             )
     evidence_refs = report.get("evidence_refs")
     for field, expected_uri in REQUIRED_WORKER_EXECUTION_TEMPLATE_URIS.items():

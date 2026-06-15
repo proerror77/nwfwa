@@ -280,6 +280,19 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
             worker_job_template(job_kind)
             for job_kind in sorted(WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS)
         ]
+        review_tasks = [
+            {
+                "task_kind": "worker_data_pipeline_execution_review",
+                "job_kind": job["job_kind"],
+                "execution_status": job["execution_status"],
+                "api_path": job.get("api_path"),
+                "required_permission": job.get("required_permission"),
+                "required_submit_flags": list(job.get("required_submit_flags", [])),
+                "review_queue": "worker_data_pipeline_ops",
+                "required_review": "review pending customer scheduler execution before downstream scoring use",
+            }
+            for job in jobs
+        ]
         return blocked_template(
             generated_at=generated_at,
             gate_id=gate_id,
@@ -296,9 +309,10 @@ def artifact_template(gate: dict, generated_at: str) -> dict:
                 "execution_date": "pending_customer_scheduler_execution_date",
                 "scheduler_status": "pending",
                 "pending_or_failed_job_count": len(jobs),
-                "review_task_count": 1,
+                "review_task_count": len(review_tasks),
                 "job_count": len(jobs),
                 "job_executions": jobs,
+                "review_tasks": review_tasks,
                 "evidence_refs": [
                     "worker_data_pipeline_plans:local://template/worker/worker_data_pipeline_plan.json",
                     "worker_data_pipeline_run_status:local://template/worker/worker_data_pipeline_run_status.json",
