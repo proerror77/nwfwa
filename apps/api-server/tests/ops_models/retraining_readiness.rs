@@ -123,7 +123,7 @@ async fn model_retraining_readiness_prepares_when_drift_and_labels_are_ready() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_retraining_ready/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/retraining_ready/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.31}}
             }}"#
         ),

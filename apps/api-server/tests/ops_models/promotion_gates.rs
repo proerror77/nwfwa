@@ -112,7 +112,7 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_quality_gate/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/quality_gate/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.91,
                 "feature_reproducibility_hash": "sha256:quality-gate-features",
@@ -188,7 +188,7 @@ async fn model_promotion_gates_require_rust_feature_set_evidence() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_rust_feature_set/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/rust_feature_set/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.91,
                 "feature_reproducibility_hash": "sha256:rust-feature-set-features",
@@ -257,7 +257,7 @@ async fn model_promotion_gates_require_rust_serving_artifact_evaluation() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_rust_serving_gate/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/rust_serving_gate/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.91,
                 "out_of_time_auc": 0.79,
@@ -327,7 +327,7 @@ async fn model_promotion_gates_require_time_group_split_strategy() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_split_strategy/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/split_strategy/feature_importance.parquet",
               "metrics_json": {{
                 "time_group_split_status": "passed",
                 "time_split_field": "service_date",
@@ -380,7 +380,7 @@ async fn model_promotion_gates_block_public_research_dataset_evidence() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_public_research/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/public_research/feature_importance.parquet",
               "metrics_json": {{
                 "dataset_usage_scope": "public_kaggle_research",
                 "time_group_split_status": "passed",
@@ -448,7 +448,7 @@ async fn model_promotion_gates_block_unhealthy_source_dataset() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_unhealthy_source/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/unhealthy_source/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.99,
                 "feature_reproducibility_hash": "sha256:unhealthy-source-features",

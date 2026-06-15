@@ -31,7 +31,7 @@ async fn blocks_model_promotion_when_score_drift_is_detected() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_drift_gate/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/drift_gate/feature_importance.parquet",
               "metrics_json": {{
                 "approval_status": "approved",
                 "leakage_check_status": "passed",
@@ -89,7 +89,7 @@ async fn version_scoped_promotion_gates_use_candidate_drift_metrics() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_candidate_drift/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/candidate_drift/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.31}}
             }}"#
         ),
@@ -796,7 +796,7 @@ async fn rollback_uses_lifecycle_history_when_non_lifecycle_governance_events_ex
                   "accuracy": "0.79",
                   "threshold": "0.52",
                   "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
-                  "feature_importance_uri": "data/eval/rollback_window/{index}/feature_importance.parquet",
+                  "feature_importance_uri": "s3://fwa-models/baseline_fwa/rollback_window/{index}/feature_importance.parquet",
                   "metrics_json": {{"score_psi": 0.04}}
                 }}"#
             ),

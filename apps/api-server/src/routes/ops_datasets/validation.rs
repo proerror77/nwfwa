@@ -437,6 +437,13 @@ pub(super) fn validate_model_evaluation_registration(
             feature_importance_uri,
             "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID",
         )?;
+        if !is_production_artifact_uri(feature_importance_uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID",
+                "feature_importance_uri must use production evidence, not local dry-run or placeholder URI",
+            ));
+        }
     }
     if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
         if permutation_importance_uri.trim().is_empty() {
@@ -450,6 +457,13 @@ pub(super) fn validate_model_evaluation_registration(
             permutation_importance_uri,
             "MODEL_EVALUATION_PERMUTATION_IMPORTANCE_FORMAT_INVALID",
         )?;
+        if !is_production_artifact_uri(permutation_importance_uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MODEL_EVALUATION_PERMUTATION_IMPORTANCE_FORMAT_INVALID",
+                "permutation_importance_uri must use production evidence, not local dry-run or placeholder URI",
+            ));
+        }
     }
     Ok(())
 }
