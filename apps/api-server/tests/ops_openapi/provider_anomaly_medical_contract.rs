@@ -90,11 +90,14 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
             "request_more_evidence"
         ])
     );
-    assert_eq!(
-        schema["components"]["schemas"]["ReviewAnomalyCandidateRequest"]["properties"]
-            ["evidence_refs"]["description"],
-        "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
-    );
+    let anomaly_review_evidence_description = schema["components"]["schemas"]
+        ["ReviewAnomalyCandidateRequest"]["properties"]["evidence_refs"]["description"]
+        .as_str()
+        .expect("review anomaly evidence description");
+    assert!(anomaly_review_evidence_description
+        .contains("anomaly_clustering_reports:{source_report_uri}"));
+    assert!(anomaly_review_evidence_description.contains("production evidence refs"));
+    assert!(anomaly_review_evidence_description.contains("not local/template refs"));
     for field in [
         "source_report_uri",
         "report_kind",

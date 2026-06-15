@@ -22,7 +22,7 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
+                    "description": "Must include anomaly_clustering_reports:{source_report_uri}; values must be production evidence refs, not local/template refs, and must not contain PII."
                 },
                 "candidate_payload": {
                     "type": "object",
@@ -44,7 +44,7 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "source_report_uri": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "URI of provider_peer_clustering_report.json, provider_graph_community_report.json, or claim_entity_clustering_report.json."
+                    "description": "Published production URI of provider_peer_clustering_report.json, provider_graph_community_report.json, or claim_entity_clustering_report.json; local/template URIs are rejected."
                 },
                 "report_kind": {
                     "type": "string",
@@ -67,7 +67,7 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
+                    "description": "Must include anomaly_clustering_reports:{source_report_uri}; values must be production evidence refs, not local/template refs, and must not contain PII."
                 }
             }
         },
@@ -621,7 +621,7 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                 "source_report_uri": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "URI of provider_peer_clustering_report.json, provider_graph_community_report.json, or claim_entity_clustering_report.json."
+                    "description": "Published production URI of provider_peer_clustering_report.json, provider_graph_community_report.json, or claim_entity_clustering_report.json; local/template URIs are rejected."
                 },
                 "decision": {
                     "type": "string",
@@ -637,7 +637,7 @@ pub(super) fn provider_anomaly_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
+                    "description": "Must include anomaly_clustering_reports:{source_report_uri}; values must be production evidence refs, not local/template refs, and must not contain PII."
                 },
                 "candidate_payload": {
                     "type": "object",

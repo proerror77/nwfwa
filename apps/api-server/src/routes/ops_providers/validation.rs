@@ -76,6 +76,16 @@ pub(super) fn validate_anomaly_clustering_report_submission(
             "source_report_uri must point to a JSON clustering report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_URI",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_URI",
+        "source_report_uri",
+    )?;
     if request.review_tasks.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -95,6 +105,16 @@ pub(super) fn validate_anomaly_clustering_report_submission(
             format!("anomaly clustering report evidence_refs must include {expected_report_ref}"),
         ));
     }
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_EVIDENCE",
+        "anomaly clustering report evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_EVIDENCE",
+        "anomaly clustering report evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     for task in &request.review_tasks {
         validate_anomaly_clustering_review_task(task, &request.source_report_uri)?;
     }
@@ -1254,6 +1274,16 @@ fn validate_anomaly_clustering_review_task(
             format!("review task evidence_refs must include {expected_report_ref}"),
         ));
     }
+    validate_no_template_evidence_refs(
+        &task.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REVIEW_TASK_EVIDENCE",
+        "review task evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &task.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REVIEW_TASK_EVIDENCE",
+        "review task evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -1318,6 +1348,16 @@ pub(super) fn validate_anomaly_candidate_review(
             "source_report_uri must point to a JSON clustering report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CANDIDATE_REPORT",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CANDIDATE_REPORT",
+        "source_report_uri",
+    )?;
     if request.evidence_refs.is_empty()
         || request
             .evidence_refs
@@ -1342,6 +1382,16 @@ pub(super) fn validate_anomaly_candidate_review(
             format!("anomaly candidate evidence_refs must include {expected_report_ref}"),
         ));
     }
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CANDIDATE_EVIDENCE",
+        "anomaly candidate evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CANDIDATE_EVIDENCE",
+        "anomaly candidate evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     if pii::contains_pii(
         std::iter::once(request.reviewer.as_str())
             .chain(std::iter::once(request.notes.as_str()))

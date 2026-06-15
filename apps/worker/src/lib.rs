@@ -55,7 +55,9 @@ pub use mlops_delivery::{
 
 mod anomaly_clustering;
 pub use anomaly_clustering::{
-    build_anomaly_clustering_report_submission, submit_anomaly_clustering_report,
+    build_anomaly_clustering_report_submission,
+    build_anomaly_clustering_report_submission_with_published_uri,
+    submit_anomaly_clustering_report, submit_anomaly_clustering_report_with_published_uri,
     AnomalyClusteringReportSubmission, AnomalyClusteringReviewTaskSubmission,
 };
 

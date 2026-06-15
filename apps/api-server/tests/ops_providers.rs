@@ -1284,12 +1284,12 @@ async fn records_unsupervised_anomaly_candidate_review_without_auto_actions() {
         r#"{
           "candidate_kind": "provider_peer_anomaly",
           "candidate_id": "provider_peer:PRV-042:2026-05",
-          "source_report_uri": "data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json",
+          "source_report_uri": "s3://customer-prod-artifacts/anomaly-clustering/provider_peer_clustering_report.json",
           "decision": "accepted_for_review",
           "reviewer": "anomaly-reviewer",
           "notes": "Unsupervised provider peer outlier accepted for investigation review only.",
           "evidence_refs": [
-            "anomaly_clustering_reports:data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json",
+            "anomaly_clustering_reports:s3://customer-prod-artifacts/anomaly-clustering/provider_peer_clustering_report.json",
             "provider_peer_anomaly:PRV-042:2026-05"
           ],
           "candidate_payload": {
@@ -1339,14 +1339,14 @@ async fn records_unsupervised_anomaly_candidate_review_without_auto_actions() {
         .unwrap()
         .iter()
         .any(|reference| reference
-            == "anomaly_clustering_reports:data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json"));
+            == "anomaly_clustering_reports:s3://customer-prod-artifacts/anomaly-clustering/provider_peer_clustering_report.json"));
 }
 
 #[tokio::test]
 async fn submits_anomaly_clustering_report_and_derives_review_queue() {
     let app = build_app(test_config()).unwrap();
     let source_report_uri =
-        "data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json";
+        "s3://customer-prod-artifacts/anomaly-clustering/provider_peer_clustering_report.json";
 
     let (status, body) = json_request(
         app.clone(),
@@ -1457,6 +1457,54 @@ async fn submits_anomaly_clustering_report_and_derives_review_queue() {
 }
 
 #[tokio::test]
+async fn anomaly_clustering_report_rejects_local_report_uri() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/providers/anomaly-clustering-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Local clustering report must not be submitted as production evidence.",
+          "source_report_uri": "local://worker/provider_peer_clustering_report.json",
+          "report_kind": "provider_peer_clustering",
+          "dataset_key": "rust_demo_provider_peer_unlabeled",
+          "dataset_version": "2026-06-clustering-demo",
+          "label_policy": "unlabeled_clustering_discovery_only",
+          "governance_boundary": "unlabeled clustering creates anomaly review candidates only",
+          "review_tasks": [
+            {
+              "candidate_kind": "provider_peer_anomaly",
+              "candidate_id": "provider_peer:PRV-042:2026-05",
+              "task_kind": "provider_peer_anomaly_review",
+              "review_queue": "provider_anomaly_candidate_review",
+              "required_review": "human_review_required_before_case_creation_or_label_assignment",
+              "decision_options": ["dismiss_as_peer_variation"],
+              "evidence_refs": [
+                "anomaly_clustering_reports:local://worker/provider_peer_clustering_report.json"
+              ],
+              "candidate_payload": {
+                "provider_id": "PRV-042"
+              }
+            }
+          ],
+          "evidence_refs": [
+            "anomaly_clustering_reports:local://worker/provider_peer_clustering_report.json"
+          ]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ANOMALY_CLUSTERING_REPORT_URI");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("production evidence"));
+}
+
+#[tokio::test]
 async fn anomaly_clustering_report_submission_requires_report_evidence() {
     let app = build_app(test_config()).unwrap();
 
@@ -1467,7 +1515,7 @@ async fn anomaly_clustering_report_submission_requires_report_evidence() {
         r#"{
           "actor": "mlops-worker",
           "notes": "Missing clustering report evidence.",
-          "source_report_uri": "data/rust-automl-demo/clusters/claim_entity_clustering_report.json",
+          "source_report_uri": "s3://customer-prod-artifacts/anomaly-clustering/claim_entity_clustering_report.json",
           "report_kind": "claim_entity_clustering",
           "dataset_key": "rust_demo_claim_entity_unlabeled",
           "dataset_version": "2026-06-clustering-demo",
@@ -1507,7 +1555,7 @@ async fn anomaly_candidate_review_requires_clustering_report_evidence() {
         r#"{
           "candidate_kind": "claim_entity_anomaly",
           "candidate_id": "claim_entity:CLM-099",
-          "source_report_uri": "data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json",
+          "source_report_uri": "s3://customer-prod-artifacts/anomaly-clustering/claim_entity_clustering_report.json",
           "decision": "rejected",
           "reviewer": "anomaly-reviewer",
           "notes": "Rejected because the explanation is too weak.",
@@ -1522,4 +1570,39 @@ async fn anomaly_candidate_review_requires_clustering_report_evidence() {
         .as_str()
         .unwrap()
         .contains("anomaly_clustering_reports:"));
+}
+
+#[tokio::test]
+async fn anomaly_candidate_review_rejects_template_evidence_refs() {
+    let app = build_app(test_config()).unwrap();
+    let source_report_uri =
+        "s3://customer-prod-artifacts/anomaly-clustering/claim_entity_clustering_report.json";
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
+        &format!(
+            r#"{{
+          "candidate_kind": "claim_entity_anomaly",
+          "candidate_id": "claim_entity:CLM-099",
+          "source_report_uri": "{source_report_uri}",
+          "decision": "rejected",
+          "reviewer": "anomaly-reviewer",
+          "notes": "Rejected because the explanation is too weak.",
+          "evidence_refs": [
+            "anomaly_clustering_reports:{source_report_uri}",
+            "claim_entity_anomaly:local://template/CLM-099"
+          ]
+        }}"#
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ANOMALY_CANDIDATE_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("local://template"));
 }

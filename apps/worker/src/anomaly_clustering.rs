@@ -1,7 +1,10 @@
 use anyhow::{bail, Context};
 use serde::Serialize;
 
-use super::{api_url, json_string, read_json_report, required_non_empty};
+use super::{
+    api_url, ensure_production_artifact_uri, ensure_production_evidence_refs, json_string,
+    read_json_report, required_non_empty,
+};
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct AnomalyClusteringReportSubmission {
@@ -38,6 +41,38 @@ pub fn build_anomaly_clustering_report_submission(
     let actor = required_non_empty("actor", actor)?;
     let notes = required_non_empty("notes", notes)?;
     let report = read_json_report(report_uri)?;
+    build_anomaly_clustering_report_submission_from_report(report_uri, actor, notes, &report)
+}
+
+pub fn build_anomaly_clustering_report_submission_with_published_uri(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+    published_report_uri: &str,
+) -> anyhow::Result<AnomalyClusteringReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    ensure_production_artifact_uri(
+        "anomaly clustering published_report_uri",
+        published_report_uri,
+    )?;
+    let report = read_json_report(report_uri)?;
+    build_anomaly_clustering_report_submission_from_report(
+        published_report_uri,
+        actor,
+        notes,
+        &report,
+    )
+}
+
+fn build_anomaly_clustering_report_submission_from_report(
+    published_report_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: &serde_json::Value,
+) -> anyhow::Result<AnomalyClusteringReportSubmission> {
     let report_kind = json_string(&report, "report_kind")
         .filter(|value| {
             matches!(
@@ -67,12 +102,13 @@ pub fn build_anomaly_clustering_report_submission(
         .flatten()
         .filter_map(|value| value.as_str().map(str::to_string))
         .collect::<Vec<_>>();
-    evidence_refs.push(format!("anomaly_clustering_reports:{report_uri}"));
+    evidence_refs.push(format!("anomaly_clustering_reports:{published_report_uri}"));
     evidence_refs.sort();
     evidence_refs.dedup();
+    ensure_production_evidence_refs("anomaly clustering report evidence_refs", &evidence_refs)?;
 
     let review_tasks =
-        anomaly_clustering_review_tasks_from_report(report_uri, &report_kind, &report)?;
+        anomaly_clustering_review_tasks_from_report(published_report_uri, &report_kind, report)?;
     if review_tasks.is_empty() {
         bail!(
             "anomaly clustering report requires anomaly_candidates for API review queue submission"
@@ -82,7 +118,7 @@ pub fn build_anomaly_clustering_report_submission(
     Ok(AnomalyClusteringReportSubmission {
         actor: actor.into(),
         notes: notes.into(),
-        source_report_uri: report_uri.into(),
+        source_report_uri: published_report_uri.into(),
         report_kind,
         dataset_key,
         dataset_version,
@@ -100,7 +136,31 @@ pub async fn submit_anomaly_clustering_report(
     actor: &str,
     notes: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    let payload = build_anomaly_clustering_report_submission(report_uri, actor, notes)?;
+    submit_anomaly_clustering_report_with_published_uri(
+        api_base_url,
+        api_key,
+        report_uri,
+        actor,
+        notes,
+        report_uri,
+    )
+    .await
+}
+
+pub async fn submit_anomaly_clustering_report_with_published_uri(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+    published_report_uri: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_anomaly_clustering_report_submission_with_published_uri(
+        report_uri,
+        actor,
+        notes,
+        published_report_uri,
+    )?;
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,
@@ -177,6 +237,10 @@ fn anomaly_clustering_review_task_from_candidate(
         .collect::<Vec<_>>();
     evidence_refs.sort();
     evidence_refs.dedup();
+    ensure_production_evidence_refs(
+        "anomaly clustering review task evidence_refs",
+        &evidence_refs,
+    )?;
 
     let task = match report_kind {
         "provider_peer_clustering" => {
