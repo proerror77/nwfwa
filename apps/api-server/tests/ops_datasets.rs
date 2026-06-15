@@ -260,7 +260,10 @@ fn worker_data_pipeline_execution_payload() -> &'static str {
         {
           "task_kind": "worker_data_pipeline_execution_review",
           "job_kind": "provider_profile_window_rollup",
-          "execution_status": "artifact_pending_submission"
+          "execution_status": "artifact_pending_submission",
+          "api_path": "/api/v1/ops/providers/profile-window-rollups",
+          "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
         }
       ],
       "evidence_refs": [
@@ -303,7 +306,9 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
         },
         {
           "job_kind": "provider_profile_window_rollup",
+          "api_path": "/api/v1/ops/providers/profile-window-rollups",
           "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
           "coverage_window_days": 0,
           "source_freshness_status": "stale",
           "readiness_status": "blocked",
@@ -313,7 +318,10 @@ fn worker_data_pipeline_readiness_payload() -> &'static str {
       "review_tasks": [
         {
           "task_kind": "worker_data_pipeline_readiness_review",
-          "job_kind": "provider_profile_window_rollup"
+          "job_kind": "provider_profile_window_rollup",
+          "api_path": "/api/v1/ops/providers/profile-window-rollups",
+          "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
         }
       ],
       "evidence_refs": [
@@ -869,7 +877,10 @@ async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker()
         {
             "task_kind": "worker_data_pipeline_execution_review",
             "job_kind": "oig_sam_sanctions_sync",
-            "execution_status": "dependency_not_completed"
+            "execution_status": "dependency_not_completed",
+            "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+            "required_permission": "ops:providers:write",
+            "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
         }
     ]);
 
@@ -1061,6 +1072,64 @@ async fn worker_data_pipeline_execution_report_rejects_review_task_permission_ap
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_submit_flags");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_submit_flags"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_wrong_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["required_submit_flags"] =
+        serde_json::json!(["--published-report-uri"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("--published-source-uri"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_execution_report_requires_pending_count_consistency() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -1172,7 +1241,10 @@ async fn worker_data_pipeline_execution_report_rejects_review_task_for_completed
         .push(serde_json::json!({
             "task_kind": "worker_data_pipeline_execution_review",
             "job_kind": "oig_sam_sanctions_sync",
-            "execution_status": "completed"
+            "execution_status": "completed",
+            "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+            "required_permission": "ops:providers:write",
+            "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
         }));
 
     let (status, body) = json_request_with_key(
@@ -2437,6 +2509,64 @@ async fn worker_data_pipeline_readiness_report_rejects_review_task_permission_ap
 }
 
 #[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_submit_flags");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_submit_flags"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_wrong_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["required_submit_flags"] =
+        serde_json::json!(["--published-report-uri"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("--published-source-uri"));
+}
+
+#[tokio::test]
 async fn worker_data_pipeline_readiness_report_requires_review_task_for_blocked_job() {
     let app = build_app(test_config_with_dataset_actors()).unwrap();
     let mut payload: serde_json::Value =
@@ -2490,6 +2620,8 @@ async fn worker_data_pipeline_readiness_report_rejects_review_task_for_ready_job
     let mut payload: serde_json::Value =
         serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
     payload["review_tasks"][0]["job_kind"] = serde_json::json!("oig_sam_sanctions_sync");
+    payload["review_tasks"][0]["api_path"] =
+        serde_json::json!("/api/v1/ops/providers/sanctions-sync-reports");
 
     let (status, body) = json_request_with_key(
         app,

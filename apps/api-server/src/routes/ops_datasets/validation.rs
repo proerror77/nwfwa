@@ -1372,6 +1372,21 @@ pub(super) fn validate_worker_data_pipeline_execution_report_submission(
                 "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION",
             )?;
         }
+        if review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+            == Some("worker_data_pipeline_execution_review")
+        {
+            let job_kind = review_task
+                .get("job_kind")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
+            validate_worker_data_pipeline_submit_job_contract(
+                job_kind,
+                review_task,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION",
+            )?;
+        }
     }
     if request.pending_or_failed_job_count > request.job_count {
         return Err(ApiError::new(
@@ -1967,6 +1982,21 @@ pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
             validate_worker_data_pipeline_required_permission(
                 required_permission,
                 review_task.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION",
+            )?;
+        }
+        if review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+            == Some("worker_data_pipeline_readiness_review")
+        {
+            let job_kind = review_task
+                .get("job_kind")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
+            validate_worker_data_pipeline_submit_job_contract(
+                job_kind,
+                review_task,
                 "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION",
             )?;
         }

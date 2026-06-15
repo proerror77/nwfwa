@@ -204,6 +204,20 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             .contains("Governed API path"),
         "missing readiness api_path description"
     );
+    let readiness_review_task_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineReadinessReportSubmissionRequest"]["properties"]["review_tasks"]
+        ["items"]["properties"];
+    assert_eq!(
+        readiness_review_task_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        readiness_review_task_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing readiness review task required_submit_flags description"
+    );
     let execution_job_properties = &schema["components"]["schemas"]
         ["WorkerDataPipelineExecutionReportSubmissionRequest"]["properties"]["job_executions"]
         ["items"]["properties"];
@@ -228,6 +242,20 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             .unwrap_or_default()
             .contains("Published URI flags"),
         "missing execution required_submit_flags description"
+    );
+    let execution_review_task_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineExecutionReportSubmissionRequest"]["properties"]["review_tasks"]
+        ["items"]["properties"];
+    assert_eq!(
+        execution_review_task_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        execution_review_task_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing execution review task required_submit_flags description"
     );
     assert_eq!(
         schema["paths"]["/api/v1/ops/clinical-compatibility-references"]["post"]["requestBody"]

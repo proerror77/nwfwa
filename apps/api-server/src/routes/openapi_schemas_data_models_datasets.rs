@@ -302,6 +302,11 @@ pub(super) fn dataset_schemas() -> Value {
                             "api_path": {
                                 "type": ["string", "null"],
                                 "description": "Optional API path associated with the review task."
+                            },
+                            "required_submit_flags": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Published URI flags required to resolve governed submit-job review tasks."
                             }
                         }
                     }
@@ -567,6 +572,11 @@ pub(super) fn dataset_schemas() -> Value {
                             "api_path": {
                                 "type": ["string", "null"],
                                 "description": "Optional API path associated with the review task."
+                            },
+                            "required_submit_flags": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Published URI flags required to resolve governed submit-job review tasks."
                             }
                         }
                     }
@@ -707,6 +717,11 @@ pub(super) fn dataset_schemas() -> Value {
                             "api_path": {
                                 "type": ["string", "null"],
                                 "description": "Optional API path associated with the review task."
+                            },
+                            "required_submit_flags": {
+                                "type": "array",
+                                "items": { "type": "string", "minLength": 1 },
+                                "description": "Published URI flags required to resolve governed submit-job review tasks."
                             }
                         }
                     }
