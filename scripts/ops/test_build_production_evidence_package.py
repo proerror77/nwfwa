@@ -89,6 +89,26 @@ class ProductionEvidencePackageTemplateTests(unittest.TestCase):
             self.assertIn("submit-scoring-feature-contexts", command_text)
             self.assertIn("submit-probability-calibration-report", command_text)
             self.assertIn("submit-worker-data-pipeline-execution-report", command_text)
+            self.assertIn(
+                "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-source-uri <customer-approved-provider-profile-claims-snapshot-uri>",
+                command_text,
+            )
+            self.assertIn(
+                "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json",
+                command_text,
+            )
+            self.assertIn(
+                "--published-input-uri <customer-labeled-holdout-predictions-uri>",
+                command_text,
+            )
+            self.assertIn(
+                "--published-label-uri <customer-approved-calibration-labels-uri>",
+                command_text,
+            )
             self.assertIn("fetch-scoring-readback-response", command_text)
             self.assertIn("build-scoring-readback-report", command_text)
             self.assertIn("runtime-secret-not-persisted", command_text)

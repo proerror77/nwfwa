@@ -214,6 +214,44 @@ REQUIRED_RUNBOOK_SUBMIT_OUTPUTS = {
     ),
     "submit_execution_report": "api:/api/v1/ops/worker-data-pipeline-executions",
 }
+REQUIRED_RUNBOOK_SUBMIT_FLAGS = {
+    "submit_sanctions_sync_report": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/sanctions_sync_report.json",
+        "--published-source-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/oig_sam_sanctions_snapshot.json",
+    },
+    "submit_provider_profile_window_rollup": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json",
+        "--published-source-uri": "<customer-approved-provider-profile-claims-snapshot-uri>",
+    },
+    "submit_provider_graph_signal_rollup": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-graph/<as-of-date>/provider_graph_signal_rollup_report.json",
+        "--published-source-uri": "<customer-approved-provider-graph-snapshot-uri>",
+    },
+    "submit_peer_benchmark": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json",
+        "--published-source-uri": "<customer-approved-peer-benchmark-claims-snapshot-uri>",
+    },
+    "submit_episode_aggregation": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json",
+        "--published-source-uri": "<customer-approved-episode-claims-snapshot-uri>",
+    },
+    "submit_clinical_compatibility_reference": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json",
+        "--published-source-uri": "<customer-approved-clinical-compatibility-reference-uri>",
+    },
+    "submit_unbundling_comparator": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json",
+        "--published-source-uri": "<customer-approved-unbundling-comparator-input-uri>",
+    },
+    "submit_scoring_feature_contexts": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json",
+    },
+    "submit_probability_calibration_report": {
+        "--published-report-uri": "<customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json",
+        "--published-input-uri": "<customer-labeled-holdout-predictions-uri>",
+        "--published-label-uri": "<customer-approved-calibration-labels-uri>",
+    },
+}
 REQUIRED_RUNBOOK_COMMAND_PATHS = {
     "artifacts/production-evidence-package/worker/worker_data_pipeline_plan.json",
     "artifacts/production-evidence-package/worker/worker_data_pipeline_readiness_input.json",
@@ -762,6 +800,19 @@ def validate_runbook(package_dir: Path) -> None:
             command.get("output") == expected_output,
             f"runbook step {step} output must be {expected_output}",
         )
+    for step, required_flags in REQUIRED_RUNBOOK_SUBMIT_FLAGS.items():
+        command = commands_by_step.get(step)
+        require(command is not None, f"runbook missing submit step {step}")
+        step_command_text = command.get("command")
+        require(
+            isinstance(step_command_text, str),
+            f"runbook step {step} command must be text",
+        )
+        for flag, expected_uri in required_flags.items():
+            require(
+                f"{flag} {expected_uri}" in step_command_text,
+                f"runbook step {step} {flag} must be {expected_uri}",
+            )
     validate_command_includes_package_validator(runbook.get("validation_command"), "runbook")
 
 

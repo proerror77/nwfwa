@@ -667,6 +667,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-sanctions-sync-report "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/sanctions_sync_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/sanctions_sync_report.json "
+                    "--published-source-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/sanctions/<as-of-date>/oig_sam_sanctions_snapshot.json "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/providers/sanctions-sync-reports",
@@ -677,6 +679,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-provider-profile-window-rollup "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-profile/<as-of-date>/provider_profile_window_rollup_report.json "
+                    "--published-source-uri <customer-approved-provider-profile-claims-snapshot-uri> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/providers/profile-window-rollups",
@@ -687,6 +691,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-provider-graph-signal-rollup "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-graph/<as-of-date>/provider_graph_signal_rollup_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/provider-graph/<as-of-date>/provider_graph_signal_rollup_report.json "
+                    "--published-source-uri <customer-approved-provider-graph-snapshot-uri> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/providers/graph-signal-rollups",
@@ -697,6 +703,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-peer-benchmark "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/peer-benchmark/<benchmark-month>/peer_percentile_benchmark.json "
+                    "--published-source-uri <customer-approved-peer-benchmark-claims-snapshot-uri> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/providers/peer-benchmarks",
@@ -707,6 +715,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-episode-aggregation "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/episodes/<as-of-date>/episode_aggregation_report.json "
+                    "--published-source-uri <customer-approved-episode-claims-snapshot-uri> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/providers/episode-rollups",
@@ -717,6 +727,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-clinical-compatibility-reference "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/clinical-compatibility/<reference-version>/clinical_compatibility_reference_report.json "
+                    "--published-source-uri <customer-approved-clinical-compatibility-reference-uri> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/clinical-compatibility-references",
@@ -727,6 +739,8 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-unbundling-comparator "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/unbundling/<as-of-date>/unbundling_comparator_report.json "
+                    "--published-source-uri <customer-approved-unbundling-comparator-input-uri> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/unbundling-comparator-candidates",
@@ -737,6 +751,7 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-scoring-feature-contexts "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/scoring-contexts/<as-of-date>/scoring_feature_context_report.json "
                     "--materialization-id <customer-scope-id>:<as-of-date> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
@@ -748,6 +763,9 @@ def worker_pipeline_command_runbook(generated_at: str) -> dict:
                     "cargo run --locked -p worker -- submit-probability-calibration-report "
                     "--api-url <production-api-base-url> --api-key <runtime-secret-not-persisted> "
                     "--report <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json "
+                    "--published-report-uri <customer-artifact-root>/worker-data-pipelines/<customer-scope-id>/probability-calibration/<benchmark-month>/probability_calibration_report.json "
+                    "--published-input-uri <customer-labeled-holdout-predictions-uri> "
+                    "--published-label-uri <customer-approved-calibration-labels-uri> "
                     f"--actor {submit_actor} --notes '{submit_notes}'"
                 ),
                 "output": "api:/api/v1/ops/models/{model_key}/probability-calibration-reports",
