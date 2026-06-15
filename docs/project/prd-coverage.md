@@ -170,6 +170,14 @@ importance, training artifacts, and serving manifests. This is verified in
 `0f6c1cc9` by `cargo test --locked -p api-server --test ops_models` and
 `cargo check --locked -p api-server`.
 
+Model evaluation registrations now also require production feature-importance
+and permutation-importance artifact URIs, so promotion gates and retraining
+readiness no longer accept local evaluation artifacts as model-governance
+evidence. This is verified in `339ca806` by
+`cargo test --locked -p api-server --test ops_models`,
+`cargo test --locked -p api-server --test ops_openapi`, and
+`cargo check --locked -p api-server`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
