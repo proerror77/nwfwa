@@ -123,6 +123,11 @@ refs before clinical review outcomes are recorded. This is verified in
 `cf4adfe8` by `cargo test --locked -p api-server --test ops_medical` and
 `cargo test --locked -p api-server --test ops_openapi`.
 
+QA feedback status updates now reject local dry-run/template evidence refs
+before feedback workflow state changes. This is verified in `39db76d5` by
+`cargo test --locked -p api-server --test pilot_loop` and
+`cargo test --locked -p api-server --test ops_openapi`.
+
 Agent investigation packages now expose an independent `investigation_id`
 separate from `agent_run_id`; callers can reuse that id to group multiple agent
 runs under one investigation, and agent run logs preserve that grouping.
