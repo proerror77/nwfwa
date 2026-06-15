@@ -451,6 +451,13 @@ async fn openapi_includes_operations_paths() {
     assert_writeback_pii_contract(&schema, "InvestigationResultRequest");
     assert!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
+    );
+    assert!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["saving_amount"]["description"]
             .as_str()
             .unwrap()
@@ -477,6 +484,13 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_writeback_pii_contract(&schema, "QaResultRequest");
+    assert!(
+        schema["components"]["schemas"]["QaResultRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
+    );
     assert!(
         schema["components"]["schemas"]["PilotWritebackResponse"]["required"]
             .as_array()

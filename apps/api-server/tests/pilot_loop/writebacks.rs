@@ -104,6 +104,25 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_INVESTIGATION_SAVING_AMOUNT");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-0287",
+          "investigation_id": "INV-LOCAL-EVIDENCE",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "TPA investigation confirmed over-treatment signals.",
+          "evidence_refs": ["investigation_results:local://template/result.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_INVESTIGATION_RESULT_EVIDENCE");
+
     let (status, investigation) = json_request(
         app.clone(),
         "POST",
@@ -424,7 +443,7 @@ async fn rejects_pii_in_investigation_and_qa_writebacks() {
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_WRITEBACK");
 
     let (status, body) = json_request(
-        app,
+        app.clone(),
         "POST",
         "/api/v1/qa/results",
         r#"{
@@ -440,6 +459,24 @@ async fn rejects_pii_in_investigation_and_qa_writebacks() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_WRITEBACK");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-LOCAL-EVIDENCE",
+          "claim_id": "CLM-PII-WRITEBACK",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "Reviewer should attach provider history evidence.",
+          "evidence_refs": ["qa_reviews:local://template/qa-result.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_QA_RESULT_EVIDENCE");
 }
 
 #[tokio::test]

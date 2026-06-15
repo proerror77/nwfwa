@@ -28,7 +28,7 @@ pub(super) fn pilot_writeback_schemas() -> Value {
                 },
                 "evidence_refs": {
                     "type": "array",
-                    "description": "Structured evidence references must not contain PII. For claims with a prior normalized scoring trace, canonical evidence refs from that trace are merged into the persisted investigation result and response.",
+                    "description": "Structured evidence references must be production refs not local/template refs and must not contain PII. For claims with a prior normalized scoring trace, canonical evidence refs from that trace are merged into the persisted investigation result and response.",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 }
                 }
@@ -59,7 +59,7 @@ pub(super) fn pilot_writeback_schemas() -> Value {
                 },
                 "evidence_refs": {
                     "type": "array",
-                    "description": "Structured evidence references must not contain PII.",
+                    "description": "Structured evidence references must be production refs not local/template refs and must not contain PII.",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 }
                 }

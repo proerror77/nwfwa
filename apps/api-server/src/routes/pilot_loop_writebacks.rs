@@ -160,6 +160,11 @@ fn validate_investigation_result_request(
         ));
     }
     validate_writeback_pii(&request.notes, &request.evidence_refs)?;
+    validate_writeback_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_INVESTIGATION_RESULT_EVIDENCE",
+        "investigation writeback evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -288,6 +293,11 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
         ));
     }
     validate_writeback_pii(&request.notes, &request.evidence_refs)?;
+    validate_writeback_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_QA_RESULT_EVIDENCE",
+        "QA writeback evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -333,6 +343,21 @@ fn validate_writeback_pii(notes: &str, evidence_refs: &[String]) -> Result<(), A
         ));
     }
     Ok(())
+}
+
+fn validate_writeback_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.contains("local://") || reference.contains('{') || reference.contains('}')
+    }) {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    } else {
+        Ok(())
+    }
 }
 
 fn is_supported_qa_feedback_target(feedback_target: &str) -> bool {
