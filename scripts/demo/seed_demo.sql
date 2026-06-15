@@ -696,7 +696,7 @@ VALUES (
   'parquet',
   'demo-schema-hash-202605',
   25000,
-  'profiled'
+  'active'
 )
 ON CONFLICT (dataset_key, dataset_version) DO UPDATE
 SET source_key = EXCLUDED.source_key,
@@ -954,6 +954,82 @@ SET model_key = EXCLUDED.model_key,
     confusion_matrix_json = EXCLUDED.confusion_matrix_json,
     feature_importance_uri = EXCLUDED.feature_importance_uri,
     metrics_json = EXCLUDED.metrics_json;
+
+INSERT INTO probability_calibration_reports (
+  model_key,
+  model_version,
+  report_uri,
+  report_kind,
+  as_of_date,
+  row_count,
+  minimum_calibration_rows,
+  bin_count,
+  expected_calibration_error,
+  max_expected_calibration_error,
+  brier_score,
+  max_brier_score,
+  calibration_status,
+  bins_json,
+  review_tasks_json,
+  evidence_refs,
+  governance_boundary,
+  submitted_by,
+  notes
+)
+VALUES (
+  'baseline_fwa',
+  '0.1.0',
+  's3://fwa-demo/model-evaluations/baseline_fwa/2026-05-demo/probability_calibration_report.json',
+  'probability_calibration_report',
+  '2026-05-31',
+  3500,
+  1000,
+  10,
+  0.032,
+  0.050,
+  0.114,
+  0.150,
+  'passed',
+  '[
+    {"bin":0,"range":"0.0-0.1","count":860,"mean_prediction":0.04,"observed_rate":0.03},
+    {"bin":1,"range":"0.1-0.2","count":720,"mean_prediction":0.14,"observed_rate":0.13},
+    {"bin":2,"range":"0.2-0.3","count":510,"mean_prediction":0.25,"observed_rate":0.23},
+    {"bin":3,"range":"0.3-0.4","count":390,"mean_prediction":0.35,"observed_rate":0.33},
+    {"bin":4,"range":"0.4-0.5","count":310,"mean_prediction":0.45,"observed_rate":0.43},
+    {"bin":5,"range":"0.5-0.6","count":260,"mean_prediction":0.55,"observed_rate":0.56},
+    {"bin":6,"range":"0.6-0.7","count":190,"mean_prediction":0.65,"observed_rate":0.67},
+    {"bin":7,"range":"0.7-0.8","count":130,"mean_prediction":0.75,"observed_rate":0.78},
+    {"bin":8,"range":"0.8-0.9","count":85,"mean_prediction":0.85,"observed_rate":0.87},
+    {"bin":9,"range":"0.9-1.0","count":45,"mean_prediction":0.94,"observed_rate":0.96}
+  ]'::jsonb,
+  '[]'::jsonb,
+  '[
+    "model_versions:baseline_fwa:0.1.0",
+    "probability_calibration_reports:s3://fwa-demo/model-evaluations/baseline_fwa/2026-05-demo/probability_calibration_report.json",
+    "probability_calibration_input:s3://fwa-demo/model-datasets/baseline_fwa/2026-05-demo/validation.parquet",
+    "calibration_labels:s3://fwa-demo/datasets/demo_claims_fwa/2026-05-demo/validation.parquet"
+  ]'::jsonb,
+  'seeded probability calibration report records baseline governance evidence only; it must not activate calibrated serving, change thresholds, or assign labels',
+  'seed',
+  'Demo baseline probability calibration evidence for promotion gates.'
+)
+ON CONFLICT (model_key, model_version, report_uri) DO UPDATE
+SET report_kind = EXCLUDED.report_kind,
+    as_of_date = EXCLUDED.as_of_date,
+    row_count = EXCLUDED.row_count,
+    minimum_calibration_rows = EXCLUDED.minimum_calibration_rows,
+    bin_count = EXCLUDED.bin_count,
+    expected_calibration_error = EXCLUDED.expected_calibration_error,
+    max_expected_calibration_error = EXCLUDED.max_expected_calibration_error,
+    brier_score = EXCLUDED.brier_score,
+    max_brier_score = EXCLUDED.max_brier_score,
+    calibration_status = EXCLUDED.calibration_status,
+    bins_json = EXCLUDED.bins_json,
+    review_tasks_json = EXCLUDED.review_tasks_json,
+    evidence_refs = EXCLUDED.evidence_refs,
+    governance_boundary = EXCLUDED.governance_boundary,
+    submitted_by = EXCLUDED.submitted_by,
+    notes = EXCLUDED.notes;
 
 INSERT INTO scoring_runs (
   id,
