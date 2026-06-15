@@ -6,7 +6,8 @@ use crate::{
     api_url, json_string, read_json_report, required_non_empty,
     worker_data_pipeline_execution::{
         canonical_required_evidence_prefixes, validate_worker_data_pipeline_job_kinds,
-        validate_worker_data_pipeline_plan, REPORT_VERSION,
+        validate_worker_data_pipeline_plan, worker_data_pipeline_submit_job_contract,
+        worker_data_pipeline_submit_job_required_flags, REPORT_VERSION,
     },
     write_json,
 };
@@ -531,6 +532,41 @@ fn validate_ready_worker_data_pipeline_job(
         }) {
             bail!("ready job evidence_refs must include required prefix {prefix}");
         }
+    }
+    validate_ready_worker_data_pipeline_submit_contract(job_kind, job)?;
+    Ok(())
+}
+
+fn validate_ready_worker_data_pipeline_submit_contract(
+    job_kind: &str,
+    job: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let Some((expected_api_path, expected_permission)) =
+        worker_data_pipeline_submit_job_contract(job_kind)
+    else {
+        return Ok(());
+    };
+    if json_string(job, "api_path").as_deref() != Some(expected_api_path) {
+        bail!("{job_kind} requires api_path {expected_api_path}");
+    }
+    if json_string(job, "required_permission").as_deref() != Some(expected_permission) {
+        bail!("{job_kind} requires required_permission {expected_permission}");
+    }
+    let Some(expected_flags) = worker_data_pipeline_submit_job_required_flags(job_kind) else {
+        return Ok(());
+    };
+    let Some(required_submit_flags) = job
+        .get("required_submit_flags")
+        .and_then(|value| value.as_array())
+    else {
+        bail!("{job_kind} requires required_submit_flags {expected_flags:?}");
+    };
+    let submitted_flags = required_submit_flags
+        .iter()
+        .map(|value| value.as_str())
+        .collect::<Option<Vec<_>>>();
+    if submitted_flags.as_deref() != Some(expected_flags) {
+        bail!("{job_kind} requires required_submit_flags {expected_flags:?}");
     }
     Ok(())
 }

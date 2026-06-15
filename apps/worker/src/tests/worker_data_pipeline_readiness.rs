@@ -617,6 +617,9 @@ fn builds_worker_data_pipeline_readiness_submission() {
                     "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
                     "coverage_window_days": 1,
                     "source_freshness_status": "fresh",
+                    "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+                    "required_permission": "ops:providers:write",
+                    "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                     "required_evidence_prefixes": ["sanctions_sync_reports:"],
                     "evidence_refs": [
                         "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
@@ -706,6 +709,60 @@ fn rejects_worker_data_pipeline_readiness_submission_with_ready_job_missing_evid
 }
 
 #[test]
+fn rejects_worker_data_pipeline_readiness_submission_with_ready_job_permission_drift() {
+    let root = temp_root("worker-data-pipeline-readiness-submission-ready-job-permission-drift");
+    let report_uri = root.join("worker_data_pipeline_readiness_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "worker_data_pipeline_readiness_report",
+            "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+            "readiness_input_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+            "readiness_status": "ready",
+            "job_count": 1,
+            "ready_job_count": 1,
+            "blocked_job_count": 0,
+            "job_readiness": [
+                {
+                    "job_kind": "oig_sam_sanctions_sync",
+                    "readiness_status": "ready",
+                    "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+                    "coverage_window_days": 1,
+                    "source_freshness_status": "fresh",
+                    "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+                    "required_permission": "ops:datasets:write",
+                    "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
+                    "required_evidence_prefixes": ["sanctions_sync_reports:"],
+                    "evidence_refs": [
+                        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+                    ]
+                }
+            ],
+            "review_task_count": 0,
+            "review_tasks": [],
+            "governance_boundary": "readiness report validates customer data prerequisites only",
+            "evidence_refs": [
+                "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                "worker_data_pipeline_readiness_inputs:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json"
+            ]
+        }),
+    )
+    .expect("write report");
+
+    let error = build_worker_data_pipeline_readiness_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "worker:worker-data-pipeline-readiness",
+        "daily readiness evidence",
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+    )
+    .expect_err("ready job with wrong permission should fail before API submission");
+
+    assert!(error
+        .to_string()
+        .contains("oig_sam_sanctions_sync requires required_permission ops:providers:write"));
+}
+
+#[test]
 fn rejects_worker_data_pipeline_readiness_submission_with_unknown_job_kind() {
     let root = temp_root("worker-data-pipeline-readiness-submission-unknown-job");
     let report_uri = root.join("worker_data_pipeline_readiness_report.json");
@@ -770,6 +827,9 @@ fn rejects_worker_data_pipeline_readiness_submission_with_ready_count_drift() {
                     "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
                     "coverage_window_days": 1,
                     "source_freshness_status": "fresh",
+                    "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+                    "required_permission": "ops:providers:write",
+                    "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                     "required_evidence_prefixes": ["sanctions_sync_reports:"],
                     "evidence_refs": [
                         "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
@@ -953,6 +1013,9 @@ fn rejects_worker_data_pipeline_readiness_submission_without_source_evidence() {
                     "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
                     "coverage_window_days": 1,
                     "source_freshness_status": "fresh",
+                    "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+                    "required_permission": "ops:providers:write",
+                    "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                     "required_evidence_prefixes": ["sanctions_sync_reports:"],
                     "evidence_refs": [
                         "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
@@ -1095,6 +1158,9 @@ async fn submits_worker_data_pipeline_readiness_report_to_api() {
                     "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
                     "coverage_window_days": 1,
                     "source_freshness_status": "fresh",
+                    "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+                    "required_permission": "ops:providers:write",
+                    "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
                     "required_evidence_prefixes": ["sanctions_sync_reports:"],
                     "evidence_refs": [
                         "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"

@@ -876,3 +876,68 @@ pub(crate) fn canonical_required_evidence_prefixes(
         _ => None,
     }
 }
+
+pub(crate) fn worker_data_pipeline_submit_job_contract(
+    job_kind: &str,
+) -> Option<(&'static str, &'static str)> {
+    match job_kind {
+        "oig_sam_sanctions_sync" => Some((
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            "ops:providers:write",
+        )),
+        "provider_profile_window_rollup" => Some((
+            "/api/v1/ops/providers/profile-window-rollups",
+            "ops:providers:write",
+        )),
+        "provider_graph_signal_rollup" => Some((
+            "/api/v1/ops/providers/graph-signal-rollups",
+            "ops:providers:write",
+        )),
+        "peer_percentile_benchmark" => Some((
+            "/api/v1/ops/providers/peer-benchmarks",
+            "ops:providers:write",
+        )),
+        "episode_aggregation" => Some((
+            "/api/v1/ops/providers/episode-rollups",
+            "ops:providers:write",
+        )),
+        "clinical_compatibility_reference" => Some((
+            "/api/v1/ops/clinical-compatibility-references",
+            "ops:datasets:write",
+        )),
+        "unbundling_comparator" => Some((
+            "/api/v1/ops/unbundling-comparator-candidates",
+            "ops:datasets:write",
+        )),
+        "scoring_feature_context_materialization" => Some((
+            "/api/v1/ops/scoring-feature-context-materializations",
+            "ops:datasets:write",
+        )),
+        "probability_calibration_evidence" => Some((
+            "/api/v1/ops/models/{model_key}/probability-calibration-reports",
+            "ops:models:review",
+        )),
+        _ => None,
+    }
+}
+
+pub(crate) fn worker_data_pipeline_submit_job_required_flags(
+    job_kind: &str,
+) -> Option<&'static [&'static str]> {
+    match job_kind {
+        "oig_sam_sanctions_sync"
+        | "provider_profile_window_rollup"
+        | "provider_graph_signal_rollup"
+        | "peer_percentile_benchmark"
+        | "episode_aggregation"
+        | "clinical_compatibility_reference"
+        | "unbundling_comparator" => Some(&["--published-report-uri", "--published-source-uri"]),
+        "scoring_feature_context_materialization" => Some(&["--published-report-uri"]),
+        "probability_calibration_evidence" => Some(&[
+            "--published-report-uri",
+            "--published-input-uri",
+            "--published-label-uri",
+        ]),
+        _ => None,
+    }
+}
