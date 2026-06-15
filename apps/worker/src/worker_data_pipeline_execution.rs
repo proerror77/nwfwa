@@ -674,6 +674,7 @@ fn validate_worker_data_pipeline_execution_review_tasks(
                     .context("worker_data_pipeline_execution_review requires job_kind")?;
                 let execution_status = json_string(task, "execution_status")
                     .context("worker_data_pipeline_execution_review requires execution_status")?;
+                validate_submit_job_contract_fields(&job_kind, task)?;
                 let matches_non_completed_job = job_executions.iter().any(|job| {
                     json_string(job, "job_kind").as_deref() == Some(job_kind.as_str())
                         && json_string(job, "execution_status").as_deref()
@@ -861,6 +862,19 @@ fn validate_completed_job_submit_contract(
     job_kind: &str,
     job: &serde_json::Value,
 ) -> anyhow::Result<()> {
+    validate_submit_job_contract_fields(job_kind, job)?;
+    if worker_data_pipeline_submit_job_contract(job_kind).is_some()
+        && job.get("submitted").and_then(|value| value.as_bool()) != Some(true)
+    {
+        bail!("completed governed submit job executions require submitted true");
+    }
+    Ok(())
+}
+
+fn validate_submit_job_contract_fields(
+    job_kind: &str,
+    job: &serde_json::Value,
+) -> anyhow::Result<()> {
     let Some((expected_api_path, expected_permission)) =
         worker_data_pipeline_submit_job_contract(job_kind)
     else {
@@ -887,9 +901,6 @@ fn validate_completed_job_submit_contract(
         .collect::<Option<Vec<_>>>();
     if submitted_flags.as_deref() != Some(expected_flags) {
         bail!("{job_kind} requires required_submit_flags {expected_flags:?}");
-    }
-    if job.get("submitted").and_then(|value| value.as_bool()) != Some(true) {
-        bail!("completed governed submit job executions require submitted true");
     }
     Ok(())
 }
