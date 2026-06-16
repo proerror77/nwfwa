@@ -410,6 +410,7 @@ CREATE TABLE IF NOT EXISTS evidence_retrieval_audit_events (
 
 CREATE TABLE IF NOT EXISTS agent_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  investigation_id TEXT,
   agent_run_id TEXT NOT NULL UNIQUE,
   claim_id TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -419,6 +420,12 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at TIMESTAMPTZ
 );
+
+ALTER TABLE agent_runs
+  ADD COLUMN IF NOT EXISTS investigation_id TEXT;
+
+CREATE INDEX IF NOT EXISTS agent_runs_investigation_id_idx
+  ON agent_runs(investigation_id);
 
 CREATE TABLE IF NOT EXISTS agent_registry (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

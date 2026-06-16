@@ -102,15 +102,17 @@ pub(super) async fn save_agent_run(
     .await?;
     sqlx::query(
         "INSERT INTO agent_runs
-             (agent_run_id, claim_id, status, decision_boundary, output_json, evidence_refs, completed_at)
-             VALUES ($1, $2, $3, $4, $5, $6, now())
+             (investigation_id, agent_run_id, claim_id, status, decision_boundary, output_json, evidence_refs, completed_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, now())
              ON CONFLICT (agent_run_id) DO UPDATE
-             SET status = EXCLUDED.status,
+             SET investigation_id = EXCLUDED.investigation_id,
+                 status = EXCLUDED.status,
                  decision_boundary = EXCLUDED.decision_boundary,
                  output_json = EXCLUDED.output_json,
                  evidence_refs = EXCLUDED.evidence_refs,
                  completed_at = EXCLUDED.completed_at",
     )
+    .bind(&run.investigation_id)
     .bind(&run.agent_run_id)
     .bind(&run.claim_id)
     .bind(&run.status)
@@ -292,6 +294,7 @@ pub(super) async fn list_agent_runs(
         String,
         String,
         Option<String>,
+        Option<String>,
         String,
         String,
         Value,
@@ -299,7 +302,7 @@ pub(super) async fn list_agent_runs(
         chrono::DateTime<chrono::Utc>,
         Option<chrono::DateTime<chrono::Utc>>,
     )> = sqlx::query_as(
-        "SELECT ar.agent_run_id, ar.claim_id, latest_event.investigation_id, ar.status,
+        "SELECT ar.agent_run_id, ar.claim_id, ar.investigation_id, latest_event.investigation_id, ar.status,
                 ar.decision_boundary, ar.output_json, ar.evidence_refs, ar.created_at, ar.completed_at
              FROM agent_runs ar
              LEFT JOIN LATERAL (
@@ -333,6 +336,7 @@ pub(super) async fn list_agent_runs(
         agent_run_id,
         claim_id,
         investigation_id,
+        audit_investigation_id,
         status,
         decision_boundary,
         output_json,
@@ -360,6 +364,7 @@ pub(super) async fn list_agent_runs(
         runs.push(AgentRunLogRecord {
             agent_run_id,
             investigation_id: investigation_id
+                .or(audit_investigation_id)
                 .unwrap_or_else(|| stable_investigation_id_for_claim(&claim_id)),
             agent_identity_id: DEFAULT_AGENT_IDENTITY_ID.into(),
             agent_kind: DEFAULT_AGENT_KIND.into(),
