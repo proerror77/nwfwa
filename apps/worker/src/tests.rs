@@ -554,6 +554,103 @@ async fn marks_retraining_job_failed_when_training_command_fails() {
 }
 
 #[tokio::test]
+async fn mock_retraining_submits_candidate_probability_calibration() {
+    use tokio::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let mut requests = Vec::new();
+
+        let (mut socket, _) = listener.accept().await.unwrap();
+        requests.push(read_http_request(&mut socket).await);
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "job_id": "model_retraining_job_1",
+                "model_key": "baseline_fwa",
+                "model_version": "0.1.0",
+                "status": "running",
+                "updated_by": "trainer-worker",
+                "status_note": "claimed"
+            }),
+        )
+        .await;
+
+        let (mut socket, _) = listener.accept().await.unwrap();
+        requests.push(read_http_request(&mut socket).await);
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "job_id": "model_retraining_job_1",
+                "model_key": "baseline_fwa",
+                "model_version": "0.1.0",
+                "status": "validation",
+                "updated_by": "trainer-worker",
+                "status_note": "validation"
+            }),
+        )
+        .await;
+
+        let (mut socket, _) = listener.accept().await.unwrap();
+        requests.push(read_http_request(&mut socket).await);
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "job": {
+                    "job_id": "model_retraining_job_1",
+                    "candidate_model_version": "0.1.0-candidate-model_retraining_job_1",
+                    "output_evaluation_id": "eval_baseline_fwa_0_1_0_candidate_model_retraining_job_1"
+                }
+            }),
+        )
+        .await;
+
+        let (mut socket, _) = listener.accept().await.unwrap();
+        requests.push(read_http_request(&mut socket).await);
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.1.0-candidate-model_retraining_job_1",
+                "calibration_status": "passed"
+            }),
+        )
+        .await;
+
+        requests
+    });
+
+    run_one_retraining_job(
+        &api_url,
+        "dev-secret",
+        "trainer-worker",
+        Some("baseline_fwa"),
+        "s3://fwa-models",
+        None,
+        "python",
+        None,
+        None,
+    )
+    .await
+    .expect("mock retraining job should complete");
+
+    let requests = server.await.unwrap();
+    assert_eq!(requests.len(), 4);
+    assert!(requests[2]
+        .contains("POST /api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"));
+    assert!(requests[3]
+        .contains("POST /api/v1/ops/models/baseline_fwa/probability-calibration-reports"));
+    assert!(requests[3].contains(r#""model_version":"0.1.0-candidate-model_retraining_job_1""#));
+    assert!(requests[3].contains(
+        "probability_calibration_reports:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/calibration/probability_calibration_report.json"
+    ));
+    assert!(requests[3].contains(
+        "calibration_labels:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/calibration/holdout_labels.json"
+    ));
+}
+
+#[tokio::test]
 async fn promotes_approved_model_version_after_gates_pass() {
     use tokio::net::TcpListener;
 
