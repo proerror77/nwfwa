@@ -246,6 +246,115 @@ async fn rejects_orphan_evidence_children() {
 }
 
 #[tokio::test]
+async fn rejects_local_or_placeholder_evidence_refs() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/evidence/documents",
+        r#"{
+          "document_id": "doc-local-ref",
+          "source_record_ref": "claim-documents:CLM-LOCAL:invoice-1",
+          "claim_id": "CLM-LOCAL",
+          "external_document_id": "invoice-local",
+          "document_type": "invoice",
+          "storage_uri": "s3://customer-approved/documents/doc-local-ref.pdf",
+          "content_checksum": "sha256:doc-local-ref",
+          "ingestion_status": "registered",
+          "redaction_status": "redacted",
+          "evidence_refs": ["claim_documents:local://template/claim-documents/doc-local-ref.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "EVIDENCE_REF_INVALID");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/evidence/documents",
+        r#"{
+          "document_id": "doc-file-ref",
+          "source_record_ref": "claim-documents:CLM-FILE:invoice-1",
+          "claim_id": "CLM-FILE",
+          "external_document_id": "invoice-file",
+          "document_type": "invoice",
+          "storage_uri": "s3://customer-approved/documents/doc-file-ref.pdf",
+          "content_checksum": "sha256:doc-file-ref",
+          "ingestion_status": "registered",
+          "redaction_status": "redacted",
+          "evidence_refs": ["claim_documents:file://tmp/claim-documents/doc-file-ref.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "EVIDENCE_REF_INVALID");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/evidence/documents",
+        r#"{
+          "document_id": "doc-loopback-ref",
+          "source_record_ref": "claim-documents:CLM-LOOPBACK:invoice-1",
+          "claim_id": "CLM-LOOPBACK",
+          "external_document_id": "invoice-loopback",
+          "document_type": "invoice",
+          "storage_uri": "s3://customer-approved/documents/doc-loopback-ref.pdf",
+          "content_checksum": "sha256:doc-loopback-ref",
+          "ingestion_status": "registered",
+          "redaction_status": "redacted",
+          "evidence_refs": ["claim_documents:http://127.0.0.1:8080/claim-documents/doc-loopback-ref.json"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "EVIDENCE_REF_INVALID");
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/evidence/documents",
+        r#"{
+          "document_id": "doc-retrieval-ref",
+          "source_record_ref": "claim-documents:CLM-RETRIEVAL:invoice-1",
+          "claim_id": "CLM-RETRIEVAL",
+          "external_document_id": "invoice-retrieval",
+          "document_type": "invoice",
+          "storage_uri": "s3://customer-approved/documents/doc-retrieval-ref.pdf",
+          "content_checksum": "sha256:doc-retrieval-ref",
+          "ingestion_status": "registered",
+          "redaction_status": "redacted",
+          "evidence_refs": ["claim_documents:CLM-RETRIEVAL:invoice-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/evidence/retrieval-audit-events",
+        r#"{
+          "retrieval_id": "ret-local-ref",
+          "query_kind": "masked_claim_context",
+          "query_checksum": "sha256:masked-query-local-ref",
+          "retrieval_method": "vector_top_k",
+          "embedding_model_version": "v1",
+          "top_k": 5,
+          "source_refs": ["claim_context:{claim_id}"],
+          "result_refs": ["evidence_documents:doc-retrieval-ref"],
+          "redaction_status": "redacted",
+          "evidence_refs": ["retrieval:ret-local-ref"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "EVIDENCE_REF_INVALID");
+}
+
+#[tokio::test]
 async fn evidence_metadata_is_scoped_to_authenticated_customer() {
     let repository = InMemoryScoringRepository::shared();
     let alpha_app = build_app_with_parts(

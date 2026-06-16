@@ -143,6 +143,37 @@ async fn returns_model_drift_from_latest_evaluation_metrics() {
     .await;
     let model_dataset_id = model_dataset["model_dataset_id"].as_str().unwrap();
 
+    let (status, invalid_feature_importance) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_drift_local_feature_importance",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "local://template/model-evaluations/feature_importance.parquet",
+              "metrics_json": {{"score_psi": 0.04}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        invalid_feature_importance["code"],
+        "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID"
+    );
+
     let (status, _) = json_request(
         app.clone(),
         "POST",
@@ -162,7 +193,7 @@ async fn returns_model_drift_from_latest_evaluation_metrics() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.04}}
             }}"#
         ),
@@ -189,7 +220,7 @@ async fn returns_model_drift_from_latest_evaluation_metrics() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.18}}
             }}"#
         ),

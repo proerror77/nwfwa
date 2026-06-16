@@ -9,6 +9,7 @@ mod evidence;
 mod knowledge_agents;
 mod models;
 mod outcomes;
+mod providers;
 mod routing;
 mod rules;
 mod trait_impl;
@@ -42,12 +43,26 @@ pub struct InMemoryScoringRepository {
     feature_set_sequence: Mutex<u64>,
     model_datasets: Mutex<HashMap<String, ModelDatasetRecord>>,
     model_dataset_sequence: Mutex<u64>,
+    scoring_feature_context_materializations:
+        Mutex<HashMap<String, ScoringFeatureContextMaterializationRecord>>,
+    clinical_compatibility_references: Mutex<HashMap<String, ClinicalCompatibilityReferenceRecord>>,
+    unbundling_comparator_candidates: Mutex<HashMap<String, UnbundlingComparatorCandidateRecord>>,
+    worker_data_pipeline_readiness_reports:
+        Mutex<HashMap<String, WorkerDataPipelineReadinessReportRecord>>,
+    worker_data_pipeline_execution_reports:
+        Mutex<HashMap<String, WorkerDataPipelineExecutionReportRecord>>,
     model_versions: Mutex<HashMap<String, ModelVersionRecord>>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
+    probability_calibration_reports: Mutex<HashMap<String, ProbabilityCalibrationReportRecord>>,
     model_retraining_jobs: Mutex<HashMap<String, ModelRetrainingJobRecord>>,
     model_retraining_job_sequence: Mutex<u64>,
     model_statuses: Mutex<HashMap<String, String>>,
+    provider_sanctions: Mutex<HashMap<String, ProviderSanctionRecord>>,
+    provider_profile_windows: Mutex<HashMap<String, ProviderProfileWindowRecord>>,
+    provider_graph_signals: Mutex<HashMap<String, ProviderGraphSignalRecord>>,
+    peer_benchmark_groups: Mutex<HashMap<String, PeerBenchmarkGroupRecord>>,
+    episode_rollups: Mutex<HashMap<String, EpisodeRollupRecord>>,
     routing_policies: Mutex<Vec<RoutingPolicyRecord>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
@@ -137,6 +152,7 @@ mod tests {
 
         repository
             .save_agent_run(PersistedAgentRun {
+                investigation_id: "investigation_test_01HX".into(),
                 agent_run_id: "agent_01HX".into(),
                 claim_id: "CLM-0287".into(),
                 status: "succeeded".into(),
@@ -158,9 +174,7 @@ mod tests {
 
         let audit_events = repository.agent_audit_events.lock().await;
         assert_eq!(audit_events.len(), 1);
-        assert!(audit_events[0]
-            .investigation_id
-            .starts_with("investigation:"));
+        assert_eq!(audit_events[0].investigation_id, "investigation_test_01HX");
         assert_eq!(audit_events[0].decision_boundary, "assistive_only");
         assert_eq!(audit_events[0].findings_count, 1);
         assert!(audit_events[0].input_digest.starts_with("sha256:"));
@@ -173,6 +187,7 @@ mod tests {
 
         let investigations = repository.agent_investigations.lock().await;
         assert_eq!(investigations.len(), 1);
+        assert!(investigations.contains_key("investigation_test_01HX"));
         assert_eq!(
             investigations.values().next().unwrap().orchestrator_version,
             DEFAULT_ORCHESTRATOR_VERSION

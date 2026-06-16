@@ -132,3 +132,196 @@ fn builds_scheduled_governance_ops_plan() {
             "s3://nwfwa-staging-artifacts/governance-ops/staging-customer/retention/{window_start}/retention_scan_report.json"
         );
 }
+
+#[test]
+fn builds_scheduled_worker_data_pipeline_plan() {
+    let plan = build_worker_data_pipeline_plan(
+        "http://api-server:8080/",
+        "s3://nwfwa-production-artifacts",
+        "production-customer",
+        "15 1 * * *",
+        "30 2 1 * *",
+    )
+    .expect("worker data pipeline plan");
+
+    assert_eq!(plan["plan_kind"], "scheduled_worker_data_pipeline");
+    assert_eq!(plan["plan_version"], 1);
+    assert_eq!(plan["customer_scope_id"], "production-customer");
+    assert_eq!(plan["api_contract"]["base_url"], "http://api-server:8080");
+    assert_eq!(plan["schedule"]["daily_cron"], "15 1 * * *");
+    assert_eq!(plan["schedule"]["monthly_cron"], "30 2 1 * *");
+    assert_eq!(plan["schedule"]["concurrency_policy"], "forbid");
+    assert_eq!(
+        plan["runtime_boundary"]["side_effect_policy"],
+        "submit commands persist governed artifacts only; no claim scoring, label assignment, claim denial, routing-policy change, model activation, or case creation"
+    );
+    let jobs = plan["jobs"].as_array().expect("jobs");
+    assert_eq!(jobs.len(), 11);
+    assert_eq!(jobs[0]["job_kind"], "oig_sam_sanctions_snapshot_fetch");
+    assert_eq!(jobs[0]["build_command"], "fetch-oig-sam-sanctions-snapshot");
+    assert_eq!(jobs[0]["artifact_kind"], "source_snapshot");
+    assert_eq!(jobs[0]["required_submit_flags"], serde_json::Value::Null);
+    assert_eq!(jobs[1]["job_kind"], "oig_sam_sanctions_sync");
+    assert_eq!(jobs[1]["submit_command"], "submit-sanctions-sync-report");
+    assert_eq!(
+        jobs[1]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri", "--published-source-uri"])
+    );
+    assert_eq!(jobs[1]["required_permission"], "ops:providers:write");
+    assert_eq!(jobs[1]["depends_on"][0], "oig_sam_sanctions_snapshot_fetch");
+    assert_eq!(jobs[2]["job_kind"], "provider_profile_window_rollup");
+    assert_eq!(
+        jobs[2]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri", "--published-source-uri"])
+    );
+    assert_eq!(
+        jobs[2]["required_evidence_prefixes"],
+        serde_json::json!([
+            "provider_profile_window_rollups:",
+            "provider_profile_claim_snapshot:"
+        ])
+    );
+    assert_eq!(jobs[3]["job_kind"], "provider_graph_signal_rollup");
+    assert_eq!(
+        jobs[3]["required_evidence_prefixes"],
+        serde_json::json!([
+            "provider_graph_signal_rollups:",
+            "provider_graph_claim_snapshot:"
+        ])
+    );
+    assert_eq!(jobs[4]["job_kind"], "peer_percentile_benchmark");
+    assert_eq!(jobs[4]["cadence"], "monthly");
+    assert_eq!(
+        jobs[4]["required_evidence_prefixes"],
+        serde_json::json!(["peer_benchmarks:", "peer_benchmark_claim_snapshot:"])
+    );
+    assert_eq!(jobs[5]["job_kind"], "episode_aggregation");
+    assert_eq!(
+        jobs[5]["required_evidence_prefixes"],
+        serde_json::json!(["episode_rollups:", "episode_claim_snapshot:"])
+    );
+    assert_eq!(jobs[6]["job_kind"], "clinical_compatibility_reference");
+    assert_eq!(jobs[6]["cadence"], "on_reference_update");
+    assert_eq!(jobs[6]["required_permission"], "ops:datasets:write");
+    assert_eq!(
+        jobs[6]["required_evidence_prefixes"],
+        serde_json::json!([
+            "clinical_compatibility_references:",
+            "clinical_compatibility_reference:",
+            "clinical_policy_authority:"
+        ])
+    );
+    assert_eq!(jobs[7]["job_kind"], "unbundling_comparator");
+    assert_eq!(jobs[7]["depends_on"][0], "episode_aggregation");
+    assert_eq!(
+        jobs[7]["required_evidence_prefixes"],
+        serde_json::json!([
+            "unbundling_comparator_candidates:",
+            "unbundling_comparator_input:"
+        ])
+    );
+    assert_eq!(
+        jobs[8]["job_kind"],
+        "scoring_feature_context_materialization"
+    );
+    assert_eq!(
+        jobs[8]["required_submit_flags"],
+        serde_json::json!(["--published-report-uri"])
+    );
+    assert!(jobs[8]["depends_on"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("peer_percentile_benchmark")));
+    assert_eq!(
+        jobs[8]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_feature_contexts:",
+            "scoring_feature_context_claim_snapshot:",
+            "episode_rollups:",
+            "peer_benchmarks:",
+            "clinical_compatibility:",
+            "unbundling_candidates:"
+        ])
+    );
+    assert_eq!(jobs[9]["job_kind"], "scoring_online_readback");
+    assert_eq!(jobs[9]["build_command"], "build-scoring-readback-report");
+    assert_eq!(jobs[9]["required_submit_flags"], serde_json::Value::Null);
+    assert_eq!(
+        jobs[9]["score_response_capture_command"],
+        "fetch-scoring-readback-response"
+    );
+    assert_eq!(jobs[9]["artifact_kind"], "online_scoring_readback");
+    assert_eq!(
+        jobs[9]["depends_on"][0],
+        "scoring_feature_context_materialization"
+    );
+    assert_eq!(
+        jobs[9]["required_evidence_prefixes"],
+        serde_json::json!([
+            "scoring_readback_reports:",
+            "scoring_readback_inputs:",
+            "scoring_readback_score_requests:",
+            "scoring_readback_score_responses:",
+            "scoring_feature_contexts:",
+            "provider_profile_window_rollups:",
+            "sanctions_sync_reports:",
+            "provider_graph_signal_rollups:",
+            "peer_benchmarks:",
+            "episode_rollups:",
+            "clinical_compatibility:",
+            "unbundling_candidates:"
+        ])
+    );
+    assert_eq!(jobs[10]["job_kind"], "probability_calibration_evidence");
+    assert_eq!(
+        jobs[10]["required_submit_flags"],
+        serde_json::json!([
+            "--published-report-uri",
+            "--published-input-uri",
+            "--published-label-uri"
+        ])
+    );
+    assert_eq!(jobs[10]["required_permission"], "ops:models:review");
+    assert_eq!(
+        jobs[10]["api_path"],
+        "/api/v1/ops/models/{model_key}/probability-calibration-reports"
+    );
+    assert_eq!(
+        jobs[10]["required_evidence_prefixes"],
+        serde_json::json!([
+            "probability_calibration_reports:",
+            "probability_calibration_input:",
+            "calibration_labels:"
+        ])
+    );
+    assert_eq!(
+        plan["api_contract"]["unbundling_comparator_path"],
+        "/api/v1/ops/unbundling-comparator-candidates"
+    );
+    assert_eq!(
+        plan["api_contract"]["worker_data_pipeline_execution_path"],
+        "/api/v1/ops/worker-data-pipeline-executions"
+    );
+    assert_eq!(
+        plan["api_contract"]["worker_data_pipeline_readiness_path"],
+        "/api/v1/ops/worker-data-pipeline-readiness"
+    );
+    assert!(plan["readiness_gates"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "dry_run_reports_reviewed_before_first_submit"
+        )));
+    assert_eq!(
+        plan["downstream_contracts"]["readiness_report"],
+        "build-worker-data-pipeline-readiness-report"
+    );
+    assert_eq!(
+        plan["downstream_contracts"]["run_status_template"],
+        "build-worker-data-pipeline-run-status-template"
+    );
+    assert_eq!(
+        plan["downstream_contracts"]["scheduler_execution_report"],
+        "build-worker-data-pipeline-execution-report"
+    );
+}

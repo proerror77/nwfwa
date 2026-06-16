@@ -62,13 +62,14 @@ mod types_evidence;
 mod types_knowledge;
 mod types_models;
 mod types_outcomes;
+mod types_providers;
 mod types_rules;
 mod webhook_helpers;
 
 #[cfg(test)]
 use self::agent_helpers::DEFAULT_ORCHESTRATOR_VERSION;
 use self::agent_helpers::{
-    agent_audit_event_from_run, agent_investigation_record_for_claim, agent_run_log_from_persisted,
+    agent_audit_event_from_run, agent_investigation_record, agent_run_log_from_persisted,
     default_agent_registry_record, stable_investigation_id_for_claim, DEFAULT_AGENT_IDENTITY_ID,
     DEFAULT_AGENT_KIND, DEFAULT_AGENT_VERSION,
 };

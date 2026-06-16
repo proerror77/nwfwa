@@ -2,7 +2,9 @@ use api_server::app::build_app;
 use axum::http::StatusCode;
 
 use super::support::{
-    get_json, json_request, register_activation_candidate, register_model_dataset_for_test,
+    get_json, json_request, register_activation_candidate,
+    register_inactive_feature_set_model_dataset_for_test, register_inactive_model_dataset_for_test,
+    register_inactive_source_dataset_for_test, register_model_dataset_for_test,
     register_unhealthy_model_dataset_for_test, test_config,
 };
 
@@ -22,7 +24,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
     assert_eq!(body["source_data_quality_status"], "missing");
     assert_eq!(body["passed_count"], 2);
-    assert_eq!(body["total_count"], 22);
+    assert_eq!(body["total_count"], 23);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -75,6 +77,10 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .contains(&serde_json::json!(
             "rust serving artifact evaluation missing"
         )));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("probability calibration missing")));
     let dataset_gate = body["gates"]
         .as_array()
         .unwrap()
@@ -108,7 +114,7 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_quality_gate/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/quality_gate/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.91,
                 "feature_reproducibility_hash": "sha256:quality-gate-features",
@@ -161,6 +167,162 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
 }
 
 #[tokio::test]
+async fn model_promotion_gates_block_draft_source_datasets() {
+    let app = build_app(test_config()).unwrap();
+    let model_dataset_id =
+        register_inactive_source_dataset_for_test(app.clone(), "draft_source_gate").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_draft_source_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/draft_source_gate/feature_importance.parquet",
+              "metrics_json": {{
+                "data_quality_score": 0.91,
+                "feature_reproducibility_hash": "sha256:draft-source-gate-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "qa_review"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["source_data_quality_score"], 1.0);
+    assert_eq!(body["source_data_quality_status"], "not_active");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("source dataset is not active")));
+    let source_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Source data quality")
+        .unwrap();
+    assert_eq!(source_gate["passed"], false);
+    assert_eq!(source_gate["evidence_source"], "dataset_lineage");
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_inactive_feature_sets() {
+    let app = build_app(test_config()).unwrap();
+    let model_dataset_id =
+        register_inactive_feature_set_model_dataset_for_test(app.clone(), "draft_feature_set_gate")
+            .await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_draft_feature_set_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/draft_feature_set_gate/feature_importance.parquet",
+              "metrics_json": {{"data_quality_score": 0.91}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("feature set is not active")));
+    let dataset_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Immutable dataset")
+        .unwrap();
+    assert_eq!(dataset_gate["passed"], false);
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_inactive_model_datasets() {
+    let app = build_app(test_config()).unwrap();
+    let model_dataset_id =
+        register_inactive_model_dataset_for_test(app.clone(), "draft_model_dataset_gate").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_draft_model_dataset_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/draft_model_dataset_gate/feature_importance.parquet",
+              "metrics_json": {{"data_quality_score": 0.91}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model dataset is not active")));
+    let dataset_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Immutable dataset")
+        .unwrap();
+    assert_eq!(dataset_gate["passed"], false);
+}
+
+#[tokio::test]
 async fn model_promotion_gates_require_rust_feature_set_evidence() {
     let app = build_app(test_config()).unwrap();
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "rust_feature_set").await;
@@ -184,7 +346,7 @@ async fn model_promotion_gates_require_rust_feature_set_evidence() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_rust_feature_set/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/rust_feature_set/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.91,
                 "feature_reproducibility_hash": "sha256:rust-feature-set-features",
@@ -253,7 +415,7 @@ async fn model_promotion_gates_require_rust_serving_artifact_evaluation() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_rust_serving_gate/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/rust_serving_gate/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.91,
                 "out_of_time_auc": 0.79,
@@ -323,7 +485,7 @@ async fn model_promotion_gates_require_time_group_split_strategy() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_split_strategy/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/split_strategy/feature_importance.parquet",
               "metrics_json": {{
                 "time_group_split_status": "passed",
                 "time_split_field": "service_date",
@@ -376,7 +538,7 @@ async fn model_promotion_gates_block_public_research_dataset_evidence() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_public_research/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/public_research/feature_importance.parquet",
               "metrics_json": {{
                 "dataset_usage_scope": "public_kaggle_research",
                 "time_group_split_status": "passed",
@@ -405,6 +567,10 @@ async fn model_promotion_gates_block_public_research_dataset_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("pilot/customer validation missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("probability calibration missing")));
     let validation_gate = body["gates"]
         .as_array()
         .unwrap()
@@ -440,7 +606,7 @@ async fn model_promotion_gates_block_unhealthy_source_dataset() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_unhealthy_source/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/unhealthy_source/feature_importance.parquet",
               "metrics_json": {{
                 "data_quality_score": 0.99,
                 "feature_reproducibility_hash": "sha256:unhealthy-source-features",

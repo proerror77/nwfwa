@@ -308,6 +308,23 @@ impl ModelsRepository for InMemoryScoringRepository {
         self.in_memory_save_model_promotion_review(record).await
     }
 
+    async fn save_probability_calibration_report(
+        &self,
+        record: ProbabilityCalibrationReportRecord,
+    ) -> anyhow::Result<ProbabilityCalibrationReportRecord> {
+        self.in_memory_save_probability_calibration_report(record)
+            .await
+    }
+
+    async fn latest_probability_calibration_report(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ProbabilityCalibrationReportRecord>> {
+        self.in_memory_latest_probability_calibration_report(model_key, model_version)
+            .await
+    }
+
     async fn latest_model_promotion_review(
         &self,
         model_key: &str,
@@ -415,6 +432,14 @@ impl DatasetsRepository for InMemoryScoringRepository {
             .await
     }
 
+    async fn get_model_dataset_lineage(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<ModelDatasetLineageRecord>> {
+        self.in_memory_get_model_dataset_lineage(model_dataset_id)
+            .await
+    }
+
     async fn register_model_evaluation(
         &self,
         input: RegisterModelEvaluationInput,
@@ -431,6 +456,95 @@ impl DatasetsRepository for InMemoryScoringRepository {
 
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
         self.in_memory_list_model_evaluations().await
+    }
+
+    async fn save_scoring_feature_context_materialization(
+        &self,
+        input: SaveScoringFeatureContextMaterializationInput,
+    ) -> anyhow::Result<ScoringFeatureContextMaterializationRecord> {
+        self.in_memory_save_scoring_feature_context_materialization(input)
+            .await
+    }
+
+    async fn get_scoring_feature_context_materialization(
+        &self,
+        materialization_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>> {
+        self.in_memory_get_scoring_feature_context_materialization(
+            materialization_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn latest_scoring_feature_context_for_claim(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>> {
+        self.in_memory_latest_scoring_feature_context_for_claim(claim_id, customer_scope_id)
+            .await
+    }
+
+    async fn save_clinical_compatibility_references(
+        &self,
+        input: SaveClinicalCompatibilityReferencesInput,
+    ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
+        self.in_memory_save_clinical_compatibility_references(input)
+            .await
+    }
+
+    async fn clinical_compatibility_reference_for_claim(
+        &self,
+        diagnosis_code: &str,
+        procedure_codes: &[String],
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ClinicalCompatibilityReferenceRecord>> {
+        self.in_memory_clinical_compatibility_reference_for_claim(
+            diagnosis_code,
+            procedure_codes,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_unbundling_comparator_candidates(
+        &self,
+        input: SaveUnbundlingComparatorCandidatesInput,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        self.in_memory_save_unbundling_comparator_candidates(input)
+            .await
+    }
+
+    async fn latest_unbundling_comparator_candidates_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        self.in_memory_latest_unbundling_comparator_candidates_for_member_provider(
+            member_id,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_worker_data_pipeline_readiness_report(
+        &self,
+        input: SaveWorkerDataPipelineReadinessReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineReadinessReportRecord> {
+        self.in_memory_save_worker_data_pipeline_readiness_report(input)
+            .await
+    }
+
+    async fn save_worker_data_pipeline_execution_report(
+        &self,
+        input: SaveWorkerDataPipelineExecutionReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineExecutionReportRecord> {
+        self.in_memory_save_worker_data_pipeline_execution_report(input)
+            .await
     }
 }
 
@@ -627,6 +741,98 @@ impl KnowledgeRepository for InMemoryScoringRepository {
 
     async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
         self.in_memory_provider_risk_summary().await
+    }
+
+    async fn save_provider_sanctions(
+        &self,
+        input: SaveProviderSanctionsInput,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        self.in_memory_save_provider_sanctions(input).await
+    }
+
+    async fn provider_sanctions_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        self.in_memory_provider_sanctions_for_provider(provider_id, customer_scope_id)
+            .await
+    }
+
+    async fn save_provider_profile_windows(
+        &self,
+        input: SaveProviderProfileWindowsInput,
+    ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>> {
+        self.in_memory_save_provider_profile_windows(input).await
+    }
+
+    async fn latest_provider_profile_windows_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderProfileWindowRecord>> {
+        self.in_memory_latest_provider_profile_windows_for_provider(provider_id, customer_scope_id)
+            .await
+    }
+
+    async fn save_provider_graph_signals(
+        &self,
+        input: SaveProviderGraphSignalsInput,
+    ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>> {
+        self.in_memory_save_provider_graph_signals(input).await
+    }
+
+    async fn latest_provider_graph_signal_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderGraphSignalRecord>> {
+        self.in_memory_latest_provider_graph_signal_for_provider(provider_id, customer_scope_id)
+            .await
+    }
+
+    async fn save_peer_benchmark_groups(
+        &self,
+        input: SavePeerBenchmarkGroupsInput,
+    ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>> {
+        self.in_memory_save_peer_benchmark_groups(input).await
+    }
+
+    async fn latest_peer_benchmark_group(
+        &self,
+        specialty: &str,
+        region: &str,
+        service_segment: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PeerBenchmarkGroupRecord>> {
+        self.in_memory_latest_peer_benchmark_group(
+            specialty,
+            region,
+            service_segment,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_episode_rollups(
+        &self,
+        input: SaveEpisodeRollupsInput,
+    ) -> anyhow::Result<Vec<EpisodeRollupRecord>> {
+        self.in_memory_save_episode_rollups(input).await
+    }
+
+    async fn latest_episode_rollup_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EpisodeRollupRecord>> {
+        self.in_memory_latest_episode_rollup_for_member_provider(
+            member_id,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
     }
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {

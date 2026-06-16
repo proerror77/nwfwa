@@ -30,7 +30,7 @@ use fwa_auth::AuthenticatedPrincipal;
 pub use super::ops_models_mlops::{
     mlops_alert_delivery_queue, model_monitoring_review_queue, submit_mlops_alert_delivery,
     submit_mlops_alert_delivery_task_review, submit_mlops_monitoring_report,
-    submit_model_monitoring_review_task_review,
+    submit_model_monitoring_review_task_review, submit_probability_calibration_report,
 };
 pub use super::ops_models_types::*;
 
@@ -446,10 +446,10 @@ async fn load_model_promotion_gates_for_optional_version(
     let latest_evaluation = evaluations.iter().find(|evaluation| {
         evaluation.model_key == model.model_key && evaluation.model_version == model.version
     });
-    let source_dataset = match latest_evaluation {
+    let model_dataset_lineage = match latest_evaluation {
         Some(evaluation) => state
             .repository
-            .get_model_dataset_source_dataset(&evaluation.model_dataset_id)
+            .get_model_dataset_lineage(&evaluation.model_dataset_id)
             .await
             .map_err(internal_error("MODEL_DATASET_LINEAGE_FAILED"))?,
         None => None,
@@ -459,6 +459,11 @@ async fn load_model_promotion_gates_for_optional_version(
         .latest_model_promotion_review(&model.model_key, &model.version)
         .await
         .map_err(internal_error("MODEL_PROMOTION_REVIEW_LOAD_FAILED"))?;
+    let latest_calibration_report = state
+        .repository
+        .latest_probability_calibration_report(&model.model_key, &model.version)
+        .await
+        .map_err(internal_error("PROBABILITY_CALIBRATION_LOAD_FAILED"))?;
     let outcome_labels = state
         .repository
         .list_outcome_labels(None)
@@ -476,7 +481,8 @@ async fn load_model_promotion_gates_for_optional_version(
         &outcome_labels,
         &feedback_items,
         latest_review.as_ref(),
-        source_dataset.as_ref(),
+        latest_calibration_report.as_ref(),
+        model_dataset_lineage.as_ref(),
     );
     Ok((model, gates))
 }

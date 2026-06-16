@@ -1,5 +1,75 @@
 use super::*;
 
+#[tokio::test]
+async fn fetches_oig_sam_sanctions_snapshot_from_configured_endpoints() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("sanctions-fetch-snapshot");
+    let output_dir = root.join("out");
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let mut requests = Vec::new();
+        for _ in 0..2 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut socket).await;
+            let body = if request.starts_with("GET /oig HTTP/1.1") {
+                serde_json::json!({
+                    "source_date": "2026-06-15",
+                    "records": [
+                        {
+                            "list": "",
+                            "provider_id": "PRV-OIG-1",
+                            "npi": null,
+                            "provider_name": "OIG Excluded Clinic",
+                            "sanction_type": "exclusion",
+                            "effective_date": "2026-06-01",
+                            "source_ref": "oig:PRV-OIG-1"
+                        }
+                    ]
+                })
+            } else {
+                serde_json::json!([
+                    {
+                        "list": "",
+                        "provider_id": "PRV-SAM-1",
+                        "npi": "2234567890",
+                        "provider_name": "SAM Debarred Clinic",
+                        "sanction_type": "debarment",
+                        "effective_date": "2026-06-02",
+                        "source_ref": "sam:PRV-SAM-1"
+                    }
+                ])
+            };
+            write_json_response(&mut socket, body).await;
+            requests.push(request);
+        }
+        requests
+    });
+
+    let snapshot = fetch_oig_sam_sanctions_snapshot(
+        Some(&format!("{base_url}/oig")),
+        Some(&format!("{base_url}/sam")),
+        &output_dir,
+        Some("2026-06-15"),
+    )
+    .await
+    .expect("sanctions snapshot fetch");
+    let requests = server.await.unwrap();
+
+    assert_eq!(snapshot.source_date.as_deref(), Some("2026-06-15"));
+    assert_eq!(snapshot.records.len(), 2);
+    assert_eq!(snapshot.records[0].list, "OIG");
+    assert_eq!(snapshot.records[1].list, "SAM");
+    assert!(requests
+        .iter()
+        .any(|request| request.starts_with("GET /oig HTTP/1.1")));
+    assert!(requests
+        .iter()
+        .any(|request| request.starts_with("GET /sam HTTP/1.1")));
+    assert!(output_dir.join("oig_sam_sanctions_snapshot.json").exists());
+}
+
 #[test]
 fn builds_sanctions_sync_dry_run_contract() {
     let root = temp_root("sanctions-sync");
@@ -58,7 +128,7 @@ fn builds_sanctions_sync_dry_run_contract() {
 }
 
 #[test]
-fn rejects_non_dry_run_sanctions_sync_until_write_path_exists() {
+fn rejects_direct_non_dry_run_sanctions_sync() {
     let root = temp_root("sanctions-sync-live");
     let source_uri = root.join("sanctions-source.json");
     write_json(
@@ -77,5 +147,260 @@ fn rejects_non_dry_run_sanctions_sync_until_write_path_exists() {
     )
     .expect_err("non-dry-run sync must be blocked");
 
-    assert!(error.to_string().contains("--dry-run only"));
+    assert!(error
+        .to_string()
+        .contains("use submit-sanctions-sync-report"));
+}
+
+#[test]
+fn builds_sanctions_sync_report_submission() {
+    let root = temp_root("sanctions-sync-submission");
+    let report_uri = root.join("sanctions_sync_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "oig_sam_sanctions_sync_report",
+            "report_version": 1,
+            "run_date": "2026-06-14",
+            "source_uri": "local://inputs/oig-sam.json",
+            "source_date": "2026-06-13",
+            "dry_run": true,
+            "execution_mode": "dry_run_contract_only",
+            "sync_status": "ready_to_apply",
+            "source_record_count": 1,
+            "valid_record_count": 1,
+            "invalid_record_count": 0,
+            "provider_upserts": [
+                {
+                    "sanction_key": "OIG:PRV-1",
+                    "list": "OIG",
+                    "provider_id": "PRV-1",
+                    "npi": null,
+                    "provider_name": "Excluded Provider Clinic",
+                    "sanction_type": "exclusion",
+                    "effective_date": "2026-06-01",
+                    "source_ref": "oig:2026-06:PRV-1",
+                    "risk_feature": "provider_sanctions_excluded",
+                    "risk_score": 100
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": ["sanctions_source_snapshot:local://inputs/oig-sam.json"],
+            "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+        }),
+    )
+    .unwrap();
+
+    let submission = build_sanctions_sync_report_submission_with_published_uris(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
+        "worker:sync-oig-sam-sanctions",
+        "daily sync",
+    )
+    .expect("sanctions submission");
+
+    assert_eq!(submission.report_kind, "oig_sam_sanctions_sync_report");
+    assert_eq!(submission.source_record_count, 1);
+    assert_eq!(submission.valid_record_count, 1);
+    assert_eq!(submission.invalid_record_count, 0);
+    assert_eq!(submission.provider_upserts[0].sanction_key, "OIG:PRV-1");
+    assert_eq!(
+        submission.source_report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    );
+    assert_eq!(
+        submission.source_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json"
+    );
+    assert!(submission.evidence_refs.contains(&"sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"sanctions_source_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json".to_string()));
+}
+
+#[test]
+fn rejects_sanctions_submission_without_source_snapshot_evidence() {
+    let root = temp_root("sanctions-sync-submission-missing-source-evidence");
+    let report_uri = root.join("sanctions_sync_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "oig_sam_sanctions_sync_report",
+            "report_version": 1,
+            "run_date": "2026-06-14",
+            "source_uri": "local://inputs/oig-sam.json",
+            "source_date": "2026-06-13",
+            "dry_run": true,
+            "execution_mode": "dry_run_contract_only",
+            "sync_status": "ready_to_apply",
+            "source_record_count": 1,
+            "valid_record_count": 1,
+            "invalid_record_count": 0,
+            "provider_upserts": [
+                {
+                    "sanction_key": "OIG:PRV-1",
+                    "list": "OIG",
+                    "provider_id": "PRV-1",
+                    "npi": null,
+                    "provider_name": "Excluded Provider Clinic",
+                    "sanction_type": "exclusion",
+                    "effective_date": "2026-06-01",
+                    "source_ref": "oig:2026-06:PRV-1",
+                    "risk_feature": "provider_sanctions_excluded",
+                    "risk_score": 100
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": [],
+            "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+        }),
+    )
+    .unwrap();
+
+    let error = build_sanctions_sync_report_submission_with_published_uris(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
+        "worker:sync-oig-sam-sanctions",
+        "daily sync",
+    )
+    .expect_err("sanctions submission without source evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("sanctions_source_snapshot:local://inputs/oig-sam.json"));
+}
+
+#[test]
+fn rejects_sanctions_submission_with_template_evidence_refs() {
+    let root = temp_root("sanctions-sync-submission-template-evidence");
+    let report_uri = root.join("sanctions_sync_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "oig_sam_sanctions_sync_report",
+            "report_version": 1,
+            "run_date": "2026-06-14",
+            "source_uri": "local://inputs/oig-sam.json",
+            "source_date": "2026-06-13",
+            "dry_run": true,
+            "execution_mode": "dry_run_contract_only",
+            "sync_status": "ready_to_apply",
+            "source_record_count": 1,
+            "valid_record_count": 1,
+            "invalid_record_count": 0,
+            "provider_upserts": [
+                {
+                    "sanction_key": "OIG:PRV-1",
+                    "list": "OIG",
+                    "provider_id": "PRV-1",
+                    "npi": null,
+                    "provider_name": "Excluded Provider Clinic",
+                    "risk_feature": "provider_sanctions_excluded",
+                    "risk_score": 100
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": [
+                "sanctions_source_snapshot:local://inputs/oig-sam.json",
+                "worker_template:local://template/sanctions/source.json"
+            ],
+            "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+        }),
+    )
+    .unwrap();
+
+    let error = build_sanctions_sync_report_submission_with_published_uris(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
+        "worker:sync-oig-sam-sanctions",
+        "daily sync",
+    )
+    .expect_err("sanctions submission with template evidence must fail");
+
+    assert!(error.to_string().contains(
+        "sanctions sync evidence_refs must not use local dry-run or placeholder evidence"
+    ));
+}
+
+#[tokio::test]
+async fn submits_sanctions_sync_report_to_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("sanctions-sync-submit-api");
+    let report_uri = root.join("sanctions_sync_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "oig_sam_sanctions_sync_report",
+            "report_version": 1,
+            "run_date": "2026-06-14",
+            "source_uri": "local://inputs/oig-sam.json",
+            "source_date": "2026-06-13",
+            "dry_run": true,
+            "execution_mode": "dry_run_contract_only",
+            "sync_status": "ready_to_apply",
+            "source_record_count": 1,
+            "valid_record_count": 1,
+            "invalid_record_count": 0,
+            "provider_upserts": [
+                {
+                    "sanction_key": "OIG:PRV-1",
+                    "list": "OIG",
+                    "provider_id": "PRV-1",
+                    "npi": null,
+                    "provider_name": "Excluded Provider Clinic",
+                    "sanction_type": "exclusion",
+                    "effective_date": "2026-06-01",
+                    "source_ref": "oig:2026-06:PRV-1",
+                    "risk_feature": "provider_sanctions_excluded",
+                    "risk_score": 100
+                }
+            ],
+            "review_tasks": [],
+            "evidence_refs": ["sanctions_source_snapshot:local://inputs/oig-sam.json"],
+            "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+        }),
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "report_kind": "oig_sam_sanctions_sync_report",
+                "provider_upsert_count": 1
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = submit_sanctions_sync_report_with_published_uris(
+        &api_url,
+        "provider-write-secret",
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json",
+        "worker:sync-oig-sam-sanctions",
+        "daily sync",
+    )
+    .await
+    .expect("submit sanctions sync report");
+
+    assert_eq!(response["provider_upsert_count"], 1);
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /api/v1/ops/providers/sanctions-sync-reports HTTP/1.1"));
+    assert!(request.contains("x-api-key: provider-write-secret"));
+    assert!(request.contains(r#""sanction_key":"OIG:PRV-1""#));
+    assert!(request.contains(
+        "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    ));
+    assert!(request.contains(
+        r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/oig_sam_sanctions_snapshot.json""#
+    ));
 }

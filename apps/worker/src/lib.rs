@@ -43,15 +43,21 @@ pub use health::{
 
 mod mlops_delivery;
 pub use mlops_delivery::{
-    build_mlops_alert_delivery_submission, build_mlops_alert_receiver_payload,
-    build_mlops_monitoring_report_submission, deliver_mlops_alert_receiver_webhook,
-    submit_mlops_alert_delivery_tasks, submit_mlops_monitoring_report,
-    MlopsAlertDeliverySubmission, MlopsMonitoringReportSubmission,
+    build_mlops_alert_delivery_submission,
+    build_mlops_alert_delivery_submission_with_published_uri, build_mlops_alert_receiver_payload,
+    build_mlops_monitoring_report_submission,
+    build_mlops_monitoring_report_submission_with_published_uri,
+    deliver_mlops_alert_receiver_webhook, submit_mlops_alert_delivery_tasks,
+    submit_mlops_alert_delivery_tasks_with_published_uri, submit_mlops_monitoring_report,
+    submit_mlops_monitoring_report_with_published_uri, MlopsAlertDeliverySubmission,
+    MlopsMonitoringReportSubmission,
 };
 
 mod anomaly_clustering;
 pub use anomaly_clustering::{
-    build_anomaly_clustering_report_submission, submit_anomaly_clustering_report,
+    build_anomaly_clustering_report_submission,
+    build_anomaly_clustering_report_submission_with_published_uri,
+    submit_anomaly_clustering_report, submit_anomaly_clustering_report_with_published_uri,
     AnomalyClusteringReportSubmission, AnomalyClusteringReviewTaskSubmission,
 };
 
@@ -95,8 +101,14 @@ pub use audit_retention::{
 
 mod probability_calibration;
 pub use probability_calibration::{
-    build_probability_calibration_report, ProbabilityCalibrationBin, ProbabilityCalibrationInput,
-    ProbabilityCalibrationReport, ProbabilityCalibrationReviewTask, ProbabilityCalibrationRow,
+    build_probability_calibration_report,
+    build_probability_calibration_report_with_expected_label_source_uri,
+    build_probability_calibration_submission,
+    build_probability_calibration_submission_with_published_uris,
+    submit_probability_calibration_report,
+    submit_probability_calibration_report_with_published_uris, ProbabilityCalibrationBin,
+    ProbabilityCalibrationInput, ProbabilityCalibrationReport, ProbabilityCalibrationReviewTask,
+    ProbabilityCalibrationRow, ProbabilityCalibrationSubmission,
 };
 
 mod model_artifact_evaluation;
@@ -133,56 +145,120 @@ pub(crate) use automl_ranking::{metric_at, read_feature_importance, round4};
 mod ops_plans;
 pub use ops_plans::{
     build_ai_evidence_execution_plan, build_analytics_export_plan, build_governance_ops_plan,
+    build_worker_data_pipeline_plan,
+};
+
+mod worker_data_pipeline_execution;
+pub use worker_data_pipeline_execution::{
+    build_worker_data_pipeline_execution_report,
+    build_worker_data_pipeline_execution_report_with_published_uris,
+    build_worker_data_pipeline_execution_submission,
+    build_worker_data_pipeline_execution_submission_with_published_uri,
+    submit_worker_data_pipeline_execution_report,
+    submit_worker_data_pipeline_execution_report_with_published_uri,
+    WorkerDataPipelineExecutionReportSubmission,
+};
+
+mod worker_data_pipeline_run_status;
+pub use worker_data_pipeline_run_status::build_worker_data_pipeline_run_status_template;
+
+mod worker_data_pipeline_readiness;
+pub use worker_data_pipeline_readiness::{
+    build_worker_data_pipeline_readiness_input_template,
+    build_worker_data_pipeline_readiness_report,
+    build_worker_data_pipeline_readiness_report_with_published_uris,
+    build_worker_data_pipeline_readiness_submission,
+    build_worker_data_pipeline_readiness_submission_with_published_uri,
+    submit_worker_data_pipeline_readiness_report,
+    submit_worker_data_pipeline_readiness_report_with_published_uri,
+    WorkerDataPipelineReadinessCheck, WorkerDataPipelineReadinessInput,
+    WorkerDataPipelineReadinessReportSubmission,
 };
 
 mod sanctions;
 pub use sanctions::{
-    build_sanctions_sync_report, SanctionsProviderUpsert, SanctionsSourceRecord,
-    SanctionsSourceSnapshot, SanctionsSyncReport, SanctionsSyncReviewTask,
+    build_sanctions_sync_report, build_sanctions_sync_report_submission,
+    build_sanctions_sync_report_submission_with_published_uris, fetch_oig_sam_sanctions_snapshot,
+    submit_sanctions_sync_report, submit_sanctions_sync_report_with_published_uris,
+    SanctionsProviderUpsert, SanctionsSourceRecord, SanctionsSourceSnapshot, SanctionsSyncReport,
+    SanctionsSyncReportSubmission, SanctionsSyncReviewTask,
 };
 
 mod provider_profile_rollup;
 pub use provider_profile_rollup::{
-    build_provider_profile_window_rollup, ProviderProfileClaimInput, ProviderProfileRollup,
-    ProviderProfileRollupInput, ProviderProfileWindowOutput, ProviderProfileWindowRollupReport,
+    build_provider_profile_window_rollup, build_provider_profile_window_rollup_submission,
+    build_provider_profile_window_rollup_submission_with_published_uris,
+    submit_provider_profile_window_rollup,
+    submit_provider_profile_window_rollup_with_published_uris, ProviderProfileClaimInput,
+    ProviderProfileRollup, ProviderProfileRollupInput, ProviderProfileWindowOutput,
+    ProviderProfileWindowRollupReport, ProviderProfileWindowRollupSubmission,
 };
 
 mod provider_graph_rollup;
 pub use provider_graph_rollup::{
-    build_provider_graph_signal_rollup, ProviderGraphClaimInput, ProviderGraphRollupInput,
-    ProviderGraphSignalRollup, ProviderGraphSignalRollupReport, ProviderReferralInput,
+    build_provider_graph_signal_rollup, build_provider_graph_signal_rollup_submission,
+    build_provider_graph_signal_rollup_submission_with_published_uris,
+    submit_provider_graph_signal_rollup, submit_provider_graph_signal_rollup_with_published_uris,
+    ProviderGraphClaimInput, ProviderGraphRollupInput, ProviderGraphSignalRollup,
+    ProviderGraphSignalRollupReport, ProviderGraphSignalRollupSubmission, ProviderReferralInput,
+    ProviderRiskInput,
 };
 
 mod peer_benchmark;
 pub use peer_benchmark::{
-    build_peer_percentile_benchmark, PeerBenchmarkClaimInput, PeerBenchmarkGroup,
-    PeerBenchmarkInput, PeerBenchmarkReport,
+    build_peer_benchmark_submission, build_peer_benchmark_submission_with_published_uris,
+    build_peer_percentile_benchmark, submit_peer_benchmark,
+    submit_peer_benchmark_with_published_uris, PeerBenchmarkClaimInput, PeerBenchmarkGroup,
+    PeerBenchmarkInput, PeerBenchmarkReport, PeerBenchmarkSubmission,
 };
 
 mod episode_rollup;
 pub use episode_rollup::{
-    build_episode_aggregation_report, EpisodeAggregationReport, EpisodeClaimInput,
-    EpisodeRollupInput, EpisodeWindowRollup, MemberProviderEpisodeRollup,
+    build_episode_aggregation_report, build_episode_aggregation_submission,
+    build_episode_aggregation_submission_with_published_uris, submit_episode_aggregation,
+    submit_episode_aggregation_with_published_uris, EpisodeAggregationReport,
+    EpisodeAggregationSubmission, EpisodeClaimInput, EpisodeRollupInput, EpisodeWindowRollup,
+    MemberProviderEpisodeRollup,
 };
 
 mod clinical_compatibility;
 pub use clinical_compatibility::{
-    build_clinical_compatibility_reference_report, ClinicalCompatibilityRecord,
+    build_clinical_compatibility_reference_report,
+    build_clinical_compatibility_reference_submission,
+    build_clinical_compatibility_reference_submission_with_published_uris,
+    submit_clinical_compatibility_reference,
+    submit_clinical_compatibility_reference_with_published_uris, ClinicalCompatibilityRecord,
     ClinicalCompatibilityReferenceInput, ClinicalCompatibilityReferenceReport,
-    ClinicalCompatibilityReferenceRow, ClinicalCompatibilityReviewTask,
+    ClinicalCompatibilityReferenceRow, ClinicalCompatibilityReferenceSubmission,
+    ClinicalCompatibilityReviewTask,
 };
 
 mod unbundling_comparator;
 pub use unbundling_comparator::{
-    build_unbundling_comparator_report, UnbundlingComparatorCandidate, UnbundlingComparatorInput,
-    UnbundlingComparatorReport, UnbundlingEpisodeInput, UnbundlingRuleInput,
+    build_unbundling_comparator_report, build_unbundling_comparator_submission,
+    build_unbundling_comparator_submission_with_published_uris,
+    submit_unbundling_comparator_candidates,
+    submit_unbundling_comparator_candidates_with_published_uris, UnbundlingComparatorCandidate,
+    UnbundlingComparatorInput, UnbundlingComparatorReport, UnbundlingComparatorSubmission,
+    UnbundlingEpisodeInput, UnbundlingRuleInput,
 };
 
 mod scoring_feature_context;
 pub use scoring_feature_context::{
-    build_scoring_feature_context_report, ClaimScoringFeatureContext,
-    ScoringFeatureContextClaimInput, ScoringFeatureContextInput, ScoringFeatureContextReport,
+    build_scoring_feature_context_materialization_submission,
+    build_scoring_feature_context_materialization_submission_with_published_uri,
+    build_scoring_feature_context_report, submit_scoring_feature_context_materialization,
+    submit_scoring_feature_context_materialization_with_published_uri, ClaimScoringFeatureContext,
+    ScoringFeatureContextClaimInput, ScoringFeatureContextInput,
+    ScoringFeatureContextMaterializationSubmission, ScoringFeatureContextReport,
     ScoringFeatureContextSourceUris,
+};
+
+mod scoring_readback;
+pub use scoring_readback::{
+    build_scoring_readback_report, build_scoring_readback_report_with_published_uris,
+    fetch_scoring_readback_response, ScoringReadbackCheck, ScoringReadbackInput,
+    ScoringReadbackReport, ScoringReadbackReviewTask,
 };
 
 mod parquet_utils;
@@ -334,6 +410,87 @@ fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str
         bail!("{field} is required");
     }
     Ok(value)
+}
+
+fn ensure_production_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    if value.is_empty()
+        || contains_non_production_artifact_reference(value)
+        || !value.contains("://")
+        || value.contains('{')
+        || value.contains('}')
+    {
+        bail!("{field} must use production evidence, not local dry-run or placeholder URI");
+    }
+    Ok(())
+}
+
+fn ensure_production_json_artifact_uri(field: &str, value: &str) -> anyhow::Result<()> {
+    ensure_production_artifact_uri(field, value)?;
+    let normalized = value
+        .trim()
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !normalized.ends_with(".json") {
+        bail!("{field} must point to a JSON report artifact");
+    }
+    Ok(())
+}
+
+fn ensure_production_evidence_refs(field: &str, evidence_refs: &[String]) -> anyhow::Result<()> {
+    if evidence_refs
+        .iter()
+        .any(|reference| contains_non_production_artifact_reference(reference))
+    {
+        bail!("{field} must not use local dry-run or placeholder evidence");
+    }
+    Ok(())
+}
+
+fn contains_non_production_artifact_reference(value: &str) -> bool {
+    let value = value.trim();
+    let normalized = value.to_ascii_lowercase();
+    normalized.contains("local://")
+        || normalized.contains("file://")
+        || normalized.contains("://localhost")
+        || normalized.contains("://127.")
+        || normalized.contains("://0.0.0.0")
+        || normalized.contains("://[::1]")
+        || value.contains('{')
+        || value.contains('}')
+}
+
+fn published_submission_evidence_refs(
+    field: &str,
+    report_evidence_refs: &[String],
+    source_evidence_prefix: &str,
+    report_source_uri: &str,
+    published_source_uri: &str,
+    report_evidence_prefix: &str,
+    published_report_uri: &str,
+) -> anyhow::Result<Vec<String>> {
+    let source_ref = format!("{source_evidence_prefix}:{report_source_uri}");
+    if !report_evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == source_ref)
+    {
+        bail!("{field} requires {source_ref} evidence");
+    }
+
+    let mut evidence_refs = report_evidence_refs
+        .iter()
+        .map(|reference| reference.trim())
+        .filter(|reference| !reference.is_empty() && *reference != source_ref)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    evidence_refs.push(format!("{source_evidence_prefix}:{published_source_uri}"));
+    evidence_refs.push(format!("{report_evidence_prefix}:{published_report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    ensure_production_evidence_refs(field, &evidence_refs)?;
+    Ok(evidence_refs)
 }
 
 fn required_optional<'a>(field: &str, value: Option<&'a str>) -> anyhow::Result<&'a str> {

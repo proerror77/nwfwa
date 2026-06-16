@@ -804,6 +804,260 @@ ALTER TABLE model_evaluation_runs
 ALTER TABLE model_evaluation_runs
   ADD COLUMN IF NOT EXISTS permutation_importance_uri TEXT;
 
+CREATE TABLE IF NOT EXISTS scoring_feature_context_materializations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  materialization_id TEXT NOT NULL,
+  customer_scope_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  source_uris JSONB NOT NULL DEFAULT '{}'::jsonb,
+  claim_count INTEGER NOT NULL,
+  context_count INTEGER NOT NULL,
+  contexts_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, materialization_id)
+);
+
+CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_scope_date_idx
+  ON scoring_feature_context_materializations(customer_scope_id, as_of_date);
+CREATE INDEX IF NOT EXISTS scoring_feature_context_materializations_contexts_gin_idx
+  ON scoring_feature_context_materializations USING GIN (contexts_json);
+
+CREATE TABLE IF NOT EXISTS worker_data_pipeline_readiness_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  plan_uri TEXT NOT NULL,
+  readiness_input_uri TEXT NOT NULL,
+  readiness_status TEXT NOT NULL,
+  job_count BIGINT NOT NULL,
+  ready_job_count BIGINT NOT NULL,
+  blocked_job_count BIGINT NOT NULL,
+  review_task_count BIGINT NOT NULL,
+  job_readiness_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  review_tasks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, source_report_uri)
+);
+
+CREATE INDEX IF NOT EXISTS worker_data_pipeline_readiness_reports_scope_status_idx
+  ON worker_data_pipeline_readiness_reports(customer_scope_id, readiness_status);
+
+CREATE TABLE IF NOT EXISTS worker_data_pipeline_execution_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  plan_uri TEXT NOT NULL,
+  run_status_uri TEXT NOT NULL,
+  readiness_report_uri TEXT,
+  readiness_gate_status TEXT,
+  run_id TEXT NOT NULL,
+  execution_date TEXT NOT NULL,
+  job_count BIGINT NOT NULL,
+  pending_or_failed_job_count BIGINT NOT NULL,
+  review_task_count BIGINT NOT NULL,
+  job_executions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  review_tasks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, source_report_uri)
+);
+
+CREATE INDEX IF NOT EXISTS worker_data_pipeline_execution_reports_scope_run_idx
+  ON worker_data_pipeline_execution_reports(customer_scope_id, run_id);
+
+CREATE TABLE IF NOT EXISTS clinical_compatibility_references (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  compatibility_key TEXT NOT NULL,
+  reference_version TEXT NOT NULL,
+  effective_date TEXT NOT NULL,
+  source_authority TEXT NOT NULL,
+  diagnosis_code_prefix TEXT NOT NULL,
+  procedure_code TEXT NOT NULL,
+  diagnosis_procedure_match_score DOUBLE PRECISION NOT NULL,
+  data_source TEXT NOT NULL,
+  policy_authority_ref TEXT NOT NULL,
+  rationale TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, compatibility_key, reference_version)
+);
+
+CREATE INDEX IF NOT EXISTS clinical_compatibility_references_scope_codes_idx
+  ON clinical_compatibility_references(customer_scope_id, diagnosis_code_prefix, procedure_code);
+
+CREATE TABLE IF NOT EXISTS unbundling_comparator_candidates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  candidate_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  rule_id TEXT NOT NULL,
+  episode_key TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  window_days INTEGER NOT NULL,
+  bundled_code TEXT NOT NULL,
+  matched_component_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  claim_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  policy_authority_ref TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recommended_review TEXT NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, candidate_id, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS unbundling_comparator_candidates_scope_provider_idx
+  ON unbundling_comparator_candidates(customer_scope_id, provider_id);
+
+CREATE INDEX IF NOT EXISTS unbundling_comparator_candidates_scope_episode_idx
+  ON unbundling_comparator_candidates(customer_scope_id, episode_key);
+
+CREATE TABLE IF NOT EXISTS provider_sanctions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  sanction_key TEXT NOT NULL,
+  list TEXT NOT NULL,
+  provider_id TEXT,
+  npi TEXT,
+  provider_name TEXT NOT NULL,
+  sanction_type TEXT,
+  effective_date TEXT,
+  source_ref TEXT,
+  risk_feature TEXT NOT NULL,
+  risk_score INTEGER NOT NULL,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, sanction_key)
+);
+
+CREATE INDEX IF NOT EXISTS provider_sanctions_scope_provider_idx
+  ON provider_sanctions(customer_scope_id, provider_id);
+
+CREATE TABLE IF NOT EXISTS provider_profile_windows (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  specialty TEXT,
+  network_status TEXT,
+  as_of_date TEXT NOT NULL,
+  windows JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, provider_id, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS provider_profile_windows_scope_provider_idx
+  ON provider_profile_windows(customer_scope_id, provider_id);
+CREATE INDEX IF NOT EXISTS provider_profile_windows_scope_provider_date_idx
+  ON provider_profile_windows(customer_scope_id, provider_id, as_of_date);
+
+CREATE TABLE IF NOT EXISTS provider_graph_signals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  high_risk_neighbor_ratio DOUBLE PRECISION,
+  provider_patient_overlap_score DOUBLE PRECISION,
+  referral_concentration_score DOUBLE PRECISION,
+  billing_ring_membership BOOLEAN NOT NULL DEFAULT false,
+  temporal_co_billing_frequency_7d DOUBLE PRECISION NOT NULL DEFAULT 0,
+  referral_concentration_entropy DOUBLE PRECISION,
+  shared_member_provider_count INTEGER NOT NULL DEFAULT 0,
+  connected_confirmed_fwa_count INTEGER,
+  network_component_risk_score INTEGER,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, provider_id, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS provider_graph_signals_scope_provider_idx
+  ON provider_graph_signals(customer_scope_id, provider_id);
+
+CREATE TABLE IF NOT EXISTS peer_benchmark_groups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  peer_group_key TEXT NOT NULL,
+  specialty TEXT NOT NULL,
+  region TEXT NOT NULL,
+  service_segment TEXT NOT NULL,
+  benchmark_month TEXT NOT NULL,
+  claim_count INTEGER NOT NULL DEFAULT 0,
+  p25 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p50 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p75 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p90 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  p99 DOUBLE PRECISION NOT NULL DEFAULT 0,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, peer_group_key, benchmark_month)
+);
+
+CREATE INDEX IF NOT EXISTS peer_benchmark_groups_scope_segment_idx
+  ON peer_benchmark_groups(customer_scope_id, specialty, region, service_segment);
+
+CREATE TABLE IF NOT EXISTS episode_rollups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_scope_id TEXT NOT NULL,
+  episode_key TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  windows JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  source_report_uri TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(customer_scope_id, episode_key, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS episode_rollups_scope_provider_idx
+  ON episode_rollups(customer_scope_id, provider_id);
+
+CREATE INDEX IF NOT EXISTS episode_rollups_scope_member_idx
+  ON episode_rollups(customer_scope_id, member_id);
+
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,
@@ -816,6 +1070,34 @@ CREATE TABLE IF NOT EXISTS model_promotion_reviews (
 );
 
 ALTER TABLE model_promotion_reviews ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS probability_calibration_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  model_key TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  report_uri TEXT NOT NULL,
+  report_kind TEXT NOT NULL,
+  as_of_date TEXT NOT NULL,
+  row_count BIGINT NOT NULL,
+  minimum_calibration_rows BIGINT NOT NULL,
+  bin_count BIGINT NOT NULL,
+  expected_calibration_error DOUBLE PRECISION NOT NULL,
+  max_expected_calibration_error DOUBLE PRECISION NOT NULL,
+  brier_score DOUBLE PRECISION NOT NULL,
+  max_brier_score DOUBLE PRECISION NOT NULL,
+  calibration_status TEXT NOT NULL,
+  bins_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  review_tasks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  governance_boundary TEXT NOT NULL,
+  submitted_by TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(model_key, model_version, report_uri)
+);
+
+CREATE INDEX IF NOT EXISTS probability_calibration_reports_model_idx
+  ON probability_calibration_reports(model_key, model_version, as_of_date);
 
 CREATE TABLE IF NOT EXISTS model_retraining_jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

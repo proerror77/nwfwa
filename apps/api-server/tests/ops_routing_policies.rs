@@ -373,6 +373,33 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
 
     let (status, blocked) = post_json(
         app.clone(),
+        "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/submit",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment", "routing_policy_reviews:local://template/routing-review.json"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(blocked["code"], "INVALID_ROUTING_POLICY_LIFECYCLE_EVIDENCE");
+
+    let (status, blocked) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/submit",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment", "routing_policy_reviews:file://tmp/routing-review.json"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(blocked["code"], "INVALID_ROUTING_POLICY_LIFECYCLE_EVIDENCE");
+
+    let (status, blocked) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/submit",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment", "routing_policy_reviews:http://localhost:8080/routing-review.json"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(blocked["code"], "INVALID_ROUTING_POLICY_LIFECYCLE_EVIDENCE");
+
+    let (status, blocked) = post_json(
+        app.clone(),
         "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/activate",
         r#"{"evidence_refs": [" "]}"#,
     )

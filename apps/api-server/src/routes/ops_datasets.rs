@@ -1,11 +1,14 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, ModelDatasetRecord,
         ModelEvaluationRecord, PersistedAuditEvent, RegisterDatasetInput, RegisterFeatureSetInput,
         RegisterModelDatasetInput, RegisterModelEvaluationInput,
+        SaveClinicalCompatibilityReferencesInput, SaveScoringFeatureContextMaterializationInput,
+        SaveUnbundlingComparatorCandidatesInput, SaveWorkerDataPipelineExecutionReportInput,
+        SaveWorkerDataPipelineReadinessReportInput,
     },
 };
 
@@ -15,6 +18,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{canonical_scheme_family, AuditEventId, ScoringRunId};
 use serde_json::{json, Value};
 
@@ -24,9 +28,12 @@ pub(crate) use super::ops_datasets_readiness::build_dataset_health_record;
 use super::ops_datasets_readiness::{build_dataset_health, build_factor_readiness};
 pub use super::ops_datasets_types::*;
 use validation::{
-    validate_dataset_contract, validate_feature_set_registration, validate_field_mapping,
-    validate_model_dataset_registration, validate_model_evaluation_registration,
-    validate_parquet_uri,
+    validate_clinical_compatibility_reference_submission, validate_dataset_contract,
+    validate_feature_set_registration, validate_field_mapping, validate_model_dataset_registration,
+    validate_model_evaluation_registration, validate_parquet_uri,
+    validate_scoring_feature_context_materialization, validate_unbundling_comparator_submission,
+    validate_worker_data_pipeline_execution_report_submission,
+    validate_worker_data_pipeline_readiness_report_submission,
 };
 
 pub async fn register_dataset(
@@ -332,6 +339,436 @@ pub async fn list_model_evaluations(
     }))
 }
 
+pub async fn submit_scoring_feature_context_materialization(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitScoringFeatureContextMaterializationRequest>,
+) -> Result<Json<ScoringFeatureContextMaterializationResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_scoring_feature_context_materialization(&request)?;
+    let contexts_json = serde_json::Value::Array(request.contexts);
+    let materialization = state
+        .repository
+        .save_scoring_feature_context_materialization(
+            SaveScoringFeatureContextMaterializationInput {
+                materialization_id: request.materialization_id,
+                customer_scope_id: actor.customer_scope_id.clone(),
+                as_of_date: request.as_of_date,
+                report_uri: request.report_uri,
+                report_kind: request.report_kind,
+                source_uris: request.source_uris,
+                claim_count: request.claim_count,
+                context_count: request.context_count,
+                contexts_json,
+                evidence_refs: request.evidence_refs,
+                governance_boundary: request.governance_boundary,
+                submitted_by: request.actor,
+                notes: request.notes,
+            },
+        )
+        .await
+        .map_err(internal_error(
+            "SCORING_FEATURE_CONTEXT_MATERIALIZATION_SAVE_FAILED",
+        ))?;
+    let mut evidence_refs = materialization.evidence_refs.clone();
+    evidence_refs.push(format!(
+        "scoring_feature_context_materializations:{}",
+        materialization.materialization_id
+    ));
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "scoring_feature_context.materialization.submitted",
+            summary: "Scoring feature context materialization submitted",
+            payload: json!({
+                "materialization_id": materialization.materialization_id,
+                "as_of_date": materialization.as_of_date,
+                "report_uri": materialization.report_uri,
+                "report_kind": materialization.report_kind,
+                "claim_count": materialization.claim_count,
+                "context_count": materialization.context_count,
+                "submitted_by": materialization.submitted_by,
+                "owner": actor.actor_id.clone(),
+            }),
+            evidence_refs,
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "SCORING_FEATURE_CONTEXT_MATERIALIZATION_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(ScoringFeatureContextMaterializationResponse {
+        materialization,
+    }))
+}
+
+pub async fn submit_clinical_compatibility_reference(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitClinicalCompatibilityReferenceRequest>,
+) -> Result<Json<ClinicalCompatibilityReferenceSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_clinical_compatibility_reference_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_clinical_compatibility_references(SaveClinicalCompatibilityReferencesInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            reference_version: request.reference_version.clone(),
+            effective_date: request.effective_date.clone(),
+            source_authority: request.source_authority.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            records: request.records.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "CLINICAL_COMPATIBILITY_REFERENCES_SAVE_FAILED",
+        ))?;
+    let response = ClinicalCompatibilityReferenceSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        reference_version: request.reference_version.clone(),
+        record_count: persisted.len(),
+        review_task_count: request.review_tasks.len(),
+        persisted_records: persisted,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        medical_review_replacement: false,
+        governance_boundary:
+            "clinical compatibility reference submission writes customer policy reference data only; it must not score claims, assign fraud labels, deny claims, or replace medical review"
+                .into(),
+        audit_event_type: "clinical_compatibility.reference.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "clinical_compatibility.reference.submitted",
+            summary: "Clinical compatibility reference submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "reference_version": request.reference_version,
+                "effective_date": request.effective_date,
+                "source_authority": request.source_authority,
+                "source_uri": request.source_uri,
+                "record_count": request.record_count,
+                "persisted_record_count": response.record_count,
+                "review_task_count": response.review_task_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "medical_review_replacement": response.medical_review_replacement,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "CLINICAL_COMPATIBILITY_REFERENCES_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_unbundling_comparator_candidates(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitUnbundlingComparatorCandidatesRequest>,
+) -> Result<Json<UnbundlingComparatorCandidatesSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_unbundling_comparator_submission(&request)?;
+    let persisted = state
+        .repository
+        .save_unbundling_comparator_candidates(SaveUnbundlingComparatorCandidatesInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            as_of_date: request.as_of_date.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+            candidates: request.candidates.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "UNBUNDLING_COMPARATOR_CANDIDATES_SAVE_FAILED",
+        ))?;
+    let response = UnbundlingComparatorCandidatesSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        as_of_date: request.as_of_date.clone(),
+        rule_count: request.rule_count,
+        episode_count: request.episode_count,
+        candidate_count: persisted.len(),
+        persisted_candidates: persisted,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        case_creation: false,
+        medical_review_replacement: false,
+        governance_boundary:
+            "unbundling comparator candidate submission writes medical-review candidates only; it must not score claims, assign fraud labels, deny claims, open cases, or replace medical review"
+                .into(),
+        audit_event_type: "unbundling_comparator.candidates.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "unbundling_comparator.candidates.submitted",
+            summary: "Unbundling comparator candidates submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "as_of_date": request.as_of_date,
+                "source_uri": request.source_uri,
+                "rule_count": request.rule_count,
+                "episode_count": request.episode_count,
+                "candidate_count": request.candidate_count,
+                "persisted_candidate_count": response.candidate_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "case_creation": response.case_creation,
+                "medical_review_replacement": response.medical_review_replacement,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "UNBUNDLING_COMPARATOR_CANDIDATES_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_worker_data_pipeline_execution_report(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitWorkerDataPipelineExecutionReportRequest>,
+) -> Result<Json<WorkerDataPipelineExecutionReportSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_worker_data_pipeline_execution_report_submission(&request)?;
+    let persisted_report = state
+        .repository
+        .save_worker_data_pipeline_execution_report(SaveWorkerDataPipelineExecutionReportInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            report_kind: request.report_kind.clone(),
+            plan_uri: request.plan_uri.clone(),
+            run_status_uri: request.run_status_uri.clone(),
+            readiness_report_uri: request.readiness_report_uri.clone(),
+            readiness_gate_status: request.readiness_gate_status.clone(),
+            run_id: request.run_id.clone(),
+            execution_date: request.execution_date.clone(),
+            job_count: request.job_count as u64,
+            pending_or_failed_job_count: request.pending_or_failed_job_count as u64,
+            review_task_count: request.review_task_count as u64,
+            job_executions_json: Value::Array(request.job_executions.clone()),
+            review_tasks_json: Value::Array(request.review_tasks.clone()),
+            evidence_refs: request.evidence_refs.clone(),
+            governance_boundary: request.governance_boundary.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "WORKER_DATA_PIPELINE_EXECUTION_REPORT_SAVE_FAILED",
+        ))?;
+    let response = WorkerDataPipelineExecutionReportSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        readiness_report_uri: request.readiness_report_uri.clone(),
+        readiness_gate_status: request.readiness_gate_status.clone(),
+        run_id: request.run_id.clone(),
+        execution_date: request.execution_date.clone(),
+        job_count: request.job_count,
+        pending_or_failed_job_count: request.pending_or_failed_job_count,
+        review_task_count: request.review_task_count,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        model_activation: false,
+        routing_policy_change: false,
+        persisted_report,
+        governance_boundary:
+            "worker data pipeline execution report submission records scheduler evidence only; it must not score claims, assign labels, deny claims, activate models, or change routing policy"
+                .into(),
+        audit_event_type: "worker_data_pipeline.execution_report.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "worker_data_pipeline.execution_report.submitted",
+            summary: "Worker data pipeline execution report submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "plan_uri": request.plan_uri,
+                "run_status_uri": request.run_status_uri,
+                "readiness_report_uri": request.readiness_report_uri,
+                "readiness_gate_status": request.readiness_gate_status,
+                "run_id": request.run_id,
+                "execution_date": request.execution_date,
+                "job_count": request.job_count,
+                "pending_or_failed_job_count": request.pending_or_failed_job_count,
+                "review_task_count": request.review_task_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "model_activation": response.model_activation,
+                "routing_policy_change": response.routing_policy_change,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "WORKER_DATA_PIPELINE_EXECUTION_REPORT_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_worker_data_pipeline_readiness_report(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Json(request): Json<SubmitWorkerDataPipelineReadinessReportRequest>,
+) -> Result<Json<WorkerDataPipelineReadinessReportSubmissionResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
+    validate_worker_data_pipeline_readiness_report_submission(&request)?;
+    let persisted_report = state
+        .repository
+        .save_worker_data_pipeline_readiness_report(SaveWorkerDataPipelineReadinessReportInput {
+            customer_scope_id: actor.customer_scope_id.clone(),
+            source_report_uri: request.source_report_uri.clone(),
+            report_kind: request.report_kind.clone(),
+            plan_uri: request.plan_uri.clone(),
+            readiness_input_uri: request.readiness_input_uri.clone(),
+            readiness_status: request.readiness_status.clone(),
+            job_count: request.job_count as u64,
+            ready_job_count: request.ready_job_count as u64,
+            blocked_job_count: request.blocked_job_count as u64,
+            review_task_count: request.review_task_count as u64,
+            job_readiness_json: Value::Array(request.job_readiness.clone()),
+            review_tasks_json: Value::Array(request.review_tasks.clone()),
+            evidence_refs: request.evidence_refs.clone(),
+            governance_boundary: request.governance_boundary.clone(),
+            submitted_by: request.actor.clone(),
+            notes: request.notes.clone(),
+        })
+        .await
+        .map_err(internal_error(
+            "WORKER_DATA_PIPELINE_READINESS_REPORT_SAVE_FAILED",
+        ))?;
+    let response = WorkerDataPipelineReadinessReportSubmissionResponse {
+        report_kind: request.report_kind.clone(),
+        source_report_uri: request.source_report_uri.clone(),
+        readiness_status: request.readiness_status.clone(),
+        job_count: request.job_count,
+        ready_job_count: request.ready_job_count,
+        blocked_job_count: request.blocked_job_count,
+        review_task_count: request.review_task_count,
+        active_scoring_policy_change: false,
+        claim_scoring: false,
+        label_assignment: false,
+        claim_denial: false,
+        model_activation: false,
+        routing_policy_change: false,
+        external_fetch_execution: false,
+        artifact_submission: false,
+        persisted_report,
+        governance_boundary:
+            "worker data pipeline readiness report submission records prerequisite evidence only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy"
+                .into(),
+        audit_event_type: "worker_data_pipeline.readiness_report.submitted".into(),
+    };
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "worker_data_pipeline.readiness_report.submitted",
+            summary: "Worker data pipeline readiness report submitted",
+            payload: json!({
+                "actor": request.actor,
+                "notes": request.notes,
+                "source_report_uri": request.source_report_uri,
+                "report_kind": request.report_kind,
+                "plan_uri": request.plan_uri,
+                "readiness_input_uri": request.readiness_input_uri,
+                "readiness_status": request.readiness_status,
+                "job_count": request.job_count,
+                "ready_job_count": request.ready_job_count,
+                "blocked_job_count": request.blocked_job_count,
+                "review_task_count": request.review_task_count,
+                "governance_boundary": response.governance_boundary,
+                "source_governance_boundary": request.governance_boundary,
+                "active_scoring_policy_change": response.active_scoring_policy_change,
+                "claim_scoring": response.claim_scoring,
+                "label_assignment": response.label_assignment,
+                "claim_denial": response.claim_denial,
+                "model_activation": response.model_activation,
+                "routing_policy_change": response.routing_policy_change,
+                "external_fetch_execution": response.external_fetch_execution,
+                "artifact_submission": response.artifact_submission,
+            }),
+            evidence_refs: request.evidence_refs.clone(),
+        },
+    )
+    .await
+    .map_err(internal_error(
+        "WORKER_DATA_PIPELINE_READINESS_REPORT_AUDIT_SAVE_FAILED",
+    ))?;
+    Ok(Json(response))
+}
+
+pub async fn get_scoring_feature_context_materialization(
+    State(state): State<AppState>,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
+    Path(materialization_id): Path<String>,
+) -> Result<Json<ScoringFeatureContextMaterializationResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:read")?;
+    let materialization = state
+        .repository
+        .get_scoring_feature_context_materialization(
+            &materialization_id,
+            Some(&actor.customer_scope_id),
+        )
+        .await
+        .map_err(internal_error(
+            "SCORING_FEATURE_CONTEXT_MATERIALIZATION_LOAD_FAILED",
+        ))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "SCORING_FEATURE_CONTEXT_MATERIALIZATION_NOT_FOUND",
+                "scoring feature context materialization not found",
+            )
+        })?;
+    Ok(Json(ScoringFeatureContextMaterializationResponse {
+        materialization,
+    }))
+}
+
 async fn build_model_evaluation_lineage(
     state: &AppState,
     evaluations: &[ModelEvaluationRecord],
@@ -410,4 +847,18 @@ async fn record_data_lineage_audit(
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

@@ -173,10 +173,13 @@ fn builds_anomaly_clustering_report_submission_payloads() {
     let provider_report =
         cluster_provider_peers(provider_manifest, &provider_dir).expect("provider clustering");
     let provider_report_uri = provider_dir.join("provider_peer_clustering_report.json");
-    let provider_submission = build_anomaly_clustering_report_submission(
+    let provider_published_report_uri =
+        "s3://customer-prod-artifacts/anomaly-clustering/provider_peer_clustering_report.json";
+    let provider_submission = build_anomaly_clustering_report_submission_with_published_uri(
         &provider_report_uri.to_string_lossy(),
         "mlops-worker",
         "Submit provider peer anomalies for human review only.",
+        provider_published_report_uri,
     )
     .expect("provider submission");
     let expected_provider_id = format!(
@@ -190,6 +193,10 @@ fn builds_anomaly_clustering_report_submission_payloads() {
         "provider_peer_anomaly"
     );
     assert_eq!(
+        provider_submission.source_report_uri,
+        provider_published_report_uri
+    );
+    assert_eq!(
         provider_submission.review_tasks[0].candidate_id,
         expected_provider_id
     );
@@ -197,10 +204,7 @@ fn builds_anomaly_clustering_report_submission_payloads() {
         .evidence_refs
         .iter()
         .any(|reference| reference
-            == &format!(
-                "anomaly_clustering_reports:{}",
-                provider_report_uri.to_string_lossy()
-            )));
+            == &format!("anomaly_clustering_reports:{provider_published_report_uri}")));
     assert_eq!(
         provider_submission.review_tasks[0].candidate_payload["reason"],
         provider_report.anomaly_candidates[0].reason
@@ -210,10 +214,13 @@ fn builds_anomaly_clustering_report_submission_payloads() {
     let graph_report = cluster_provider_graph_communities(provider_manifest, &graph_dir)
         .expect("provider graph clustering");
     let graph_report_uri = graph_dir.join("provider_graph_community_report.json");
-    let graph_submission = build_anomaly_clustering_report_submission(
+    let graph_published_report_uri =
+        "s3://customer-prod-artifacts/anomaly-clustering/provider_graph_community_report.json";
+    let graph_submission = build_anomaly_clustering_report_submission_with_published_uri(
         &graph_report_uri.to_string_lossy(),
         "mlops-worker",
         "Submit provider graph anomalies for human review only.",
+        graph_published_report_uri,
     )
     .expect("graph submission");
     let expected_graph_id = format!(
@@ -234,10 +241,13 @@ fn builds_anomaly_clustering_report_submission_payloads() {
     let claim_report =
         cluster_claim_entities(claim_manifest, &claim_dir).expect("claim clustering");
     let claim_report_uri = claim_dir.join("claim_entity_clustering_report.json");
-    let claim_submission = build_anomaly_clustering_report_submission(
+    let claim_published_report_uri =
+        "s3://customer-prod-artifacts/anomaly-clustering/claim_entity_clustering_report.json";
+    let claim_submission = build_anomaly_clustering_report_submission_with_published_uri(
         &claim_report_uri.to_string_lossy(),
         "mlops-worker",
         "Submit claim entity anomalies for human review only.",
+        claim_published_report_uri,
     )
     .expect("claim submission");
     assert_eq!(
@@ -255,4 +265,30 @@ fn builds_anomaly_clustering_report_submission_payloads() {
         claim_submission.review_tasks[0].required_review,
         "human_review_required_before_case_creation_label_assignment_or_rule_writeback"
     );
+}
+
+#[test]
+fn rejects_anomaly_clustering_submission_without_published_uri() {
+    let root = temp_root("anomaly-clustering-submission-local-uri");
+    let pack = build_demo_ml_datasets(&root, "2026-06-clustering-demo").expect("demo ML datasets");
+    let provider_manifest = pack
+        .unlabeled_manifest_uris
+        .iter()
+        .find(|uri| uri.contains("unlabeled_provider_peer_clustering"))
+        .expect("provider peer manifest");
+    let provider_dir = root.join("provider-clusters");
+    cluster_provider_peers(provider_manifest, &provider_dir).expect("provider clustering");
+    let provider_report_uri = provider_dir.join("provider_peer_clustering_report.json");
+
+    let error = build_anomaly_clustering_report_submission_with_published_uri(
+        &provider_report_uri.to_string_lossy(),
+        "mlops-worker",
+        "Submit provider peer anomalies for human review only.",
+        "local://template/provider_peer_clustering_report.json",
+    )
+    .expect_err("anomaly clustering submission must require published report URI");
+
+    assert!(error
+        .to_string()
+        .contains("anomaly clustering published_report_uri must use production evidence"));
 }

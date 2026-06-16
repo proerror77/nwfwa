@@ -3,6 +3,7 @@ use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub struct PersistedAgentRun {
+    pub investigation_id: String,
     pub agent_run_id: String,
     pub claim_id: String,
     pub status: String,

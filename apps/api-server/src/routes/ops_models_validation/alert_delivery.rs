@@ -11,6 +11,13 @@ use crate::{
 };
 use axum::http::StatusCode;
 
+fn is_production_artifact_uri(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && value.contains("://")
+        && !super::artifact_reference_is_non_production(value)
+}
+
 pub(in crate::routes) fn validate_mlops_alert_delivery_request(
     request: &SubmitMlopsAlertDeliveryRequest,
 ) -> Result<(), ApiError> {
@@ -62,6 +69,13 @@ pub(in crate::routes) fn validate_mlops_alert_delivery_request(
         "INVALID_MLOPS_SCHEDULER_REPORT_URI",
         "scheduler_execution_report_uri must point to a JSON report",
     )?;
+    if !is_production_artifact_uri(&request.scheduler_execution_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_SCHEDULER_REPORT_URI",
+            "scheduler_execution_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
     if request.evidence_refs.is_empty()
         || request
             .evidence_refs
@@ -115,6 +129,11 @@ pub(in crate::routes) fn validate_mlops_alert_delivery_request(
             "MLOps alert delivery actor, notes, scheduler report URI, and evidence_refs must not contain PII",
         ));
     }
+    validate_alert_delivery_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_MLOPS_ALERT_DELIVERY_EVIDENCE",
+        "MLOps alert delivery evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -171,7 +190,27 @@ pub(in crate::routes) fn validate_alert_delivery_task_review_request(
             "alert delivery task reviewer, notes, and evidence_refs must not contain PII",
         ));
     }
+    validate_alert_delivery_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_MLOPS_ALERT_DELIVERY_TASK_EVIDENCE",
+        "alert delivery task evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
+}
+
+fn validate_alert_delivery_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs
+        .iter()
+        .any(|reference| super::artifact_reference_is_non_production(reference))
+    {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    } else {
+        Ok(())
+    }
 }
 
 pub(in crate::routes) fn validate_alert_delivery_evidence(

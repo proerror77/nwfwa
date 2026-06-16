@@ -47,6 +47,16 @@ async fn openapi_includes_operations_paths() {
     lifecycle_contract::assert_lifecycle_contract(&schema);
     case_agent_audit_contract::assert_case_agent_audit_contract(&schema);
     provider_anomaly_medical_contract::assert_provider_anomaly_medical_contract(&schema);
+    for schema_name in ["TriageLeadRequest", "UpdateCaseStatusRequest"] {
+        let evidence_description = schema["components"]["schemas"][schema_name]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            evidence_description.contains("not local/template refs"),
+            "missing {schema_name}.evidence_refs production-ref contract"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
         "string"
@@ -98,6 +108,14 @@ async fn openapi_includes_operations_paths() {
             .as_str()
             .unwrap()
             .contains("investigation_results")
+    );
+    assert!(
+        schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs"),
+        "missing PublishKnowledgeCaseRequest.evidence_refs production-ref contract"
     );
     for field in ["title", "summary", "outcome", "tags", "evidence_refs"] {
         assert!(
@@ -210,6 +228,26 @@ async fn openapi_includes_operations_paths() {
         .unwrap()
         .iter()
         .any(|field| field == "customer_scope_id"));
+    assert!(schema["paths"]["/api/v1/ops/worker-data-pipeline-executions"].is_object());
+    assert!(
+        schema["components"]["schemas"]["WorkerDataPipelineExecutionReportSubmissionResponse"]
+            ["properties"]["claim_scoring"]["const"]
+            == false
+    );
+    assert!(
+        schema["components"]["schemas"]["WorkerDataPipelineExecutionReportSubmissionRequest"]
+            ["properties"]["readiness_gate_status"]["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == "ready")
+    );
+    assert!(schema["paths"]["/api/v1/ops/worker-data-pipeline-readiness"].is_object());
+    assert!(
+        schema["components"]["schemas"]["WorkerDataPipelineReadinessReportSubmissionResponse"]
+            ["properties"]["external_fetch_execution"]["const"]
+            == false
+    );
     assert_eq!(
         schema["components"]["schemas"]["WebhookEvent"]["properties"]["delivery_status"]["enum"][1],
         "retry_wait"
@@ -279,6 +317,14 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
             ["evidence_refs"]["items"]["minLength"],
         1
+    );
+    assert!(
+        schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("not local/template refs"),
+        "missing SubmitMedicalReviewResultRequest.evidence_refs production-ref contract"
     );
     assert_writeback_pii_contract(&schema, "SubmitMedicalReviewResultRequest");
     for schema_name in [
@@ -421,6 +467,13 @@ async fn openapi_includes_operations_paths() {
     assert_writeback_pii_contract(&schema, "InvestigationResultRequest");
     assert!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
+    );
+    assert!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["saving_amount"]["description"]
             .as_str()
             .unwrap()
@@ -448,6 +501,13 @@ async fn openapi_includes_operations_paths() {
     );
     assert_writeback_pii_contract(&schema, "QaResultRequest");
     assert!(
+        schema["components"]["schemas"]["QaResultRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
+    );
+    assert!(
         schema["components"]["schemas"]["PilotWritebackResponse"]["required"]
             .as_array()
             .unwrap()
@@ -462,6 +522,14 @@ async fn openapi_includes_operations_paths() {
             .contains("retry-safe TPA writeback")
     );
     assert_writeback_pii_contract(&schema, "UpdateQaFeedbackStatusRequest");
+    assert!(
+        schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("not local/template refs"),
+        "missing UpdateQaFeedbackStatusRequest.evidence_refs production-ref contract"
+    );
     assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
             .as_array()

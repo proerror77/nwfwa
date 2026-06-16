@@ -73,10 +73,11 @@ fn builds_mlops_monitoring_report_from_runtime_reports() {
         .join("out/mlops_monitoring_review_tasks.json")
         .is_file());
 
-    let (model_key, submission) = build_mlops_monitoring_report_submission(
+    let (model_key, submission) = build_mlops_monitoring_report_submission_with_published_uri(
         &root
             .join("out/mlops_monitoring_report.json")
             .to_string_lossy(),
+        "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json",
         "mlops-worker",
         "submit monitoring report",
     )
@@ -92,6 +93,74 @@ fn builds_mlops_monitoring_report_from_runtime_reports() {
         .evidence_refs
         .iter()
         .any(|reference| reference.starts_with("model_monitoring_reports:")));
+    let root_marker = root.to_string_lossy();
+    assert!(submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains(root_marker.as_ref())));
+}
+
+#[test]
+fn rejects_mlops_monitoring_submission_without_published_uri() {
+    let root = temp_root("mlops-monitoring-report-local-submit");
+    let report_uri = root.join("mlops_monitoring_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_monitoring_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "overall_status": "passed",
+            "retraining_recommendation": "monitor",
+            "triggers": [],
+            "review_tasks": [],
+            "evidence_refs": []
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_monitoring_report_submission(
+        &report_uri.to_string_lossy(),
+        "mlops-worker",
+        "submit monitoring report",
+    )
+    .expect_err("local monitoring report submission must fail");
+    assert!(error
+        .to_string()
+        .contains("published_report_uri must use a published production artifact URI"));
+}
+
+#[test]
+fn rejects_mlops_monitoring_submission_with_localhost_published_uri() {
+    let root = temp_root("mlops-monitoring-report-localhost-submit");
+    let report_uri = root.join("mlops_monitoring_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_monitoring_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "overall_status": "passed",
+            "retraining_recommendation": "monitor",
+            "triggers": [],
+            "review_tasks": [],
+            "evidence_refs": [
+                "model_drift_reports:http://127.0.0.1:8080/drift_report.json"
+            ]
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_monitoring_report_submission_with_published_uri(
+        &report_uri.to_string_lossy(),
+        "http://localhost:8080/mlops_monitoring_report.json",
+        "mlops-worker",
+        "submit monitoring report",
+    )
+    .expect_err("localhost monitoring report submission must fail");
+    assert!(error
+        .to_string()
+        .contains("published_report_uri must use a published production artifact URI"));
 }
 
 #[test]
@@ -256,10 +325,11 @@ fn builds_mlops_scheduler_execution_report_and_alert_delivery_tasks() {
         .join("scheduler/mlops_alert_delivery_tasks.json")
         .is_file());
 
-    let (_, submission) = build_mlops_alert_delivery_submission(
+    let (_, submission) = build_mlops_alert_delivery_submission_with_published_uri(
         &root
             .join("scheduler/mlops_scheduler_execution_report.json")
             .to_string_lossy(),
+        "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
         "mlops-worker",
         "Submit alert-router delivery tasks.",
     )
@@ -274,6 +344,139 @@ fn builds_mlops_scheduler_execution_report_and_alert_delivery_tasks() {
         .evidence_refs
         .iter()
         .any(|reference| reference.starts_with("mlops_scheduler_execution_reports:")));
+    let root_marker = root.to_string_lossy();
+    assert!(submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains(root_marker.as_ref())));
+}
+
+#[test]
+fn rejects_mlops_alert_delivery_submission_without_published_uri() {
+    let root = temp_root("mlops-alert-delivery-local-submit");
+    let scheduler_report_uri = root.join("mlops_scheduler_execution_report.json");
+    write_json(
+        scheduler_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_scheduler_execution_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "alert_delivery_status": "no_alerts_required",
+            "alert_delivery_tasks": [],
+            "evidence_refs": []
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_alert_delivery_submission(
+        &scheduler_report_uri.to_string_lossy(),
+        "mlops-worker",
+        "submit alert delivery",
+    )
+    .expect_err("local alert delivery submission must fail");
+    assert!(error.to_string().contains(
+        "published_scheduler_execution_report_uri must use a published production artifact URI"
+    ));
+}
+
+#[test]
+fn rejects_mlops_alert_delivery_submission_with_localhost_published_uri() {
+    let root = temp_root("mlops-alert-delivery-localhost-submit");
+    let scheduler_report_uri = root.join("mlops_scheduler_execution_report.json");
+    write_json(
+        scheduler_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_scheduler_execution_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "alert_delivery_status": "no_alerts_required",
+            "alert_delivery_tasks": [],
+            "evidence_refs": [
+                "mlops_scheduler_inputs:http://0.0.0.0:8080/scheduler-input.json"
+            ]
+        }),
+    )
+    .unwrap();
+
+    let error = build_mlops_alert_delivery_submission_with_published_uri(
+        &scheduler_report_uri.to_string_lossy(),
+        "http://[::1]:8080/mlops_scheduler_execution_report.json",
+        "mlops-worker",
+        "submit alert delivery",
+    )
+    .expect_err("localhost alert delivery submission must fail");
+    assert!(error.to_string().contains(
+        "published_scheduler_execution_report_uri must use a published production artifact URI"
+    ));
+}
+
+#[test]
+fn filters_localhost_evidence_refs_from_mlops_submissions() {
+    let root = temp_root("mlops-submission-localhost-evidence-filter");
+    let monitoring_report_uri = root.join("mlops_monitoring_report.json");
+    write_json(
+        monitoring_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_monitoring_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "overall_status": "passed",
+            "retraining_recommendation": "monitor",
+            "triggers": [],
+            "review_tasks": [],
+            "evidence_refs": [
+                "model_drift_reports:http://127.0.0.1:8080/drift_report.json",
+                "shadow_evaluations:s3://customer-prod-artifacts/mlops/shadow_report.json"
+            ]
+        }),
+    )
+    .unwrap();
+    let (_, monitoring_submission) = build_mlops_monitoring_report_submission_with_published_uri(
+        &monitoring_report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/mlops/mlops_monitoring_report.json",
+        "mlops-worker",
+        "submit monitoring report",
+    )
+    .expect("monitoring submission");
+    assert!(monitoring_submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains("127.0.0.1")));
+    assert!(monitoring_submission.evidence_refs.contains(
+        &"shadow_evaluations:s3://customer-prod-artifacts/mlops/shadow_report.json".into()
+    ));
+
+    let scheduler_report_uri = root.join("mlops_scheduler_execution_report.json");
+    write_json(
+        scheduler_report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "mlops_scheduler_execution_report",
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0",
+            "alert_delivery_status": "queued_for_external_alert_router",
+            "alert_delivery_tasks": [],
+            "evidence_refs": [
+                "mlops_scheduler_inputs:http://localhost:8080/input.json",
+                "mlops_monitoring_reports:s3://customer-prod-artifacts/mlops/mlops_monitoring_report.json"
+            ]
+        }),
+    )
+    .unwrap();
+    let (_, alert_submission) = build_mlops_alert_delivery_submission_with_published_uri(
+        &scheduler_report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/mlops/mlops_scheduler_execution_report.json",
+        "mlops-worker",
+        "submit alert delivery",
+    )
+    .expect("alert delivery submission");
+    assert!(alert_submission
+        .evidence_refs
+        .iter()
+        .all(|reference| !reference.contains("localhost")));
+    assert!(alert_submission.evidence_refs.contains(
+        &"mlops_monitoring_reports:s3://customer-prod-artifacts/mlops/mlops_monitoring_report.json"
+            .into()
+    ));
 }
 
 #[test]
@@ -373,17 +576,23 @@ async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
                         "trigger": "model_drift_detected",
                         "severity": "high",
                         "route_key": "mlops_retraining_readiness",
-                        "delivery_status": "queued_for_external_alert_router"
+                        "delivery_status": "queued_for_external_alert_router",
+                        "evidence_refs": [
+                            "mlops_monitoring_plans:local://template/mlops_monitoring_plan.json",
+                            "model_versions:baseline_fwa:0.2.0"
+                        ]
                     }
                 ],
                 "evidence_refs": [
-                    "mlops_monitoring_plans:data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json",
-                    "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json"
+                    "mlops_monitoring_plans:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json",
+                    "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json",
+                    "mlops_scheduler_execution_reports:file://tmp/mlops_scheduler_execution_report.json"
                 ],
                 "governance_boundary": "scheduler execution evidence may queue alert delivery and review work only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels"
             }),
         )
         .unwrap();
+    let published_scheduler_report_uri = "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json";
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let receiver_url = format!("http://{}/mlops-alerts", listener.local_addr().unwrap());
     let receiver = tokio::spawn(async move {
@@ -431,6 +640,7 @@ async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
 
     let report = deliver_mlops_alert_receiver_webhook(
         &scheduler_report.to_string_lossy(),
+        published_scheduler_report_uri,
         &receiver_url,
         "customer-alpha-alert-router",
         Some("receiver-token"),
@@ -461,6 +671,10 @@ async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
         .contains("x-fwa-signature-sha256: hmac-sha256="));
     assert!(request.contains("\"event_kind\":\"mlops_alert_receiver_delivery\""));
     assert!(request.contains("\"trigger\":\"model_drift_detected\""));
+    assert!(request.contains(published_scheduler_report_uri));
+    assert!(!request.contains("local://template"));
+    assert!(!request.contains("file://tmp"));
+    assert!(!request.contains(root.to_string_lossy().as_ref()));
     assert_eq!(report["delivery_status"], "delivered");
     assert_eq!(report["http_status"], 202);
     assert_eq!(report["attempt_count"], 2);

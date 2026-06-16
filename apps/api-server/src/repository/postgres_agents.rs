@@ -69,7 +69,7 @@ pub(super) async fn save_agent_run(
 ) -> anyhow::Result<()> {
     let mut tx = repository.pool.begin().await?;
     let registry = default_agent_registry_record();
-    let investigation = agent_investigation_record_for_claim(&run.claim_id);
+    let investigation = agent_investigation_record(&run.claim_id, &run.investigation_id);
     sqlx::query(
         "INSERT INTO agent_registry
              (agent_identity_id, agent_kind, agent_version, capability_scope, phi_fields_allowed, status)
@@ -291,6 +291,7 @@ pub(super) async fn list_agent_runs(
     let rows: Vec<(
         String,
         String,
+        Option<String>,
         String,
         String,
         Value,
@@ -298,8 +299,16 @@ pub(super) async fn list_agent_runs(
         chrono::DateTime<chrono::Utc>,
         Option<chrono::DateTime<chrono::Utc>>,
     )> = sqlx::query_as(
-        "SELECT agent_run_id, claim_id, status, decision_boundary, output_json, evidence_refs, created_at, completed_at
+        "SELECT ar.agent_run_id, ar.claim_id, latest_event.investigation_id, ar.status,
+                ar.decision_boundary, ar.output_json, ar.evidence_refs, ar.created_at, ar.completed_at
              FROM agent_runs ar
+             LEFT JOIN LATERAL (
+               SELECT investigation_id
+               FROM agent_audit_events aae
+               WHERE aae.agent_run_id = ar.agent_run_id
+               ORDER BY created_at DESC
+               LIMIT 1
+             ) latest_event ON true
              WHERE (
                $1::text IS NULL OR EXISTS (
                  SELECT 1
@@ -323,6 +332,7 @@ pub(super) async fn list_agent_runs(
     for (
         agent_run_id,
         claim_id,
+        investigation_id,
         status,
         decision_boundary,
         output_json,
@@ -349,7 +359,8 @@ pub(super) async fn list_agent_runs(
         let approvals = repository.load_agent_approvals(&agent_run_id).await?;
         runs.push(AgentRunLogRecord {
             agent_run_id,
-            investigation_id: stable_investigation_id_for_claim(&claim_id),
+            investigation_id: investigation_id
+                .unwrap_or_else(|| stable_investigation_id_for_claim(&claim_id)),
             agent_identity_id: DEFAULT_AGENT_IDENTITY_ID.into(),
             agent_kind: DEFAULT_AGENT_KIND.into(),
             agent_version: DEFAULT_AGENT_VERSION,

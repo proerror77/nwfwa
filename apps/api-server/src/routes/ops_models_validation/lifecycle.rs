@@ -53,6 +53,11 @@ pub(in crate::routes) fn validate_model_promotion_review_request(
             "promotion review notes and evidence_refs must not contain PII",
         ));
     }
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROMOTION_REVIEW_EVIDENCE",
+        "promotion review evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -78,6 +83,11 @@ pub(in crate::routes) fn validate_model_lifecycle_request(
             "model lifecycle evidence_refs must not contain PII",
         ));
     }
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_MODEL_LIFECYCLE_EVIDENCE",
+        "model lifecycle evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -103,4 +113,19 @@ pub(in crate::routes) fn validate_target_model_version_evidence(
 
 fn model_version_evidence_ref(model_key: &str, model_version: &str) -> String {
     format!("model_versions:{model_key}:{model_version}")
+}
+
+fn validate_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs
+        .iter()
+        .any(|reference| super::artifact_reference_is_non_production(reference))
+    {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    } else {
+        Ok(())
+    }
 }

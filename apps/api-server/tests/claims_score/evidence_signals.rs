@@ -307,6 +307,138 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
 }
 
 #[tokio::test]
+async fn returns_persisted_provider_profile_rollup_for_network_risk() {
+    let app = build_app(test_config()).unwrap();
+
+    let rollup_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/profile-window-rollups")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-provider-profile-windows",
+              "notes": "claims scoring provider profile test",
+              "source_report_uri": "s3://customer-prod-artifacts/provider-profile/provider_profile_window_rollup_report.json",
+              "report_kind": "provider_profile_window_rollup",
+              "as_of_date": "2026-06-14",
+              "source_uri": "s3://customer-prod-artifacts/inputs/provider-claims.json",
+              "provider_count": 1,
+              "claim_count": 3,
+              "provider_profiles": [
+                {
+                  "provider_id": "PRV-PERSISTED-PROFILE",
+                  "specialty": "imaging",
+                  "network_status": "in_network",
+                  "windows": [
+                    {
+                      "window_days": 30,
+                      "claim_count": 3,
+                      "total_claim_amount": "36000.00",
+                      "high_cost_item_ratio": 1.0,
+                      "diagnosis_procedure_mismatch_rate": 0.5,
+                      "peer_amount_percentile": 97,
+                      "peer_frequency_percentile": 95,
+                      "review_failure_count": 1,
+                      "confirmed_fwa_count": 2,
+                      "false_positive_count": 0
+                    }
+                  ],
+                  "evidence_refs": ["claims:CLM-PERSISTED-PROFILE-1"]
+                }
+              ],
+              "evidence_refs": [
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/provider-profile/provider_profile_window_rollup_report.json",
+                "provider_profile_claim_snapshot:s3://customer-prod-artifacts/inputs/provider-claims.json"
+              ],
+              "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+            }"#,
+        ))
+        .unwrap();
+    let rollup_response = app.clone().oneshot(rollup_request).await.unwrap();
+    assert_eq!(rollup_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-PROFILE-1",
+                "claim_amount": "12000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-901",
+                  "item_type": "procedure",
+                  "description": "High cost imaging",
+                  "quantity": 1,
+                  "unit_amount": "12000",
+                  "total_amount": "12000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-PROFILE"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-PROFILE",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "15000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-PROFILE",
+                "name": "Persisted Profile Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let profile = &body["provider_profile"];
+    assert_eq!(profile["provider_id"], "PRV-PERSISTED-PROFILE");
+    assert_eq!(profile["review_required"], true);
+    assert_eq!(profile["specialty"], "imaging");
+    assert_eq!(profile["network_status"], "in_network");
+
+    let provider_profile_feature = body["feature_values"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|feature| feature["name"] == "provider_profile_score")
+        .expect("provider profile score feature");
+    assert_eq!(provider_profile_feature["is_proxy"], false);
+    assert_eq!(
+        provider_profile_feature["data_source"],
+        "worker.provider_profile_window_rollup"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!("claims:CLM-PERSISTED-PROFILE-1")));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "provider_profile_windows:PRV-PERSISTED-PROFILE:2026-06-14"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "provider_profile_window_rollups:s3://customer-prod-artifacts/provider-profile/provider_profile_window_rollup_report.json"
+    )));
+}
+
+#[tokio::test]
 async fn returns_provider_sanctions_evidence_for_excluded_provider() {
     let app = build_app(test_config()).unwrap();
 
@@ -398,6 +530,126 @@ async fn returns_provider_sanctions_evidence_for_excluded_provider() {
         provider_profile_feature["data_source"],
         "worker.provider_profile_window_rollup"
     );
+}
+
+#[tokio::test]
+async fn returns_persisted_provider_sanctions_for_excluded_provider() {
+    let app = build_app(test_config()).unwrap();
+
+    let sanctions_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/sanctions-sync-reports")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:sync-oig-sam-sanctions",
+              "notes": "claims scoring sanctions test",
+              "source_report_uri": "s3://customer-prod-artifacts/sanctions/sanctions_sync_report.json",
+              "report_kind": "oig_sam_sanctions_sync_report",
+              "run_date": "2026-06-14",
+              "source_uri": "s3://customer-prod-artifacts/inputs/oig-sam-snapshot.json",
+              "source_date": "2026-06-13",
+              "sync_status": "ready_to_apply",
+              "provider_upserts": [
+                {
+                  "sanction_key": "OIG:PRV-PERSISTED-SANCTIONED",
+                  "list": "OIG",
+                  "provider_id": "PRV-PERSISTED-SANCTIONED",
+                  "npi": null,
+                  "provider_name": "Persisted Sanctioned Provider",
+                  "sanction_type": "exclusion",
+                  "effective_date": "2026-06-01",
+                  "source_ref": "oig:2026-06:PRV-PERSISTED-SANCTIONED",
+                  "risk_feature": "provider_sanctions_excluded",
+                  "risk_score": 100
+                }
+              ],
+              "review_tasks": [],
+              "evidence_refs": [
+                "sanctions_sync_reports:s3://customer-prod-artifacts/sanctions/sanctions_sync_report.json",
+                "sanctions_source_snapshot:s3://customer-prod-artifacts/inputs/oig-sam-snapshot.json"
+              ],
+              "governance_boundary": "dry-run produces sanctions upsert evidence only; it must not assign fraud labels or alter scoring policy"
+            }"#,
+        ))
+        .unwrap();
+    let sanctions_response = app.clone().oneshot(sanctions_request).await.unwrap();
+    assert_eq!(sanctions_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-SANCTIONS-1",
+                "claim_amount": "2500",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "CONSULT-001",
+                  "item_type": "procedure",
+                  "description": "Consultation",
+                  "quantity": 1,
+                  "unit_amount": "2500",
+                  "total_amount": "2500"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-SANCTIONS"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-SANCTIONS",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "20000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-SANCTIONED",
+                "name": "Persisted Sanctioned Provider",
+                "provider_type": "clinic",
+                "region": "SH",
+                "risk_tier": "Low"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let profile = &body["provider_profile"];
+
+    assert_eq!(profile["risk_score"], 100);
+    assert_eq!(profile["review_route"], "provider_sanctions_review");
+    assert_eq!(profile["oig_excluded"], true);
+    assert_eq!(profile["sam_debarred"], false);
+    assert!(profile["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "provider_sanctions:PRV-PERSISTED-SANCTIONED:oig"
+        )));
+
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "provider_sanctions:OIG:PRV-PERSISTED-SANCTIONED"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "sanctions_sync_reports:s3://customer-prod-artifacts/sanctions/sanctions_sync_report.json"
+    )));
 }
 
 #[tokio::test]
@@ -523,6 +775,128 @@ async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("relationship_edges:PRV-GRAPH-1")));
+}
+
+#[tokio::test]
+async fn returns_persisted_provider_graph_signal_for_l6_network_risk() {
+    let app = build_app(test_config()).unwrap();
+
+    let rollup_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/graph-signal-rollups")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-provider-graph-signals",
+              "notes": "claims scoring provider graph test",
+              "source_report_uri": "s3://customer-prod-artifacts/provider-graph/provider_graph_signal_rollup.json",
+              "report_kind": "provider_graph_signal_rollup",
+              "as_of_date": "2026-06-14",
+              "source_uri": "s3://customer-prod-artifacts/inputs/provider-graph-input.json",
+              "provider_count": 1,
+              "claim_count": 3,
+              "provider_relationships": [
+                {
+                  "provider_id": "PRV-PERSISTED-GRAPH",
+                  "high_risk_neighbor_ratio": 0.34,
+                  "provider_patient_overlap_score": 0.68,
+                  "referral_concentration_score": 0.82,
+                  "billing_ring_membership": true,
+                  "temporal_co_billing_frequency_7d": 0.56,
+                  "referral_concentration_entropy": 0.18,
+                  "shared_member_provider_count": 2,
+                  "connected_confirmed_fwa_count": 2,
+                  "network_component_risk_score": 82,
+                  "evidence_refs": ["provider_graph_rollups:PRV-PERSISTED-GRAPH", "claims:CLM-PERSISTED-GRAPH-1"]
+                }
+              ],
+              "evidence_refs": [
+                "provider_graph_signal_rollups:s3://customer-prod-artifacts/provider-graph/provider_graph_signal_rollup.json",
+                "provider_graph_claim_snapshot:s3://customer-prod-artifacts/inputs/provider-graph-input.json"
+              ],
+              "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+            }"#,
+        ))
+        .unwrap();
+    let rollup_response = app.clone().oneshot(rollup_request).await.unwrap();
+    assert_eq!(rollup_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-GRAPH-1",
+                "claim_amount": "9000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-910",
+                  "item_type": "procedure",
+                  "description": "High cost imaging",
+                  "quantity": 1,
+                  "unit_amount": "9000",
+                  "total_amount": "9000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-GRAPH"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-GRAPH",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-GRAPH",
+                "name": "Persisted Graph Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let graph = &body["provider_relationships"];
+    assert_eq!(graph["provider_id"], "PRV-PERSISTED-GRAPH");
+    assert_eq!(graph["review_required"], true);
+    assert_eq!(graph["review_route"], "provider_graph_review");
+    assert!(graph["risk_score"].as_u64().unwrap() >= 90);
+    assert!(graph["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "provider_graph_rollups:PRV-PERSISTED-GRAPH"
+        )));
+    assert!(graph["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "provider_graph_signals:PRV-PERSISTED-GRAPH:2026-06-14"
+        )));
+    assert!(graph["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "provider_graph_signal_rollups:s3://customer-prod-artifacts/provider-graph/provider_graph_signal_rollup.json"
+        )));
 }
 
 #[tokio::test]

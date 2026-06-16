@@ -18,8 +18,231 @@ REQUIRED_GATE_IDS = {
     "alert_router_delivery",
     "retention_legal_hold",
     "customer_data_governance",
+    "worker_data_pipeline_execution",
+    "scoring_online_readback",
     "model_serving_slo",
     "ocr_vector_analytics_execution",
+}
+
+CUSTOMER_DATA_REQUIRED_GATE_IDS = {
+    "customer_data_governance",
+    "worker_data_pipeline_execution",
+    "scoring_online_readback",
+    "model_serving_slo",
+    "ocr_vector_analytics_execution",
+}
+
+WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS = {
+    "oig_sam_sanctions_snapshot_fetch",
+    "oig_sam_sanctions_sync",
+    "provider_profile_window_rollup",
+    "provider_graph_signal_rollup",
+    "peer_percentile_benchmark",
+    "episode_aggregation",
+    "clinical_compatibility_reference",
+    "unbundling_comparator",
+    "scoring_feature_context_materialization",
+    "scoring_online_readback",
+    "probability_calibration_evidence",
+}
+
+WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS = (
+    WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS
+    - {"oig_sam_sanctions_snapshot_fetch", "scoring_online_readback"}
+)
+
+WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS = {
+    "oig_sam_sanctions_sync": "/api/v1/ops/providers/sanctions-sync-reports",
+    "provider_profile_window_rollup": "/api/v1/ops/providers/profile-window-rollups",
+    "provider_graph_signal_rollup": "/api/v1/ops/providers/graph-signal-rollups",
+    "peer_percentile_benchmark": "/api/v1/ops/providers/peer-benchmarks",
+    "episode_aggregation": "/api/v1/ops/providers/episode-rollups",
+    "clinical_compatibility_reference": "/api/v1/ops/clinical-compatibility-references",
+    "unbundling_comparator": "/api/v1/ops/unbundling-comparator-candidates",
+    "scoring_feature_context_materialization": "/api/v1/ops/scoring-feature-context-materializations",
+    "probability_calibration_evidence": "/api/v1/ops/models/{model_key}/probability-calibration-reports",
+}
+
+WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS = {
+    "oig_sam_sanctions_sync": "ops:providers:write",
+    "provider_profile_window_rollup": "ops:providers:write",
+    "provider_graph_signal_rollup": "ops:providers:write",
+    "peer_percentile_benchmark": "ops:providers:write",
+    "episode_aggregation": "ops:providers:write",
+    "clinical_compatibility_reference": "ops:datasets:write",
+    "unbundling_comparator": "ops:datasets:write",
+    "scoring_feature_context_materialization": "ops:datasets:write",
+    "probability_calibration_evidence": "ops:models:review",
+}
+
+WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES = {
+    "oig_sam_sanctions_sync": "sanctions_sync_reports:",
+    "provider_profile_window_rollup": "provider_profile_window_rollups:",
+    "provider_graph_signal_rollup": "provider_graph_signal_rollups:",
+    "peer_percentile_benchmark": "peer_benchmarks:",
+    "episode_aggregation": "episode_rollups:",
+    "clinical_compatibility_reference": "clinical_compatibility_references:",
+    "unbundling_comparator": "unbundling_comparator_candidates:",
+    "scoring_feature_context_materialization": "scoring_feature_contexts:",
+    "probability_calibration_evidence": "probability_calibration_reports:",
+}
+
+WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS = {
+    "oig_sam_sanctions_sync": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "provider_profile_window_rollup": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "provider_graph_signal_rollup": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "peer_percentile_benchmark": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "episode_aggregation": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "clinical_compatibility_reference": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "unbundling_comparator": (
+        "--published-report-uri",
+        "--published-source-uri",
+    ),
+    "scoring_feature_context_materialization": ("--published-report-uri",),
+    "probability_calibration_evidence": (
+        "--published-report-uri",
+        "--published-input-uri",
+        "--published-label-uri",
+    ),
+}
+
+WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX = "oig_sam_snapshot:"
+
+WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES = (
+    "scoring_readback_reports:",
+    "scoring_readback_inputs:",
+    "scoring_readback_score_requests:",
+    "scoring_readback_score_responses:",
+)
+
+MODEL_SERVING_SLO_EVIDENCE_PREFIXES = (
+    "model_serving:",
+    "model_artifact:",
+    "probability_calibration_reports:",
+    "probability_calibration_input:",
+    "calibration_labels:",
+)
+
+WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES = {
+    "provider_profile_window_rollup": ("provider_profile_claim_snapshot:",),
+    "provider_graph_signal_rollup": ("provider_graph_claim_snapshot:",),
+    "peer_percentile_benchmark": ("peer_benchmark_claim_snapshot:",),
+    "episode_aggregation": ("episode_claim_snapshot:",),
+    "clinical_compatibility_reference": (
+        "clinical_compatibility_reference:",
+        "clinical_policy_authority:",
+    ),
+    "unbundling_comparator": ("unbundling_comparator_input:",),
+    "scoring_feature_context_materialization": (
+        "scoring_feature_context_claim_snapshot:",
+        "episode_rollups:",
+        "peer_benchmarks:",
+        "clinical_compatibility:",
+        "unbundling_candidates:",
+    ),
+    "probability_calibration_evidence": (
+        "probability_calibration_input:",
+        "calibration_labels:",
+    ),
+}
+
+WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_worker_data_pipeline_execution_report",
+    "readiness_gate_status_ready",
+    "required_execution_uris_and_run_identity_present",
+    "required_execution_uris_are_production_uris",
+    "scheduler_status_completed",
+    "pending_or_failed_job_count_zero",
+    "review_task_count_zero",
+    "required_job_kinds_completed",
+    "scheduler_reported_jobs_succeeded_without_dependency_blockers",
+    "completed_job_artifact_and_evidence_refs_present",
+    "completed_job_artifacts_are_production_uris",
+    "governed_submit_jobs_submitted",
+    "governed_submit_jobs_include_required_submit_flags",
+    "governed_submit_jobs_include_write_evidence_refs",
+    "source_snapshot_artifact_reported",
+    "scoring_online_readback_artifact_reported",
+    "evidence_refs_include_plan_run_status_and_readiness",
+    "governance_boundary_no_adjudication",
+}
+
+SCORING_READBACK_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_scoring_readback_report",
+    "readback_status_verified",
+    "score_request_and_response_uris_present",
+    "expected_evidence_prefixes_matched",
+    "no_scoring_readback_review_tasks",
+}
+
+ALERT_ROUTER_DELIVERY_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_mlops_alert_receiver_delivery_report",
+    "customer_receiver_delivery_succeeded",
+    "receiver_auth_and_signature_configured",
+    "published_scheduler_report_evidence_present",
+    "alert_delivery_boundary_no_model_actions",
+}
+
+RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_retention_legal_hold_report",
+    "minimum_six_year_retention_configured",
+    "policy_and_archive_refs_present",
+    "legal_hold_reconciliation_completed",
+    "destruction_requires_human_approval",
+}
+
+MODEL_SERVING_SLO_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_model_serving_slo_report",
+    "latency_and_error_slos_passed",
+    "artifact_integrity_verified",
+    "fallback_and_rollback_ready",
+    "calibrated_probability_serving_active",
+    "model_serving_evidence_refs_present",
+}
+
+CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_customer_data_governance_report",
+    "dataset_and_label_provenance_approved",
+    "holdout_and_shadow_plan_approved",
+    "customer_validation_samples_present",
+    "customer_data_evidence_refs_present",
+}
+
+OCR_VECTOR_ANALYTICS_ACCEPTANCE_CHECK_IDS = {
+    "report_kind_is_ocr_vector_analytics_execution_report",
+    "evidence_pipeline_jobs_completed",
+    "execution_counts_positive",
+    "phi_boundary_preserved",
+    "ocr_vector_analytics_evidence_refs_present",
+}
+
+SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES = {
+    "scoring_feature_contexts:",
+    "provider_profile_window_rollups:",
+    "sanctions_sync_reports:",
+    "provider_graph_signal_rollups:",
+    "peer_benchmarks:",
+    "episode_rollups:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
 }
 
 
@@ -35,7 +258,7 @@ def load_json(path: Path) -> dict:
         raise AssertionError(f"missing JSON artifact: {path}") from exc
 
 
-def validate_contract(contract: dict) -> None:
+def validate_contract(contract: dict) -> list[dict]:
     require(
         contract.get("artifact_kind") == "production_readiness_evidence_contract",
         "wrong production readiness contract artifact kind",
@@ -55,17 +278,808 @@ def validate_contract(contract: dict) -> None:
             gate.get("status") == "requires_customer_environment_evidence",
             f"gate {gate.get('gate_id')} must require customer environment evidence",
         )
+        require(
+            bool(gate.get("customer_data_required"))
+            == (gate.get("gate_id") in CUSTOMER_DATA_REQUIRED_GATE_IDS),
+            f"gate {gate.get('gate_id')} has wrong customer_data_required flag",
+        )
+        if gate.get("gate_id") == "worker_data_pipeline_execution":
+            required_job_kinds = set(gate.get("required_job_kinds", []))
+            require(
+                required_job_kinds == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+                "worker data pipeline gate required_job_kinds changed unexpectedly",
+            )
+            governed_submit_job_kinds = set(
+                gate.get("governed_submit_job_kinds", [])
+            )
+            require(
+                governed_submit_job_kinds == WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
+                "worker data pipeline gate governed_submit_job_kinds changed unexpectedly",
+            )
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "worker data pipeline gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == WORKER_DATA_PIPELINE_ACCEPTANCE_CHECK_IDS,
+                "worker data pipeline gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"worker data pipeline acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "retention_legal_hold":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "retention legal hold gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == RETENTION_LEGAL_HOLD_ACCEPTANCE_CHECK_IDS,
+                "retention legal hold gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"retention legal hold acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "model_serving_slo":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "model serving SLO gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == MODEL_SERVING_SLO_ACCEPTANCE_CHECK_IDS,
+                "model serving SLO gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"model serving SLO acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "customer_data_governance":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "customer data governance gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == CUSTOMER_DATA_GOVERNANCE_ACCEPTANCE_CHECK_IDS,
+                "customer data governance gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"customer data governance acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "scoring_online_readback":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "scoring online readback gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == SCORING_READBACK_ACCEPTANCE_CHECK_IDS,
+                "scoring online readback gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"scoring online readback acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "alert_router_delivery":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "alert router delivery gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == ALERT_ROUTER_DELIVERY_ACCEPTANCE_CHECK_IDS,
+                "alert router delivery gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"alert router delivery acceptance check {check.get('check_id')} missing description",
+                )
+        if gate.get("gate_id") == "ocr_vector_analytics_execution":
+            acceptance_checks = gate.get("acceptance_checks")
+            require(
+                isinstance(acceptance_checks, list) and acceptance_checks,
+                "OCR/vector/analytics gate missing acceptance_checks",
+            )
+            check_ids = {
+                check.get("check_id")
+                for check in acceptance_checks
+                if isinstance(check, dict)
+            }
+            require(
+                check_ids == OCR_VECTOR_ANALYTICS_ACCEPTANCE_CHECK_IDS,
+                "OCR/vector/analytics gate acceptance check set changed unexpectedly",
+            )
+            for check in acceptance_checks:
+                require(
+                    check.get("description"),
+                    f"OCR/vector/analytics acceptance check {check.get('check_id')} missing description",
+                )
+    return gates
+
+
+def validate_evidence_dir(evidence_dir: Path, gates: list[dict]) -> dict[str, dict]:
+    artifacts = {}
+    for gate in gates:
+        gate_id = gate.get("gate_id")
+        required_artifact = gate.get("required_artifact")
+        require(
+            isinstance(required_artifact, str) and required_artifact.strip(),
+            f"gate {gate_id} missing required_artifact",
+        )
+        artifact = load_json(evidence_dir / required_artifact)
+        require(
+            isinstance(artifact, dict),
+            f"production evidence artifact {required_artifact} must be a JSON object",
+        )
+        artifacts[required_artifact] = artifact
+    return artifacts
+
+
+def is_production_artifact_uri(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    uri = value.strip()
+    return (
+        bool(uri)
+        and not contains_non_production_artifact_reference(uri)
+        and "://" in uri
+        and "{" not in uri
+        and "}" not in uri
+    )
+
+
+def evidence_refs_include_prefix(job: dict, prefix: str) -> bool:
+    evidence_refs = job.get("evidence_refs")
+    return isinstance(evidence_refs, list) and any(
+        isinstance(reference, str) and reference.startswith(prefix)
+        for reference in evidence_refs
+    )
+
+
+def validate_worker_data_pipeline_execution_evidence(report: dict) -> None:
+    require(
+        report.get("report_kind") == "worker_data_pipeline_execution_report",
+        "worker data pipeline execution evidence has wrong report_kind",
+    )
+    require(
+        report.get("readiness_gate_status") == "ready",
+        "worker data pipeline execution evidence must have readiness_gate_status ready",
+    )
+    for field_name in (
+        "plan_uri",
+        "run_status_uri",
+        "readiness_report_uri",
+        "run_id",
+        "execution_date",
+    ):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"worker data pipeline execution evidence must include {field_name}",
+        )
+    for field_name in ("plan_uri", "run_status_uri", "readiness_report_uri"):
+        require(
+            is_production_artifact_uri(report.get(field_name)),
+            f"worker data pipeline execution evidence {field_name} must be a production artifact URI, not a local dry-run or template URI",
+        )
+    require(
+        report.get("scheduler_status") == "completed",
+        "worker data pipeline execution evidence must have scheduler_status completed",
+    )
+    require(
+        report.get("pending_or_failed_job_count") == 0,
+        "worker data pipeline execution evidence must have zero pending or failed jobs",
+    )
+    require(
+        report.get("review_task_count") == 0,
+        "worker data pipeline execution evidence must have zero review tasks",
+    )
+    require(
+        report.get("review_tasks") == [],
+        "worker data pipeline execution evidence review_tasks must be empty",
+    )
+    job_executions = report.get("job_executions")
+    require(
+        isinstance(job_executions, list) and job_executions,
+        "worker data pipeline execution evidence must include job_executions",
+    )
+    require(
+        report.get("job_count") == len(job_executions),
+        "worker data pipeline execution evidence job_count must match job_executions",
+    )
+    jobs_by_kind = {
+        job.get("job_kind"): job for job in job_executions if isinstance(job, dict)
+    }
+    require(
+        len(jobs_by_kind) == len(job_executions),
+        "worker data pipeline execution evidence must not include duplicate job_kind entries",
+    )
+    require(
+        set(jobs_by_kind) == WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS,
+        "worker data pipeline execution evidence job kind set changed unexpectedly",
+    )
+    for job_kind, job in jobs_by_kind.items():
+        require(
+            job.get("execution_status") == "completed",
+            f"worker data pipeline job {job_kind} must be completed",
+        )
+        require(
+            job.get("reported_status") == "succeeded",
+            f"worker data pipeline job {job_kind} must have reported_status succeeded",
+        )
+        blocked_dependencies = job.get("blocked_dependencies")
+        require(
+            not blocked_dependencies,
+            f"worker data pipeline job {job_kind} must not have blocked_dependencies",
+        )
+        require(
+            isinstance(job.get("reported_artifact_uri"), str)
+            and job["reported_artifact_uri"].strip(),
+            f"worker data pipeline job {job_kind} must report artifact URI",
+        )
+        require(
+            is_production_artifact_uri(job.get("reported_artifact_uri")),
+            f"worker data pipeline job {job_kind} must report a production artifact URI, not a local dry-run or template URI",
+        )
+        job_evidence_refs = job.get("evidence_refs")
+        require(
+            isinstance(job_evidence_refs, list)
+            and job_evidence_refs
+            and all(
+                isinstance(reference, str) and reference.strip()
+                for reference in job_evidence_refs
+            ),
+            f"worker data pipeline job {job_kind} must include non-empty evidence_refs",
+        )
+        require_no_template_evidence_refs(
+            job_evidence_refs, f"worker data pipeline job {job_kind}"
+        )
+    for job_kind in WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS:
+        job = jobs_by_kind[job_kind]
+        require(
+            job.get("submitted") is True,
+            f"worker data pipeline submit job {job_kind} must have submitted true",
+        )
+        require(
+            job.get("api_path") == WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS[job_kind],
+            f"worker data pipeline submit job {job_kind} has wrong api_path",
+        )
+        require(
+            job.get("required_permission")
+            == WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS[job_kind],
+            f"worker data pipeline submit job {job_kind} has wrong required_permission",
+        )
+        require(
+            job.get("required_submit_flags")
+            == list(WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS[job_kind]),
+            f"worker data pipeline submit job {job_kind} has wrong required_submit_flags",
+        )
+        require(
+            isinstance(job.get("reported_artifact_uri"), str)
+            and job["reported_artifact_uri"].strip(),
+            f"worker data pipeline submit job {job_kind} must report artifact URI",
+        )
+        required_evidence_prefix = WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES[job_kind]
+        require(
+            evidence_refs_include_prefix(job, required_evidence_prefix),
+            f"worker data pipeline submit job {job_kind} evidence_refs missing {required_evidence_prefix}",
+        )
+        for additional_prefix in WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(
+            job_kind, ()
+        ):
+            require(
+                evidence_refs_include_prefix(job, additional_prefix),
+                f"worker data pipeline submit job {job_kind} evidence_refs missing {additional_prefix}",
+            )
+    snapshot_job = jobs_by_kind["oig_sam_sanctions_snapshot_fetch"]
+    require(
+        isinstance(snapshot_job.get("reported_artifact_uri"), str)
+        and snapshot_job["reported_artifact_uri"].strip(),
+        "worker data pipeline source snapshot job must report artifact URI",
+    )
+    require(
+        is_production_artifact_uri(snapshot_job.get("reported_artifact_uri")),
+        "worker data pipeline source snapshot job must report a production artifact URI, not a local dry-run or template URI",
+    )
+    require(
+        evidence_refs_include_prefix(
+            snapshot_job, WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX
+        ),
+        f"worker data pipeline source snapshot job evidence_refs missing {WORKER_DATA_PIPELINE_SOURCE_SNAPSHOT_EVIDENCE_PREFIX}",
+    )
+    readback_job = jobs_by_kind["scoring_online_readback"]
+    for prefix in WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES:
+        require(
+            evidence_refs_include_prefix(readback_job, prefix),
+            f"worker data pipeline scoring readback job evidence_refs missing {prefix}",
+        )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "worker data pipeline execution evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(
+        evidence_refs, "worker data pipeline execution evidence"
+    )
+    for prefix in (
+        "worker_data_pipeline_plans:",
+        "worker_data_pipeline_run_status:",
+        "worker_data_pipeline_readiness_reports:",
+    ):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"worker data pipeline execution evidence_refs missing {prefix}",
+        )
+    governance_boundary = report.get("governance_boundary", "")
+    for forbidden_side_effect in (
+        "score claims",
+        "assign labels",
+        "deny claims",
+        "activate models",
+        "change routing policy",
+    ):
+        require(
+            forbidden_side_effect in governance_boundary,
+            f"worker data pipeline governance boundary missing {forbidden_side_effect}",
+        )
+
+
+def validate_scoring_readback_evidence(report: dict) -> None:
+    require(
+        report.get("report_kind") == "scoring_readback_report",
+        "scoring readback evidence has wrong report_kind",
+    )
+    require(
+        report.get("readback_status") == "verified",
+        "scoring readback evidence must have readback_status verified",
+    )
+    require(
+        report.get("execution_mode") == "score_response_artifact_readback",
+        "scoring readback evidence must come from a score response artifact readback",
+    )
+    for field_name in ("input_uri", "score_request_uri", "score_response_uri"):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"scoring readback evidence must include {field_name}",
+        )
+    for field_name in ("input_uri", "score_request_uri", "score_response_uri"):
+        require(
+            is_production_artifact_uri(report.get(field_name)),
+            f"scoring readback evidence {field_name} must be a production artifact URI, not a local dry-run or template URI",
+        )
+    expected_count = report.get("expected_evidence_prefix_count")
+    matched_count = report.get("matched_evidence_prefix_count")
+    require(
+        isinstance(expected_count, int) and expected_count > 0,
+        "scoring readback evidence must include positive expected_evidence_prefix_count",
+    )
+    require(
+        matched_count == expected_count,
+        "scoring readback evidence must match every expected evidence prefix",
+    )
+    checks = report.get("checks")
+    require(
+        isinstance(checks, list) and len(checks) == expected_count,
+        "scoring readback evidence checks must match expected_evidence_prefix_count",
+    )
+    checked_prefixes = {
+        check.get("expected_evidence_prefix")
+        for check in checks
+        if isinstance(check, dict)
+    }
+    missing_required_prefixes = sorted(
+        SCORING_READBACK_REQUIRED_SCORE_RESPONSE_PREFIXES - checked_prefixes
+    )
+    require(
+        not missing_required_prefixes,
+        "scoring readback evidence checks missing required worker score-response prefixes: "
+        + ", ".join(missing_required_prefixes),
+    )
+    for check in checks:
+        require(
+            isinstance(check, dict) and check.get("matched") is True,
+            "scoring readback evidence check must be matched",
+        )
+        matched_refs = check.get("matched_evidence_refs")
+        require(
+            isinstance(matched_refs, list) and matched_refs,
+            "scoring readback evidence matched checks must include matched_evidence_refs",
+        )
+        require_no_template_evidence_refs(
+            matched_refs, "scoring readback matched evidence"
+        )
+    require(
+        not report.get("blockers"),
+        "scoring readback evidence must have no blockers",
+    )
+    require(
+        report.get("review_task_count") == 0,
+        "scoring readback evidence must have zero review tasks",
+    )
+    require(
+        report.get("review_tasks") == [],
+        "scoring readback evidence review_tasks must be empty",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "scoring readback evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(evidence_refs, "scoring readback evidence")
+    for prefix in WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES:
+        require(
+            any(
+                isinstance(reference, str) and reference.startswith(prefix)
+                for reference in evidence_refs
+            ),
+            f"scoring readback evidence_refs missing {prefix}",
+        )
+
+
+def validate_alert_router_delivery_evidence(report: dict) -> None:
+    require(
+        report.get("report_kind") == "mlops_alert_receiver_delivery_report",
+        "alert router delivery evidence has wrong report_kind",
+    )
+    require(
+        report.get("delivery_status") == "delivered",
+        "alert router delivery evidence must have delivery_status delivered",
+    )
+    http_status = report.get("http_status")
+    require(
+        isinstance(http_status, int) and 200 <= http_status < 300,
+        "alert router delivery evidence must include a 2xx http_status",
+    )
+    require(
+        report.get("receiver_auth_configured") is True,
+        "alert router delivery evidence must configure receiver auth",
+    )
+    require(
+        report.get("receiver_signature_configured") is True,
+        "alert router delivery evidence must configure receiver signature",
+    )
+    require(
+        is_production_artifact_uri(report.get("scheduler_execution_report_uri")),
+        "alert router delivery evidence scheduler_execution_report_uri must be a production artifact URI, not a local dry-run or template URI",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "alert router delivery evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(evidence_refs, "alert router delivery evidence")
+    expected_scheduler_ref = (
+        f"mlops_scheduler_execution_reports:{report.get('scheduler_execution_report_uri')}"
+    )
+    require(
+        expected_scheduler_ref in evidence_refs,
+        f"alert router delivery evidence_refs must include {expected_scheduler_ref}",
+    )
+    boundary = report.get("governance_boundary", "")
+    require(
+        isinstance(boundary, str)
+        and all(
+            phrase in boundary
+            for phrase in (
+                "must not create retraining jobs",
+                "activate models",
+                "rollback models",
+                "assign fraud labels",
+                "write rules",
+            )
+        ),
+        "alert router delivery evidence must preserve the no model-action governance boundary",
+    )
+
+
+def validate_retention_legal_hold_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "retention_legal_hold_report",
+        "retention legal-hold evidence has wrong artifact_kind",
+    )
+    require(
+        isinstance(report.get("retention_years"), int)
+        and report["retention_years"] >= 6,
+        "retention legal-hold evidence must configure at least six retention years",
+    )
+    for field_name in (
+        "retention_policy_id",
+        "legal_hold_policy_id",
+        "archive_storage_uri",
+    ):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"retention legal-hold evidence must include {field_name}",
+        )
+    require(
+        is_production_artifact_uri(report.get("archive_storage_uri")),
+        "retention legal-hold evidence archive_storage_uri must be a production artifact URI, not a local dry-run or template URI",
+    )
+    require(
+        report.get("legal_hold_reconciliation_status") == "completed",
+        "retention legal-hold evidence must have completed legal-hold reconciliation",
+    )
+    require(
+        report.get("destruction_workflow") == "human_approval_required_before_destroy",
+        "retention legal-hold evidence must require human approval before destruction",
+    )
+    require(
+        report.get("automated_destruction_enabled") is False,
+        "retention legal-hold evidence must keep automated destruction disabled",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "retention legal-hold evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(evidence_refs, "retention legal-hold evidence")
+    for prefix in ("retention_policy:", "legal_hold_policy:"):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"retention legal-hold evidence_refs missing {prefix}",
+        )
+
+
+def validate_model_serving_slo_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "model_serving_slo_report",
+        "model serving SLO evidence has wrong artifact_kind",
+    )
+    for field_name in ("model_key", "model_version"):
+        require(
+            isinstance(report.get(field_name), str) and report[field_name].strip(),
+            f"model serving SLO evidence must include {field_name}",
+        )
+    latency_slo_ms = report.get("latency_slo_ms")
+    p95_latency_ms = report.get("p95_latency_ms")
+    require(
+        isinstance(latency_slo_ms, (int, float)) and latency_slo_ms > 0,
+        "model serving SLO evidence must include positive latency_slo_ms",
+    )
+    require(
+        isinstance(p95_latency_ms, (int, float)) and p95_latency_ms <= latency_slo_ms,
+        "model serving SLO evidence p95 latency must be within latency_slo_ms",
+    )
+    error_rate_slo = report.get("error_rate_slo")
+    error_rate = report.get("error_rate")
+    require(
+        isinstance(error_rate_slo, (int, float)) and 0 <= error_rate_slo <= 1,
+        "model serving SLO evidence must include error_rate_slo between 0 and 1",
+    )
+    require(
+        isinstance(error_rate, (int, float)) and 0 <= error_rate <= error_rate_slo,
+        "model serving SLO evidence error_rate must be within error_rate_slo",
+    )
+    require(
+        report.get("checksum_verified") is True,
+        "model serving SLO evidence must verify model checksum",
+    )
+    require(
+        report.get("signature_verified") is True,
+        "model serving SLO evidence must verify model signature",
+    )
+    require(
+        report.get("fallback_status") == "healthy",
+        "model serving SLO evidence fallback_status must be healthy",
+    )
+    require(
+        report.get("rollback_ready") is True,
+        "model serving SLO evidence rollback_ready must be true",
+    )
+    require(
+        report.get("probability_calibration_status") == "calibrated",
+        "model serving SLO evidence probability_calibration_status must be calibrated",
+    )
+    require(
+        report.get("calibrated_probability_serving_active") is True,
+        "model serving SLO evidence must activate calibrated probability serving",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "model serving SLO evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(evidence_refs, "model serving SLO evidence")
+    for prefix in MODEL_SERVING_SLO_EVIDENCE_PREFIXES:
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"model serving SLO evidence_refs missing {prefix}",
+        )
+
+
+def validate_customer_data_governance_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "customer_data_governance_report",
+        "customer data governance evidence has wrong artifact_kind",
+    )
+    for field_name in (
+        "dataset_provenance_status",
+        "label_provenance_status",
+        "holdout_split_status",
+        "shadow_traffic_plan_status",
+    ):
+        require(
+            report.get(field_name) == "approved",
+            f"customer data governance evidence must have {field_name} approved",
+        )
+    approved_label_count = report.get("approved_label_count")
+    holdout_claim_count = report.get("holdout_claim_count")
+    require(
+        isinstance(approved_label_count, int) and approved_label_count > 0,
+        "customer data governance evidence must include positive approved_label_count",
+    )
+    require(
+        isinstance(holdout_claim_count, int) and holdout_claim_count > 0,
+        "customer data governance evidence must include positive holdout_claim_count",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "customer data governance evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(evidence_refs, "customer data governance evidence")
+    for prefix in (
+        "dataset_provenance:",
+        "label_provenance:",
+        "holdout_split:",
+        "shadow_traffic_plan:",
+    ):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"customer data governance evidence_refs missing {prefix}",
+        )
+
+
+def validate_ocr_vector_analytics_execution_evidence(report: dict) -> None:
+    require(
+        report.get("artifact_kind") == "ocr_vector_analytics_execution_report",
+        "OCR/vector/analytics execution evidence has wrong artifact_kind",
+    )
+    for field_name in (
+        "ocr_execution_status",
+        "embedding_vector_status",
+        "retrieval_ranking_status",
+        "clickhouse_export_status",
+        "dashboard_access_status",
+        "analytics_retention_backup_status",
+    ):
+        require(
+            report.get(field_name) == "completed",
+            f"OCR/vector/analytics evidence must have {field_name} completed",
+        )
+    for field_name in (
+        "document_count",
+        "embedding_job_count",
+        "retrieval_audit_count",
+        "analytics_export_job_count",
+    ):
+        require(
+            isinstance(report.get(field_name), int) and report[field_name] > 0,
+            f"OCR/vector/analytics evidence must include positive {field_name}",
+        )
+    require(
+        report.get("raw_phi_exported") is False,
+        "OCR/vector/analytics evidence must not export raw PHI",
+    )
+    evidence_refs = report.get("evidence_refs")
+    require(
+        isinstance(evidence_refs, list) and evidence_refs,
+        "OCR/vector/analytics evidence must include evidence_refs",
+    )
+    require_no_template_evidence_refs(evidence_refs, "OCR/vector/analytics evidence")
+    for prefix in (
+        "ai_evidence_execution:",
+        "ocr_outputs:",
+        "embedding_jobs:",
+        "retrieval_audits:",
+        "analytics_exports:",
+        "clickhouse_dashboard:",
+    ):
+        require(
+            any(isinstance(reference, str) and reference.startswith(prefix) for reference in evidence_refs),
+            f"OCR/vector/analytics evidence_refs missing {prefix}",
+        )
+
+
+def require_no_template_evidence_refs(evidence_refs: list, owner: str) -> None:
+    require(
+        not any(
+            isinstance(reference, str) and contains_non_production_artifact_reference(reference)
+            for reference in evidence_refs
+        ),
+        f"{owner} evidence_refs must not use local://template, local dry-run, file://, or placeholder evidence",
+    )
+
+
+def contains_non_production_artifact_reference(value: str) -> bool:
+    normalized = value.strip().lower()
+    return (
+        "local://" in normalized
+        or "file://" in normalized
+        or "://localhost" in normalized
+        or "://127." in normalized
+        or "://0.0.0.0" in normalized
+        or "://[::1]" in normalized
+        or "{" in value
+        or "}" in value
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract-dir", default="artifacts/production-readiness")
+    parser.add_argument(
+        "--evidence-dir",
+        help="Optional directory containing production evidence artifacts to validate.",
+    )
     args = parser.parse_args()
 
     contract_dir = Path(args.contract_dir)
-    validate_contract(load_json(contract_dir / "production_readiness_contract.json"))
+    gates = validate_contract(load_json(contract_dir / "production_readiness_contract.json"))
     index = load_json(contract_dir / "index.json")
     require(index.get("artifact_kind") == "production_readiness_contract_index", "wrong index artifact kind")
+    if args.evidence_dir:
+        evidence_dir = Path(args.evidence_dir)
+        artifacts = validate_evidence_dir(evidence_dir, gates)
+        validate_customer_data_governance_evidence(
+            artifacts["customer_data_governance_report.json"]
+        )
+        validate_retention_legal_hold_evidence(
+            artifacts["retention_legal_hold_report.json"]
+        )
+        validate_model_serving_slo_evidence(
+            artifacts["model_serving_slo_report.json"]
+        )
+        validate_ocr_vector_analytics_execution_evidence(
+            artifacts["ocr_vector_analytics_execution_report.json"]
+        )
+        validate_worker_data_pipeline_execution_evidence(
+            artifacts["worker_data_pipeline_execution_report.json"]
+        )
+        validate_scoring_readback_evidence(artifacts["scoring_readback_report.json"])
+        validate_alert_router_delivery_evidence(
+            artifacts["alert_router_delivery_report.json"]
+        )
     print("production readiness contract validation passed")
     return 0
 

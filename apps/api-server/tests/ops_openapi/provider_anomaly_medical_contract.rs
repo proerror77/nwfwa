@@ -90,11 +90,14 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
             "request_more_evidence"
         ])
     );
-    assert_eq!(
-        schema["components"]["schemas"]["ReviewAnomalyCandidateRequest"]["properties"]
-            ["evidence_refs"]["description"],
-        "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
-    );
+    let anomaly_review_evidence_description = schema["components"]["schemas"]
+        ["ReviewAnomalyCandidateRequest"]["properties"]["evidence_refs"]["description"]
+        .as_str()
+        .expect("review anomaly evidence description");
+    assert!(anomaly_review_evidence_description
+        .contains("anomaly_clustering_reports:{source_report_uri}"));
+    assert!(anomaly_review_evidence_description.contains("production evidence refs"));
+    assert!(anomaly_review_evidence_description.contains("not local/template refs"));
     for field in [
         "source_report_uri",
         "report_kind",
@@ -139,6 +142,154 @@ pub(super) fn assert_provider_anomaly_medical_contract(schema: &serde_json::Valu
         assert_eq!(
             schema["components"]["schemas"]["SubmitAnomalyClusteringReportResponse"]["properties"]
                 [field]["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/sanctions-sync-reports"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitSanctionsSyncReportRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/sanctions-sync-reports"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitSanctionsSyncReportResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderSanctionUpsert"]["properties"]["risk_feature"]
+            ["const"],
+        "provider_sanctions_excluded"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderSanctionUpsert"]["properties"]["risk_score"]
+            ["const"],
+        100
+    );
+    for field in ["active_scoring_policy_change", "label_assignment"] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitSanctionsSyncReportResponse"]["properties"]
+                [field]["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/profile-window-rollups"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProviderProfileWindowRollupRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/profile-window-rollups"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProviderProfileWindowRollupResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderProfileWindowUpsert"]["properties"]["windows"]
+            ["items"]["$ref"],
+        "#/components/schemas/ProviderProfileWindowPayload"
+    );
+    for field in ["active_scoring_policy_change", "label_assignment"] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitProviderProfileWindowRollupResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/graph-signal-rollups"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProviderGraphSignalRollupRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/graph-signal-rollups"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProviderGraphSignalRollupResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["temporal_co_billing_frequency_7d"]["maximum"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["high_risk_neighbor_ratio"]["maximum"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["provider_patient_overlap_score"]["maximum"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderGraphSignalUpsert"]["properties"]
+            ["network_component_risk_score"]["maximum"],
+        100
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "label_assignment",
+        "case_creation",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitProviderGraphSignalRollupResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/peer-benchmarks"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitPeerBenchmarkRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/peer-benchmarks"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitPeerBenchmarkResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PeerBenchmarkGroupUpsert"]["properties"]["claim_count"]
+            ["minimum"],
+        1
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "label_assignment",
+        "claim_scoring",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitPeerBenchmarkResponse"]["properties"][field]
+                ["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/episode-rollups"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitEpisodeRollupRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/providers/episode-rollups"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitEpisodeRollupResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["EpisodeRollupUpsert"]["properties"]["windows"]["items"]
+            ["$ref"],
+        "#/components/schemas/EpisodeWindowRollupPayload"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["EpisodeWindowRollupPayload"]["properties"]["window_days"]
+            ["enum"],
+        serde_json::json!([30, 90, 365])
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "label_assignment",
+        "case_creation",
+        "claim_denial",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitEpisodeRollupResponse"]["properties"][field]
+                ["const"],
             false
         );
     }

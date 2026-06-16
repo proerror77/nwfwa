@@ -5,6 +5,7 @@ use api_server::{
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
+    Router,
 };
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -526,4 +527,985 @@ async fn scores_full_payload_with_materialized_worker_feature_context() {
     assert!(evidence_refs.contains(&serde_json::json!(
         "unbundling:UNB-IMG:MBR-WORKER-CONTEXT|PRV-WORKER-CONTEXT"
     )));
+}
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_worker_feature_context() {
+    let app = build_app(test_config()).unwrap();
+
+    let materialization_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/scoring-feature-context-materializations")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "materialization_id": "sfc-mat-claims-score-2026-06-13",
+              "actor": "worker:scoring-feature-contexts",
+              "notes": "claims scoring materialized context test",
+              "report_uri": "s3://customer-prod-artifacts/scoring/scoring_feature_context_report.json",
+              "report_kind": "scoring_feature_context_materialization",
+              "as_of_date": "2026-06-13",
+              "source_uris": {
+                "claims_uri": "s3://customer-prod-artifacts/inputs/scoring-claims.json",
+                "episode_rollups_uri": "s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
+                "peer_benchmarks_uri": "s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
+                "clinical_compatibility_uri": "s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
+                "unbundling_candidates_uri": "s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
+              },
+              "claim_count": 1,
+              "context_count": 1,
+              "contexts": [
+                {
+                  "claim_id": "CLM-PERSISTED-WORKER-CONTEXT",
+                  "peer_context": {
+                    "claim_amount_peer_percentile": 91
+                  },
+                  "clinical_compatibility_context": {
+                    "diagnosis_procedure_match_score": 0.28,
+                    "data_source": "worker.icd_cpt_compatibility_reference:clinical-ref-v1"
+                  },
+                  "episode_utilization_context": {
+                    "member_provider_claim_count_30d": 4,
+                    "duplicate_claim_similarity_score": 0.8,
+                    "procedure_frequency_peer_percentile": 89,
+                    "unbundling_candidate_count": 3,
+                    "data_source": "worker.episode_utilization_rollup"
+                  },
+                  "evidence_refs": [
+                    "claims:CLM-PERSISTED-WORKER-CONTEXT",
+                    "scoring_feature_contexts:CLM-PERSISTED-WORKER-CONTEXT",
+                    "unbundling:UNB-IMG:MBR-PERSISTED|PRV-PERSISTED"
+                  ]
+                }
+              ],
+              "evidence_refs": [
+                "scoring_feature_contexts:s3://customer-prod-artifacts/scoring/scoring_feature_context_report.json",
+                "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/inputs/scoring-claims.json",
+                "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
+                "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
+                "clinical_compatibility:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
+                "unbundling_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
+              ],
+              "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
+            }"#,
+        ))
+        .unwrap();
+    let materialization_response = app.clone().oneshot(materialization_request).await.unwrap();
+    assert_eq!(materialization_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-WORKER-CONTEXT",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-900",
+                  "item_type": "procedure",
+                  "description": "Imaging bundle",
+                  "quantity": 1,
+                  "unit_amount": "8000",
+                  "total_amount": "8000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED",
+                "name": "Persisted Worker Context Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let feature = |name: &str| {
+        feature_values
+            .iter()
+            .find(|feature| feature["name"] == name)
+            .unwrap_or_else(|| panic!("missing feature {name}"))
+    };
+
+    assert_eq!(
+        feature("claim_amount_peer_percentile")["value"],
+        serde_json::json!(91)
+    );
+    assert_eq!(
+        feature("diagnosis_procedure_match_score")["value"],
+        serde_json::json!(0.28)
+    );
+    assert_eq!(
+        feature("member_provider_claim_count_30d")["value"],
+        serde_json::json!(4)
+    );
+    assert_eq!(
+        feature("unbundling_candidate_count")["value"],
+        serde_json::json!(3)
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_contexts:CLM-PERSISTED-WORKER-CONTEXT"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_context_materializations:sfc-mat-claims-score-2026-06-13"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_contexts:s3://customer-prod-artifacts/scoring/scoring_feature_context_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/inputs/scoring-claims.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "clinical_compatibility:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "unbundling_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
+    )));
+}
+
+#[tokio::test]
+async fn score_response_contains_all_worker_readback_prefixes() {
+    let app = build_app(test_config()).unwrap();
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/providers/sanctions-sync-reports",
+        r#"{
+          "actor": "worker:sync-oig-sam-sanctions",
+          "notes": "readback prefix sanctions evidence",
+          "source_report_uri": "s3://customer-prod-artifacts/readback/sanctions_sync_report.json",
+          "report_kind": "oig_sam_sanctions_sync_report",
+          "run_date": "2026-06-14",
+          "source_uri": "s3://customer-prod-artifacts/inputs/readback/oig-sam-snapshot.json",
+          "source_date": "2026-06-14",
+          "sync_status": "completed",
+          "source_record_count": 1,
+          "valid_record_count": 1,
+          "invalid_record_count": 0,
+          "provider_upserts": [
+            {
+              "sanction_key": "OIG:PRV-READBACK-ALL",
+              "provider_id": "PRV-READBACK-ALL",
+              "provider_name": "Readback All Hospital",
+              "list": "OIG",
+              "source_record_id": "OIG-READBACK-ALL",
+              "effective_date": "2026-06-01",
+              "risk_feature": "provider_sanctions_excluded",
+              "risk_score": 100,
+              "evidence_refs": ["provider_sanctions:PRV-READBACK-ALL:oig"]
+            }
+          ],
+          "evidence_refs": [
+            "sanctions_sync_reports:s3://customer-prod-artifacts/readback/sanctions_sync_report.json",
+            "sanctions_source_snapshot:s3://customer-prod-artifacts/inputs/readback/oig-sam-snapshot.json"
+          ],
+          "governance_boundary": "sanctions sync submission writes provider sanctions only; it must not change scoring policy, assign fraud labels, or adjudicate claims"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/providers/profile-window-rollups",
+        r#"{
+          "actor": "worker:build-provider-profile-windows",
+          "notes": "readback prefix provider profile evidence",
+          "source_report_uri": "s3://customer-prod-artifacts/readback/provider_profile_window_rollup.json",
+          "report_kind": "provider_profile_window_rollup",
+          "as_of_date": "2026-06-14",
+          "source_uri": "s3://customer-prod-artifacts/inputs/readback/provider-profile-claims.json",
+          "provider_count": 1,
+          "claim_count": 3,
+          "provider_profiles": [
+            {
+              "provider_id": "PRV-READBACK-ALL",
+              "specialty": "dental",
+              "network_status": "in_network",
+              "windows": [
+                {
+                  "window_days": 30,
+                  "claim_count": 3,
+                  "total_claim_amount": 1800.0,
+                  "high_cost_item_ratio": 0.25,
+                  "diagnosis_procedure_mismatch_rate": 0.1,
+                  "peer_amount_percentile": 75,
+                  "peer_frequency_percentile": 72,
+                  "review_failure_count": 0,
+                  "confirmed_fwa_count": 0,
+                  "false_positive_count": 0
+                }
+              ],
+              "evidence_refs": ["provider_profile_windows:PRV-READBACK-ALL", "claims:CLM-READBACK-ALL"]
+            }
+          ],
+          "evidence_refs": [
+            "provider_profile_window_rollups:s3://customer-prod-artifacts/readback/provider_profile_window_rollup.json",
+            "provider_profile_claim_snapshot:s3://customer-prod-artifacts/inputs/readback/provider-profile-claims.json"
+          ],
+          "governance_boundary": "rollup computes provider profile windows only; it must not assign fraud labels, change routing policy, or write provider sanctions"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/providers/graph-signal-rollups",
+        r#"{
+          "actor": "worker:build-provider-graph-signals",
+          "notes": "readback prefix provider graph evidence",
+          "source_report_uri": "s3://customer-prod-artifacts/readback/provider_graph_signal_rollup.json",
+          "report_kind": "provider_graph_signal_rollup",
+          "as_of_date": "2026-06-14",
+          "source_uri": "s3://customer-prod-artifacts/inputs/readback/provider-graph-claims.json",
+          "provider_count": 1,
+          "claim_count": 3,
+          "provider_relationships": [
+            {
+              "provider_id": "PRV-READBACK-ALL",
+              "high_risk_neighbor_ratio": 0.31,
+              "provider_patient_overlap_score": 0.62,
+              "referral_concentration_score": 0.74,
+              "billing_ring_membership": true,
+              "temporal_co_billing_frequency_7d": 0.51,
+              "referral_concentration_entropy": 0.2,
+              "shared_member_provider_count": 2,
+              "connected_confirmed_fwa_count": 2,
+              "network_component_risk_score": 78,
+              "evidence_refs": ["provider_graph_rollups:PRV-READBACK-ALL", "claims:CLM-READBACK-ALL"]
+            }
+          ],
+          "evidence_refs": [
+            "provider_graph_signal_rollups:s3://customer-prod-artifacts/readback/provider_graph_signal_rollup.json",
+            "provider_graph_claim_snapshot:s3://customer-prod-artifacts/inputs/readback/provider-graph-claims.json"
+          ],
+          "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = post_json(
+        app.clone(),
+        "/api/v1/ops/scoring-feature-context-materializations",
+        r#"{
+          "materialization_id": "sfc-mat-readback-all-2026-06-14",
+          "actor": "worker:scoring-feature-contexts",
+          "notes": "readback prefix scoring context evidence",
+          "report_uri": "s3://customer-prod-artifacts/readback/scoring_feature_context_report.json",
+          "report_kind": "scoring_feature_context_materialization",
+          "as_of_date": "2026-06-14",
+          "source_uris": {
+            "claims_uri": "s3://customer-prod-artifacts/inputs/readback/scoring-claims.json",
+            "episode_rollups_uri": "s3://customer-prod-artifacts/readback/episode_aggregation_report.json",
+            "peer_benchmarks_uri": "s3://customer-prod-artifacts/readback/peer_percentile_benchmark.json",
+            "clinical_compatibility_uri": "s3://customer-prod-artifacts/readback/clinical_compatibility_reference_report.json",
+            "unbundling_candidates_uri": "s3://customer-prod-artifacts/readback/unbundling_comparator_report.json"
+          },
+          "claim_count": 1,
+          "context_count": 1,
+          "contexts": [
+            {
+              "claim_id": "CLM-READBACK-ALL",
+              "peer_context": {"claim_amount_peer_percentile": 94},
+              "clinical_compatibility_context": {
+                "diagnosis_procedure_match_score": 0.22,
+                "data_source": "worker.icd_cpt_compatibility_reference:readback"
+              },
+              "episode_utilization_context": {
+                "member_provider_claim_count_30d": 5,
+                "duplicate_claim_similarity_score": 0.6,
+                "procedure_frequency_peer_percentile": 91,
+                "unbundling_candidate_count": 2,
+                "data_source": "worker.episode_utilization_rollup"
+              },
+              "evidence_refs": [
+                "claims:CLM-READBACK-ALL",
+                "scoring_feature_contexts:CLM-READBACK-ALL",
+                "unbundling:READBACK-ALL"
+              ]
+            }
+          ],
+          "evidence_refs": [
+            "scoring_feature_contexts:s3://customer-prod-artifacts/readback/scoring_feature_context_report.json",
+            "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/inputs/readback/scoring-claims.json",
+            "episode_rollups:s3://customer-prod-artifacts/readback/episode_aggregation_report.json",
+            "peer_benchmarks:s3://customer-prod-artifacts/readback/peer_percentile_benchmark.json",
+            "clinical_compatibility:s3://customer-prod-artifacts/readback/clinical_compatibility_reference_report.json",
+            "unbundling_candidates:s3://customer-prod-artifacts/readback/unbundling_comparator_report.json"
+          ],
+          "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = post_json(
+        app,
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-READBACK-ALL",
+            "claim_amount": "9500",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "IMG-900",
+              "item_type": "procedure",
+              "description": "Imaging bundle",
+              "quantity": 1,
+              "unit_amount": "9500",
+              "total_amount": "9500"
+            }
+          ],
+          "member": {"external_member_id": "MBR-READBACK-ALL"},
+          "policy": {
+            "external_policy_id": "POL-READBACK-ALL",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-READBACK-ALL",
+            "name": "Readback All Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "Medium"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    for prefix in [
+        "scoring_feature_contexts:",
+        "provider_profile_window_rollups:",
+        "sanctions_sync_reports:",
+        "provider_graph_signal_rollups:",
+        "peer_benchmarks:",
+        "episode_rollups:",
+        "clinical_compatibility:",
+        "unbundling_candidates:",
+    ] {
+        assert!(
+            evidence_refs.iter().any(|reference| reference
+                .as_str()
+                .is_some_and(|value| value.starts_with(prefix))),
+            "score response missing readback prefix {prefix}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_clinical_compatibility_reference() {
+    let app = build_app(test_config()).unwrap();
+
+    let clinical_reference_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/clinical-compatibility-references")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-clinical-compatibility-reference",
+              "notes": "customer policy board approved clinical reference",
+              "source_report_uri": "s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
+              "report_kind": "clinical_compatibility_reference",
+              "reference_version": "clinical-policy-2026-06",
+              "effective_date": "2026-06-01",
+              "source_authority": "customer-medical-policy-board",
+              "source_uri": "s3://customer-prod-artifacts/inputs/clinical-reference.json",
+              "record_count": 1,
+              "records": [
+                {
+                  "compatibility_key": "J|IMG-900",
+                  "diagnosis_code_prefix": "J",
+                  "procedure_code": "IMG-900",
+                  "diagnosis_procedure_match_score": 0.25,
+                  "data_source": "worker.icd_cpt_compatibility_reference:clinical-policy-2026-06",
+                  "policy_authority_ref": "policy:clinical:J:IMG-900",
+                  "rationale": "Respiratory diagnosis requires additional support for this imaging procedure.",
+                  "evidence_refs": ["policy:clinical:J:IMG-900", "medical_policy:v2026-06"]
+                }
+              ],
+              "review_tasks": [
+                {
+                  "task_type": "clinical_policy_review_candidate",
+                  "compatibility_key": "J|IMG-900",
+                  "reason": "low compatibility score should be reviewed before production activation",
+                  "evidence_refs": ["policy:clinical:J:IMG-900"]
+                }
+              ],
+              "evidence_refs": [
+                "clinical_compatibility_references:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json",
+                "clinical_compatibility_reference:s3://customer-prod-artifacts/inputs/clinical-reference.json",
+                "clinical_policy_authority:customer-medical-policy-board"
+              ],
+              "governance_boundary": "clinical compatibility reference data can feed ClinicalCompatibilityFeatureContext; it must not deny claims or replace medical review without customer-approved policy authority"
+            }"#,
+        ))
+        .unwrap();
+    let clinical_reference_response = app
+        .clone()
+        .oneshot(clinical_reference_request)
+        .await
+        .unwrap();
+    assert_eq!(clinical_reference_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-CLINICAL-REF",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-900",
+                  "item_type": "procedure",
+                  "description": "Imaging bundle",
+                  "quantity": 1,
+                  "unit_amount": "8000",
+                  "total_amount": "8000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-CLINICAL-REF"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-CLINICAL-REF",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-CLINICAL-REF",
+                "name": "Persisted Clinical Reference Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let clinical_feature = feature_values
+        .iter()
+        .find(|feature| feature["name"] == "diagnosis_procedure_match_score")
+        .expect("clinical compatibility feature should be present");
+
+    assert_eq!(clinical_feature["value"], serde_json::json!(0.25));
+    assert_eq!(clinical_feature["is_proxy"], false);
+    assert_eq!(
+        clinical_feature["data_source"],
+        "worker.icd_cpt_compatibility_reference:clinical-policy-2026-06"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "clinical_compatibility_references:s3://customer-prod-artifacts/clinical/clinical_compatibility_reference_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "clinical_compatibility_reference:J|IMG-900:clinical-policy-2026-06"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!("policy:clinical:J:IMG-900")));
+}
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_peer_benchmark() {
+    let app = build_app(test_config()).unwrap();
+
+    let peer_benchmark_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/peer-benchmarks")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-peer-benchmarks",
+              "notes": "monthly peer percentile benchmark",
+              "source_report_uri": "s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
+              "report_kind": "peer_percentile_benchmark",
+              "benchmark_month": "2026-06",
+              "source_uri": "s3://customer-prod-artifacts/inputs/peer-claims.json",
+              "claim_count": 5,
+              "peer_group_count": 1,
+              "peer_groups": [
+                {
+                  "peer_group_key": "dental|SH|outpatient",
+                  "specialty": "dental",
+                  "region": "SH",
+                  "service_segment": "outpatient",
+                  "claim_count": 5,
+                  "p25": 200.0,
+                  "p50": 300.0,
+                  "p75": 400.0,
+                  "p90": 500.0,
+                  "p99": 500.0,
+                  "evidence_refs": ["peer_benchmark_groups:dental|SH|outpatient", "claims:CLM-PEER-BENCHMARK-1"]
+                }
+              ],
+              "evidence_refs": [
+                "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json",
+                "peer_benchmark_claim_snapshot:s3://customer-prod-artifacts/inputs/peer-claims.json"
+              ],
+              "governance_boundary": "benchmark computes peer percentile reference data only; it must not score claims, assign labels, or change routing policy"
+            }"#,
+        ))
+        .unwrap();
+    let peer_benchmark_response = app.clone().oneshot(peer_benchmark_request).await.unwrap();
+    assert_eq!(peer_benchmark_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "service_segment": "outpatient",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-PEER-BENCHMARK",
+                "claim_amount": "450",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "K02"
+              },
+              "items": [
+                {
+                  "item_code": "DEN-100",
+                  "item_type": "procedure",
+                  "description": "Dental procedure",
+                  "quantity": 1,
+                  "unit_amount": "450",
+                  "total_amount": "450"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PERSISTED-PEER"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-PEER",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PERSISTED-PEER",
+                "name": "Persisted Peer Dental Clinic",
+                "provider_type": "clinic",
+                "region": "SH",
+                "risk_tier": "Medium"
+              },
+              "provider_profile": {
+                "specialty": "dental",
+                "network_status": "in_network",
+                "windows": [
+                  {
+                    "window_days": 30,
+                    "claim_count": 5,
+                    "total_claim_amount": "1500",
+                    "high_cost_item_ratio": 0.2,
+                    "diagnosis_procedure_mismatch_rate": 0.1,
+                    "peer_amount_percentile": 50,
+                    "peer_frequency_percentile": 50,
+                    "review_failure_count": 0,
+                    "confirmed_fwa_count": 0,
+                    "false_positive_count": 0
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let peer_feature = feature_values
+        .iter()
+        .find(|feature| feature["name"] == "claim_amount_peer_percentile")
+        .expect("peer percentile feature should be present");
+
+    assert_eq!(peer_feature["value"], serde_json::json!(90));
+    assert_eq!(peer_feature["is_proxy"], false);
+    assert_eq!(
+        peer_feature["data_source"],
+        "worker.peer_percentile_benchmark_rollup"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmark_groups:dental|SH|outpatient"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmarks:s3://customer-prod-artifacts/peer/peer_percentile_benchmark.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "peer_benchmark_group:dental|SH|outpatient:2026-06"
+    )));
+}
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_episode_rollup() {
+    let app = build_app(test_config()).unwrap();
+
+    let episode_rollup_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/providers/episode-rollups")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-episode-aggregation",
+              "notes": "daily member-provider episode rollup",
+              "source_report_uri": "s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
+              "report_kind": "member_provider_episode_aggregation",
+              "as_of_date": "2026-06-14",
+              "source_uri": "s3://customer-prod-artifacts/inputs/episode-claims.json",
+              "episode_count": 1,
+              "claim_count": 3,
+              "episodes": [
+                {
+                  "episode_key": "MBR-EPISODE-1|PRV-EPISODE-1",
+                  "member_id": "MBR-EPISODE-1",
+                  "provider_id": "PRV-EPISODE-1",
+                  "windows": [
+                    {
+                      "window_days": 30,
+                      "claim_count": 2,
+                      "total_claim_amount": 200.0,
+                      "unique_procedure_code_count": 2,
+                      "max_procedure_code_frequency": 2,
+                      "duplicate_amount_day_count": 1
+                    },
+                    {
+                      "window_days": 90,
+                      "claim_count": 3,
+                      "total_claim_amount": 450.0,
+                      "unique_procedure_code_count": 3,
+                      "max_procedure_code_frequency": 2,
+                      "duplicate_amount_day_count": 1
+                    }
+                  ],
+                  "evidence_refs": ["claims:CLM-EPISODE-1", "claims:CLM-EPISODE-2"]
+                }
+              ],
+              "evidence_refs": [
+                "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json",
+                "episode_claim_snapshot:s3://customer-prod-artifacts/inputs/episode-claims.json"
+              ],
+              "governance_boundary": "episode aggregation computes member-provider utilization evidence only; it must not assign fraud labels, deny claims, or write rules"
+            }"#,
+        ))
+        .unwrap();
+    let episode_rollup_response = app.clone().oneshot(episode_rollup_request).await.unwrap();
+    assert_eq!(episode_rollup_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-EPISODE-ROLLUP",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-900",
+                  "item_type": "procedure",
+                  "description": "Imaging bundle",
+                  "quantity": 1,
+                  "unit_amount": "8000",
+                  "total_amount": "8000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-EPISODE-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-EPISODE",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-EPISODE-1",
+                "name": "Persisted Episode Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let feature = |name: &str| {
+        feature_values
+            .iter()
+            .find(|feature| feature["name"] == name)
+            .unwrap_or_else(|| panic!("missing feature {name}"))
+    };
+
+    assert_eq!(
+        feature("member_provider_claim_count_30d")["value"],
+        serde_json::json!(2)
+    );
+    assert_eq!(
+        feature("duplicate_claim_similarity_score")["value"],
+        serde_json::json!(1.0)
+    );
+    assert_eq!(
+        feature("unbundling_candidate_count")["value"],
+        serde_json::json!(0)
+    );
+    assert_eq!(
+        feature("member_provider_claim_count_30d")["data_source"],
+        "worker.episode_utilization_rollup"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!("claims:CLM-EPISODE-1")));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "episode_rollups:s3://customer-prod-artifacts/episode/episode_aggregation_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "episode_rollup:MBR-EPISODE-1|PRV-EPISODE-1:2026-06-14"
+    )));
+}
+
+#[tokio::test]
+async fn scores_full_payload_with_persisted_unbundling_candidates() {
+    let app = build_app(test_config()).unwrap();
+
+    let unbundling_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/unbundling-comparator-candidates")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "actor": "worker:build-unbundling-comparator",
+              "notes": "customer-approved unbundling comparator candidates",
+              "source_report_uri": "s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json",
+              "report_kind": "unbundling_comparator",
+              "as_of_date": "2026-06-13",
+              "source_uri": "s3://customer-prod-artifacts/inputs/unbundling-reference.json",
+              "rule_count": 1,
+              "episode_count": 1,
+              "candidate_count": 1,
+              "candidates": [
+                {
+                  "candidate_id": "unbundling:UNBUNDLE-KNEE-001:MBR-UNB-1|PRV-UNB-1",
+                  "rule_id": "UNBUNDLE-KNEE-001",
+                  "episode_key": "MBR-UNB-1|PRV-UNB-1",
+                  "member_id": "MBR-UNB-1",
+                  "provider_id": "PRV-UNB-1",
+                  "window_days": 30,
+                  "bundled_code": "BUNDLE-900",
+                  "matched_component_codes": ["COMP-100", "COMP-200"],
+                  "claim_ids": ["CLM-UNB-1", "CLM-UNB-2"],
+                  "policy_authority_ref": "policy:unbundling:BUNDLE-900",
+                  "evidence_refs": ["policy:unbundling:BUNDLE-900", "claims:CLM-UNB-1", "claims:CLM-UNB-2"],
+                  "recommended_review": "medical_review_candidate"
+                }
+              ],
+              "evidence_refs": [
+                "unbundling_comparator_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json",
+                "unbundling_comparator_input:s3://customer-prod-artifacts/inputs/unbundling-reference.json"
+              ],
+              "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
+            }"#,
+        ))
+        .unwrap();
+    let unbundling_response = app.clone().oneshot(unbundling_request).await.unwrap();
+    assert_eq!(unbundling_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PERSISTED-UNBUNDLING",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "M17"
+              },
+              "items": [
+                {
+                  "item_code": "COMP-100",
+                  "item_type": "procedure",
+                  "description": "Component procedure",
+                  "quantity": 1,
+                  "unit_amount": "4000",
+                  "total_amount": "4000"
+                },
+                {
+                  "item_code": "COMP-200",
+                  "item_type": "procedure",
+                  "description": "Component procedure",
+                  "quantity": 1,
+                  "unit_amount": "4000",
+                  "total_amount": "4000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-UNB-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-PERSISTED-UNBUNDLING",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-UNB-1",
+                "name": "Persisted Unbundling Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let unbundling_feature = feature_values
+        .iter()
+        .find(|feature| feature["name"] == "unbundling_candidate_count")
+        .expect("unbundling feature should be present");
+
+    assert_eq!(unbundling_feature["value"], serde_json::json!(1));
+    assert_eq!(
+        unbundling_feature["data_source"],
+        "worker.unbundling_comparator"
+    );
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!("unbundling:MBR-UNB-1|PRV-UNB-1")));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "unbundling_comparator_candidates:s3://customer-prod-artifacts/unbundling/unbundling_comparator_report.json"
+    )));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "unbundling_comparator_candidate:unbundling:UNBUNDLE-KNEE-001:MBR-UNB-1|PRV-UNB-1:2026-06-13"
+    )));
+}
+
+async fn post_json(app: Router, uri: &str, body: &'static str) -> (StatusCode, serde_json::Value) {
+    let request = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(body))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
+    (status, body)
 }

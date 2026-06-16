@@ -21,6 +21,11 @@ fn builds_provider_graph_signal_rollup_contract() {
                 {"provider_id": "PRV-A", "referring_provider_id": "REF-2", "referral_count": 1},
                 {"provider_id": "PRV-B", "referring_provider_id": "REF-3", "referral_count": 5},
                 {"provider_id": "PRV-B", "referring_provider_id": "REF-4", "referral_count": 5}
+            ],
+            "provider_risks": [
+                {"provider_id": "PRV-A", "high_risk": false, "confirmed_fwa_count": 0, "network_component_risk_score": 72},
+                {"provider_id": "PRV-B", "high_risk": true, "confirmed_fwa_count": 2, "network_component_risk_score": 85},
+                {"provider_id": "PRV-C", "high_risk": false, "confirmed_fwa_count": 0, "network_component_risk_score": 20}
             ]
         }),
     )
@@ -39,12 +44,23 @@ fn builds_provider_graph_signal_rollup_contract() {
         .find(|provider| provider.provider_id == "PRV-A")
         .expect("PRV-A rollup");
     assert!(provider_a.billing_ring_membership);
+    assert_eq!(provider_a.high_risk_neighbor_ratio, Some(0.5));
+    assert!(provider_a.provider_patient_overlap_score.unwrap() >= 0.66);
+    assert_eq!(provider_a.connected_confirmed_fwa_count, Some(2));
+    assert_eq!(provider_a.network_component_risk_score, Some(72));
     assert!(provider_a.temporal_co_billing_frequency_7d >= 0.66);
+    assert!(provider_a.referral_concentration_score.unwrap() > 0.50);
     assert!(provider_a.referral_concentration_entropy.unwrap() < 0.50);
     assert_eq!(provider_a.shared_member_provider_count, 1);
     assert!(provider_a
         .evidence_refs
         .contains(&"provider_graph_rollups:PRV-A".to_string()));
+    assert!(provider_a
+        .evidence_refs
+        .contains(&"claims:CLM-A1".to_string()));
+    assert!(provider_a
+        .evidence_refs
+        .contains(&"provider_graph_neighbor:PRV-B".to_string()));
     let provider_b = report
         .provider_relationships
         .iter()
@@ -52,9 +68,243 @@ fn builds_provider_graph_signal_rollup_contract() {
         .expect("PRV-B rollup");
     assert!(provider_b.referral_concentration_entropy.unwrap() > 0.95);
     assert!(output_dir
-        .join("provider_graph_signal_rollup.json")
+        .join("provider_graph_signal_rollup_report.json")
         .exists());
     assert!(output_dir
         .join("provider_relationship_inputs.json")
         .exists());
+}
+
+#[test]
+fn builds_provider_graph_signal_rollup_submission() {
+    let root = temp_root("provider-graph-rollup-submission");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_graph_signal_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-graph-input.json",
+            "provider_count": 1,
+            "claim_count": 3,
+            "provider_relationships": [
+                {
+                    "provider_id": "PRV-GRAPH-1",
+                    "high_risk_neighbor_ratio": 0.34,
+                    "provider_patient_overlap_score": 0.68,
+                    "referral_concentration_score": 0.78,
+                    "billing_ring_membership": true,
+                    "temporal_co_billing_frequency_7d": 0.67,
+                    "referral_concentration_entropy": 0.22,
+                    "shared_member_provider_count": 2,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 82,
+                    "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+                }
+            ],
+            "evidence_refs": ["provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"],
+            "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }),
+    )
+    .unwrap();
+
+    let submission = build_provider_graph_signal_rollup_submission_with_published_uris(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
+        "worker:build-provider-graph-signals",
+        "daily graph rollup",
+    )
+    .expect("provider graph submission");
+
+    assert_eq!(submission.report_kind, "provider_graph_signal_rollup");
+    assert_eq!(submission.provider_count, 1);
+    assert_eq!(
+        submission.provider_relationships[0].provider_id,
+        "PRV-GRAPH-1"
+    );
+    assert_eq!(
+        submission.source_report_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json"
+    );
+    assert_eq!(
+        submission.source_uri,
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json"
+    );
+    assert!(submission.evidence_refs.contains(&"provider_graph_signal_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json".to_string()));
+    assert!(submission.evidence_refs.contains(&"provider_graph_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json".to_string()));
+}
+
+#[test]
+fn rejects_provider_graph_submission_without_claim_snapshot_evidence() {
+    let root = temp_root("provider-graph-rollup-submission-missing-source-evidence");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_graph_signal_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-graph-input.json",
+            "provider_count": 1,
+            "claim_count": 3,
+            "provider_relationships": [
+                {
+                    "provider_id": "PRV-GRAPH-1",
+                    "high_risk_neighbor_ratio": 0.34,
+                    "provider_patient_overlap_score": 0.68,
+                    "referral_concentration_score": 0.78,
+                    "billing_ring_membership": true,
+                    "temporal_co_billing_frequency_7d": 0.67,
+                    "referral_concentration_entropy": 0.22,
+                    "shared_member_provider_count": 2,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 82,
+                    "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+                }
+            ],
+            "evidence_refs": [],
+            "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }),
+    )
+    .unwrap();
+
+    let error = build_provider_graph_signal_rollup_submission_with_published_uris(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
+        "worker:build-provider-graph-signals",
+        "daily graph rollup",
+    )
+    .expect_err("provider graph submission without source evidence must fail");
+
+    assert!(error
+        .to_string()
+        .contains("provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"));
+}
+
+#[test]
+fn rejects_provider_graph_submission_with_template_record_evidence() {
+    let root = temp_root("provider-graph-rollup-submission-template-evidence");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_graph_signal_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-graph-input.json",
+            "provider_count": 1,
+            "claim_count": 3,
+            "provider_relationships": [
+                {
+                    "provider_id": "PRV-GRAPH-1",
+                    "high_risk_neighbor_ratio": 0.34,
+                    "provider_patient_overlap_score": 0.68,
+                    "referral_concentration_score": 0.78,
+                    "billing_ring_membership": true,
+                    "temporal_co_billing_frequency_7d": 0.67,
+                    "referral_concentration_entropy": 0.22,
+                    "shared_member_provider_count": 2,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 82,
+                    "evidence_refs": ["provider_graph_rollups:local://template/provider/graph.json"]
+                }
+            ],
+            "evidence_refs": ["provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"],
+            "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }),
+    )
+    .unwrap();
+
+    let error = build_provider_graph_signal_rollup_submission_with_published_uris(
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
+        "worker:build-provider-graph-signals",
+        "daily graph rollup",
+    )
+    .expect_err("provider graph submission with template evidence must fail");
+
+    assert!(error.to_string().contains(
+        "provider graph record evidence_refs must not use local dry-run or placeholder evidence"
+    ));
+}
+
+#[tokio::test]
+async fn submits_provider_graph_signal_rollup_to_api() {
+    use tokio::net::TcpListener;
+
+    let root = temp_root("provider-graph-rollup-submit-api");
+    let report_uri = root.join("provider_graph_signal_rollup_report.json");
+    write_json(
+        report_uri.clone(),
+        &serde_json::json!({
+            "report_kind": "provider_graph_signal_rollup",
+            "report_version": 1,
+            "as_of_date": "2026-06-14",
+            "source_uri": "local://inputs/provider-graph-input.json",
+            "provider_count": 1,
+            "claim_count": 3,
+            "provider_relationships": [
+                {
+                    "provider_id": "PRV-GRAPH-1",
+                    "high_risk_neighbor_ratio": 0.34,
+                    "provider_patient_overlap_score": 0.68,
+                    "referral_concentration_score": 0.78,
+                    "billing_ring_membership": true,
+                    "temporal_co_billing_frequency_7d": 0.67,
+                    "referral_concentration_entropy": 0.22,
+                    "shared_member_provider_count": 2,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 82,
+                    "evidence_refs": ["provider_graph_rollups:PRV-GRAPH-1"]
+                }
+            ],
+            "evidence_refs": ["provider_graph_claim_snapshot:local://inputs/provider-graph-input.json"],
+            "governance_boundary": "rollup computes provider graph signals only; it must not assign fraud labels, open cases, or change scoring/routing policy"
+        }),
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api_url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let request = read_http_request(&mut socket).await;
+        write_json_response(
+            &mut socket,
+            serde_json::json!({
+                "report_kind": "provider_graph_signal_rollup",
+                "provider_relationship_count": 1
+            }),
+        )
+        .await;
+        request
+    });
+
+    let response = submit_provider_graph_signal_rollup_with_published_uris(
+        &api_url,
+        "provider-write-secret",
+        &report_uri.to_string_lossy(),
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json",
+        "s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json",
+        "worker:build-provider-graph-signals",
+        "daily graph rollup",
+    )
+    .await
+    .expect("submit provider graph signal rollup");
+
+    assert_eq!(response["provider_relationship_count"], 1);
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /api/v1/ops/providers/graph-signal-rollups HTTP/1.1"));
+    assert!(request.contains("x-api-key: provider-write-secret"));
+    assert!(request.contains(r#""provider_id":"PRV-GRAPH-1""#));
+    assert!(request.contains(
+        "provider_graph_signal_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_signal_rollup_report.json"
+    ));
+    assert!(request.contains(
+        r#""source_uri":"s3://customer-prod-artifacts/worker-data-pipeline/provider_graph_claims.json""#
+    ));
 }

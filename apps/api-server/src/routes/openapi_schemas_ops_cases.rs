@@ -106,7 +106,7 @@ pub(super) fn case_schemas() -> Value {
                 "evidence_refs": {
                     "type": "array",
                     "minItems": 1,
-                    "description": "Structured triage decision evidence references must not contain PII.",
+                    "description": "Structured triage decision evidence references must be production refs not local/template refs and must not contain PII.",
                     "items": { "type": "string", "minLength": 1 }
                 }
             }
@@ -142,7 +142,7 @@ pub(super) fn case_schemas() -> Value {
                 "evidence_refs": {
                     "type": "array",
                     "minItems": 1,
-                    "description": "Structured evidence references must not contain PII.",
+                    "description": "Structured evidence references must be production refs not local/template refs and must not contain PII.",
                     "items": { "type": "string", "minLength": 1 }
                 }
             }

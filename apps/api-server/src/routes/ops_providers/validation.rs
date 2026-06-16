@@ -3,7 +3,9 @@ use axum::http::StatusCode;
 
 use super::{
     AnomalyClusteringReviewTaskInput, ReviewAnomalyCandidateRequest,
-    SubmitAnomalyClusteringReportRequest,
+    SubmitAnomalyClusteringReportRequest, SubmitEpisodeRollupRequest, SubmitPeerBenchmarkRequest,
+    SubmitProviderGraphSignalRollupRequest, SubmitProviderProfileWindowRollupRequest,
+    SubmitSanctionsSyncReportRequest,
 };
 
 pub(super) fn validate_anomaly_clustering_report_submission(
@@ -74,6 +76,16 @@ pub(super) fn validate_anomaly_clustering_report_submission(
             "source_report_uri must point to a JSON clustering report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_URI",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_URI",
+        "source_report_uri",
+    )?;
     if request.review_tasks.is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -93,6 +105,16 @@ pub(super) fn validate_anomaly_clustering_report_submission(
             format!("anomaly clustering report evidence_refs must include {expected_report_ref}"),
         ));
     }
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_EVIDENCE",
+        "anomaly clustering report evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REPORT_EVIDENCE",
+        "anomaly clustering report evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     for task in &request.review_tasks {
         validate_anomaly_clustering_review_task(task, &request.source_report_uri)?;
     }
@@ -110,6 +132,1098 @@ pub(super) fn validate_anomaly_clustering_report_submission(
             StatusCode::BAD_REQUEST,
             "PII_NOT_ALLOWED_IN_ANOMALY_CLUSTERING_REPORT",
             "anomaly clustering actor, notes, report URI, candidate IDs, and evidence_refs must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn validate_sanctions_sync_report_submission(
+    request: &SubmitSanctionsSyncReportRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_SANCTIONS_SYNC_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_SANCTIONS_SYNC_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_SANCTIONS_SYNC_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_SANCTIONS_SYNC_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.run_date.as_str(),
+            "INVALID_SANCTIONS_SYNC_RUN_DATE",
+            "run_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.sync_status.as_str(),
+            "INVALID_SANCTIONS_SYNC_STATUS",
+            "sync_status is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_SANCTIONS_SYNC_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "oig_sam_sanctions_sync_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SANCTIONS_SYNC_REPORT_KIND",
+            "report_kind must be oig_sam_sanctions_sync_report",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SANCTIONS_SYNC_REPORT_URI",
+            "source_report_uri must point to a JSON sanctions sync report",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_SANCTIONS_SYNC_REPORT_URI",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_SANCTIONS_SYNC_REPORT_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_uri,
+        "INVALID_SANCTIONS_SYNC_SOURCE_URI",
+        "source_uri",
+    )?;
+    if request.provider_upserts.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_SANCTIONS_UPSERTS",
+            "provider_upserts are required",
+        ));
+    }
+    if let Some(valid_record_count) = request.valid_record_count {
+        if valid_record_count != request.provider_upserts.len() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SANCTIONS_SYNC_RECORD_COUNT",
+                "valid_record_count must match provider_upserts length",
+            ));
+        }
+    }
+    if let Some(invalid_record_count) = request.invalid_record_count {
+        if invalid_record_count != request.review_tasks.len() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SANCTIONS_SYNC_RECORD_COUNT",
+                "invalid_record_count must match review_tasks length",
+            ));
+        }
+    }
+    if let (Some(source_record_count), Some(valid_record_count), Some(invalid_record_count)) = (
+        request.source_record_count,
+        request.valid_record_count,
+        request.invalid_record_count,
+    ) {
+        if source_record_count != valid_record_count + invalid_record_count {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SANCTIONS_SYNC_RECORD_COUNT",
+                "source_record_count must equal valid_record_count + invalid_record_count",
+            ));
+        }
+    }
+    let expected_report_ref = format!("sanctions_sync_reports:{}", request.source_report_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_SANCTIONS_SYNC_REPORT_EVIDENCE",
+            format!("sanctions sync evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_source_ref = format!("sanctions_source_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        format!("sanctions sync evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        "sanctions sync evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_SANCTIONS_SYNC_REPORT_EVIDENCE",
+        "sanctions sync evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
+    for upsert in &request.provider_upserts {
+        if upsert.sanction_key.trim().is_empty()
+            || upsert.list.trim().is_empty()
+            || upsert.provider_name.trim().is_empty()
+            || upsert.risk_feature.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_SANCTIONS_UPSERT",
+                "sanction_key, list, provider_name, and risk_feature are required",
+            ));
+        }
+        if upsert
+            .provider_id
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+            && upsert.npi.as_deref().unwrap_or_default().trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_SANCTIONS_UPSERT",
+                "provider_id or npi is required",
+            ));
+        }
+        if upsert.risk_feature != "provider_sanctions_excluded" || upsert.risk_score != 100 {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_SANCTIONS_RISK_SIGNAL",
+                "sanctions upserts must use provider_sanctions_excluded with risk_score 100",
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_provider_profile_window_rollup_submission(
+    request: &SubmitProviderProfileWindowRollupRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_PROVIDER_PROFILE_ROLLUP_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "provider_profile_window_rollup" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_ROLLUP_KIND",
+            "report_kind must be provider_profile_window_rollup",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+            "source_report_uri must point to a JSON provider profile rollup report",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    if request.provider_profiles.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_PROFILE_WINDOWS",
+            "provider_profiles are required",
+        ));
+    }
+    if request.provider_count != request.provider_profiles.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_ROLLUP_PROVIDER_COUNT",
+            "provider_count must match provider_profiles length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "provider_profile_window_rollups:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+            format!("provider profile rollup evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_source_ref = format!("provider_profile_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        format!("provider profile rollup evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        "provider profile rollup evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_PROFILE_ROLLUP_EVIDENCE",
+        "provider profile rollup evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
+    for profile in &request.provider_profiles {
+        if profile.provider_id.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_PROFILE_WINDOWS",
+                "provider_id is required",
+            ));
+        }
+        if profile.windows.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_PROFILE_WINDOWS",
+                "windows are required",
+            ));
+        }
+        validate_source_lineage_evidence_refs(
+            &profile.evidence_refs,
+            &["claims:"],
+            "INVALID_PROVIDER_PROFILE_EVIDENCE",
+            "provider profiles require source lineage evidence_refs",
+        )?;
+        for window in &profile.windows {
+            validate_provider_profile_window(window)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_provider_profile_window(window: &serde_json::Value) -> Result<(), ApiError> {
+    let window_days = window
+        .get("window_days")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_PROFILE_WINDOW",
+                "window_days is required",
+            )
+        })?;
+    if !matches!(window_days, 30 | 90 | 365) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_WINDOW",
+            "window_days must be 30, 90, or 365",
+        ));
+    }
+    if window
+        .get("claim_count")
+        .and_then(serde_json::Value::as_u64)
+        .is_none()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_PROFILE_WINDOW",
+            "claim_count is required",
+        ));
+    }
+    for field in ["high_cost_item_ratio", "diagnosis_procedure_mismatch_rate"] {
+        if let Some(value) = window.get(field).and_then(serde_json::Value::as_f64) {
+            if !(0.0..=1.0).contains(&value) {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_PROFILE_WINDOW",
+                    format!("{field} must be between 0 and 1"),
+                ));
+            }
+        }
+    }
+    for field in ["peer_amount_percentile", "peer_frequency_percentile"] {
+        if let Some(value) = window.get(field).and_then(serde_json::Value::as_u64) {
+            if value > 100 {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_PROFILE_WINDOW",
+                    format!("{field} must be between 0 and 100"),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_lineage_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.is_empty()
+        || evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    validate_no_template_evidence_refs(evidence_refs, code, message)?;
+    validate_production_evidence_refs(evidence_refs, code, message)?;
+    Ok(())
+}
+
+fn validate_source_lineage_evidence_refs(
+    evidence_refs: &[String],
+    source_prefixes: &[&str],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    validate_lineage_evidence_refs(evidence_refs, code, message)?;
+    if !evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        source_prefixes
+            .iter()
+            .any(|source_prefix| reference.starts_with(source_prefix))
+    }) {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn validate_required_evidence_ref(
+    evidence_refs: &[String],
+    expected_ref: &str,
+    code: &'static str,
+    message: String,
+) -> Result<(), ApiError> {
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn validate_no_template_uri(
+    value: &str,
+    code: &'static str,
+    field_name: &'static str,
+) -> Result<(), ApiError> {
+    if value.trim().starts_with("local://template") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            format!("{field_name} must not use local://template evidence"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_production_artifact_uri(
+    value: &str,
+    code: &'static str,
+    field_name: &'static str,
+) -> Result<(), ApiError> {
+    let value = value.trim();
+    if value.is_empty()
+        || artifact_reference_is_non_production(value)
+        || !value.contains("://")
+        || value.contains('{')
+        || value.contains('}')
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            format!(
+                "{field_name} must use production evidence, not local dry-run or placeholder URI"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_no_template_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn validate_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        artifact_reference_is_non_production(reference)
+    }) {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn artifact_reference_is_non_production(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    normalized.contains("local://")
+        || normalized.contains("file://")
+        || normalized.contains("://localhost")
+        || normalized.contains("://127.")
+        || normalized.contains("://0.0.0.0")
+        || normalized.contains("://[::1]")
+        || value.contains('{')
+        || value.contains('}')
+}
+
+pub(super) fn validate_provider_graph_signal_rollup_submission(
+    request: &SubmitProviderGraphSignalRollupRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_PROVIDER_GRAPH_ROLLUP_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "provider_graph_signal_rollup" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_GRAPH_ROLLUP_KIND",
+            "report_kind must be provider_graph_signal_rollup",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+            "source_report_uri must point to a JSON provider graph signal rollup report",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_uri,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    if request.provider_relationships.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_GRAPH_SIGNALS",
+            "provider_relationships are required",
+        ));
+    }
+    if request.provider_count != request.provider_relationships.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROVIDER_GRAPH_ROLLUP_PROVIDER_COUNT",
+            "provider_count must match provider_relationships length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "provider_graph_signal_rollups:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+            format!("provider graph rollup evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_source_ref = format!("provider_graph_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        format!("provider graph rollup evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        "provider graph rollup evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROVIDER_GRAPH_ROLLUP_EVIDENCE",
+        "provider graph rollup evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
+    for relationship in &request.provider_relationships {
+        if relationship.provider_id.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_GRAPH_SIGNAL",
+                "provider_id is required",
+            ));
+        }
+        validate_source_lineage_evidence_refs(
+            &relationship.evidence_refs,
+            &["claims:", "relationship_edges:"],
+            "INVALID_PROVIDER_GRAPH_SIGNAL_EVIDENCE",
+            "provider graph signals require source lineage evidence_refs",
+        )?;
+        for (value, field) in [
+            (
+                relationship.high_risk_neighbor_ratio,
+                "high_risk_neighbor_ratio",
+            ),
+            (
+                relationship.provider_patient_overlap_score,
+                "provider_patient_overlap_score",
+            ),
+            (
+                relationship.referral_concentration_score,
+                "referral_concentration_score",
+            ),
+        ] {
+            if let Some(value) = value {
+                if !(0.0..=1.0).contains(&value) {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_PROVIDER_GRAPH_SIGNAL",
+                        format!("{field} must be between 0 and 1"),
+                    ));
+                }
+            }
+        }
+        if !(0.0..=1.0).contains(&relationship.temporal_co_billing_frequency_7d) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PROVIDER_GRAPH_SIGNAL",
+                "temporal_co_billing_frequency_7d must be between 0 and 1",
+            ));
+        }
+        if let Some(score) = relationship.network_component_risk_score {
+            if score > 100 {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_GRAPH_SIGNAL",
+                    "network_component_risk_score must be between 0 and 100",
+                ));
+            }
+        }
+        if let Some(entropy) = relationship.referral_concentration_entropy {
+            if !(0.0..=1.0).contains(&entropy) {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_PROVIDER_GRAPH_SIGNAL",
+                    "referral_concentration_entropy must be between 0 and 1",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_peer_benchmark_submission(
+    request: &SubmitPeerBenchmarkRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_PEER_BENCHMARK_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_PEER_BENCHMARK_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_PEER_BENCHMARK_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_PEER_BENCHMARK_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.benchmark_month.as_str(),
+            "INVALID_PEER_BENCHMARK_MONTH",
+            "benchmark_month is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_PEER_BENCHMARK_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_PEER_BENCHMARK_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "peer_percentile_benchmark" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PEER_BENCHMARK_KIND",
+            "report_kind must be peer_percentile_benchmark",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PEER_BENCHMARK_URI",
+            "source_report_uri must point to a JSON peer benchmark report",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_PEER_BENCHMARK_URI",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_PEER_BENCHMARK_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_PEER_BENCHMARK_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_uri,
+        "INVALID_PEER_BENCHMARK_SOURCE_URI",
+        "source_uri",
+    )?;
+    if request.peer_groups.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PEER_BENCHMARK_GROUPS",
+            "peer_groups are required",
+        ));
+    }
+    if request.peer_group_count != request.peer_groups.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PEER_BENCHMARK_GROUP_COUNT",
+            "peer_group_count must match peer_groups length",
+        ));
+    }
+    let expected_report_ref = format!("peer_benchmarks:{}", request.source_report_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PEER_BENCHMARK_EVIDENCE",
+            format!("peer benchmark evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_source_ref = format!("peer_benchmark_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_PEER_BENCHMARK_EVIDENCE",
+        format!("peer benchmark evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PEER_BENCHMARK_EVIDENCE",
+        "peer benchmark evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PEER_BENCHMARK_EVIDENCE",
+        "peer benchmark evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
+    for group in &request.peer_groups {
+        if group.peer_group_key.trim().is_empty()
+            || group.specialty.trim().is_empty()
+            || group.region.trim().is_empty()
+            || group.service_segment.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_GROUP",
+                "peer_group_key, specialty, region, and service_segment are required",
+            ));
+        }
+        if group.claim_count == 0 {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_GROUP",
+                "claim_count must be greater than 0",
+            ));
+        }
+        validate_source_lineage_evidence_refs(
+            &group.evidence_refs,
+            &["claims:"],
+            "INVALID_PEER_BENCHMARK_EVIDENCE",
+            "peer benchmark groups require source lineage evidence_refs",
+        )?;
+        let percentiles = [group.p25, group.p50, group.p75, group.p90, group.p99];
+        if percentiles
+            .iter()
+            .any(|value| !value.is_finite() || *value < 0.0)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_PERCENTILES",
+                "peer benchmark percentiles must be finite non-negative amounts",
+            ));
+        }
+        if !(group.p25 <= group.p50
+            && group.p50 <= group.p75
+            && group.p75 <= group.p90
+            && group.p90 <= group.p99)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PEER_BENCHMARK_PERCENTILES",
+                "peer benchmark percentiles must be monotonic",
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_episode_rollup_submission(
+    request: &SubmitEpisodeRollupRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_EPISODE_ROLLUP_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_EPISODE_ROLLUP_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_EPISODE_ROLLUP_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_EPISODE_ROLLUP_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_EPISODE_ROLLUP_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_EPISODE_ROLLUP_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "member_provider_episode_aggregation" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_ROLLUP_KIND",
+            "report_kind must be member_provider_episode_aggregation",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_ROLLUP_URI",
+            "source_report_uri must point to a JSON episode aggregation report",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_EPISODE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_EPISODE_ROLLUP_URI",
+        "source_report_uri",
+    )?;
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_uri,
+        "INVALID_EPISODE_ROLLUP_SOURCE_URI",
+        "source_uri",
+    )?;
+    if request.episodes.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_EPISODE_ROLLUPS",
+            "episodes are required",
+        ));
+    }
+    if request.episode_count != request.episodes.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_ROLLUP_COUNT",
+            "episode_count must match episodes length",
+        ));
+    }
+    let expected_report_ref = format!("episode_rollups:{}", request.source_report_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_EPISODE_ROLLUP_EVIDENCE",
+            format!("episode rollup evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_source_ref = format!("episode_claim_snapshot:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_EPISODE_ROLLUP_EVIDENCE",
+        format!("episode rollup evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_EPISODE_ROLLUP_EVIDENCE",
+        "episode rollup evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_EPISODE_ROLLUP_EVIDENCE",
+        "episode rollup evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
+    for episode in &request.episodes {
+        if episode.episode_key.trim().is_empty()
+            || episode.member_id.trim().is_empty()
+            || episode.provider_id.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_ROLLUP",
+                "episode_key, member_id, and provider_id are required",
+            ));
+        }
+        if episode.windows.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_ROLLUP",
+                "windows are required",
+            ));
+        }
+        validate_source_lineage_evidence_refs(
+            &episode.evidence_refs,
+            &["claims:"],
+            "INVALID_EPISODE_ROLLUP_EVIDENCE",
+            "episode rollups require source lineage evidence_refs",
+        )?;
+        for window in &episode.windows {
+            validate_episode_window(window)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_episode_window(window: &serde_json::Value) -> Result<(), ApiError> {
+    let window_days = window
+        .get("window_days")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_WINDOW",
+                "window_days is required",
+            )
+        })?;
+    if !matches!(window_days, 30 | 90 | 365) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_WINDOW",
+            "window_days must be 30, 90, or 365",
+        ));
+    }
+    for field in [
+        "claim_count",
+        "unique_procedure_code_count",
+        "max_procedure_code_frequency",
+        "duplicate_amount_day_count",
+    ] {
+        if window
+            .get(field)
+            .and_then(serde_json::Value::as_u64)
+            .is_none()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_WINDOW",
+                format!("{field} is required"),
+            ));
+        }
+    }
+    let total_claim_amount = window
+        .get("total_claim_amount")
+        .and_then(serde_json::Value::as_f64)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_EPISODE_WINDOW",
+                "total_claim_amount is required",
+            )
+        })?;
+    if !total_claim_amount.is_finite() || total_claim_amount < 0.0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EPISODE_WINDOW",
+            "total_claim_amount must be finite and non-negative",
         ));
     }
     Ok(())
@@ -172,6 +1286,16 @@ fn validate_anomaly_clustering_review_task(
             format!("review task evidence_refs must include {expected_report_ref}"),
         ));
     }
+    validate_no_template_evidence_refs(
+        &task.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REVIEW_TASK_EVIDENCE",
+        "review task evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &task.evidence_refs,
+        "INVALID_ANOMALY_CLUSTERING_REVIEW_TASK_EVIDENCE",
+        "review task evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -236,6 +1360,16 @@ pub(super) fn validate_anomaly_candidate_review(
             "source_report_uri must point to a JSON clustering report",
         ));
     }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CANDIDATE_REPORT",
+        "source_report_uri",
+    )?;
+    validate_production_artifact_uri(
+        &request.source_report_uri,
+        "INVALID_ANOMALY_CANDIDATE_REPORT",
+        "source_report_uri",
+    )?;
     if request.evidence_refs.is_empty()
         || request
             .evidence_refs
@@ -260,6 +1394,16 @@ pub(super) fn validate_anomaly_candidate_review(
             format!("anomaly candidate evidence_refs must include {expected_report_ref}"),
         ));
     }
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CANDIDATE_EVIDENCE",
+        "anomaly candidate evidence_refs must not use local://template evidence",
+    )?;
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_ANOMALY_CANDIDATE_EVIDENCE",
+        "anomaly candidate evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     if pii::contains_pii(
         std::iter::once(request.reviewer.as_str())
             .chain(std::iter::once(request.notes.as_str()))

@@ -25,6 +25,33 @@ pub(crate) fn test_config() -> AppConfig {
     }
 }
 
+pub(crate) fn restricted_test_config(permissions: &[&str]) -> (AppConfig, String) {
+    let restricted_key = "restricted-test-key";
+    let permission_spec = permissions.join(",");
+    let principal_spec = format!(
+        "{}|restricted-actor|fwa_operator|tpa-demo|demo-customer|{}",
+        restricted_key, permission_spec
+    );
+    let config = AppConfig {
+        api_key: "dev-secret".into(),
+        api_key_principals: vec![principal_spec],
+        source_system: "tpa-demo".into(),
+        database_url: "postgres://unused".into(),
+        model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    };
+    (config, restricted_key.into())
+}
+
 pub(crate) async fn get_json(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method("GET")
@@ -64,12 +91,25 @@ pub(crate) fn model_lifecycle_payload(model_key: &str, version: &str) -> String 
 }
 
 pub(crate) async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
+    register_active_model_dataset_for_test(app, suffix).await
+}
+
+pub(crate) async fn register_active_model_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
-        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "active",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
     )
     .await
 }
@@ -81,20 +121,103 @@ pub(crate) async fn register_unhealthy_model_dataset_for_test(
     register_model_dataset_for_test_with_profiles(
         app,
         suffix,
-        "{}",
-        r#"{"allowed_values": [0, 1]}"#,
-        "{}",
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "active",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: "{}",
+            label_profile: r#"{"allowed_values": [0, 1]}"#,
+            feature_profile: "{}",
+        },
     )
     .await
+}
+
+pub(crate) async fn register_inactive_feature_set_model_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "draft",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
+    )
+    .await
+}
+
+pub(crate) async fn register_inactive_source_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        ModelDatasetProfileConfig {
+            dataset_status: "draft",
+            feature_set_status: "active",
+            model_dataset_status: "active",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
+    )
+    .await
+}
+
+pub(crate) async fn register_inactive_model_dataset_for_test(
+    app: axum::Router,
+    suffix: &str,
+) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        ModelDatasetProfileConfig {
+            dataset_status: "active",
+            feature_set_status: "active",
+            model_dataset_status: "draft",
+            uri_prefix: "s3://fwa-model-data",
+            key_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            label_profile: r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+            feature_profile: r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        },
+    )
+    .await
+}
+
+struct ModelDatasetProfileConfig<'a> {
+    dataset_status: &'a str,
+    feature_set_status: &'a str,
+    model_dataset_status: &'a str,
+    uri_prefix: &'a str,
+    key_profile: &'a str,
+    label_profile: &'a str,
+    feature_profile: &'a str,
 }
 
 async fn register_model_dataset_for_test_with_profiles(
     app: axum::Router,
     suffix: &str,
-    key_profile: &str,
-    label_profile: &str,
-    feature_profile: &str,
+    config: ModelDatasetProfileConfig<'_>,
 ) -> String {
+    let ModelDatasetProfileConfig {
+        dataset_status,
+        feature_set_status,
+        model_dataset_status,
+        uri_prefix,
+        key_profile,
+        label_profile,
+        feature_profile,
+    } = config;
     let (_, dataset) = json_request(
         app.clone(),
         "POST",
@@ -111,17 +234,17 @@ async fn register_model_dataset_for_test_with_profiles(
               "sample_grain": "claim",
               "label_column": "confirmed_fwa",
               "entity_keys": ["claim_id"],
-              "manifest_uri": "data/eval/claims_model_eval_{suffix}/v1/manifest.json",
-              "schema_uri": "data/eval/claims_model_eval_{suffix}/v1/schema.json",
-              "profile_uri": "data/eval/claims_model_eval_{suffix}/v1/profile.json",
+              "manifest_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/manifest.json",
+              "schema_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/schema.json",
+              "profile_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/profile.json",
               "storage_format": "parquet",
               "schema_hash": "sha256:model-{suffix}",
               "row_count": 100,
-              "status": "draft",
+              "status": "{dataset_status}",
               "splits": [
                 {{
                   "split_name": "validation",
-                  "data_uri": "data/eval/claims_model_eval_{suffix}/v1/split=validation/",
+                  "data_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/split=validation/",
                   "row_count": 100,
                   "positive_count": 25,
                   "negative_count": 75,
@@ -170,11 +293,11 @@ async fn register_model_dataset_for_test_with_profiles(
               "feature_set_key": "claims_features_{suffix}",
               "version": "v1",
               "dataset_id": "{dataset_id}",
-              "features_uri": "data/eval/claims_model_eval_{suffix}/v1/features/",
+              "features_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/features/",
               "feature_list_json": ["claim_amount_to_limit_ratio"],
               "row_count": 100,
               "label_column": "confirmed_fwa",
-              "status": "draft"
+              "status": "{feature_set_status}"
             }}"#
         ),
     )
@@ -191,12 +314,12 @@ async fn register_model_dataset_for_test_with_profiles(
               "task_type": "binary_classification",
               "label_name": "confirmed_fwa",
               "feature_set_id": "{feature_set_id}",
-              "train_uri": "data/eval/claims_model_eval_{suffix}/v1/split=train/",
-              "validation_uri": "data/eval/claims_model_eval_{suffix}/v1/split=validation/",
+              "train_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/split=train/",
+              "validation_uri": "{uri_prefix}/claims_model_eval_{suffix}/v1/split=validation/",
               "test_uri": null,
               "row_counts_json": {{"train": 80, "validation": 20}},
               "label_distribution_json": {{"train": {{"1": 20, "0": 60}}, "validation": {{"1": 5, "0": 15}}}},
-              "status": "draft"
+              "status": "{model_dataset_status}"
             }}"#
         ),
     )
@@ -229,7 +352,7 @@ pub(crate) async fn register_activation_candidate(app: axum::Router) -> String {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/claims_model_eval_activation/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.31}}
             }}"#
         ),
@@ -313,7 +436,7 @@ pub(crate) async fn register_activation_candidate(app: axum::Router) -> String {
                 "model_artifacts:s3://fwa-models/baseline_fwa/{candidate_version}/model.onnx",
                 "model_validation_reports:s3://fwa-models/baseline_fwa/{candidate_version}/validation.json",
                 "model_artifact_evaluations:s3://fwa-models/baseline_fwa/{candidate_version}/artifact-evaluation/model_artifact_evaluation_report.json",
-                "model_feature_importance:data/eval/claims_model_eval_activation_candidate/v1/feature_importance.parquet",
+                "model_feature_importance:s3://fwa-models/baseline_fwa/{candidate_version}/feature_importance.parquet",
                 "model_permutation_importance:s3://fwa-models/baseline_fwa/{candidate_version}/permutation_importance.parquet",
                 "automl_factor_rankings:s3://fwa-models/baseline_fwa/{candidate_version}/automl_factor_ranking_report.json",
                 "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/{candidate_version}/overfitting_diagnostics_report.json",
@@ -329,7 +452,7 @@ pub(crate) async fn register_activation_candidate(app: axum::Router) -> String {
               "accuracy": "0.79",
               "threshold": "0.52",
               "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
-              "feature_importance_uri": "data/eval/claims_model_eval_activation_candidate/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/feature_importance.parquet",
               "permutation_importance_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/permutation_importance.parquet",
               "metrics_json": {{
                 "score_psi": 0.04,
@@ -402,8 +525,72 @@ pub(crate) async fn approve_activation_candidate(app: axum::Router, candidate_ve
     assert_eq!(review["model_version"], candidate_version);
 }
 
+pub(crate) async fn submit_probability_calibration_report_for_test(
+    app: axum::Router,
+    model_version: &str,
+) {
+    let report_uri =
+        format!("s3://customer-prod-artifacts/model-artifacts/baseline_fwa/{model_version}/calibration/probability_calibration_report.json");
+    let (status, response) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/probability-calibration-reports",
+        &format!(
+            r#"{{
+              "actor": "worker:build-probability-calibration-report",
+              "notes": "Labeled holdout calibration evidence for activation gate.",
+              "report_uri": "{report_uri}",
+              "report_kind": "probability_calibration_report",
+              "model_version": "{model_version}",
+              "as_of_date": "2026-06-15",
+              "row_count": 120,
+              "minimum_calibration_rows": 100,
+              "bin_count": 2,
+              "expected_calibration_error": 0.02,
+              "max_expected_calibration_error": 0.05,
+              "brier_score": 0.12,
+              "max_brier_score": 0.20,
+              "calibration_status": "passed",
+              "bins": [
+                {{
+                  "bin_index": 0,
+                  "lower_bound": 0.0,
+                  "upper_bound": 0.5,
+                  "row_count": 60,
+                  "average_predicted_probability": 0.1,
+                  "observed_positive_rate": 0.1,
+                  "calibration_error": 0.0
+                }},
+                {{
+                  "bin_index": 1,
+                  "lower_bound": 0.5,
+                  "upper_bound": 1.0,
+                  "row_count": 60,
+                  "average_predicted_probability": 0.8,
+                  "observed_positive_rate": 0.76,
+                  "calibration_error": 0.04
+                }}
+              ],
+              "review_tasks": [],
+              "evidence_refs": [
+                "model_versions:baseline_fwa:{model_version}",
+                "probability_calibration_reports:{report_uri}",
+                "probability_calibration_input:s3://customer-prod-artifacts/baseline_fwa/{model_version}/calibration/holdout-predictions.json",
+                "calibration_labels:s3://customer-prod-artifacts/baseline_fwa/{model_version}/calibration/holdout-labels.json"
+              ],
+              "governance_boundary": "calibration report is evidence only; it must not relabel outcomes, rewrite model probabilities, change routing thresholds, or activate calibrated serving"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert_eq!(response["model_version"], model_version);
+    assert_eq!(response["calibration_status"], "passed");
+}
+
 pub(crate) async fn activate_candidate_for_test(app: axum::Router, candidate_version: &str) {
     approve_activation_candidate(app.clone(), candidate_version).await;
+    submit_probability_calibration_report_for_test(app.clone(), candidate_version).await;
     let (status, activated) = json_request(
         app,
         "POST",

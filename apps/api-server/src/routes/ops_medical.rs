@@ -380,7 +380,33 @@ fn validate_medical_review_result(
             "medical review notes and evidence_refs must not contain PII",
         ));
     }
+    validate_medical_review_production_evidence_refs(&request.evidence_refs)?;
     Ok(())
+}
+
+fn validate_medical_review_production_evidence_refs(
+    evidence_refs: &[String],
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        let normalized = reference.to_ascii_lowercase();
+        normalized.contains("local://")
+            || normalized.contains("file://")
+            || normalized.contains("://localhost")
+            || normalized.contains("://127.")
+            || normalized.contains("://0.0.0.0")
+            || normalized.contains("://[::1]")
+            || reference.contains('{')
+            || reference.contains('}')
+    }) {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MEDICAL_REVIEW_EVIDENCE",
+            "medical review evidence_refs must not use local dry-run or placeholder evidence",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn controlled_clinical_outcomes(request: &SubmitMedicalReviewResultRequest) -> Vec<String> {

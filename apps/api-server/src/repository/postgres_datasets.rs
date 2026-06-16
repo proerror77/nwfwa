@@ -1,5 +1,6 @@
 use super::dataset_rows::load_dataset_record;
 use super::*;
+use sqlx::Row;
 
 pub(super) async fn register_dataset(
     repository: &PostgresScoringRepository,
@@ -267,8 +268,37 @@ pub(super) async fn get_model_dataset_source_dataset(
     repository: &PostgresScoringRepository,
     model_dataset_id: &str,
 ) -> anyhow::Result<Option<DatasetRecord>> {
-    let row: Option<(String,)> = sqlx::query_as(
-        "SELECT fs.dataset_id::text
+    Ok(get_model_dataset_lineage(repository, model_dataset_id)
+        .await?
+        .map(|lineage| lineage.source_dataset))
+}
+
+pub(super) async fn get_model_dataset_lineage(
+    repository: &PostgresScoringRepository,
+    model_dataset_id: &str,
+) -> anyhow::Result<Option<ModelDatasetLineageRecord>> {
+    let row = sqlx::query(
+        "SELECT md.id::text AS model_dataset_id,
+                md.business_domain AS model_business_domain,
+                md.task_type,
+                md.label_name,
+                md.feature_set_id::text AS model_feature_set_id,
+                md.train_uri,
+                md.validation_uri,
+                md.test_uri,
+                md.row_counts_json,
+                md.label_distribution_json,
+                md.status AS model_dataset_status,
+                fs.id::text AS feature_set_id,
+                fs.business_domain AS feature_business_domain,
+                fs.feature_set_key,
+                fs.version AS feature_set_version,
+                fs.dataset_id::text AS source_dataset_id,
+                fs.features_uri,
+                fs.feature_list_json,
+                fs.row_count AS feature_row_count,
+                fs.label_column AS feature_label_column,
+                fs.status AS feature_set_status
              FROM model_dataset_versions md
              JOIN feature_set_versions fs ON fs.id = md.feature_set_id
              WHERE md.id = $1::uuid",
@@ -277,10 +307,41 @@ pub(super) async fn get_model_dataset_source_dataset(
     .fetch_optional(&repository.pool)
     .await?;
 
-    let Some((dataset_id,)) = row else {
+    let Some(row) = row else {
         return Ok(None);
     };
-    load_dataset_record(&repository.pool, &dataset_id).await
+    let dataset_id: String = row.try_get("source_dataset_id")?;
+    let Some(source_dataset) = load_dataset_record(&repository.pool, &dataset_id).await? else {
+        return Ok(None);
+    };
+    Ok(Some(ModelDatasetLineageRecord {
+        model_dataset: ModelDatasetRecord {
+            model_dataset_id: row.try_get("model_dataset_id")?,
+            business_domain: row.try_get("model_business_domain")?,
+            task_type: row.try_get("task_type")?,
+            label_name: row.try_get("label_name")?,
+            feature_set_id: row.try_get("model_feature_set_id")?,
+            train_uri: row.try_get("train_uri")?,
+            validation_uri: row.try_get("validation_uri")?,
+            test_uri: row.try_get("test_uri")?,
+            row_counts_json: row.try_get("row_counts_json")?,
+            label_distribution_json: row.try_get("label_distribution_json")?,
+            status: row.try_get("model_dataset_status")?,
+        },
+        feature_set: FeatureSetRecord {
+            feature_set_id: row.try_get("feature_set_id")?,
+            business_domain: row.try_get("feature_business_domain")?,
+            feature_set_key: row.try_get("feature_set_key")?,
+            version: row.try_get("feature_set_version")?,
+            dataset_id,
+            features_uri: row.try_get("features_uri")?,
+            feature_list_json: row.try_get("feature_list_json")?,
+            row_count: row.try_get::<i64, _>("feature_row_count")? as u64,
+            label_column: row.try_get("feature_label_column")?,
+            status: row.try_get("feature_set_status")?,
+        },
+        source_dataset,
+    }))
 }
 
 pub(super) async fn register_model_evaluation(
@@ -476,4 +537,565 @@ pub(super) async fn list_model_evaluations(
             },
         )
         .collect())
+}
+
+pub(super) async fn save_scoring_feature_context_materialization(
+    repository: &PostgresScoringRepository,
+    input: SaveScoringFeatureContextMaterializationInput,
+) -> anyhow::Result<ScoringFeatureContextMaterializationRecord> {
+    sqlx::query(
+        "INSERT INTO scoring_feature_context_materializations
+             (materialization_id, customer_scope_id, as_of_date, report_uri, report_kind, source_uris, claim_count, context_count, contexts_json, evidence_refs, governance_boundary, submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (customer_scope_id, materialization_id) DO UPDATE
+             SET customer_scope_id = EXCLUDED.customer_scope_id,
+                 as_of_date = EXCLUDED.as_of_date,
+                 report_uri = EXCLUDED.report_uri,
+                 report_kind = EXCLUDED.report_kind,
+                 source_uris = EXCLUDED.source_uris,
+                 claim_count = EXCLUDED.claim_count,
+                 context_count = EXCLUDED.context_count,
+                 contexts_json = EXCLUDED.contexts_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes",
+    )
+    .bind(&input.materialization_id)
+    .bind(&input.customer_scope_id)
+    .bind(&input.as_of_date)
+    .bind(&input.report_uri)
+    .bind(&input.report_kind)
+    .bind(&input.source_uris)
+    .bind(input.claim_count as i64)
+    .bind(input.context_count as i64)
+    .bind(&input.contexts_json)
+    .bind(serde_json::json!(input.evidence_refs))
+    .bind(&input.governance_boundary)
+    .bind(&input.submitted_by)
+    .bind(&input.notes)
+    .execute(&repository.pool)
+    .await?;
+
+    get_scoring_feature_context_materialization(
+        repository,
+        &input.materialization_id,
+        Some(&input.customer_scope_id),
+    )
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("saved scoring feature context materialization was not found"))
+}
+
+pub(super) async fn get_scoring_feature_context_materialization(
+    repository: &PostgresScoringRepository,
+    materialization_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>> {
+    let row: Option<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Value,
+        i32,
+        i32,
+        Value,
+        Value,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT materialization_id, customer_scope_id, as_of_date, report_uri, report_kind, source_uris, claim_count, context_count, contexts_json, evidence_refs, governance_boundary, submitted_by, notes
+             FROM scoring_feature_context_materializations
+             WHERE materialization_id = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)",
+    )
+    .bind(materialization_id)
+    .bind(customer_scope_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            materialization_id,
+            customer_scope_id,
+            as_of_date,
+            report_uri,
+            report_kind,
+            source_uris,
+            claim_count,
+            context_count,
+            contexts_json,
+            evidence_refs,
+            governance_boundary,
+            submitted_by,
+            notes,
+        )| ScoringFeatureContextMaterializationRecord {
+            materialization_id,
+            customer_scope_id,
+            as_of_date,
+            report_uri,
+            report_kind,
+            source_uris,
+            claim_count: claim_count as u64,
+            context_count: context_count as u64,
+            contexts_json,
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            governance_boundary,
+            submitted_by,
+            notes,
+        },
+    ))
+}
+
+pub(super) async fn latest_scoring_feature_context_for_claim(
+    repository: &PostgresScoringRepository,
+    claim_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>> {
+    let row: Option<(String, String, String, Value, Value)> = sqlx::query_as(
+        "SELECT materialization_id, as_of_date, report_uri, context_json, evidence_refs
+             FROM scoring_feature_context_materializations
+             CROSS JOIN LATERAL jsonb_array_elements(contexts_json) AS context_json
+             WHERE context_json->>'claim_id' = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)
+             ORDER BY as_of_date DESC, created_at DESC, materialization_id DESC
+             LIMIT 1",
+    )
+    .bind(claim_id)
+    .bind(customer_scope_id)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(materialization_id, as_of_date, report_uri, context_json, evidence_refs)| {
+            ScoringFeatureContextForClaimRecord {
+                materialization_id,
+                as_of_date,
+                report_uri,
+                context_json,
+                evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            }
+        },
+    ))
+}
+
+pub(super) async fn save_clinical_compatibility_references(
+    repository: &PostgresScoringRepository,
+    input: SaveClinicalCompatibilityReferencesInput,
+) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
+    let mut saved = Vec::with_capacity(input.records.len());
+    let mut tx = repository.pool.begin().await?;
+    for record in input.records {
+        let evidence_refs = serde_json::Value::Array(
+            record
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+        sqlx::query(
+            "INSERT INTO clinical_compatibility_references
+                 (customer_scope_id, compatibility_key, reference_version, effective_date, source_authority, diagnosis_code_prefix, procedure_code, diagnosis_procedure_match_score, data_source, policy_authority_ref, rationale, evidence_refs, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                 ON CONFLICT (customer_scope_id, compatibility_key, reference_version) DO UPDATE
+                 SET effective_date = EXCLUDED.effective_date,
+                     source_authority = EXCLUDED.source_authority,
+                     diagnosis_code_prefix = EXCLUDED.diagnosis_code_prefix,
+                     procedure_code = EXCLUDED.procedure_code,
+                     diagnosis_procedure_match_score = EXCLUDED.diagnosis_procedure_match_score,
+                     data_source = EXCLUDED.data_source,
+                     policy_authority_ref = EXCLUDED.policy_authority_ref,
+                     rationale = EXCLUDED.rationale,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&record.compatibility_key)
+        .bind(&input.reference_version)
+        .bind(&input.effective_date)
+        .bind(&input.source_authority)
+        .bind(&record.diagnosis_code_prefix)
+        .bind(&record.procedure_code)
+        .bind(record.diagnosis_procedure_match_score)
+        .bind(&record.data_source)
+        .bind(&record.policy_authority_ref)
+        .bind(&record.rationale)
+        .bind(&evidence_refs)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(ClinicalCompatibilityReferenceRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            compatibility_key: record.compatibility_key,
+            diagnosis_code_prefix: record.diagnosis_code_prefix,
+            procedure_code: record.procedure_code,
+            diagnosis_procedure_match_score: record.diagnosis_procedure_match_score,
+            data_source: record.data_source,
+            policy_authority_ref: record.policy_authority_ref,
+            rationale: record.rationale,
+            evidence_refs: record.evidence_refs,
+            reference_version: input.reference_version.clone(),
+            effective_date: input.effective_date.clone(),
+            source_authority: input.source_authority.clone(),
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}
+
+pub(super) async fn clinical_compatibility_reference_for_claim(
+    repository: &PostgresScoringRepository,
+    diagnosis_code: &str,
+    procedure_codes: &[String],
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Option<ClinicalCompatibilityReferenceRecord>> {
+    let normalized_diagnosis_code = diagnosis_code.trim().to_ascii_uppercase();
+    let normalized_procedure_codes = procedure_codes
+        .iter()
+        .map(|code| code.trim().to_ascii_uppercase())
+        .collect::<Vec<_>>();
+    if normalized_diagnosis_code.is_empty() || normalized_procedure_codes.is_empty() {
+        return Ok(None);
+    }
+
+    let row: Option<(
+        String,
+        String,
+        String,
+        String,
+        f64,
+        String,
+        String,
+        String,
+        Value,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+    )> = sqlx::query_as(
+        "SELECT customer_scope_id, compatibility_key, diagnosis_code_prefix, procedure_code, diagnosis_procedure_match_score, data_source, policy_authority_ref, rationale, evidence_refs, reference_version, effective_date, source_authority, source_report_uri, submitted_by, notes
+             FROM clinical_compatibility_references
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+               AND $2 LIKE upper(diagnosis_code_prefix) || '%'
+               AND upper(procedure_code) = ANY($3::text[])
+             ORDER BY diagnosis_procedure_match_score ASC, effective_date DESC, reference_version DESC
+             LIMIT 1",
+    )
+    .bind(customer_scope_id)
+    .bind(&normalized_diagnosis_code)
+    .bind(&normalized_procedure_codes)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(
+        |(
+            customer_scope_id,
+            compatibility_key,
+            diagnosis_code_prefix,
+            procedure_code,
+            diagnosis_procedure_match_score,
+            data_source,
+            policy_authority_ref,
+            rationale,
+            evidence_refs,
+            reference_version,
+            effective_date,
+            source_authority,
+            source_report_uri,
+            submitted_by,
+            notes,
+        )| ClinicalCompatibilityReferenceRecord {
+            customer_scope_id,
+            compatibility_key,
+            diagnosis_code_prefix,
+            procedure_code,
+            diagnosis_procedure_match_score,
+            data_source,
+            policy_authority_ref,
+            rationale,
+            evidence_refs: serde_json::from_value(evidence_refs).unwrap_or_default(),
+            reference_version,
+            effective_date,
+            source_authority,
+            source_report_uri,
+            submitted_by,
+            notes,
+        },
+    ))
+}
+
+pub(super) async fn save_unbundling_comparator_candidates(
+    repository: &PostgresScoringRepository,
+    input: SaveUnbundlingComparatorCandidatesInput,
+) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+    let mut saved = Vec::with_capacity(input.candidates.len());
+    let mut tx = repository.pool.begin().await?;
+    for candidate in input.candidates {
+        sqlx::query(
+            "INSERT INTO unbundling_comparator_candidates
+                 (customer_scope_id, candidate_id, as_of_date, rule_id, episode_key, member_id, provider_id, window_days, bundled_code, matched_component_codes, claim_ids, policy_authority_ref, evidence_refs, recommended_review, source_report_uri, submitted_by, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                 ON CONFLICT (customer_scope_id, candidate_id, as_of_date) DO UPDATE
+                 SET rule_id = EXCLUDED.rule_id,
+                     episode_key = EXCLUDED.episode_key,
+                     member_id = EXCLUDED.member_id,
+                     provider_id = EXCLUDED.provider_id,
+                     window_days = EXCLUDED.window_days,
+                     bundled_code = EXCLUDED.bundled_code,
+                     matched_component_codes = EXCLUDED.matched_component_codes,
+                     claim_ids = EXCLUDED.claim_ids,
+                     policy_authority_ref = EXCLUDED.policy_authority_ref,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     recommended_review = EXCLUDED.recommended_review,
+                     source_report_uri = EXCLUDED.source_report_uri,
+                     submitted_by = EXCLUDED.submitted_by,
+                     notes = EXCLUDED.notes,
+                     updated_at = now()",
+        )
+        .bind(&input.customer_scope_id)
+        .bind(&candidate.candidate_id)
+        .bind(&input.as_of_date)
+        .bind(&candidate.rule_id)
+        .bind(&candidate.episode_key)
+        .bind(&candidate.member_id)
+        .bind(&candidate.provider_id)
+        .bind(candidate.window_days as i32)
+        .bind(&candidate.bundled_code)
+        .bind(string_values(&candidate.matched_component_codes))
+        .bind(string_values(&candidate.claim_ids))
+        .bind(&candidate.policy_authority_ref)
+        .bind(string_values(&candidate.evidence_refs))
+        .bind(&candidate.recommended_review)
+        .bind(&input.source_report_uri)
+        .bind(&input.submitted_by)
+        .bind(&input.notes)
+        .execute(&mut *tx)
+        .await?;
+        saved.push(UnbundlingComparatorCandidateRecord {
+            customer_scope_id: input.customer_scope_id.clone(),
+            candidate_id: candidate.candidate_id,
+            as_of_date: input.as_of_date.clone(),
+            rule_id: candidate.rule_id,
+            episode_key: candidate.episode_key,
+            member_id: candidate.member_id,
+            provider_id: candidate.provider_id,
+            window_days: candidate.window_days,
+            bundled_code: candidate.bundled_code,
+            matched_component_codes: candidate.matched_component_codes,
+            claim_ids: candidate.claim_ids,
+            policy_authority_ref: candidate.policy_authority_ref,
+            evidence_refs: candidate.evidence_refs,
+            recommended_review: candidate.recommended_review,
+            source_report_uri: input.source_report_uri.clone(),
+            submitted_by: input.submitted_by.clone(),
+            notes: input.notes.clone(),
+        });
+    }
+    tx.commit().await?;
+    Ok(saved)
+}
+
+pub(super) async fn latest_unbundling_comparator_candidates_for_member_provider(
+    repository: &PostgresScoringRepository,
+    member_id: &str,
+    provider_id: &str,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+    let rows = sqlx::query(
+        "SELECT customer_scope_id, candidate_id, as_of_date, rule_id, episode_key, member_id, provider_id, window_days, bundled_code, matched_component_codes, claim_ids, policy_authority_ref, evidence_refs, recommended_review, source_report_uri, submitted_by, notes
+         FROM unbundling_comparator_candidates
+         WHERE ($1::text IS NULL OR customer_scope_id = $1)
+           AND member_id = $2
+           AND provider_id = $3
+           AND as_of_date = (
+             SELECT max(as_of_date)
+             FROM unbundling_comparator_candidates
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+               AND member_id = $2
+               AND provider_id = $3
+           )
+         ORDER BY candidate_id",
+    )
+    .bind(customer_scope_id)
+    .bind(member_id.trim())
+    .bind(provider_id.trim())
+    .fetch_all(&repository.pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let window_days: i32 = row.try_get("window_days")?;
+            Ok(UnbundlingComparatorCandidateRecord {
+                customer_scope_id: row.try_get("customer_scope_id")?,
+                candidate_id: row.try_get("candidate_id")?,
+                as_of_date: row.try_get("as_of_date")?,
+                rule_id: row.try_get("rule_id")?,
+                episode_key: row.try_get("episode_key")?,
+                member_id: row.try_get("member_id")?,
+                provider_id: row.try_get("provider_id")?,
+                window_days: window_days.max(0) as u16,
+                bundled_code: row.try_get("bundled_code")?,
+                matched_component_codes: row.try_get("matched_component_codes")?,
+                claim_ids: row.try_get("claim_ids")?,
+                policy_authority_ref: row.try_get("policy_authority_ref")?,
+                evidence_refs: row.try_get("evidence_refs")?,
+                recommended_review: row.try_get("recommended_review")?,
+                source_report_uri: row.try_get("source_report_uri")?,
+                submitted_by: row.try_get("submitted_by")?,
+                notes: row.try_get("notes")?,
+            })
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()?)
+}
+
+pub(super) async fn save_worker_data_pipeline_readiness_report(
+    repository: &PostgresScoringRepository,
+    input: SaveWorkerDataPipelineReadinessReportInput,
+) -> anyhow::Result<WorkerDataPipelineReadinessReportRecord> {
+    sqlx::query(
+        "INSERT INTO worker_data_pipeline_readiness_reports
+             (customer_scope_id, source_report_uri, report_kind, plan_uri, readiness_input_uri,
+              readiness_status, job_count, ready_job_count, blocked_job_count, review_task_count,
+              job_readiness_json, review_tasks_json, evidence_refs, governance_boundary,
+              submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+             ON CONFLICT (customer_scope_id, source_report_uri) DO UPDATE
+             SET report_kind = EXCLUDED.report_kind,
+                 plan_uri = EXCLUDED.plan_uri,
+                 readiness_input_uri = EXCLUDED.readiness_input_uri,
+                 readiness_status = EXCLUDED.readiness_status,
+                 job_count = EXCLUDED.job_count,
+                 ready_job_count = EXCLUDED.ready_job_count,
+                 blocked_job_count = EXCLUDED.blocked_job_count,
+                 review_task_count = EXCLUDED.review_task_count,
+                 job_readiness_json = EXCLUDED.job_readiness_json,
+                 review_tasks_json = EXCLUDED.review_tasks_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes,
+                 updated_at = now()",
+    )
+    .bind(&input.customer_scope_id)
+    .bind(&input.source_report_uri)
+    .bind(&input.report_kind)
+    .bind(&input.plan_uri)
+    .bind(&input.readiness_input_uri)
+    .bind(&input.readiness_status)
+    .bind(input.job_count as i64)
+    .bind(input.ready_job_count as i64)
+    .bind(input.blocked_job_count as i64)
+    .bind(input.review_task_count as i64)
+    .bind(&input.job_readiness_json)
+    .bind(&input.review_tasks_json)
+    .bind(serde_json::json!(input.evidence_refs.clone()))
+    .bind(&input.governance_boundary)
+    .bind(&input.submitted_by)
+    .bind(&input.notes)
+    .execute(&repository.pool)
+    .await?;
+    Ok(WorkerDataPipelineReadinessReportRecord {
+        customer_scope_id: input.customer_scope_id,
+        source_report_uri: input.source_report_uri,
+        report_kind: input.report_kind,
+        plan_uri: input.plan_uri,
+        readiness_input_uri: input.readiness_input_uri,
+        readiness_status: input.readiness_status,
+        job_count: input.job_count,
+        ready_job_count: input.ready_job_count,
+        blocked_job_count: input.blocked_job_count,
+        review_task_count: input.review_task_count,
+        job_readiness_json: input.job_readiness_json,
+        review_tasks_json: input.review_tasks_json,
+        evidence_refs: input.evidence_refs,
+        governance_boundary: input.governance_boundary,
+        submitted_by: input.submitted_by,
+        notes: input.notes,
+    })
+}
+
+pub(super) async fn save_worker_data_pipeline_execution_report(
+    repository: &PostgresScoringRepository,
+    input: SaveWorkerDataPipelineExecutionReportInput,
+) -> anyhow::Result<WorkerDataPipelineExecutionReportRecord> {
+    sqlx::query(
+        "INSERT INTO worker_data_pipeline_execution_reports
+             (customer_scope_id, source_report_uri, report_kind, plan_uri, run_status_uri,
+              readiness_report_uri, readiness_gate_status, run_id, execution_date, job_count,
+              pending_or_failed_job_count, review_task_count, job_executions_json,
+              review_tasks_json, evidence_refs, governance_boundary, submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+             ON CONFLICT (customer_scope_id, source_report_uri) DO UPDATE
+             SET report_kind = EXCLUDED.report_kind,
+                 plan_uri = EXCLUDED.plan_uri,
+                 run_status_uri = EXCLUDED.run_status_uri,
+                 readiness_report_uri = EXCLUDED.readiness_report_uri,
+                 readiness_gate_status = EXCLUDED.readiness_gate_status,
+                 run_id = EXCLUDED.run_id,
+                 execution_date = EXCLUDED.execution_date,
+                 job_count = EXCLUDED.job_count,
+                 pending_or_failed_job_count = EXCLUDED.pending_or_failed_job_count,
+                 review_task_count = EXCLUDED.review_task_count,
+                 job_executions_json = EXCLUDED.job_executions_json,
+                 review_tasks_json = EXCLUDED.review_tasks_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes,
+                 updated_at = now()",
+    )
+    .bind(&input.customer_scope_id)
+    .bind(&input.source_report_uri)
+    .bind(&input.report_kind)
+    .bind(&input.plan_uri)
+    .bind(&input.run_status_uri)
+    .bind(&input.readiness_report_uri)
+    .bind(&input.readiness_gate_status)
+    .bind(&input.run_id)
+    .bind(&input.execution_date)
+    .bind(input.job_count as i64)
+    .bind(input.pending_or_failed_job_count as i64)
+    .bind(input.review_task_count as i64)
+    .bind(&input.job_executions_json)
+    .bind(&input.review_tasks_json)
+    .bind(serde_json::json!(input.evidence_refs.clone()))
+    .bind(&input.governance_boundary)
+    .bind(&input.submitted_by)
+    .bind(&input.notes)
+    .execute(&repository.pool)
+    .await?;
+    Ok(WorkerDataPipelineExecutionReportRecord {
+        customer_scope_id: input.customer_scope_id,
+        source_report_uri: input.source_report_uri,
+        report_kind: input.report_kind,
+        plan_uri: input.plan_uri,
+        run_status_uri: input.run_status_uri,
+        readiness_report_uri: input.readiness_report_uri,
+        readiness_gate_status: input.readiness_gate_status,
+        run_id: input.run_id,
+        execution_date: input.execution_date,
+        job_count: input.job_count,
+        pending_or_failed_job_count: input.pending_or_failed_job_count,
+        review_task_count: input.review_task_count,
+        job_executions_json: input.job_executions_json,
+        review_tasks_json: input.review_tasks_json,
+        evidence_refs: input.evidence_refs,
+        governance_boundary: input.governance_boundary,
+        submitted_by: input.submitted_by,
+        notes: input.notes,
+    })
 }

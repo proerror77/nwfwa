@@ -70,6 +70,7 @@ pub(in crate::routes) fn validate_retraining_output_request(
         }
     }
     validate_model_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
+    validate_production_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
     if let Some(artifact_sha256) = &request.artifact_sha256 {
         validate_sha256_digest(
             artifact_sha256,
@@ -86,6 +87,7 @@ pub(in crate::routes) fn validate_retraining_output_request(
             ));
         }
         validate_training_artifact_uri(training_artifact_uri, "INVALID_TRAINING_ARTIFACT_URI")?;
+        validate_production_artifact_uri(training_artifact_uri, "INVALID_TRAINING_ARTIFACT_URI")?;
     }
     if let Some(training_artifact_sha256) = &request.training_artifact_sha256 {
         if request.training_artifact_uri.is_none() {
@@ -114,8 +116,9 @@ pub(in crate::routes) fn validate_retraining_output_request(
             "INVALID_SERVING_MANIFEST_URI",
             "serving_manifest_uri must point to a JSON serving manifest",
         )?;
+        validate_production_artifact_uri(serving_manifest_uri, "INVALID_SERVING_MANIFEST_URI")?;
     }
-    validate_json_report_uri(
+    validate_json_production_report_uri(
         &request.validation_report_uri,
         "INVALID_VALIDATION_REPORT_URI",
     )?;
@@ -161,6 +164,10 @@ pub(in crate::routes) fn validate_retraining_output_request(
             feature_importance_uri,
             "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
         )?;
+        validate_production_artifact_uri(
+            feature_importance_uri,
+            "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
+        )?;
     }
     if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
         if permutation_importance_uri.trim().is_empty() {
@@ -171,6 +178,10 @@ pub(in crate::routes) fn validate_retraining_output_request(
             ));
         }
         validate_parquet_artifact_uri(
+            permutation_importance_uri,
+            "INVALID_RETRAINING_OUTPUT_PERMUTATION_IMPORTANCE",
+        )?;
+        validate_production_artifact_uri(
             permutation_importance_uri,
             "INVALID_RETRAINING_OUTPUT_PERMUTATION_IMPORTANCE",
         )?;
@@ -218,7 +229,10 @@ fn validate_retraining_output_artifact_evaluation(
             "model retraining output requires model_artifact_evaluation_report_uri",
         ));
     };
-    validate_json_report_uri(report_uri, "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION")?;
+    validate_json_production_report_uri(
+        report_uri,
+        "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION",
+    )?;
     let expected_ref = format!("model_artifact_evaluations:{report_uri}");
     if !request
         .evidence_refs
@@ -254,6 +268,17 @@ fn validate_retraining_output_evidence_refs(
             StatusCode::BAD_REQUEST,
             "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB",
             "model retraining output evidence_refs must not contain PII",
+        ));
+    }
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| super::artifact_reference_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_EVIDENCE",
+            "model retraining output evidence_refs must not use local dry-run or placeholder evidence",
         ));
     }
     for expected_ref in [
@@ -343,6 +368,10 @@ fn validate_retraining_output_evidence_refs(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
+        validate_json_production_report_uri(
+            overfitting_diagnostics_uri,
+            "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE",
+        )?;
         let expected_ref = format!("model_overfitting_diagnostics:{overfitting_diagnostics_uri}");
         if !request
             .evidence_refs
@@ -363,6 +392,10 @@ fn validate_retraining_output_evidence_refs(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
+        validate_json_production_report_uri(
+            factor_ranking_uri,
+            "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE",
+        )?;
         let expected_ref = format!("automl_factor_rankings:{factor_ranking_uri}");
         if !request
             .evidence_refs
@@ -507,6 +540,14 @@ pub(in crate::routes) fn validate_json_report_uri(
     )
 }
 
+pub(in crate::routes) fn validate_json_production_report_uri(
+    value: &str,
+    code: &'static str,
+) -> Result<(), ApiError> {
+    validate_json_report_uri(value, code)?;
+    validate_production_artifact_uri(value, code)
+}
+
 pub(in crate::routes) fn validate_json_artifact_uri(
     value: &str,
     code: &'static str,
@@ -516,6 +557,22 @@ pub(in crate::routes) fn validate_json_artifact_uri(
         Ok(())
     } else {
         Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    }
+}
+
+fn validate_production_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    let value = value.trim();
+    if value.is_empty()
+        || !value.contains("://")
+        || super::artifact_reference_is_non_production(value)
+    {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "model retraining output artifact URIs must use production evidence, not local dry-run or placeholder URIs",
+        ))
+    } else {
+        Ok(())
     }
 }
 

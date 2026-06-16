@@ -133,6 +133,13 @@ pub struct ModelDatasetRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelDatasetLineageRecord {
+    pub model_dataset: ModelDatasetRecord,
+    pub feature_set: FeatureSetRecord,
+    pub source_dataset: DatasetRecord,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterModelDatasetInput {
     pub business_domain: String,
     pub task_type: String,
@@ -164,6 +171,223 @@ pub struct ModelEvaluationRecord {
     pub feature_importance_uri: Option<String>,
     pub permutation_importance_uri: Option<String>,
     pub metrics_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoringFeatureContextMaterializationRecord {
+    pub materialization_id: String,
+    pub customer_scope_id: String,
+    pub as_of_date: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub source_uris: Value,
+    pub claim_count: u64,
+    pub context_count: u64,
+    pub contexts_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoringFeatureContextForClaimRecord {
+    pub materialization_id: String,
+    pub as_of_date: String,
+    pub report_uri: String,
+    pub context_json: Value,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveScoringFeatureContextMaterializationInput {
+    pub materialization_id: String,
+    pub customer_scope_id: String,
+    pub as_of_date: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub source_uris: Value,
+    pub claim_count: u64,
+    pub context_count: u64,
+    pub contexts_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClinicalCompatibilityReferenceUpsertInput {
+    pub compatibility_key: String,
+    pub diagnosis_code_prefix: String,
+    pub procedure_code: String,
+    pub diagnosis_procedure_match_score: f64,
+    pub data_source: String,
+    pub policy_authority_ref: String,
+    pub rationale: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveClinicalCompatibilityReferencesInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub reference_version: String,
+    pub effective_date: String,
+    pub source_authority: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub records: Vec<ClinicalCompatibilityReferenceUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClinicalCompatibilityReferenceRecord {
+    pub customer_scope_id: String,
+    pub compatibility_key: String,
+    pub diagnosis_code_prefix: String,
+    pub procedure_code: String,
+    pub diagnosis_procedure_match_score: f64,
+    pub data_source: String,
+    pub policy_authority_ref: String,
+    pub rationale: String,
+    pub evidence_refs: Vec<String>,
+    pub reference_version: String,
+    pub effective_date: String,
+    pub source_authority: String,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnbundlingComparatorCandidateUpsertInput {
+    pub candidate_id: String,
+    pub rule_id: String,
+    pub episode_key: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub window_days: u16,
+    pub bundled_code: String,
+    pub matched_component_codes: Vec<String>,
+    pub claim_ids: Vec<String>,
+    pub policy_authority_ref: String,
+    pub evidence_refs: Vec<String>,
+    pub recommended_review: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveUnbundlingComparatorCandidatesInput {
+    pub customer_scope_id: String,
+    pub as_of_date: String,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+    pub candidates: Vec<UnbundlingComparatorCandidateUpsertInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnbundlingComparatorCandidateRecord {
+    pub customer_scope_id: String,
+    pub candidate_id: String,
+    pub as_of_date: String,
+    pub rule_id: String,
+    pub episode_key: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub window_days: u16,
+    pub bundled_code: String,
+    pub matched_component_codes: Vec<String>,
+    pub claim_ids: Vec<String>,
+    pub policy_authority_ref: String,
+    pub evidence_refs: Vec<String>,
+    pub recommended_review: String,
+    pub source_report_uri: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveWorkerDataPipelineReadinessReportInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub readiness_input_uri: String,
+    pub readiness_status: String,
+    pub job_count: u64,
+    pub ready_job_count: u64,
+    pub blocked_job_count: u64,
+    pub review_task_count: u64,
+    pub job_readiness_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerDataPipelineReadinessReportRecord {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub readiness_input_uri: String,
+    pub readiness_status: String,
+    pub job_count: u64,
+    pub ready_job_count: u64,
+    pub blocked_job_count: u64,
+    pub review_task_count: u64,
+    pub job_readiness_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveWorkerDataPipelineExecutionReportInput {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub run_status_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: u64,
+    pub pending_or_failed_job_count: u64,
+    pub review_task_count: u64,
+    pub job_executions_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerDataPipelineExecutionReportRecord {
+    pub customer_scope_id: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub run_status_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: u64,
+    pub pending_or_failed_job_count: u64,
+    pub review_task_count: u64,
+    pub job_executions_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

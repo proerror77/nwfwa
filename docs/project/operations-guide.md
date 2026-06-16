@@ -445,6 +445,7 @@ cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
   --api-url "$FWA_API_BASE_URL" \
   --api-key "$FWA_API_KEY" \
   --scheduler-report artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --published-scheduler-report-uri s3://customer-prod-artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
   --actor mlops-worker \
   --notes "MLOps scheduler alert-router handoff submitted."
 ```
@@ -452,6 +453,9 @@ cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
 This records delivery handoff evidence only. It does not replace the customer
 alert receiver, create retraining jobs, activate models, rollback models, or
 assign fraud labels.
+The worker reads `--scheduler-report` from the local run workspace; the API
+handoff evidence must use `--published-scheduler-report-uri` so governance
+records never depend on local filesystem paths.
 
 Run the Alertmanager adapter when Kubernetes Alertmanager should submit native
 webhooks into the same governed FWA API handoff:
@@ -480,6 +484,7 @@ Send queued MLOps alert tasks to a customer receiver webhook:
 ```bash
 cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook \
   --scheduler-report artifacts/mlops-monitoring/cycle/scheduler/mlops_scheduler_execution_report.json \
+  --published-scheduler-report-uri s3://customer-prod-artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
   --receiver-url "$FWA_ALERT_RECEIVER_URL" \
   --receiver-id customer-alert-router-v1 \
   --receiver-token "$FWA_ALERT_RECEIVER_TOKEN" \
@@ -493,6 +498,10 @@ delivery evidence and keeps the receiver payload governance-only. The worker can
 attach bearer auth, HMAC signature, and bounded retry evidence; the customer
 receiver still owns downstream notification policy, escalation, and
 acknowledgement.
+The worker reads `--scheduler-report` from the local run workspace, but the
+payload sent to the customer receiver uses
+`--published-scheduler-report-uri`; do not send local filesystem paths as
+customer evidence.
 
 Analytics-scale export proof:
 
@@ -757,7 +766,141 @@ python3 scripts/ops/validate_production_readiness_contract.py \
 The readiness contract is intentionally blocked until live environment evidence
 is attached for deployment apply, smoke, observability, secrets/access,
 backup/restore, rollback, alert delivery, retention/legal hold, customer data
-governance, model serving SLO, and OCR/vector/analytics execution.
+governance, worker data-pipeline scheduler execution, model serving SLO, and
+OCR/vector/analytics execution.
+
+Generate the customer-fillable evidence package template from the same contract
+before a production readiness workshop:
+
+```bash
+python3 scripts/ops/build_production_evidence_package.py \
+  --output-dir artifacts/production-evidence-package
+python3 scripts/ops/validate_production_evidence_package.py \
+  --package-dir artifacts/production-evidence-package
+```
+
+The template writes `contract/` plus one blocked JSON file under `evidence/`
+for every required gate. It is not a readiness claim. Running the production
+readiness validator against a newly generated template should fail until the
+customer replaces `local://template/...` placeholders and pending statuses with
+real production artifact URIs, scheduler execution results, approvals, counts,
+and evidence refs.
+After filling the supported source templates under `sources/`, render those
+sources into the matching evidence reports:
+
+```bash
+python3 scripts/ops/render_production_evidence_package.py \
+  --package-dir artifacts/production-evidence-package
+python3 scripts/ops/validate_production_evidence_package.py \
+  --package-dir artifacts/production-evidence-package
+```
+
+The renderer currently covers customer-data governance, retention/legal hold,
+model-serving SLO, and OCR/vector/analytics execution. It writes
+`render_summary.json`; blocked source inputs remain blocked reports, and source
+reports without blockers still produce
+`rendered_with_pending_worker_templates` until the customer scheduler/readback
+worker inputs are replaced and executed. The production readiness validator
+remains the final acceptance gate. The summary also lists pending worker input
+templates so customer scheduler/readback inputs remain visible even though the
+renderer does not execute worker jobs.
+The package also writes
+`runbooks/worker-data-pipeline-commands.json`, which lists the customer-side
+worker commands for plan generation, readiness input/report, scheduler
+run-status, execution report, score-response capture, and scoring readback
+report generation. The runbook uses placeholders for runtime secrets and must
+not persist API keys.
+It also writes customer-fillable worker input templates under `worker/`,
+including `score_request.json`, `scoring_readback_input.json`,
+`worker_data_pipeline_readiness_input.json`, and
+`worker_data_pipeline_run_status.json`; these files remain templates until the
+customer replaces placeholder artifact URIs with production evidence.
+
+The customer-data governance gate requires
+`customer_data_governance_report.json` to show approved dataset provenance,
+label provenance, holdout split, and shadow-traffic plan, plus positive
+approved-label and holdout-claim counts and matching evidence refs.
+After the customer supplies the approval source JSON, render the standard
+evidence artifact into the package:
+
+```bash
+python3 scripts/ops/build_customer_data_governance_report.py \
+  --source-uri artifacts/production-evidence-package/sources/customer-data-governance-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder preserves incomplete or unapproved inputs as `status = blocked`;
+the production readiness validator remains the authority for accepting or
+rejecting the generated report.
+The retention/legal-hold gate requires `retention_legal_hold_report.json` to
+show at least six retention years, explicit retention and legal-hold policy ids,
+archive storage, completed legal-hold reconciliation, human approval before
+destruction, automated destruction disabled, and policy evidence refs.
+Render approved retention/legal-hold controls into the required report shape:
+
+```bash
+python3 scripts/ops/build_retention_legal_hold_report.py \
+  --source-uri artifacts/production-evidence-package/sources/retention-legal-hold-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder produces evidence only. It does not archive, delete, or mutate
+customer records, and incomplete retention/legal-hold controls remain blocked.
+The model-serving SLO gate requires `model_serving_slo_report.json` to show the
+served model identity, p95 latency and error rate within declared SLOs,
+checksum/signature verification, healthy fallback, rollback readiness,
+calibrated probability serving active, and model-serving, model-artifact, plus
+probability-calibration evidence refs.
+Render production model-serving measurements into the required report shape:
+
+```bash
+python3 scripts/ops/build_model_serving_slo_report.py \
+  --source-uri artifacts/production-evidence-package/sources/model-serving-slo-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder leaves the report blocked when latency, error-rate, artifact
+integrity, fallback, rollback, or calibrated-probability evidence is missing or
+outside the declared SLO.
+The OCR/vector/analytics gate requires
+`ocr_vector_analytics_execution_report.json` to show completed OCR,
+embedding/vector, retrieval ranking, ClickHouse export, dashboard access, and
+analytics retention/backup checks, positive execution counts, no raw PHI
+export, and evidence refs for each stage.
+Render customer execution results into the required report shape:
+
+```bash
+python3 scripts/ops/build_ocr_vector_analytics_execution_report.py \
+  --source-uri artifacts/production-evidence-package/sources/ocr-vector-analytics-source.json \
+  --output-dir artifacts/production-evidence-package/evidence
+```
+
+The builder does not run OCR, write vectors, export ClickHouse data, or move
+PHI. It only packages customer-produced execution evidence and keeps the report
+blocked if any stage is incomplete, counts are zero, raw PHI was exported, or
+stage evidence refs are missing.
+The worker data-pipeline gate requires the customer
+`worker_data_pipeline_execution_report.json` to pass the contract acceptance
+checks: readiness gate ready, scheduler completed, zero pending or failed jobs,
+zero review tasks, all governed worker job kinds completed, required execution
+URIs present as production artifact URIs, plan/run-status/readiness evidence
+refs present, and the no-adjudication governance boundary preserved. Every job must show
+`reported_status = succeeded` and no blocked dependencies. Every completed job
+must report a production artifact URI rather than a local dry-run URI or
+template placeholder. All governed submit jobs must also show
+`submitted = true`, while the expected API path, required permission scope,
+non-empty artifact URI, and matching write evidence reference are present. The
+artifact-only OIG/SAM source snapshot job must also report a non-empty
+production artifact URI and `oig_sam_snapshot:` source evidence reference.
+After the customer environment publishes production evidence, validate that all
+required readiness artifacts are present and JSON-parseable, and validate the
+worker pipeline execution artifact against those deeper checks:
+
+```bash
+python3 scripts/ops/validate_production_readiness_contract.py \
+  --contract-dir artifacts/production-readiness \
+  --evidence-dir artifacts/production-readiness/evidence
+```
 
 Generate local pilot foundation evidence without customer data:
 

@@ -365,6 +365,22 @@ pub(super) fn validate_evidence_refs(values: &[String]) -> Result<(), ApiError> 
             "EVIDENCE_REF_INVALID",
             "evidence refs must be non-empty strings",
         ))
+    } else if values.iter().any(|value| {
+        let value = value.trim();
+        let normalized = value.to_ascii_lowercase();
+        normalized.contains("local://")
+            || normalized.contains("file://")
+            || normalized.contains("://localhost")
+            || normalized.contains("://127.")
+            || normalized.contains("://0.0.0.0")
+            || normalized.contains("://[::1]")
+            || value.contains('{')
+            || value.contains('}')
+    }) {
+        Err(bad_request(
+            "EVIDENCE_REF_INVALID",
+            "evidence refs must not use local dry-run or placeholder evidence",
+        ))
     } else {
         Ok(())
     }

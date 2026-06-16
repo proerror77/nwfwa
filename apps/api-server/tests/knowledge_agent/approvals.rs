@@ -213,6 +213,60 @@ async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
         app.clone(),
         "POST",
         &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:local://template/manual-review.json"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_APPROVAL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:http://127.0.0.1:8080/manual-review.json"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_APPROVAL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:file://tmp/manual-review.json"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_APPROVAL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
         r#"{
           "decision": "approved",
           "approver": "qa-lead",

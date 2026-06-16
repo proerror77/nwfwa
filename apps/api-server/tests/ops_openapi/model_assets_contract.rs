@@ -137,6 +137,210 @@ pub(crate) fn assert_model_assets_contract(schema: &serde_json::Value) {
             ["application/json"]["schema"]["$ref"],
         "#/components/schemas/ModelEvaluationResponse"
     );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/scoring-feature-context-materializations"]["post"]
+            ["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextMaterializationRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/scoring-feature-context-materializations"]["post"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextMaterializationResponse"
+    );
+    assert_eq!(
+        schema["paths"]
+            ["/api/v1/ops/scoring-feature-context-materializations/{materialization_id}"]["get"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ScoringFeatureContextMaterializationResponse"
+    );
+    assert!(
+        schema["paths"]["/api/v1/ops/scoring-feature-context-materializations"]["post"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("does not score")
+    );
+    assert!(
+        schema["components"]["schemas"]["ScoringFeatureContextMaterializationRequest"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "governance_boundary")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ScoringFeatureContextMaterialization"]["properties"]
+            ["report_kind"]["const"],
+        "scoring_feature_context_materialization"
+    );
+    let readiness_job_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineReadinessReportSubmissionRequest"]["properties"]["job_readiness"]
+        ["items"]["properties"];
+    assert_eq!(
+        readiness_job_properties["required_evidence_prefixes"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        readiness_job_properties["required_evidence_prefixes"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("source-lineage prefixes"),
+        "missing readiness required_evidence_prefixes description"
+    );
+    assert_eq!(
+        readiness_job_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        readiness_job_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing readiness required_submit_flags description"
+    );
+    assert!(
+        readiness_job_properties["api_path"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Governed API path"),
+        "missing readiness api_path description"
+    );
+    let readiness_review_task_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineReadinessReportSubmissionRequest"]["properties"]["review_tasks"]
+        ["items"]["properties"];
+    assert_eq!(
+        readiness_review_task_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        readiness_review_task_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing readiness review task required_submit_flags description"
+    );
+    let execution_job_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineExecutionReportSubmissionRequest"]["properties"]["job_executions"]
+        ["items"]["properties"];
+    assert_eq!(
+        execution_job_properties["required_evidence_prefixes"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        execution_job_properties["required_evidence_prefixes"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("source-lineage prefixes"),
+        "missing execution required_evidence_prefixes description"
+    );
+    assert_eq!(
+        execution_job_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        execution_job_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing execution required_submit_flags description"
+    );
+    let execution_review_task_properties = &schema["components"]["schemas"]
+        ["WorkerDataPipelineExecutionReportSubmissionRequest"]["properties"]["review_tasks"]
+        ["items"]["properties"];
+    assert_eq!(
+        execution_review_task_properties["required_submit_flags"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        execution_review_task_properties["required_submit_flags"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Published URI flags"),
+        "missing execution review task required_submit_flags description"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/clinical-compatibility-references"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ClinicalCompatibilityReferenceSubmissionRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/clinical-compatibility-references"]["post"]["responses"]
+            ["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ClinicalCompatibilityReferenceSubmissionResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ClinicalCompatibilityReferenceUpsert"]["properties"]
+            ["diagnosis_procedure_match_score"]["maximum"],
+        1
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "claim_scoring",
+        "label_assignment",
+        "claim_denial",
+        "medical_review_replacement",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["ClinicalCompatibilityReferenceSubmissionResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/unbundling-comparator-candidates"]["post"]["requestBody"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/UnbundlingComparatorCandidatesSubmissionRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/unbundling-comparator-candidates"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/UnbundlingComparatorCandidatesSubmissionResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["UnbundlingComparatorCandidateUpsert"]["properties"]
+            ["recommended_review"]["const"],
+        "medical_review_candidate"
+    );
+    for field in [
+        "active_scoring_policy_change",
+        "claim_scoring",
+        "label_assignment",
+        "claim_denial",
+        "case_creation",
+        "medical_review_replacement",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["UnbundlingComparatorCandidatesSubmissionResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/models/{model_key}/probability-calibration-reports"]["post"]
+            ["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProbabilityCalibrationReportRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/models/{model_key}/probability-calibration-reports"]["post"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SubmitProbabilityCalibrationReportResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitProbabilityCalibrationReportRequest"]["properties"]
+            ["report_kind"]["const"],
+        "probability_calibration_report"
+    );
+    for field in [
+        "active_calibration_change",
+        "calibrated_probability_serving_activation",
+        "threshold_change",
+        "label_assignment",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitProbabilityCalibrationReportResponse"]
+                ["properties"][field]["const"],
+            false
+        );
+    }
     assert!(
         schema["components"]["schemas"]["ModelEvaluation"]["required"]
             .as_array()

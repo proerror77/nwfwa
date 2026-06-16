@@ -35,6 +35,9 @@ required_files=(
   "scripts/ops/validate_production_secret_file.py"
   "scripts/ops/validate_observability_manifests.py"
   "scripts/ops/validate_production_readiness_contract.py"
+  "scripts/ops/validate_production_evidence_package.py"
+  "scripts/ops/test_validate_production_readiness_contract.py"
+  "scripts/ops/test_validate_production_evidence_package.py"
   "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
@@ -42,6 +45,18 @@ required_files=(
   "scripts/ops/build_k3s_simulation_package.py"
   "scripts/ops/build_production_deployment_package.py"
   "scripts/ops/build_production_readiness_contract.py"
+  "scripts/ops/build_production_evidence_package.py"
+  "scripts/ops/render_production_evidence_package.py"
+  "scripts/ops/build_customer_data_governance_report.py"
+  "scripts/ops/build_retention_legal_hold_report.py"
+  "scripts/ops/build_model_serving_slo_report.py"
+  "scripts/ops/build_ocr_vector_analytics_execution_report.py"
+  "scripts/ops/test_build_production_evidence_package.py"
+  "scripts/ops/test_render_production_evidence_package.py"
+  "scripts/ops/test_build_customer_data_governance_report.py"
+  "scripts/ops/test_build_retention_legal_hold_report.py"
+  "scripts/ops/test_build_model_serving_slo_report.py"
+  "scripts/ops/test_build_ocr_vector_analytics_execution_report.py"
   "scripts/ops/run_k3d_simulation.sh"
   "scripts/ops/build_prd_coverage.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
@@ -121,6 +136,8 @@ grep -q "docs/engineering/tpa-integration-contract.md" apps/api-server/tests/tpa
 grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "ErrorResponse" apps/api-server/tests/tpa_contract_docs.rs
 python3 -m unittest scripts.demo.test_tpa_mock_client
+python3 -m unittest scripts.ops.test_validate_production_readiness_contract scripts.ops.test_validate_production_evidence_package
+python3 -m unittest scripts.ops.test_build_production_evidence_package scripts.ops.test_render_production_evidence_package scripts.ops.test_build_customer_data_governance_report scripts.ops.test_build_retention_legal_hold_report scripts.ops.test_build_model_serving_slo_report scripts.ops.test_build_ocr_vector_analytics_execution_report
 python3 -m py_compile scripts/data/build_kaggle_provider_fraud_mvp.py scripts/data/build_public_data_mvp.py
 grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
 grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
@@ -613,7 +630,7 @@ grep -q "governance_ops_plan" apps/worker/src/health.rs
 grep -q "build-governance-ops-plan" apps/worker/src/commands/mod.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/validate_production_evidence_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_production_evidence_package.py scripts/ops/render_production_evidence_package.py scripts/ops/build_customer_data_governance_report.py scripts/ops/build_retention_legal_hold_report.py scripts/ops/build_model_serving_slo_report.py scripts/ops/build_ocr_vector_analytics_execution_report.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 bash -n scripts/ops/run_k3d_simulation.sh
 bash -n scripts/dev/start_local_runtime.sh scripts/dev/stop_local_runtime.sh
 python3 scripts/ops/validate_k8s_staging.py
@@ -640,6 +657,104 @@ python3 scripts/ops/build_production_deployment_package.py \
 python3 scripts/ops/validate_production_deployment_package.py --package-dir /tmp/nwfwa-production-deployment
 python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwfwa-production-readiness >/tmp/nwfwa-production-readiness.json
 python3 scripts/ops/validate_production_readiness_contract.py --contract-dir /tmp/nwfwa-production-readiness
+python3 scripts/ops/build_production_evidence_package.py --output-dir /tmp/nwfwa-production-evidence-package >/tmp/nwfwa-production-evidence-package.json
+python3 scripts/ops/render_production_evidence_package.py --package-dir /tmp/nwfwa-production-evidence-package >/tmp/nwfwa-production-evidence-render-summary.json
+python3 scripts/ops/validate_production_evidence_package.py --package-dir /tmp/nwfwa-production-evidence-package
+python3 - <<'PY'
+import importlib.util
+from pathlib import Path
+
+module_path = Path("scripts/ops/validate_production_readiness_contract.py")
+spec = importlib.util.spec_from_file_location("readiness_validator", module_path)
+validator = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(validator)
+
+
+def worker_execution_report(artifact_uri, include_write_refs=True):
+    jobs = []
+    for job_kind in sorted(validator.WORKER_DATA_PIPELINE_REQUIRED_JOB_KINDS):
+        evidence_refs = [f"worker_job_artifacts:{job_kind}:2026-06-14"]
+        write_prefix = validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_EVIDENCE_PREFIXES.get(job_kind)
+        if include_write_refs and write_prefix:
+            evidence_refs.append(f"{write_prefix}s3://nwfwa-production-artifacts/{job_kind}.json")
+            for additional_prefix in validator.WORKER_DATA_PIPELINE_ADDITIONAL_JOB_EVIDENCE_PREFIXES.get(job_kind, ()):
+                evidence_refs.append(f"{additional_prefix}s3://nwfwa-production-artifacts/{job_kind}.json")
+        if job_kind == "oig_sam_sanctions_snapshot_fetch":
+            evidence_refs.append("oig_sam_snapshot:2026-06-14")
+        if job_kind == "scoring_online_readback":
+            for readback_prefix in validator.WORKER_DATA_PIPELINE_SCORING_READBACK_EVIDENCE_PREFIXES:
+                evidence_refs.append(f"{readback_prefix}s3://nwfwa-production-artifacts/scoring-readback/{job_kind}.json")
+        jobs.append(
+            {
+                "job_kind": job_kind,
+                "execution_status": "completed",
+                "reported_status": "succeeded",
+                "reported_artifact_uri": artifact_uri,
+                "evidence_refs": evidence_refs,
+                "submitted": job_kind in validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_KINDS,
+                "blocked_dependencies": [],
+                "api_path": validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_API_PATHS.get(job_kind),
+                "required_permission": validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_PERMISSIONS.get(job_kind),
+                "required_submit_flags": list(
+                    validator.WORKER_DATA_PIPELINE_SUBMIT_JOB_REQUIRED_FLAGS.get(job_kind, ())
+                ),
+            }
+        )
+    return {
+        "report_kind": "worker_data_pipeline_execution_report",
+        "readiness_gate_status": "ready",
+        "plan_uri": "s3://nwfwa-production-artifacts/worker-data-pipeline/plan.json",
+        "run_status_uri": "s3://nwfwa-production-artifacts/worker-data-pipeline/run-status.json",
+        "readiness_report_uri": "s3://nwfwa-production-artifacts/worker-data-pipeline/readiness.json",
+        "run_id": "wdp_2026_06_14",
+        "execution_date": "2026-06-14",
+        "scheduler_status": "completed",
+        "pending_or_failed_job_count": 0,
+        "review_task_count": 0,
+        "review_tasks": [],
+        "job_count": len(jobs),
+        "job_executions": jobs,
+        "evidence_refs": [
+            "worker_data_pipeline_plans:s3://nwfwa-production-artifacts/worker-data-pipeline/plan.json",
+            "worker_data_pipeline_run_status:s3://nwfwa-production-artifacts/worker-data-pipeline/run-status.json",
+            "worker_data_pipeline_readiness_reports:s3://nwfwa-production-artifacts/worker-data-pipeline/readiness.json",
+        ],
+        "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy",
+    }
+
+
+def assert_rejected(report, label):
+    try:
+        validator.validate_worker_data_pipeline_execution_evidence(report)
+    except AssertionError:
+        return
+    raise AssertionError(f"production readiness validator accepted invalid worker evidence: {label}")
+
+
+assert_rejected(worker_execution_report("local://worker-data-pipeline/report.json"), "local artifact URI")
+local_plan_report = worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json")
+local_plan_report["plan_uri"] = "local://worker-data-pipeline/plan.json"
+assert_rejected(local_plan_report, "local plan URI")
+assert_rejected(
+    worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/{as_of_date}/report.json"),
+    "template artifact URI",
+)
+assert_rejected(
+    worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json", include_write_refs=False),
+    "missing governed write evidence refs",
+)
+missing_scoring_source_report = worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json")
+for job in missing_scoring_source_report["job_executions"]:
+    if job["job_kind"] == "scoring_feature_context_materialization":
+        job["evidence_refs"] = [
+            reference for reference in job["evidence_refs"]
+            if not reference.startswith("peer_benchmarks:")
+        ]
+assert_rejected(missing_scoring_source_report, "missing scoring context source evidence refs")
+validator.validate_worker_data_pipeline_execution_evidence(
+    worker_execution_report("s3://nwfwa-production-artifacts/worker-data-pipeline/report.json")
+)
+PY
 python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
 python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation >/tmp/nwfwa-ai-evidence-foundation.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
@@ -661,6 +776,12 @@ test -x /tmp/nwfwa-production-deployment/apply.sh
 test -x /tmp/nwfwa-production-deployment/tools/validate_production_secret_file.py
 test -f /tmp/nwfwa-production-readiness/production_readiness_contract.json
 test -f /tmp/nwfwa-production-readiness/index.json
+test -f /tmp/nwfwa-production-evidence-package/index.json
+test -f /tmp/nwfwa-production-evidence-package/render_summary.json
+test -f /tmp/nwfwa-production-evidence-package/worker/score_request.json
+test -f /tmp/nwfwa-production-evidence-package/worker/scoring_readback_input.json
+test -f /tmp/nwfwa-production-evidence-package/worker/worker_data_pipeline_readiness_input.json
+test -f /tmp/nwfwa-production-evidence-package/worker/worker_data_pipeline_run_status.json
 test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
 test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
 test -f /tmp/nwfwa-analytics-export/schema.sql

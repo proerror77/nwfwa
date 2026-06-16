@@ -1,7 +1,308 @@
 use crate::routes::pii;
 use rust_decimal::Decimal;
+use std::collections::BTreeSet;
 
 use super::*;
+
+const OIG_SAM_SANCTIONS_SNAPSHOT_FETCH_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &["oig_sam_snapshot:"];
+
+const OIG_SAM_SANCTIONS_SYNC_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &["sanctions_sync_reports:"];
+
+const PROVIDER_PROFILE_WINDOW_ROLLUP_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "provider_profile_window_rollups:",
+    "provider_profile_claim_snapshot:",
+];
+
+const PROVIDER_GRAPH_SIGNAL_ROLLUP_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "provider_graph_signal_rollups:",
+    "provider_graph_claim_snapshot:",
+];
+
+const PEER_PERCENTILE_BENCHMARK_REQUIRED_EVIDENCE_PREFIXES: &[&str] =
+    &["peer_benchmarks:", "peer_benchmark_claim_snapshot:"];
+
+const EPISODE_AGGREGATION_REQUIRED_EVIDENCE_PREFIXES: &[&str] =
+    &["episode_rollups:", "episode_claim_snapshot:"];
+
+const CLINICAL_COMPATIBILITY_REFERENCE_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "clinical_compatibility_references:",
+    "clinical_compatibility_reference:",
+    "clinical_policy_authority:",
+];
+
+const UNBUNDLING_COMPARATOR_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "unbundling_comparator_candidates:",
+    "unbundling_comparator_input:",
+];
+
+const SCORING_FEATURE_CONTEXT_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "scoring_feature_contexts:",
+    "scoring_feature_context_claim_snapshot:",
+    "episode_rollups:",
+    "peer_benchmarks:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+];
+
+const SCORING_READBACK_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "scoring_readback_reports:",
+    "scoring_readback_inputs:",
+    "scoring_readback_score_requests:",
+    "scoring_readback_score_responses:",
+    "scoring_feature_contexts:",
+    "provider_profile_window_rollups:",
+    "sanctions_sync_reports:",
+    "provider_graph_signal_rollups:",
+    "peer_benchmarks:",
+    "episode_rollups:",
+    "clinical_compatibility:",
+    "unbundling_candidates:",
+];
+
+const PROBABILITY_CALIBRATION_REQUIRED_EVIDENCE_PREFIXES: &[&str] = &[
+    "probability_calibration_reports:",
+    "probability_calibration_input:",
+    "calibration_labels:",
+];
+
+fn required_worker_data_pipeline_prefixes(job_kind: &str) -> Option<&'static [&'static str]> {
+    match job_kind {
+        "oig_sam_sanctions_snapshot_fetch" => {
+            Some(OIG_SAM_SANCTIONS_SNAPSHOT_FETCH_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "oig_sam_sanctions_sync" => Some(OIG_SAM_SANCTIONS_SYNC_REQUIRED_EVIDENCE_PREFIXES),
+        "provider_profile_window_rollup" => {
+            Some(PROVIDER_PROFILE_WINDOW_ROLLUP_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "provider_graph_signal_rollup" => {
+            Some(PROVIDER_GRAPH_SIGNAL_ROLLUP_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "peer_percentile_benchmark" => Some(PEER_PERCENTILE_BENCHMARK_REQUIRED_EVIDENCE_PREFIXES),
+        "episode_aggregation" => Some(EPISODE_AGGREGATION_REQUIRED_EVIDENCE_PREFIXES),
+        "clinical_compatibility_reference" => {
+            Some(CLINICAL_COMPATIBILITY_REFERENCE_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "unbundling_comparator" => Some(UNBUNDLING_COMPARATOR_REQUIRED_EVIDENCE_PREFIXES),
+        "scoring_feature_context_materialization" => {
+            Some(SCORING_FEATURE_CONTEXT_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        "scoring_online_readback" => Some(SCORING_READBACK_REQUIRED_EVIDENCE_PREFIXES),
+        "probability_calibration_evidence" => {
+            Some(PROBABILITY_CALIBRATION_REQUIRED_EVIDENCE_PREFIXES)
+        }
+        _ => None,
+    }
+}
+
+fn missing_required_worker_data_pipeline_prefix(
+    job_kind: &str,
+    required_evidence_prefixes: &[&str],
+) -> Option<&'static str> {
+    required_worker_data_pipeline_prefixes(job_kind)?
+        .iter()
+        .copied()
+        .find(|required_prefix| !required_evidence_prefixes.contains(required_prefix))
+}
+
+fn is_known_worker_data_pipeline_job_kind(job_kind: &str) -> bool {
+    required_worker_data_pipeline_prefixes(job_kind).is_some()
+}
+
+fn worker_data_pipeline_submit_job_contract(
+    job_kind: &str,
+) -> Option<(&'static str, &'static str)> {
+    match job_kind {
+        "oig_sam_sanctions_sync" => Some((
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            "ops:providers:write",
+        )),
+        "provider_profile_window_rollup" => Some((
+            "/api/v1/ops/providers/profile-window-rollups",
+            "ops:providers:write",
+        )),
+        "provider_graph_signal_rollup" => Some((
+            "/api/v1/ops/providers/graph-signal-rollups",
+            "ops:providers:write",
+        )),
+        "peer_percentile_benchmark" => Some((
+            "/api/v1/ops/providers/peer-benchmarks",
+            "ops:providers:write",
+        )),
+        "episode_aggregation" => Some((
+            "/api/v1/ops/providers/episode-rollups",
+            "ops:providers:write",
+        )),
+        "clinical_compatibility_reference" => Some((
+            "/api/v1/ops/clinical-compatibility-references",
+            "ops:datasets:write",
+        )),
+        "unbundling_comparator" => Some((
+            "/api/v1/ops/unbundling-comparator-candidates",
+            "ops:datasets:write",
+        )),
+        "scoring_feature_context_materialization" => Some((
+            "/api/v1/ops/scoring-feature-context-materializations",
+            "ops:datasets:write",
+        )),
+        "probability_calibration_evidence" => Some((
+            "/api/v1/ops/models/{model_key}/probability-calibration-reports",
+            "ops:models:review",
+        )),
+        _ => None,
+    }
+}
+
+fn worker_data_pipeline_submit_job_required_flags(
+    job_kind: &str,
+) -> Option<&'static [&'static str]> {
+    match job_kind {
+        "oig_sam_sanctions_sync"
+        | "provider_profile_window_rollup"
+        | "provider_graph_signal_rollup"
+        | "peer_percentile_benchmark"
+        | "episode_aggregation"
+        | "clinical_compatibility_reference"
+        | "unbundling_comparator" => Some(&["--published-report-uri", "--published-source-uri"]),
+        "scoring_feature_context_materialization" => Some(&["--published-report-uri"]),
+        "probability_calibration_evidence" => Some(&[
+            "--published-report-uri",
+            "--published-input-uri",
+            "--published-label-uri",
+        ]),
+        _ => None,
+    }
+}
+
+fn validate_worker_data_pipeline_submit_job_contract(
+    job_kind: &str,
+    job: &serde_json::Value,
+    error_code: &'static str,
+) -> Result<bool, ApiError> {
+    let Some((expected_api_path, expected_permission)) =
+        worker_data_pipeline_submit_job_contract(job_kind)
+    else {
+        return Ok(false);
+    };
+    if job.get("api_path").and_then(|value| value.as_str()) != Some(expected_api_path) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires api_path {expected_api_path}"),
+        ));
+    }
+    if job
+        .get("required_permission")
+        .and_then(|value| value.as_str())
+        != Some(expected_permission)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_permission {expected_permission}"),
+        ));
+    }
+    let Some(expected_flags) = worker_data_pipeline_submit_job_required_flags(job_kind) else {
+        return Ok(true);
+    };
+    let Some(required_submit_flags) = job
+        .get("required_submit_flags")
+        .and_then(|value| value.as_array())
+    else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_submit_flags {expected_flags:?}"),
+        ));
+    };
+    let Some(submitted_flags) = required_submit_flags
+        .iter()
+        .map(|value| value.as_str())
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_submit_flags {expected_flags:?}"),
+        ));
+    };
+    if submitted_flags.as_slice() != expected_flags {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            format!("{job_kind} requires required_submit_flags {expected_flags:?}"),
+        ));
+    }
+    Ok(true)
+}
+
+fn validate_required_evidence_ref(
+    evidence_refs: &[String],
+    expected_ref: &str,
+    code: &'static str,
+    message: String,
+) -> Result<(), ApiError> {
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn validate_no_template_uri(
+    value: &str,
+    code: &'static str,
+    field_name: &'static str,
+) -> Result<(), ApiError> {
+    if value.trim().starts_with("local://template") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            format!("{field_name} must not use local://template evidence"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_no_template_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs
+        .iter()
+        .any(|reference| reference.trim().contains("local://template"))
+    {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+    }
+    Ok(())
+}
+
+fn is_production_artifact_uri(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && !artifact_reference_is_non_production(value)
+        && value.contains("://")
+        && !value.contains('{')
+        && !value.contains('}')
+}
+
+fn evidence_ref_is_non_production(value: &str) -> bool {
+    artifact_reference_is_non_production(value)
+}
+
+fn artifact_reference_is_non_production(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    normalized.contains("local://")
+        || normalized.contains("file://")
+        || normalized.contains("://localhost")
+        || normalized.contains("://127.")
+        || normalized.contains("://0.0.0.0")
+        || normalized.contains("://[::1]")
+        || value.contains('{')
+        || value.contains('}')
+}
 
 pub(super) fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiError> {
     if request.external_field.trim().is_empty()
@@ -81,6 +382,13 @@ pub(super) fn validate_feature_set_registration(
             "status must be draft, active, or deprecated",
         ));
     }
+    if request.status == "active" && !is_production_artifact_uri(&request.features_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "FEATURE_SET_FORMAT_INVALID",
+            "active feature sets require production features_uri evidence, not local dry-run or placeholder URI",
+        ));
+    }
     Ok(())
 }
 
@@ -133,6 +441,9 @@ pub(super) fn validate_model_dataset_registration(
             "INVALID_MODEL_DATASET",
             "status must be draft, active, or deprecated",
         ));
+    }
+    if request.status == "active" {
+        validate_active_model_dataset_production_uris(request)?;
     }
     Ok(())
 }
@@ -200,6 +511,13 @@ pub(super) fn validate_model_evaluation_registration(
             feature_importance_uri,
             "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID",
         )?;
+        if !is_production_artifact_uri(feature_importance_uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID",
+                "feature_importance_uri must use production evidence, not local dry-run or placeholder URI",
+            ));
+        }
     }
     if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
         if permutation_importance_uri.trim().is_empty() {
@@ -213,8 +531,1934 @@ pub(super) fn validate_model_evaluation_registration(
             permutation_importance_uri,
             "MODEL_EVALUATION_PERMUTATION_IMPORTANCE_FORMAT_INVALID",
         )?;
+        if !is_production_artifact_uri(permutation_importance_uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MODEL_EVALUATION_PERMUTATION_IMPORTANCE_FORMAT_INVALID",
+                "permutation_importance_uri must use production evidence, not local dry-run or placeholder URI",
+            ));
+        }
     }
     Ok(())
+}
+
+pub(super) fn validate_scoring_feature_context_materialization(
+    request: &SubmitScoringFeatureContextMaterializationRequest,
+) -> Result<(), ApiError> {
+    if request.materialization_id.trim().is_empty()
+        || request.actor.trim().is_empty()
+        || request.report_uri.trim().is_empty()
+        || request.as_of_date.trim().is_empty()
+        || request.governance_boundary.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "materialization_id, actor, report_uri, as_of_date, and governance_boundary are required",
+        ));
+    }
+    if request.report_kind != "scoring_feature_context_materialization" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "report_kind must be scoring_feature_context_materialization",
+        ));
+    }
+    validate_no_template_uri(
+        &request.report_uri,
+        "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+        "report_uri",
+    )?;
+    if !is_production_artifact_uri(&request.report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    if !request.source_uris.is_object() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "source_uris must be an object",
+        ));
+    }
+    for source_key in [
+        "claims_uri",
+        "episode_rollups_uri",
+        "peer_benchmarks_uri",
+        "clinical_compatibility_uri",
+        "unbundling_candidates_uri",
+    ] {
+        if request
+            .source_uris
+            .get(source_key)
+            .and_then(|value| value.as_str())
+            .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI",
+                format!("source_uris.{source_key} is required"),
+            ));
+        }
+        validate_no_template_uri(
+            request
+                .source_uris
+                .get(source_key)
+                .and_then(|value| value.as_str())
+                .unwrap_or_default(),
+            "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI",
+            source_key,
+        )?;
+        if !request
+            .source_uris
+            .get(source_key)
+            .and_then(|value| value.as_str())
+            .is_some_and(is_production_artifact_uri)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI",
+                format!(
+                    "source_uris.{source_key} must use production evidence, not local dry-run or placeholder URI"
+                ),
+            ));
+        }
+    }
+    if request.context_count != request.contexts.len() as u64 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "context_count must match contexts length",
+        ));
+    }
+    if request.context_count > request.claim_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "context_count must not exceed claim_count",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+            "evidence_refs must be non-empty and contain no blank values",
+        ));
+    }
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+        "scoring feature context evidence_refs must not use local://template evidence",
+    )?;
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+            "scoring feature context evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
+    let required_evidence_refs = [
+        format!("scoring_feature_contexts:{}", request.report_uri),
+        format!(
+            "scoring_feature_context_claim_snapshot:{}",
+            request.source_uris["claims_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
+            "episode_rollups:{}",
+            request.source_uris["episode_rollups_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
+            "peer_benchmarks:{}",
+            request.source_uris["peer_benchmarks_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
+            "clinical_compatibility:{}",
+            request.source_uris["clinical_compatibility_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+        format!(
+            "unbundling_candidates:{}",
+            request.source_uris["unbundling_candidates_uri"]
+                .as_str()
+                .unwrap_or_default()
+        ),
+    ];
+    for expected_ref in required_evidence_refs {
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_SCORING_FEATURE_CONTEXT_SOURCE_EVIDENCE",
+                format!("scoring feature context evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
+    for context in &request.contexts {
+        let Some(claim_id) = context.get("claim_id").and_then(|value| value.as_str()) else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+                "each context must include claim_id",
+            ));
+        };
+        if claim_id.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION",
+                "context claim_id must not be blank",
+            ));
+        }
+        let has_context_evidence_refs = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .is_some_and(|references| {
+                !references.is_empty()
+                    && references.iter().all(|reference| {
+                        reference
+                            .as_str()
+                            .is_some_and(|value| !value.trim().is_empty())
+                    })
+            });
+        if !has_context_evidence_refs {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                "each context must include non-empty evidence_refs",
+            ));
+        }
+        let has_template_context_evidence_ref = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .any(|reference| {
+                reference
+                    .as_str()
+                    .is_some_and(|value| value.trim().contains("local://template"))
+            });
+        if has_template_context_evidence_ref {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                "context evidence_refs must not use local://template evidence",
+            ));
+        }
+        let has_non_production_context_evidence_ref = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .any(|reference| {
+                reference
+                    .as_str()
+                    .is_some_and(evidence_ref_is_non_production)
+            });
+        if has_non_production_context_evidence_ref {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                "context evidence_refs must not use local dry-run or placeholder evidence",
+            ));
+        }
+        let expected_claim_ref = format!("claims:{}", claim_id.trim());
+        let has_claim_source_ref = context
+            .get("evidence_refs")
+            .and_then(|value| value.as_array())
+            .is_some_and(|references| {
+                references
+                    .iter()
+                    .filter_map(|reference| reference.as_str())
+                    .any(|reference| reference.trim() == expected_claim_ref)
+            });
+        if !has_claim_source_ref {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE",
+                format!("each context evidence_refs must include {expected_claim_ref}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_clinical_compatibility_reference_submission(
+    request: &SubmitClinicalCompatibilityReferenceRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.reference_version.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_VERSION",
+            "reference_version is required",
+        ),
+        (
+            request.effective_date.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_EFFECTIVE_DATE",
+            "effective_date is required",
+        ),
+        (
+            request.source_authority.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_AUTHORITY",
+            "source_authority is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_CLINICAL_COMPATIBILITY_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "clinical_compatibility_reference" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_KIND",
+            "report_kind must be clinical_compatibility_reference",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+            "source_report_uri must point to a JSON clinical compatibility reference report",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+        "source_report_uri",
+    )?;
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+        "source_uri",
+    )?;
+    if !is_production_artifact_uri(&request.source_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+            "source_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    if request.records.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CLINICAL_COMPATIBILITY_RECORDS",
+            "records are required",
+        ));
+    }
+    if request.record_count != request.records.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_RECORD_COUNT",
+            "record_count must match records length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "clinical_compatibility_references:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+            format!("clinical compatibility evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_source_ref = format!("clinical_compatibility_reference:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+        format!("clinical compatibility evidence_refs must include {expected_source_ref}"),
+    )?;
+    let expected_authority_ref = format!("clinical_policy_authority:{}", request.source_authority);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_authority_ref,
+        "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+        format!("clinical compatibility evidence_refs must include {expected_authority_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+        "clinical compatibility evidence_refs must not use local://template evidence",
+    )?;
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+            "clinical compatibility evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
+    for record in &request.records {
+        if record.compatibility_key.trim().is_empty()
+            || record.diagnosis_code_prefix.trim().is_empty()
+            || record.procedure_code.trim().is_empty()
+            || record.data_source.trim().is_empty()
+            || record.policy_authority_ref.trim().is_empty()
+            || record.rationale.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_RECORD",
+                "compatibility_key, diagnosis_code_prefix, procedure_code, data_source, policy_authority_ref, and rationale are required",
+            ));
+        }
+        if !record.diagnosis_procedure_match_score.is_finite()
+            || !(0.0..=1.0).contains(&record.diagnosis_procedure_match_score)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_SCORE",
+                "diagnosis_procedure_match_score must be between 0 and 1",
+            ));
+        }
+        if record.evidence_refs.is_empty()
+            || record
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+                "clinical compatibility records require non-empty evidence_refs",
+            ));
+        }
+        validate_no_template_evidence_refs(
+            &record.evidence_refs,
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+            "clinical compatibility record evidence_refs must not use local://template evidence",
+        )?;
+        if record
+            .evidence_refs
+            .iter()
+            .any(|reference| evidence_ref_is_non_production(reference))
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+                "clinical compatibility record evidence_refs must not use local dry-run or placeholder evidence",
+            ));
+        }
+        if !record
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == record.policy_authority_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+                format!(
+                    "clinical compatibility evidence_refs must include {}",
+                    record.policy_authority_ref
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_unbundling_comparator_submission(
+    request: &SubmitUnbundlingComparatorCandidatesRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.as_of_date.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_AS_OF_DATE",
+            "as_of_date is required",
+        ),
+        (
+            request.source_uri.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+            "source_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_UNBUNDLING_COMPARATOR_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "unbundling_comparator" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_KIND",
+            "report_kind must be unbundling_comparator",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+            "source_report_uri must point to a JSON unbundling comparator report",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_report_uri,
+        "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+        "source_report_uri",
+    )?;
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    validate_no_template_uri(
+        &request.source_uri,
+        "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+        "source_uri",
+    )?;
+    if !is_production_artifact_uri(&request.source_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+            "source_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    if request.candidates.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_UNBUNDLING_COMPARATOR_CANDIDATES",
+            "candidates are required",
+        ));
+    }
+    if request.candidate_count != request.candidates.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_CANDIDATE_COUNT",
+            "candidate_count must match candidates length",
+        ));
+    }
+    let expected_report_ref = format!(
+        "unbundling_comparator_candidates:{}",
+        request.source_report_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_UNBUNDLING_COMPARATOR_REPORT_EVIDENCE",
+            format!("unbundling comparator evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_source_ref = format!("unbundling_comparator_input:{}", request.source_uri);
+    validate_required_evidence_ref(
+        &request.evidence_refs,
+        &expected_source_ref,
+        "MISSING_UNBUNDLING_COMPARATOR_REPORT_EVIDENCE",
+        format!("unbundling comparator evidence_refs must include {expected_source_ref}"),
+    )?;
+    validate_no_template_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+        "unbundling comparator evidence_refs must not use local://template evidence",
+    )?;
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+            "unbundling comparator evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
+    for candidate in &request.candidates {
+        if candidate.candidate_id.trim().is_empty()
+            || candidate.rule_id.trim().is_empty()
+            || candidate.episode_key.trim().is_empty()
+            || candidate.member_id.trim().is_empty()
+            || candidate.provider_id.trim().is_empty()
+            || candidate.bundled_code.trim().is_empty()
+            || candidate.policy_authority_ref.trim().is_empty()
+            || candidate.recommended_review.trim().is_empty()
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_CANDIDATE",
+                "candidate_id, rule_id, episode_key, member_id, provider_id, bundled_code, policy_authority_ref, and recommended_review are required",
+            ));
+        }
+        if !matches!(candidate.window_days, 30 | 90 | 365) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_WINDOW",
+                "window_days must be 30, 90, or 365",
+            ));
+        }
+        if candidate.recommended_review != "medical_review_candidate" {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_REVIEW",
+                "recommended_review must be medical_review_candidate",
+            ));
+        }
+        if candidate.matched_component_codes.is_empty()
+            || candidate
+                .matched_component_codes
+                .iter()
+                .any(|value| value.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_COMPONENT_CODES",
+                "matched_component_codes must be non-empty and contain no blank values",
+            ));
+        }
+        if candidate.claim_ids.is_empty()
+            || candidate
+                .claim_ids
+                .iter()
+                .any(|value| value.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_CLAIMS",
+                "claim_ids must be non-empty and contain no blank values",
+            ));
+        }
+        if candidate.evidence_refs.is_empty()
+            || candidate
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                "unbundling candidates require non-empty evidence_refs",
+            ));
+        }
+        validate_no_template_evidence_refs(
+            &candidate.evidence_refs,
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+            "unbundling candidate evidence_refs must not use local://template evidence",
+        )?;
+        if candidate
+            .evidence_refs
+            .iter()
+            .any(|reference| evidence_ref_is_non_production(reference))
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                "unbundling candidate evidence_refs must not use local dry-run or placeholder evidence",
+            ));
+        }
+        if !candidate
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == candidate.policy_authority_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                format!(
+                    "unbundling candidate evidence_refs must include {}",
+                    candidate.policy_authority_ref
+                ),
+            ));
+        }
+        for claim_id in &candidate.claim_ids {
+            let expected_claim_ref = format!("claims:{}", claim_id.trim());
+            if !candidate
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim() == expected_claim_ref)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+                    format!("unbundling candidate evidence_refs must include {expected_claim_ref}"),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_worker_data_pipeline_execution_report_submission(
+    request: &SubmitWorkerDataPipelineExecutionReportRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.plan_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PLAN_URI",
+            "plan_uri is required",
+        ),
+        (
+            request.run_status_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS_URI",
+            "run_status_uri is required",
+        ),
+        (
+            request.run_id.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_RUN_ID",
+            "run_id is required",
+        ),
+        (
+            request.execution_date.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DATE",
+            "execution_date is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "worker_data_pipeline_execution_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_KIND",
+            "report_kind must be worker_data_pipeline_execution_report",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_URI",
+            "source_report_uri must point to a JSON worker data pipeline execution report",
+        ));
+    }
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    for (value, code, message) in [
+        (
+            request.plan_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PLAN_URI",
+            "plan_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+        (
+            request.run_status_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS_URI",
+            "run_status_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+    ] {
+        if !is_production_artifact_uri(value) {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.job_count == 0 || request.job_count != request.job_executions.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_COUNT",
+            "job_count must match job_executions length and be greater than zero",
+        ));
+    }
+    if request.review_task_count != request.review_tasks.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_COUNT",
+            "review_task_count must match review_tasks length",
+        ));
+    }
+    for review_task in &request.review_tasks {
+        if let Some(required_permission) = review_task.get("required_permission") {
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
+                review_task.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION",
+            )?;
+        }
+        if review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+            == Some("worker_data_pipeline_execution_review")
+        {
+            let job_kind = review_task
+                .get("job_kind")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
+            validate_worker_data_pipeline_submit_job_contract(
+                job_kind,
+                review_task,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION",
+            )?;
+        }
+    }
+    if request.pending_or_failed_job_count > request.job_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PENDING_COUNT",
+            "pending_or_failed_job_count must not exceed job_count",
+        ));
+    }
+    if let Some(status) = request.readiness_gate_status.as_deref() {
+        if !matches!(status, "ready" | "blocked" | "missing") {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_GATE",
+                "readiness_gate_status must be ready, blocked, or missing",
+            ));
+        }
+    }
+    if let Some(readiness_report_uri) = request.readiness_report_uri.as_deref() {
+        if readiness_report_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_URI",
+                "readiness_report_uri must not be blank when supplied",
+            ));
+        }
+        if !is_production_artifact_uri(readiness_report_uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_URI",
+                "readiness_report_uri must use production evidence, not local dry-run or placeholder URI",
+            ));
+        }
+        match request.readiness_gate_status.as_deref() {
+            Some("ready" | "blocked") => {}
+            _ => {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_GATE",
+                    "readiness_gate_status must be ready or blocked when readiness_report_uri is supplied",
+                ));
+            }
+        }
+    } else if matches!(
+        request.readiness_gate_status.as_deref(),
+        Some("ready" | "blocked")
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_URI",
+            "readiness_report_uri is required when readiness_gate_status is ready or blocked",
+        ));
+    }
+    if request.readiness_gate_status.as_deref() != Some("ready") {
+        let has_readiness_gate_review = request.review_tasks.iter().any(|review_task| {
+            review_task
+                .get("task_kind")
+                .and_then(|value| value.as_str())
+                == Some("worker_data_pipeline_readiness_gate_review")
+                && review_task
+                    .get("readiness_gate_status")
+                    .and_then(|value| value.as_str())
+                    == request.readiness_gate_status.as_deref()
+        });
+        if !has_readiness_gate_review {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK",
+                "non-ready readiness_gate_status requires a worker_data_pipeline_readiness_gate_review task",
+            ));
+        }
+    }
+    let expected_report_ref = format!(
+        "worker_data_pipeline_execution_reports:{}",
+        request.source_report_uri
+    );
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_EVIDENCE",
+            "worker data pipeline execution evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_EXECUTION_REPORT_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_plan_ref = format!("worker_data_pipeline_plans:{}", request.plan_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_plan_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_plan_ref}"),
+        ));
+    }
+    let expected_run_status_ref =
+        format!("worker_data_pipeline_run_status:{}", request.run_status_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_run_status_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_RUN_STATUS_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_run_status_ref}"),
+        ));
+    }
+    if let Some(readiness_report_uri) = request.readiness_report_uri.as_deref() {
+        let expected_readiness_ref =
+            format!("worker_data_pipeline_readiness_reports:{readiness_report_uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_readiness_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_WORKER_DATA_PIPELINE_READINESS_REPORT_EVIDENCE",
+                format!("worker data pipeline evidence_refs must include {expected_readiness_ref}"),
+            ));
+        }
+    }
+    let mut seen_job_kinds = BTreeSet::new();
+    let mut pending_or_failed_jobs = 0usize;
+    let mut non_completed_jobs = Vec::new();
+    for execution in &request.job_executions {
+        let Some(job_kind) = execution.get("job_kind").and_then(|value| value.as_str()) else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                "each job execution must include job_kind",
+            ));
+        };
+        if job_kind.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                "job_kind must not be blank",
+            ));
+        }
+        if !is_known_worker_data_pipeline_job_kind(job_kind) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                format!("unknown worker data pipeline job_kind {job_kind}"),
+            ));
+        }
+        if !seen_job_kinds.insert(job_kind.to_string()) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB",
+                format!("duplicate worker data pipeline job_kind {job_kind}"),
+            ));
+        }
+        let Some(execution_status) = execution
+            .get("execution_status")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS",
+                "each job execution must include execution_status",
+            ));
+        };
+        if !matches!(
+            execution_status,
+            "completed"
+                | "artifact_pending_submission"
+                | "artifact_missing_evidence"
+                | "failed"
+                | "scheduled_pending_customer_execution"
+                | "dependency_not_completed"
+        ) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_STATUS",
+                "execution_status must be completed, artifact_pending_submission, artifact_missing_evidence, failed, scheduled_pending_customer_execution, or dependency_not_completed",
+            ));
+        }
+        if execution_status != "completed" {
+            pending_or_failed_jobs += 1;
+            non_completed_jobs.push((job_kind.to_string(), execution_status.to_string()));
+        } else {
+            let has_reported_artifact_uri = execution
+                .get("reported_artifact_uri")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| !value.trim().is_empty());
+            if !has_reported_artifact_uri {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT",
+                    "completed job executions require non-empty reported_artifact_uri",
+                ));
+            }
+            if execution
+                .get("reported_artifact_uri")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| value.trim().starts_with("local://template"))
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT",
+                    "completed job executions must not use local://template reported_artifact_uri",
+                ));
+            }
+            if !execution
+                .get("reported_artifact_uri")
+                .and_then(|value| value.as_str())
+                .is_some_and(is_production_artifact_uri)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT",
+                    "completed job executions require a production reported_artifact_uri, not a local dry-run or placeholder URI",
+                ));
+            }
+            let has_evidence_refs = execution
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .is_some_and(|references| {
+                    !references.is_empty()
+                        && references.iter().all(|reference| {
+                            reference
+                                .as_str()
+                                .is_some_and(|value| !value.trim().is_empty())
+                        })
+                });
+            if !has_evidence_refs {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job executions require non-empty evidence_refs",
+                ));
+            }
+            let has_template_evidence_ref = execution
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .any(|reference| {
+                    reference
+                        .as_str()
+                        .is_some_and(|value| value.trim().contains("local://template"))
+                });
+            if has_template_evidence_ref {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job evidence_refs must not use local://template evidence",
+                ));
+            }
+            let has_non_production_evidence_ref = execution
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .any(|reference| {
+                    reference
+                        .as_str()
+                        .is_some_and(evidence_ref_is_non_production)
+                });
+            if has_non_production_evidence_ref {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job evidence_refs must not use local dry-run or placeholder evidence",
+                ));
+            }
+            let required_evidence_prefixes = execution
+                .get("required_evidence_prefixes")
+                .and_then(|value| value.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|value| value.as_str())
+                .collect::<Vec<_>>();
+            if required_evidence_prefixes.is_empty() {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "completed job executions require non-empty required_evidence_prefixes",
+                ));
+            }
+            if required_evidence_prefixes
+                .iter()
+                .any(|prefix| prefix.trim().is_empty())
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    "required_evidence_prefixes must contain no blank values",
+                ));
+            }
+            if let Some(required_prefix) =
+                missing_required_worker_data_pipeline_prefix(job_kind, &required_evidence_prefixes)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    format!("{job_kind} required_evidence_prefixes must include {required_prefix}"),
+                ));
+            }
+            let missing_required_evidence_prefix =
+                required_evidence_prefixes.iter().find(|prefix| {
+                    !execution
+                        .get("evidence_refs")
+                        .and_then(|value| value.as_array())
+                        .into_iter()
+                        .flatten()
+                        .any(|reference| {
+                            reference
+                                .as_str()
+                                .is_some_and(|value| value.starts_with(*prefix))
+                        })
+                });
+            if let Some(prefix) = missing_required_evidence_prefix {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE",
+                    format!("completed job evidence_refs must include required prefix {prefix}"),
+                ));
+            }
+            if execution
+                .get("reported_status")
+                .and_then(|value| value.as_str())
+                != Some("succeeded")
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORTED_STATUS",
+                    "completed job executions require reported_status succeeded",
+                ));
+            }
+            let has_blocked_dependencies = execution
+                .get("blocked_dependencies")
+                .and_then(|value| value.as_array())
+                .is_some_and(|dependencies| !dependencies.is_empty());
+            if has_blocked_dependencies {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES",
+                    "completed job executions must not include blocked_dependencies",
+                ));
+            }
+            let is_governed_submit_job = validate_worker_data_pipeline_submit_job_contract(
+                job_kind,
+                execution,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
+            )? || execution
+                .get("api_path")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| !value.trim().is_empty())
+                || execution
+                    .get("required_permission")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(|value| !value.trim().is_empty());
+            if is_governed_submit_job
+                && execution.get("submitted").and_then(|value| value.as_bool()) != Some(true)
+            {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_SUBMISSION",
+                    "completed governed submit job executions require submitted true",
+                ));
+            }
+        }
+        if let Some(required_permission) = execution.get("required_permission") {
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
+                execution.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION",
+            )?;
+        }
+        if execution_status == "dependency_not_completed" {
+            let has_blocked_dependencies = execution
+                .get("blocked_dependencies")
+                .and_then(|value| value.as_array())
+                .is_some_and(|dependencies| {
+                    !dependencies.is_empty()
+                        && dependencies.iter().all(|dependency| {
+                            dependency
+                                .as_str()
+                                .is_some_and(|value| !value.trim().is_empty())
+                        })
+                });
+            if !has_blocked_dependencies {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES",
+                    "dependency_not_completed job executions require non-empty blocked_dependencies",
+                ));
+            }
+        }
+    }
+    if pending_or_failed_jobs != request.pending_or_failed_job_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PENDING_COUNT",
+            "pending_or_failed_job_count must equal the number of non-completed job executions",
+        ));
+    }
+    for (job_kind, execution_status) in non_completed_jobs {
+        let has_review_task = request.review_tasks.iter().any(|review_task| {
+            review_task
+                .get("task_kind")
+                .and_then(|value| value.as_str())
+                == Some("worker_data_pipeline_execution_review")
+                && review_task.get("job_kind").and_then(|value| value.as_str())
+                    == Some(job_kind.as_str())
+                && review_task
+                    .get("execution_status")
+                    .and_then(|value| value.as_str())
+                    == Some(execution_status.as_str())
+        });
+        if !has_review_task {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
+                "each non-completed job execution requires a matching worker_data_pipeline_execution_review task with the same execution_status",
+            ));
+        }
+    }
+    for review_task in &request.review_tasks {
+        let Some(task_kind) = review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
+                "each review task must include task_kind",
+            ));
+        };
+        match task_kind {
+            "worker_data_pipeline_execution_review" => {
+                let job_kind = review_task
+                    .get("job_kind")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default();
+                let execution_status = review_task
+                    .get("execution_status")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default();
+                let matches_non_completed_job = request.job_executions.iter().any(|execution| {
+                    execution.get("job_kind").and_then(|value| value.as_str()) == Some(job_kind)
+                        && execution
+                            .get("execution_status")
+                            .and_then(|value| value.as_str())
+                            == Some(execution_status)
+                        && execution_status != "completed"
+                });
+                if !matches_non_completed_job {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
+                        "execution review tasks must match a non-completed job execution and status",
+                    ));
+                }
+            }
+            "worker_data_pipeline_readiness_gate_review" => {
+                let matches_readiness_gate = request.readiness_gate_status.as_deref()
+                    != Some("ready")
+                    && review_task
+                        .get("readiness_gate_status")
+                        .and_then(|value| value.as_str())
+                        == request.readiness_gate_status.as_deref();
+                if !matches_readiness_gate {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK",
+                        "readiness gate review tasks must match a non-ready readiness_gate_status",
+                    ));
+                }
+            }
+            _ => {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS",
+                    "review task kind must be worker_data_pipeline_execution_review or worker_data_pipeline_readiness_gate_review",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_worker_data_pipeline_readiness_report_submission(
+    request: &SubmitWorkerDataPipelineReadinessReportRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_NOTES",
+            "notes are required",
+        ),
+        (
+            request.source_report_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_URI",
+            "source_report_uri is required",
+        ),
+        (
+            request.report_kind.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_KIND",
+            "report_kind is required",
+        ),
+        (
+            request.plan_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_PLAN_URI",
+            "plan_uri is required",
+        ),
+        (
+            request.readiness_input_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_INPUT_URI",
+            "readiness_input_uri is required",
+        ),
+        (
+            request.governance_boundary.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_GOVERNANCE",
+            "governance_boundary is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "worker_data_pipeline_readiness_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_KIND",
+            "report_kind must be worker_data_pipeline_readiness_report",
+        ));
+    }
+    if !matches!(request.readiness_status.as_str(), "ready" | "blocked") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_STATUS",
+            "readiness_status must be ready or blocked",
+        ));
+    }
+    if !request.source_report_uri.ends_with(".json") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_URI",
+            "source_report_uri must point to a JSON worker data pipeline readiness report",
+        ));
+    }
+    if !is_production_artifact_uri(&request.source_report_uri) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_URI",
+            "source_report_uri must use production evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    for (value, code, message) in [
+        (
+            request.plan_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_PLAN_URI",
+            "plan_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+        (
+            request.readiness_input_uri.as_str(),
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_INPUT_URI",
+            "readiness_input_uri must use production evidence, not local dry-run or placeholder URI",
+        ),
+    ] {
+        if !is_production_artifact_uri(value) {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.job_count == 0
+        || request.job_count != request.job_readiness.len()
+        || request.ready_job_count + request.blocked_job_count != request.job_count
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_COUNT",
+            "job_count must match job_readiness length and equal ready_job_count + blocked_job_count",
+        ));
+    }
+    if request.review_task_count != request.review_tasks.len() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_COUNT",
+            "review_task_count must match review_tasks length",
+        ));
+    }
+    for review_task in &request.review_tasks {
+        if let Some(required_permission) = review_task.get("required_permission") {
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
+                review_task.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION",
+            )?;
+        }
+        if review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+            == Some("worker_data_pipeline_readiness_review")
+        {
+            let job_kind = review_task
+                .get("job_kind")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
+            validate_worker_data_pipeline_submit_job_contract(
+                job_kind,
+                review_task,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION",
+            )?;
+        }
+    }
+    let expected_report_ref = format!(
+        "worker_data_pipeline_readiness_reports:{}",
+        request.source_report_uri
+    );
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| evidence_ref_is_non_production(reference))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_EVIDENCE",
+            "worker data pipeline readiness evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_READINESS_REPORT_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_report_ref}"),
+        ));
+    }
+    let expected_plan_ref = format!("worker_data_pipeline_plans:{}", request.plan_uri);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_plan_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_plan_ref}"),
+        ));
+    }
+    let expected_input_ref = format!(
+        "worker_data_pipeline_readiness_inputs:{}",
+        request.readiness_input_uri
+    );
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_input_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WORKER_DATA_PIPELINE_READINESS_INPUT_EVIDENCE",
+            format!("worker data pipeline evidence_refs must include {expected_input_ref}"),
+        ));
+    }
+    let mut seen_job_kinds = BTreeSet::new();
+    let mut ready_jobs = 0usize;
+    let mut blocked_jobs = 0usize;
+    let mut blocked_job_kinds = Vec::new();
+    for readiness in &request.job_readiness {
+        let Some(job_kind) = readiness.get("job_kind").and_then(|value| value.as_str()) else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB",
+                "each job readiness record must include job_kind",
+            ));
+        };
+        if job_kind.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB",
+                "job_kind must not be blank",
+            ));
+        }
+        if !is_known_worker_data_pipeline_job_kind(job_kind) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB",
+                format!("unknown worker data pipeline job_kind {job_kind}"),
+            ));
+        }
+        if !seen_job_kinds.insert(job_kind.to_string()) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB",
+                format!("duplicate worker data pipeline job_kind {job_kind}"),
+            ));
+        }
+        if let Some(required_permission) = readiness.get("required_permission") {
+            validate_worker_data_pipeline_required_permission(
+                required_permission,
+                readiness.get("api_path").and_then(|value| value.as_str()),
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
+            )?;
+        }
+        let required_evidence_prefixes = readiness
+            .get("required_evidence_prefixes")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>();
+        if required_evidence_prefixes
+            .iter()
+            .any(|prefix| prefix.trim().is_empty())
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                "required_evidence_prefixes must contain no blank values",
+            ));
+        }
+        let Some(readiness_status) = readiness
+            .get("readiness_status")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_STATUS",
+                "each job readiness record must include readiness_status",
+            ));
+        };
+        match readiness_status {
+            "ready" => {
+                let has_blockers = readiness.get("blockers").is_some_and(|value| {
+                    value.as_array().is_none_or(|blockers| !blockers.is_empty())
+                });
+                if has_blockers {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS",
+                        "ready job readiness records must not include blockers",
+                    ));
+                }
+                if readiness
+                    .get("coverage_window_days")
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or(0)
+                    == 0
+                {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_COVERAGE_WINDOW",
+                        "ready job readiness records require positive coverage_window_days",
+                    ));
+                }
+                if readiness
+                    .get("source_freshness_status")
+                    .and_then(|value| value.as_str())
+                    != Some("fresh")
+                {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_SOURCE_FRESHNESS",
+                        "ready job readiness records require source_freshness_status fresh",
+                    ));
+                }
+                let has_job_evidence_refs = readiness
+                    .get("evidence_refs")
+                    .and_then(|value| value.as_array())
+                    .is_some_and(|references| {
+                        !references.is_empty()
+                            && references.iter().all(|reference| {
+                                reference
+                                    .as_str()
+                                    .is_some_and(|value| !value.trim().is_empty())
+                            })
+                    });
+                if !has_job_evidence_refs {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job readiness records require non-empty evidence_refs",
+                    ));
+                }
+                if readiness
+                    .get("artifact_uri")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(|value| value.trim().starts_with("local://template"))
+                {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT",
+                        "ready job readiness records must not use local://template artifact_uri",
+                    ));
+                }
+                if !readiness
+                    .get("artifact_uri")
+                    .and_then(|value| value.as_str())
+                    .is_some_and(is_production_artifact_uri)
+                {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT",
+                        "ready job readiness records require a production artifact_uri, not a local dry-run or placeholder URI",
+                    ));
+                }
+                let has_template_evidence_ref = readiness
+                    .get("evidence_refs")
+                    .and_then(|value| value.as_array())
+                    .into_iter()
+                    .flatten()
+                    .any(|reference| {
+                        reference
+                            .as_str()
+                            .is_some_and(|value| value.trim().contains("local://template"))
+                    });
+                if has_template_evidence_ref {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job evidence_refs must not use local://template evidence",
+                    ));
+                }
+                let has_non_production_evidence_ref = readiness
+                    .get("evidence_refs")
+                    .and_then(|value| value.as_array())
+                    .into_iter()
+                    .flatten()
+                    .any(|reference| {
+                        reference
+                            .as_str()
+                            .is_some_and(evidence_ref_is_non_production)
+                    });
+                if has_non_production_evidence_ref {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job evidence_refs must not use local dry-run or placeholder evidence",
+                    ));
+                }
+                if required_evidence_prefixes.is_empty() {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        "ready job readiness records require non-empty required_evidence_prefixes",
+                    ));
+                }
+                if let Some(required_prefix) = missing_required_worker_data_pipeline_prefix(
+                    job_kind,
+                    &required_evidence_prefixes,
+                ) {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        format!(
+                            "{job_kind} required_evidence_prefixes must include {required_prefix}"
+                        ),
+                    ));
+                }
+                validate_worker_data_pipeline_submit_job_contract(
+                    job_kind,
+                    readiness,
+                    "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION",
+                )?;
+                let missing_required_evidence_prefix =
+                    required_evidence_prefixes.iter().find(|prefix| {
+                        !readiness
+                            .get("evidence_refs")
+                            .and_then(|value| value.as_array())
+                            .into_iter()
+                            .flatten()
+                            .any(|reference| {
+                                reference
+                                    .as_str()
+                                    .is_some_and(|value| value.starts_with(*prefix))
+                            })
+                    });
+                if let Some(prefix) = missing_required_evidence_prefix {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE",
+                        format!("ready job evidence_refs must include required prefix {prefix}"),
+                    ));
+                }
+                ready_jobs += 1;
+            }
+            "blocked" => {
+                blocked_jobs += 1;
+                blocked_job_kinds.push(job_kind.to_string());
+                let has_blockers = readiness
+                    .get("blockers")
+                    .and_then(|value| value.as_array())
+                    .is_some_and(|blockers| {
+                        !blockers.is_empty()
+                            && blockers.iter().all(|blocker| {
+                                blocker
+                                    .as_str()
+                                    .is_some_and(|value| !value.trim().is_empty())
+                            })
+                    });
+                if !has_blockers {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS",
+                        "blocked job readiness records require non-empty blockers",
+                    ));
+                }
+            }
+            _ => {
+                return Err(ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_STATUS",
+                    "job readiness_status must be ready or blocked",
+                ));
+            }
+        }
+    }
+    if ready_jobs != request.ready_job_count || blocked_jobs != request.blocked_job_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_COUNT",
+            "ready_job_count and blocked_job_count must match per-job readiness_status values",
+        ));
+    }
+    if (request.readiness_status == "ready" && blocked_jobs != 0)
+        || (request.readiness_status == "blocked" && blocked_jobs == 0)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WORKER_DATA_PIPELINE_READINESS_STATUS",
+            "readiness_status must match whether any job readiness record is blocked",
+        ));
+    }
+    for job_kind in &blocked_job_kinds {
+        let has_review_task = request.review_tasks.iter().any(|review_task| {
+            review_task
+                .get("task_kind")
+                .and_then(|value| value.as_str())
+                == Some("worker_data_pipeline_readiness_review")
+                && review_task.get("job_kind").and_then(|value| value.as_str())
+                    == Some(job_kind.as_str())
+        });
+        if !has_review_task {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "each blocked job readiness record requires a matching worker_data_pipeline_readiness_review task",
+            ));
+        }
+    }
+    for review_task in &request.review_tasks {
+        let Some(task_kind) = review_task
+            .get("task_kind")
+            .and_then(|value| value.as_str())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "each readiness review task must include task_kind",
+            ));
+        };
+        if task_kind != "worker_data_pipeline_readiness_review" {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "readiness review task kind must be worker_data_pipeline_readiness_review",
+            ));
+        }
+        let job_kind = review_task
+            .get("job_kind")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        if !blocked_job_kinds.iter().any(|blocked| blocked == job_kind) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS",
+                "readiness review tasks must match a blocked job readiness record",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_worker_data_pipeline_required_permission(
+    required_permission: &serde_json::Value,
+    api_path: Option<&str>,
+    error_code: &'static str,
+) -> Result<(), ApiError> {
+    let Some(required_permission) = required_permission.as_str() else {
+        if required_permission.is_null() {
+            return Ok(());
+        }
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            "required_permission must be a supported worker data pipeline permission scope",
+        ));
+    };
+    if required_permission.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            "required_permission must not be blank when supplied",
+        ));
+    }
+    if !is_worker_data_pipeline_permission(required_permission) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            error_code,
+            "required_permission must be a supported worker data pipeline permission scope",
+        ));
+    }
+    if let Some(expected_permission) =
+        api_path.and_then(worker_data_pipeline_permission_for_api_path)
+    {
+        if required_permission != expected_permission {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                error_code,
+                "required_permission must match api_path",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_worker_data_pipeline_permission(value: &str) -> bool {
+    matches!(
+        value,
+        "ops:providers:write" | "ops:datasets:write" | "ops:models:review"
+    )
+}
+
+fn worker_data_pipeline_permission_for_api_path(api_path: &str) -> Option<&'static str> {
+    if api_path.starts_with("/api/v1/ops/providers/") {
+        Some("ops:providers:write")
+    } else if api_path.starts_with("/api/v1/ops/models/") {
+        Some("ops:models:review")
+    } else if api_path.starts_with("/api/v1/ops/") {
+        Some("ops:datasets:write")
+    } else {
+        None
+    }
 }
 
 fn validate_unit_interval_metric(
@@ -258,6 +2502,9 @@ pub(super) fn validate_dataset_contract(request: &RegisterDatasetInput) -> Resul
             "DATASET_SPLIT_FORMAT_INVALID",
             "dataset split URIs must point to parquet files or parquet partition directories",
         ));
+    }
+    if request.status == "active" {
+        validate_active_dataset_production_uris(request)?;
     }
 
     let split_rows = request
@@ -309,6 +2556,65 @@ pub(super) fn validate_dataset_contract(request: &RegisterDatasetInput) -> Resul
         }
     }
 
+    Ok(())
+}
+
+fn validate_active_dataset_production_uris(request: &RegisterDatasetInput) -> Result<(), ApiError> {
+    for (uri, code, field_name) in [
+        (
+            request.manifest_uri.as_str(),
+            "DATASET_MANIFEST_INVALID",
+            "manifest_uri",
+        ),
+        (
+            request.schema_uri.as_str(),
+            "DATASET_SCHEMA_INVALID",
+            "schema_uri",
+        ),
+        (
+            request.profile_uri.as_str(),
+            "DATASET_PROFILE_INVALID",
+            "profile_uri",
+        ),
+    ] {
+        if !is_production_artifact_uri(uri) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                code,
+                format!("active datasets require production {field_name} evidence, not local dry-run or placeholder URI"),
+            ));
+        }
+    }
+    if request
+        .splits
+        .iter()
+        .any(|split| !is_production_artifact_uri(&split.data_uri))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "DATASET_SPLIT_FORMAT_INVALID",
+            "active datasets require production split data_uri evidence, not local dry-run or placeholder URI",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_active_model_dataset_production_uris(
+    request: &RegisterModelDatasetInput,
+) -> Result<(), ApiError> {
+    if !is_production_artifact_uri(&request.train_uri)
+        || !is_production_artifact_uri(&request.validation_uri)
+        || request
+            .test_uri
+            .as_ref()
+            .is_some_and(|test_uri| !is_production_artifact_uri(test_uri))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_DATASET",
+            "active model datasets require production train_uri, validation_uri, and test_uri evidence, not local dry-run or placeholder URI",
+        ));
+    }
     Ok(())
 }
 

@@ -5,8 +5,9 @@ use super::{
     ops_models_gate_evidence::{model_artifact_evidence_summary, source_data_quality_gate},
 };
 use crate::repository::{
-    canonical_feedback_target, DatasetRecord, ModelEvaluationRecord, ModelPerformanceRecord,
-    ModelPromotionReviewRecord, ModelVersionRecord, QaFeedbackItemRecord,
+    canonical_feedback_target, ModelDatasetLineageRecord, ModelEvaluationRecord,
+    ModelPerformanceRecord, ModelPromotionReviewRecord, ModelVersionRecord,
+    ProbabilityCalibrationReportRecord, QaFeedbackItemRecord,
 };
 use serde_json::Value;
 
@@ -26,7 +27,8 @@ pub(super) fn build_model_promotion_gates(
     outcome_labels: &[crate::repository::OutcomeLabelRecord],
     feedback_items: &[QaFeedbackItemRecord],
     latest_review: Option<&ModelPromotionReviewRecord>,
-    source_dataset: Option<&DatasetRecord>,
+    latest_calibration_report: Option<&ProbabilityCalibrationReportRecord>,
+    model_dataset_lineage: Option<&ModelDatasetLineageRecord>,
 ) -> ModelPromotionGatesResponse {
     let latest_evaluation = evaluations.iter().find(|evaluation| {
         evaluation.model_key == model.model_key && evaluation.model_version == model.version
@@ -38,9 +40,8 @@ pub(super) fn build_model_promotion_gates(
         || metrics.get("out_of_time_precision").is_some()
         || metrics.get("out_of_time_recall").is_some();
     let time_group_split_strategy = time_group_split_strategy_gate(metrics);
-    let immutable_dataset = latest_evaluation
-        .map(|evaluation| !evaluation.model_dataset_id.is_empty())
-        .unwrap_or(false);
+    let immutable_dataset =
+        latest_evaluation.is_some() && model_dataset_lineage_active(model_dataset_lineage);
     let holdout_metrics = latest_evaluation
         .map(|evaluation| {
             evaluation.auc.is_some()
@@ -85,7 +86,7 @@ pub(super) fn build_model_promotion_gates(
         .and_then(|value| value.as_str())
         == Some("passed");
     let rust_serving_evaluation = rust_serving_evaluation_gate(metrics);
-    let source_data_quality = source_data_quality_gate(metrics, source_dataset);
+    let source_data_quality = source_data_quality_gate(metrics, model_dataset_lineage);
     let feature_reproducibility = metrics
         .get("feature_reproducibility_hash")
         .and_then(|value| value.as_str())
@@ -146,6 +147,7 @@ pub(super) fn build_model_promotion_gates(
         .count();
     let label_governance = approved_model_labels > 0 && needs_review_model_labels == 0;
     let artifact_evidence = model_artifact_evidence_summary(metrics);
+    let probability_calibration = probability_calibration_gate(latest_calibration_report);
 
     let gates = vec![
         gate(
@@ -251,6 +253,12 @@ pub(super) fn build_model_promotion_gates(
             pilot_customer_validation_evidence_source(metrics, pilot_customer_validation),
         ),
         gate(
+            "Probability calibration",
+            probability_calibration.passed,
+            probability_calibration.blocker,
+            probability_calibration.evidence_source,
+        ),
+        gate(
             "Drift status",
             drift_gate_passed,
             drift_blocker(&drift_status),
@@ -320,18 +328,49 @@ pub(super) fn build_model_promotion_gates(
     }
 }
 
+struct ProbabilityCalibrationGate {
+    passed: bool,
+    blocker: &'static str,
+    evidence_source: &'static str,
+}
+
+fn probability_calibration_gate(
+    report: Option<&ProbabilityCalibrationReportRecord>,
+) -> ProbabilityCalibrationGate {
+    let Some(report) = report else {
+        return ProbabilityCalibrationGate {
+            passed: false,
+            blocker: "probability calibration missing",
+            evidence_source: "missing",
+        };
+    };
+    let passed = report.calibration_status == "passed"
+        && report.row_count >= report.minimum_calibration_rows
+        && report.expected_calibration_error <= report.max_expected_calibration_error
+        && report.brier_score <= report.max_brier_score;
+    ProbabilityCalibrationGate {
+        passed,
+        blocker: if passed {
+            "none"
+        } else {
+            "probability calibration failed"
+        },
+        evidence_source: "probability_calibration_report",
+    }
+}
+
 pub(super) fn build_model_retraining_readiness(
     model: &ModelVersionRecord,
     performance: &ModelPerformanceRecord,
     latest_evaluation: Option<&ModelEvaluationRecord>,
     outcome_labels: &[crate::repository::OutcomeLabelRecord],
     feedback_items: &[QaFeedbackItemRecord],
-    source_dataset: Option<&DatasetRecord>,
+    model_dataset_lineage: Option<&ModelDatasetLineageRecord>,
 ) -> ModelRetrainingReadinessResponse {
     let metrics = latest_evaluation
         .map(|evaluation| &evaluation.metrics_json)
         .unwrap_or(&serde_json::Value::Null);
-    let source_data_quality = source_data_quality_gate(metrics, source_dataset);
+    let source_data_quality = source_data_quality_gate(metrics, model_dataset_lineage);
     let open_model_feedback_count = feedback_items
         .iter()
         .filter(|item| {
@@ -436,6 +475,14 @@ fn evidence_source(passed: bool, source: &'static str) -> &'static str {
     } else {
         "missing"
     }
+}
+
+fn model_dataset_lineage_active(lineage: Option<&ModelDatasetLineageRecord>) -> bool {
+    lineage.is_some_and(|lineage| {
+        lineage.model_dataset.status == "active"
+            && lineage.feature_set.status == "active"
+            && lineage.source_dataset.status == "active"
+    })
 }
 
 fn drift_blocker(status: &str) -> &'static str {

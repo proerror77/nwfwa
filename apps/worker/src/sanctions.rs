@@ -2,7 +2,10 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-use crate::{read_json_report, write_json};
+use crate::{
+    api_url, ensure_production_artifact_uri, ensure_production_json_artifact_uri,
+    published_submission_evidence_refs, read_json_report, required_non_empty, write_json,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SanctionsSourceSnapshot {
@@ -63,6 +66,72 @@ pub struct SanctionsSyncReport {
     pub governance_boundary: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SanctionsSyncReportSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub run_date: String,
+    pub source_uri: String,
+    pub source_date: Option<String>,
+    pub sync_status: String,
+    pub source_record_count: usize,
+    pub valid_record_count: usize,
+    pub invalid_record_count: usize,
+    pub provider_upserts: Vec<SanctionsProviderUpsert>,
+    pub review_tasks: Vec<serde_json::Value>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+pub async fn fetch_oig_sam_sanctions_snapshot(
+    oig_url: Option<&str>,
+    sam_url: Option<&str>,
+    output_dir: impl AsRef<Path>,
+    source_date: Option<&str>,
+) -> anyhow::Result<SanctionsSourceSnapshot> {
+    if oig_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+        && sam_url
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_none()
+    {
+        bail!("at least one of oig_url or sam_url is required");
+    }
+
+    let client = reqwest::Client::new();
+    let mut records = Vec::new();
+    if let Some(url) = oig_url.map(str::trim).filter(|value| !value.is_empty()) {
+        records.extend(fetch_sanctions_records(&client, url, "OIG").await?);
+    }
+    if let Some(url) = sam_url.map(str::trim).filter(|value| !value.is_empty()) {
+        records.extend(fetch_sanctions_records(&client, url, "SAM").await?);
+    }
+
+    let snapshot = SanctionsSourceSnapshot {
+        source_date: source_date
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        records,
+    };
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create sanctions snapshot output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir.as_ref().join("oig_sam_sanctions_snapshot.json"),
+        &snapshot,
+    )?;
+    Ok(snapshot)
+}
+
 pub fn build_sanctions_sync_report(
     source_uri: &str,
     output_dir: impl AsRef<Path>,
@@ -70,7 +139,9 @@ pub fn build_sanctions_sync_report(
     dry_run: bool,
 ) -> anyhow::Result<SanctionsSyncReport> {
     if !dry_run {
-        bail!("sanctions sync currently supports --dry-run only; repository writes are not implemented");
+        bail!(
+            "direct sanctions sync currently supports --dry-run only; use submit-sanctions-sync-report for approved API writes"
+        );
     }
     if run_date.trim().is_empty() {
         bail!("run_date is required");
@@ -142,6 +213,209 @@ pub fn build_sanctions_sync_report(
         &report.provider_upserts,
     )?;
     Ok(report)
+}
+
+pub fn build_sanctions_sync_report_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<SanctionsSyncReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let report: SanctionsSyncReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse sanctions sync report")?;
+    let published_source_uri = report.source_uri.clone();
+    build_sanctions_sync_report_submission_from_report(
+        report_uri,
+        &published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+pub fn build_sanctions_sync_report_submission_with_published_uris(
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<SanctionsSyncReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let published_report_uri = required_non_empty("published_report_uri", published_report_uri)?;
+    let published_source_uri = required_non_empty("published_source_uri", published_source_uri)?;
+    let report: SanctionsSyncReport = serde_json::from_value(read_json_report(report_uri)?)
+        .context("parse sanctions sync report")?;
+    build_sanctions_sync_report_submission_from_report(
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+        report,
+    )
+}
+
+fn build_sanctions_sync_report_submission_from_report(
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+    report: SanctionsSyncReport,
+) -> anyhow::Result<SanctionsSyncReportSubmission> {
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    if report.report_kind != "oig_sam_sanctions_sync_report" {
+        bail!("report_kind must be oig_sam_sanctions_sync_report");
+    }
+    if report.provider_upserts.is_empty() {
+        bail!("sanctions sync report requires provider_upserts before API submission");
+    }
+    ensure_production_json_artifact_uri(
+        "sanctions sync published_report_uri",
+        published_report_uri,
+    )?;
+    ensure_production_artifact_uri("sanctions sync published_source_uri", published_source_uri)?;
+    let evidence_refs = published_submission_evidence_refs(
+        "sanctions sync evidence_refs",
+        &report.evidence_refs,
+        "sanctions_source_snapshot",
+        &report.source_uri,
+        published_source_uri,
+        "sanctions_sync_reports",
+        published_report_uri,
+    )?;
+    Ok(SanctionsSyncReportSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: published_report_uri.into(),
+        report_kind: report.report_kind,
+        run_date: report.run_date,
+        source_uri: published_source_uri.into(),
+        source_date: report.source_date,
+        sync_status: report.sync_status,
+        source_record_count: report.source_record_count,
+        valid_record_count: report.valid_record_count,
+        invalid_record_count: report.invalid_record_count,
+        provider_upserts: report.provider_upserts,
+        review_tasks: report
+            .review_tasks
+            .into_iter()
+            .map(serde_json::to_value)
+            .collect::<Result<Vec<_>, _>>()?,
+        evidence_refs,
+        governance_boundary: report.governance_boundary,
+    })
+}
+
+pub async fn submit_sanctions_sync_report(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_sanctions_sync_report_submission(report_uri, actor, notes)?;
+    submit_sanctions_sync_report_payload(api_base_url, api_key, &payload).await
+}
+
+pub async fn submit_sanctions_sync_report_with_published_uris(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    published_report_uri: &str,
+    published_source_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_sanctions_sync_report_submission_with_published_uris(
+        report_uri,
+        published_report_uri,
+        published_source_uri,
+        actor,
+        notes,
+    )?;
+    submit_sanctions_sync_report_payload(api_base_url, api_key, &payload).await
+}
+
+async fn submit_sanctions_sync_report_payload(
+    api_base_url: &str,
+    api_key: &str,
+    payload: &SanctionsSyncReportSubmission,
+) -> anyhow::Result<serde_json::Value> {
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/providers/sanctions-sync-reports",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit sanctions sync report")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit sanctions sync report failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse sanctions sync report response")
+}
+
+async fn fetch_sanctions_records(
+    client: &reqwest::Client,
+    url: &str,
+    default_list: &str,
+) -> anyhow::Result<Vec<SanctionsSourceRecord>> {
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("fetch sanctions snapshot {url}"))?;
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .with_context(|| format!("read sanctions snapshot {url}"))?;
+    if !status.is_success() {
+        bail!("fetch sanctions snapshot {url} failed with {status}: {body}");
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(&body).with_context(|| format!("parse sanctions snapshot {url}"))?;
+    let mut records = sanctions_records_from_value(value, default_list)
+        .with_context(|| format!("parse sanctions records from {url}"))?;
+    for record in &mut records {
+        if record.list.trim().is_empty() {
+            record.list = default_list.into();
+        }
+    }
+    Ok(records)
+}
+
+fn sanctions_records_from_value(
+    value: serde_json::Value,
+    default_list: &str,
+) -> anyhow::Result<Vec<SanctionsSourceRecord>> {
+    if value.is_array() {
+        let mut records: Vec<SanctionsSourceRecord> = serde_json::from_value(value)?;
+        for record in &mut records {
+            if record.list.trim().is_empty() {
+                record.list = default_list.into();
+            }
+        }
+        return Ok(records);
+    }
+    let snapshot: SanctionsSourceSnapshot = serde_json::from_value(value)?;
+    Ok(snapshot
+        .records
+        .into_iter()
+        .map(|mut record| {
+            if record.list.trim().is_empty() {
+                record.list = default_list.into();
+            }
+            record
+        })
+        .collect())
 }
 
 fn sanctions_record_validation_error(record: &SanctionsSourceRecord) -> Option<String> {

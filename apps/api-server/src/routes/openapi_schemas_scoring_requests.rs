@@ -166,6 +166,11 @@ pub(super) fn scoring_request_schemas() -> Value {
                     "maximum": 100,
                     "description": "Optional real peer percentile from upstream peer-group statistics. The API does not derive this from claim amount or policy limit."
                 },
+                "service_segment": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Optional explicit service segment used only to match persisted peer benchmark groups. The API does not infer this from provider_type or item_type."
+                },
                 "review_mode": {
                     "type": "string",
                     "enum": ["pre_payment", "post_payment"],
@@ -232,6 +237,11 @@ pub(super) fn scoring_request_schemas() -> Value {
                     "minimum": 0,
                     "maximum": 100,
                     "description": "Optional real peer percentile from upstream peer-group statistics. If omitted, claim_amount_peer_percentile is not generated."
+                },
+                "service_segment": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Optional explicit service segment used only to match persisted peer benchmark groups."
                 },
                 "currency": {
                     "type": "string",

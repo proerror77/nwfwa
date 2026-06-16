@@ -1,4 +1,5 @@
 use super::*;
+use sqlx::Row;
 
 pub(super) async fn list_models(
     repository: &PostgresScoringRepository,
@@ -271,6 +272,112 @@ pub(super) async fn latest_model_promotion_review(
     ))
 }
 
+pub(super) async fn save_probability_calibration_report(
+    repository: &PostgresScoringRepository,
+    record: ProbabilityCalibrationReportRecord,
+) -> anyhow::Result<ProbabilityCalibrationReportRecord> {
+    let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
+        "INSERT INTO probability_calibration_reports
+             (model_key, model_version, report_uri, report_kind, as_of_date, row_count,
+              minimum_calibration_rows, bin_count, expected_calibration_error,
+              max_expected_calibration_error, brier_score, max_brier_score,
+              calibration_status, bins_json, review_tasks_json, evidence_refs,
+              governance_boundary, submitted_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+             ON CONFLICT (model_key, model_version, report_uri) DO UPDATE
+             SET report_kind = EXCLUDED.report_kind,
+                 as_of_date = EXCLUDED.as_of_date,
+                 row_count = EXCLUDED.row_count,
+                 minimum_calibration_rows = EXCLUDED.minimum_calibration_rows,
+                 bin_count = EXCLUDED.bin_count,
+                 expected_calibration_error = EXCLUDED.expected_calibration_error,
+                 max_expected_calibration_error = EXCLUDED.max_expected_calibration_error,
+                 brier_score = EXCLUDED.brier_score,
+                 max_brier_score = EXCLUDED.max_brier_score,
+                 calibration_status = EXCLUDED.calibration_status,
+                 bins_json = EXCLUDED.bins_json,
+                 review_tasks_json = EXCLUDED.review_tasks_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 governance_boundary = EXCLUDED.governance_boundary,
+                 submitted_by = EXCLUDED.submitted_by,
+                 notes = EXCLUDED.notes
+             RETURNING created_at",
+    )
+    .bind(&record.model_key)
+    .bind(&record.model_version)
+    .bind(&record.report_uri)
+    .bind(&record.report_kind)
+    .bind(&record.as_of_date)
+    .bind(record.row_count as i64)
+    .bind(record.minimum_calibration_rows as i64)
+    .bind(record.bin_count as i64)
+    .bind(record.expected_calibration_error)
+    .bind(record.max_expected_calibration_error)
+    .bind(record.brier_score)
+    .bind(record.max_brier_score)
+    .bind(&record.calibration_status)
+    .bind(record.bins_json.clone())
+    .bind(record.review_tasks_json.clone())
+    .bind(serde_json::json!(record.evidence_refs.clone()))
+    .bind(&record.governance_boundary)
+    .bind(&record.submitted_by)
+    .bind(&record.notes)
+    .fetch_one(&repository.pool)
+    .await?;
+    Ok(ProbabilityCalibrationReportRecord {
+        created_at: Some(row.0.to_rfc3339()),
+        ..record
+    })
+}
+
+pub(super) async fn latest_probability_calibration_report(
+    repository: &PostgresScoringRepository,
+    model_key: &str,
+    model_version: &str,
+) -> anyhow::Result<Option<ProbabilityCalibrationReportRecord>> {
+    let row = sqlx::query(
+        "SELECT model_key, model_version, report_uri, report_kind, as_of_date, row_count,
+                minimum_calibration_rows, bin_count, expected_calibration_error,
+                max_expected_calibration_error, brier_score, max_brier_score,
+                calibration_status, bins_json, review_tasks_json, evidence_refs,
+                governance_boundary, submitted_by, notes, created_at
+         FROM probability_calibration_reports
+         WHERE model_key = $1 AND model_version = $2
+         ORDER BY as_of_date DESC, created_at DESC
+         LIMIT 1",
+    )
+    .bind(model_key)
+    .bind(model_version)
+    .fetch_optional(&repository.pool)
+    .await?;
+
+    Ok(row.map(|row| ProbabilityCalibrationReportRecord {
+        model_key: row.get("model_key"),
+        model_version: row.get("model_version"),
+        report_uri: row.get("report_uri"),
+        report_kind: row.get("report_kind"),
+        as_of_date: row.get("as_of_date"),
+        row_count: non_negative_i64_as_usize(row.get("row_count")),
+        minimum_calibration_rows: non_negative_i64_as_usize(row.get("minimum_calibration_rows")),
+        bin_count: non_negative_i64_as_usize(row.get("bin_count")),
+        expected_calibration_error: row.get("expected_calibration_error"),
+        max_expected_calibration_error: row.get("max_expected_calibration_error"),
+        brier_score: row.get("brier_score"),
+        max_brier_score: row.get("max_brier_score"),
+        calibration_status: row.get("calibration_status"),
+        bins_json: row.get("bins_json"),
+        review_tasks_json: row.get("review_tasks_json"),
+        evidence_refs: json_array_to_strings(row.get("evidence_refs")),
+        governance_boundary: row.get("governance_boundary"),
+        submitted_by: row.get("submitted_by"),
+        notes: row.get("notes"),
+        created_at: Some(
+            row.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                .to_rfc3339(),
+        ),
+    }))
+}
+
 pub(super) async fn save_model_retraining_job(
     repository: &PostgresScoringRepository,
     record: ModelRetrainingJobRecord,
@@ -456,4 +563,8 @@ pub(super) async fn complete_model_retraining_job(
     .await?;
 
     Ok(row.map(model_retraining_job_from_pg_row))
+}
+
+fn non_negative_i64_as_usize(value: i64) -> usize {
+    value.max(0) as usize
 }

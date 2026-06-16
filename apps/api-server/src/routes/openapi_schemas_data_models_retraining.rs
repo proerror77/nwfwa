@@ -46,7 +46,7 @@ pub(super) fn retraining_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include model_versions:{model_key}:{model_version} and model_monitoring_reports:{report_uri}."
+                    "description": "Must include model_versions:{model_key}:{model_version} and model_monitoring_reports:{report_uri}; values must not contain PII or local dry-run/template refs."
                 }
             }
         },
@@ -64,6 +64,81 @@ pub(super) fn retraining_schemas() -> Value {
                 "next_actions": {
                     "type": "array",
                     "items": { "type": "string" }
+                },
+                "governance_boundary": { "type": "string" }
+            }
+        },
+        "SubmitProbabilityCalibrationReportRequest": {
+            "type": "object",
+            "required": ["actor", "notes", "report_uri", "report_kind", "model_version", "as_of_date", "row_count", "minimum_calibration_rows", "bin_count", "expected_calibration_error", "max_expected_calibration_error", "brier_score", "max_brier_score", "calibration_status", "bins", "review_tasks", "evidence_refs", "governance_boundary"],
+            "properties": {
+                "actor": { "type": "string", "minLength": 1 },
+                "notes": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Calibration notes must not contain PII."
+                },
+                "report_uri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "URI of probability_calibration_report.json."
+                },
+                "report_kind": { "type": "string", "const": "probability_calibration_report" },
+                "model_version": { "type": "string", "minLength": 1 },
+                "as_of_date": { "type": "string", "minLength": 1 },
+                "row_count": { "type": "integer", "minimum": 1 },
+                "minimum_calibration_rows": { "type": "integer", "minimum": 1 },
+                "bin_count": { "type": "integer", "minimum": 1 },
+                "expected_calibration_error": { "type": "number", "minimum": 0, "maximum": 1 },
+                "max_expected_calibration_error": { "type": "number", "minimum": 0, "maximum": 1 },
+                "brier_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                "max_brier_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                "calibration_status": {
+                    "type": "string",
+                    "enum": ["passed", "needs_calibration_review", "insufficient_sample"],
+                    "description": "Must match row_count, minimum_calibration_rows, expected_calibration_error, max_expected_calibration_error, brier_score, and max_brier_score."
+                },
+                "bins": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "object", "minProperties": 1 }
+                },
+                "review_tasks": {
+                    "type": "array",
+                    "description": "Human review tasks opened by calibration evidence; task content must not contain PII.",
+                    "items": { "type": "object", "minProperties": 1 }
+                },
+                "evidence_refs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 },
+                    "description": "Must include model_versions:{model_key}:{model_version}, probability_calibration_reports:{report_uri}, probability_calibration_input:{source_uri}, and calibration_labels:{label_source_uri}."
+                },
+                "governance_boundary": { "type": "string", "minLength": 1 }
+            }
+        },
+        "SubmitProbabilityCalibrationReportResponse": {
+            "type": "object",
+            "required": ["model_key", "model_version", "report_uri", "calibration_status", "row_count", "expected_calibration_error", "brier_score", "review_task_count", "active_calibration_change", "calibrated_probability_serving_activation", "threshold_change", "label_assignment", "persisted_report", "governance_boundary"],
+            "properties": {
+                "model_key": { "type": "string" },
+                "model_version": { "type": "string" },
+                "report_uri": { "type": "string" },
+                "calibration_status": {
+                    "type": "string",
+                    "enum": ["passed", "needs_calibration_review", "insufficient_sample"]
+                },
+                "row_count": { "type": "integer" },
+                "expected_calibration_error": { "type": "number" },
+                "brier_score": { "type": "number" },
+                "review_task_count": { "type": "integer" },
+                "active_calibration_change": { "type": "boolean", "const": false },
+                "calibrated_probability_serving_activation": { "type": "boolean", "const": false },
+                "threshold_change": { "type": "boolean", "const": false },
+                "label_assignment": { "type": "boolean", "const": false },
+                "persisted_report": {
+                    "type": "object",
+                    "description": "Persisted model-governance calibration evidence. It does not activate calibrated serving."
                 },
                 "governance_boundary": { "type": "string" }
             }
@@ -97,7 +172,7 @@ pub(super) fn retraining_schemas() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Must include model_versions:{model_key}:{model_version} and mlops_scheduler_execution_reports:{scheduler_execution_report_uri}."
+                    "description": "Must include model_versions:{model_key}:{model_version} and mlops_scheduler_execution_reports:{scheduler_execution_report_uri}; values must not contain PII or local dry-run/template refs."
                 }
             }
         },
@@ -165,7 +240,7 @@ pub(super) fn retraining_schemas() -> Value {
                 "artifact_uri": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Supported serving model artifact formats: .onnx, .pkl, .joblib, or .json. Rust serving exports should use rust_serving_artifact.json."
+                    "description": "Production artifact URI for the serving model artifact. Supported formats: .onnx, .pkl, .joblib, or .json. Rust serving exports should use rust_serving_artifact.json."
                 },
                 "artifact_sha256": {
                     "type": ["string", "null"],
@@ -175,7 +250,7 @@ pub(super) fn retraining_schemas() -> Value {
                 "training_artifact_uri": {
                     "type": ["string", "null"],
                     "minLength": 1,
-                    "description": "Optional Python training artifact URI for audit and fallback reproducibility. Supported formats: .pkl or .joblib."
+                    "description": "Optional production artifact URI for Python training artifact audit and fallback reproducibility. Supported formats: .pkl or .joblib."
                 },
                 "training_artifact_sha256": {
                     "type": ["string", "null"],
@@ -185,20 +260,20 @@ pub(super) fn retraining_schemas() -> Value {
                 "serving_manifest_uri": {
                     "type": ["string", "null"],
                     "minLength": 1,
-                    "description": "Optional Rust serving manifest URI. Must point to serving_manifest.json when provided."
+                    "description": "Optional production artifact URI for the Rust serving manifest. Must point to serving_manifest.json when provided."
                 },
                 "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
                 "validation_report_uri": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Validation report URI must point to a JSON report."
+                    "description": "Production artifact URI for the validation report. Must point to a JSON report."
                 },
                 "evaluation_run_id": { "type": "string", "minLength": 1 },
                 "evidence_refs": {
                     "type": "array",
                     "minItems": 1,
                     "items": { "type": "string", "minLength": 1 },
-                    "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, model_feature_importance, model_permutation_importance, model_training_artifacts when training_artifact_uri is present, and model_serving_manifests or serving_manifests when serving_manifest_uri is present."
+                    "description": "Model retraining output evidence_refs must not contain PII or local dry-run/template refs, and must include model_artifacts, model_validation_reports, model_evaluations, model_feature_importance, model_permutation_importance, model_training_artifacts when training_artifact_uri is present, and model_serving_manifests or serving_manifests when serving_manifest_uri is present."
                 },
                 "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                 "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
@@ -211,7 +286,7 @@ pub(super) fn retraining_schemas() -> Value {
                 "feature_importance_uri": {
                     "type": ["string", "null"],
                     "minLength": 1,
-                    "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
+                    "description": "Production feature importance artifact URI. Must be a Parquet file or Parquet partition directory."
                 },
                 "permutation_importance_uri": {
                     "type": ["string", "null"],

@@ -1,5 +1,10 @@
-use crate::repository::{DatasetRecord, FieldMappingRecord, ModelEvaluationRecord};
-use serde::Serialize;
+use crate::repository::{
+    ClinicalCompatibilityReferenceRecord, ClinicalCompatibilityReferenceUpsertInput, DatasetRecord,
+    FieldMappingRecord, ModelEvaluationRecord, ScoringFeatureContextMaterializationRecord,
+    UnbundlingComparatorCandidateRecord, UnbundlingComparatorCandidateUpsertInput,
+    WorkerDataPipelineExecutionReportRecord, WorkerDataPipelineReadinessReportRecord,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 #[derive(Debug, Serialize)]
@@ -39,6 +44,191 @@ pub struct ModelEvaluationResponse {
 pub struct ModelEvaluationListResponse {
     pub evaluations: Vec<ModelEvaluationRecord>,
     pub lineage: Vec<ModelEvaluationLineageRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitScoringFeatureContextMaterializationRequest {
+    pub materialization_id: String,
+    pub actor: String,
+    pub notes: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uris: Value,
+    pub claim_count: u64,
+    pub context_count: u64,
+    pub contexts: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ScoringFeatureContextMaterializationResponse {
+    pub materialization: ScoringFeatureContextMaterializationRecord,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitClinicalCompatibilityReferenceRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub reference_version: String,
+    pub effective_date: String,
+    pub source_authority: String,
+    pub source_uri: String,
+    pub record_count: usize,
+    #[serde(default)]
+    pub records: Vec<ClinicalCompatibilityReferenceUpsertInput>,
+    #[serde(default)]
+    pub review_tasks: Vec<Value>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ClinicalCompatibilityReferenceSubmissionResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub reference_version: String,
+    pub record_count: usize,
+    pub review_task_count: usize,
+    pub persisted_records: Vec<ClinicalCompatibilityReferenceRecord>,
+    pub active_scoring_policy_change: bool,
+    pub claim_scoring: bool,
+    pub label_assignment: bool,
+    pub claim_denial: bool,
+    pub medical_review_replacement: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitUnbundlingComparatorCandidatesRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub source_uri: String,
+    pub rule_count: usize,
+    pub episode_count: usize,
+    pub candidate_count: usize,
+    #[serde(default)]
+    pub candidates: Vec<UnbundlingComparatorCandidateUpsertInput>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UnbundlingComparatorCandidatesSubmissionResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub as_of_date: String,
+    pub rule_count: usize,
+    pub episode_count: usize,
+    pub candidate_count: usize,
+    pub persisted_candidates: Vec<UnbundlingComparatorCandidateRecord>,
+    pub active_scoring_policy_change: bool,
+    pub claim_scoring: bool,
+    pub label_assignment: bool,
+    pub claim_denial: bool,
+    pub case_creation: bool,
+    pub medical_review_replacement: bool,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitWorkerDataPipelineExecutionReportRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub run_status_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: usize,
+    pub pending_or_failed_job_count: usize,
+    pub review_task_count: usize,
+    #[serde(default)]
+    pub job_executions: Vec<Value>,
+    #[serde(default)]
+    pub review_tasks: Vec<Value>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkerDataPipelineExecutionReportSubmissionResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub readiness_report_uri: Option<String>,
+    pub readiness_gate_status: Option<String>,
+    pub run_id: String,
+    pub execution_date: String,
+    pub job_count: usize,
+    pub pending_or_failed_job_count: usize,
+    pub review_task_count: usize,
+    pub active_scoring_policy_change: bool,
+    pub claim_scoring: bool,
+    pub label_assignment: bool,
+    pub claim_denial: bool,
+    pub model_activation: bool,
+    pub routing_policy_change: bool,
+    pub persisted_report: WorkerDataPipelineExecutionReportRecord,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitWorkerDataPipelineReadinessReportRequest {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub plan_uri: String,
+    pub readiness_input_uri: String,
+    pub readiness_status: String,
+    pub job_count: usize,
+    pub ready_job_count: usize,
+    pub blocked_job_count: usize,
+    pub review_task_count: usize,
+    #[serde(default)]
+    pub job_readiness: Vec<Value>,
+    #[serde(default)]
+    pub review_tasks: Vec<Value>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkerDataPipelineReadinessReportSubmissionResponse {
+    pub report_kind: String,
+    pub source_report_uri: String,
+    pub readiness_status: String,
+    pub job_count: usize,
+    pub ready_job_count: usize,
+    pub blocked_job_count: usize,
+    pub review_task_count: usize,
+    pub active_scoring_policy_change: bool,
+    pub claim_scoring: bool,
+    pub label_assignment: bool,
+    pub claim_denial: bool,
+    pub model_activation: bool,
+    pub routing_policy_change: bool,
+    pub external_fetch_execution: bool,
+    pub artifact_submission: bool,
+    pub persisted_report: WorkerDataPipelineReadinessReportRecord,
+    pub governance_boundary: String,
+    pub audit_event_type: String,
 }
 
 #[derive(Debug, Serialize)]

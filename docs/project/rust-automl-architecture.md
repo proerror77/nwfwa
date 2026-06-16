@@ -154,8 +154,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
   scheduled plan plus runtime reports, then optionally submit monitoring and
   alert-router handoff evidence into the API audit surface.
 - `deliver-mlops-alert-receiver-webhook`: POST queued MLOps alert tasks to a
-  customer receiver webhook and write delivery evidence without triggering model
-  lifecycle actions.
+  customer receiver webhook using a published scheduler report URI for
+  customer-visible evidence, and write delivery evidence without triggering
+  model lifecycle actions.
 - `build-automl-lifecycle-closure-report`: summarize dataset, candidate
   ranking, ONNX Rust-serving, rule-backtest, clustering, and monitoring
   evidence into one closure report without auto-activating models or writing
@@ -216,8 +217,9 @@ Current repository completion for this target architecture is approximately:
   produce scheduler execution and alert-delivery evidence, submit scheduler
   alert-router handoff evidence into API governance audit, run the Rust
   monitoring cycle executor from plan plus runtime reports, POST queued alert
-  tasks to a customer receiver webhook with bearer auth, HMAC signature, and
-  bounded retry evidence, produce a lifecycle closure report, and generate a
+  tasks to a customer receiver webhook with bearer auth, HMAC signature,
+  published scheduler-report evidence, and bounded retry evidence, produce a
+  lifecycle closure report, and generate a
   checked-in demo lifecycle evidence pack, while API promotion gates now require
   Rust feature-set materialization evidence, worker ranking requires Rust
   feature-set and Rust serving evaluation evidence, and trainer-side ONNX parity

@@ -197,6 +197,30 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             get(ops_datasets::get_model_evaluation),
         )
         .route(
+            "/api/v1/ops/scoring-feature-context-materializations",
+            post(ops_datasets::submit_scoring_feature_context_materialization),
+        )
+        .route(
+            "/api/v1/ops/clinical-compatibility-references",
+            post(ops_datasets::submit_clinical_compatibility_reference),
+        )
+        .route(
+            "/api/v1/ops/unbundling-comparator-candidates",
+            post(ops_datasets::submit_unbundling_comparator_candidates),
+        )
+        .route(
+            "/api/v1/ops/worker-data-pipeline-executions",
+            post(ops_datasets::submit_worker_data_pipeline_execution_report),
+        )
+        .route(
+            "/api/v1/ops/worker-data-pipeline-readiness",
+            post(ops_datasets::submit_worker_data_pipeline_readiness_report),
+        )
+        .route(
+            "/api/v1/ops/scoring-feature-context-materializations/:materialization_id",
+            get(ops_datasets::get_scoring_feature_context_materialization),
+        )
+        .route(
             "/api/v1/ops/evidence/documents",
             get(ops_evidence::list_documents).post(ops_evidence::create_document),
         )
@@ -256,6 +280,26 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
             post(ops_providers::submit_anomaly_clustering_report),
         )
         .route(
+            "/api/v1/ops/providers/sanctions-sync-reports",
+            post(ops_providers::submit_sanctions_sync_report),
+        )
+        .route(
+            "/api/v1/ops/providers/profile-window-rollups",
+            post(ops_providers::submit_provider_profile_window_rollup),
+        )
+        .route(
+            "/api/v1/ops/providers/graph-signal-rollups",
+            post(ops_providers::submit_provider_graph_signal_rollup),
+        )
+        .route(
+            "/api/v1/ops/providers/peer-benchmarks",
+            post(ops_providers::submit_peer_benchmark),
+        )
+        .route(
+            "/api/v1/ops/providers/episode-rollups",
+            post(ops_providers::submit_episode_rollup),
+        )
+        .route(
             "/api/v1/ops/providers/anomaly-review-queue",
             get(ops_providers::anomaly_review_queue),
         )
@@ -307,6 +351,10 @@ pub(super) fn register_api_routes(router: Router<AppState>) -> Router<AppState> 
         .route(
             "/api/v1/ops/models/:model_key/mlops-monitoring-reports",
             post(ops_models::submit_mlops_monitoring_report),
+        )
+        .route(
+            "/api/v1/ops/models/:model_key/probability-calibration-reports",
+            post(ops_models::submit_probability_calibration_report),
         )
         .route(
             "/api/v1/ops/models/:model_key/mlops-alert-deliveries",

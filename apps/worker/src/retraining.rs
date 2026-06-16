@@ -404,7 +404,10 @@ pub async fn complete_retraining_job_with_mock_output(
     artifact_base_uri: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let output = build_mock_retraining_output(job, actor, artifact_base_uri)?;
-    register_retraining_output(api_base_url, api_key, job, &output).await
+    let result = register_retraining_output(api_base_url, api_key, job, &output).await?;
+    submit_mock_candidate_probability_calibration(api_base_url, api_key, job, actor, &output)
+        .await?;
+    Ok(result)
 }
 
 async fn register_retraining_output(
@@ -557,6 +560,105 @@ pub async fn complete_retraining_job_with_training_output(
         enrich_retraining_output_with_model_artifact_evaluation(output, training_manifest).await?;
     let output = enrich_retraining_output_with_rule_candidate_workflow(output, training_manifest)?;
     register_retraining_output(api_base_url, api_key, job, &output).await
+}
+
+async fn submit_mock_candidate_probability_calibration(
+    api_base_url: &str,
+    api_key: &str,
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+    output: &CompleteRetrainingJobPayload,
+) -> anyhow::Result<()> {
+    let artifact_dir = output
+        .validation_report_uri
+        .strip_suffix("/validation.json")
+        .map(str::to_string)
+        .or_else(|| {
+            output
+                .artifact_uri
+                .rsplit_once('/')
+                .map(|(artifact_dir, _)| artifact_dir.to_string())
+        })
+        .ok_or_else(|| {
+            anyhow!("candidate artifact directory is required for calibration report")
+        })?;
+    let report_uri = format!("{artifact_dir}/calibration/probability_calibration_report.json");
+    let input_uri = format!("{artifact_dir}/calibration/holdout_predictions.json");
+    let label_uri = format!("{artifact_dir}/calibration/holdout_labels.json");
+    let payload = serde_json::json!({
+        "actor": actor,
+        "notes": "Candidate holdout probability calibration evidence registered by retraining worker.",
+        "report_uri": report_uri,
+        "report_kind": "probability_calibration_report",
+        "model_version": output.candidate_model_version,
+        "as_of_date": "2026-06-14",
+        "row_count": 1000,
+        "minimum_calibration_rows": 100,
+        "bin_count": 2,
+        "expected_calibration_error": 0.03,
+        "max_expected_calibration_error": 0.05,
+        "brier_score": 0.12,
+        "max_brier_score": 0.20,
+        "calibration_status": "passed",
+        "bins": [
+            {
+                "bin_index": 0,
+                "lower_bound": 0.0,
+                "upper_bound": 0.5,
+                "row_count": 680,
+                "average_predicted_probability": 0.18,
+                "observed_positive_rate": 0.16,
+                "calibration_error": 0.02
+            },
+            {
+                "bin_index": 1,
+                "lower_bound": 0.5,
+                "upper_bound": 1.0,
+                "row_count": 320,
+                "average_predicted_probability": 0.74,
+                "observed_positive_rate": 0.70,
+                "calibration_error": 0.04
+            }
+        ],
+        "review_tasks": [],
+        "evidence_refs": [
+            format!("model_versions:{}:{}", job.model_key, output.candidate_model_version),
+            format!("model_retraining_jobs:{}", job.job_id),
+            format!("model_evaluations:{}", output.evaluation_run_id),
+            format!("probability_calibration_reports:{report_uri}"),
+            format!("probability_calibration_input:{input_uri}"),
+            format!("calibration_labels:{label_uri}")
+        ],
+        "governance_boundary": "candidate probability calibration submission records model-governance evidence only; it must not activate calibrated serving, change thresholds, or assign labels"
+    });
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            &format!(
+                "/api/v1/ops/models/{}/probability-calibration-reports",
+                job.model_key
+            ),
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .with_context(|| {
+            format!(
+                "submit probability calibration report for {}:{}",
+                job.model_key, output.candidate_model_version
+            )
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!(
+            "submit probability calibration report for {}:{} failed with {status}: {body}",
+            job.model_key,
+            output.candidate_model_version
+        );
+    }
+    Ok(())
 }
 
 pub async fn run_one_retraining_job(

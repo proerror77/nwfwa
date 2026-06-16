@@ -4,7 +4,7 @@ use super::{
     ops_rules_types::{
         RuleLifecycleRequest, RuleLifecycleResponse, SubmitRulePromotionReviewRequest,
     },
-    ops_rules_validation::validate_rule_lifecycle_request,
+    ops_rules_validation::{validate_production_evidence_refs, validate_rule_lifecycle_request},
 };
 use crate::{
     app::AppState, auth::AuthenticatedApiPrincipal, error::ApiError,
@@ -298,6 +298,11 @@ pub async fn submit_rule_promotion_review(
             "promotion review notes and evidence_refs must not contain PII",
         ));
     }
+    validate_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_PROMOTION_REVIEW_EVIDENCE",
+        "promotion review evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     let rule = state
         .repository
         .get_rule(&rule_id)

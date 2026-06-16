@@ -8,6 +8,7 @@ pub use super::types_evidence::*;
 pub use super::types_knowledge::*;
 pub use super::types_models::*;
 pub use super::types_outcomes::*;
+pub use super::types_providers::*;
 pub use super::types_rules::*;
 
 pub(super) const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
@@ -23,6 +24,15 @@ pub(super) const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "model.promotion.reviewed",
     "model.activation.completed",
     "model.rollback.completed",
+    "model.probability_calibration.report_submitted",
+    "worker_data_pipeline.readiness_report.submitted",
+    "worker_data_pipeline.execution_report.submitted",
+    "clinical_compatibility.reference.submitted",
+    "unbundling_comparator.candidates.submitted",
+    "provider.sanctions_sync.submitted",
+    "provider.profile_windows.submitted",
+    "provider.graph_signals.submitted",
+    "provider.peer_benchmarks.submitted",
     "agent.approval.decided",
     "agent.run.cancelled",
     "audit_sample.created",

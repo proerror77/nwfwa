@@ -113,6 +113,14 @@ pub(crate) fn assert_rules_factor_contract(schema: &serde_json::Value) {
         schema["components"]["schemas"]["SaveRuleCandidateRequest"]["properties"]["rule"]["$ref"],
         "#/components/schemas/RuleDefinition"
     );
+    assert!(
+        schema["components"]["schemas"]["ReviewRuleCandidateRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("not local/template refs"),
+        "missing ReviewRuleCandidateRequest.evidence_refs production-ref contract"
+    );
     assert_eq!(
         schema["paths"]["/api/v1/ops/rules/conditions"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"]["$ref"],

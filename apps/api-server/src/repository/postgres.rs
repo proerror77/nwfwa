@@ -363,6 +363,21 @@ impl ModelsRepository for PostgresScoringRepository {
         postgres_models::save_model_promotion_review(self, record).await
     }
 
+    async fn save_probability_calibration_report(
+        &self,
+        record: ProbabilityCalibrationReportRecord,
+    ) -> anyhow::Result<ProbabilityCalibrationReportRecord> {
+        postgres_models::save_probability_calibration_report(self, record).await
+    }
+
+    async fn latest_probability_calibration_report(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ProbabilityCalibrationReportRecord>> {
+        postgres_models::latest_probability_calibration_report(self, model_key, model_version).await
+    }
+
     async fn latest_model_promotion_review(
         &self,
         model_key: &str,
@@ -469,6 +484,13 @@ impl DatasetsRepository for PostgresScoringRepository {
         postgres_datasets::get_model_dataset_source_dataset(self, model_dataset_id).await
     }
 
+    async fn get_model_dataset_lineage(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<ModelDatasetLineageRecord>> {
+        postgres_datasets::get_model_dataset_lineage(self, model_dataset_id).await
+    }
+
     async fn register_model_evaluation(
         &self,
         input: RegisterModelEvaluationInput,
@@ -485,6 +507,97 @@ impl DatasetsRepository for PostgresScoringRepository {
 
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
         postgres_datasets::list_model_evaluations(self).await
+    }
+
+    async fn save_scoring_feature_context_materialization(
+        &self,
+        input: SaveScoringFeatureContextMaterializationInput,
+    ) -> anyhow::Result<ScoringFeatureContextMaterializationRecord> {
+        postgres_datasets::save_scoring_feature_context_materialization(self, input).await
+    }
+
+    async fn get_scoring_feature_context_materialization(
+        &self,
+        materialization_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextMaterializationRecord>> {
+        postgres_datasets::get_scoring_feature_context_materialization(
+            self,
+            materialization_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn latest_scoring_feature_context_for_claim(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ScoringFeatureContextForClaimRecord>> {
+        postgres_datasets::latest_scoring_feature_context_for_claim(
+            self,
+            claim_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_clinical_compatibility_references(
+        &self,
+        input: SaveClinicalCompatibilityReferencesInput,
+    ) -> anyhow::Result<Vec<ClinicalCompatibilityReferenceRecord>> {
+        postgres_datasets::save_clinical_compatibility_references(self, input).await
+    }
+
+    async fn clinical_compatibility_reference_for_claim(
+        &self,
+        diagnosis_code: &str,
+        procedure_codes: &[String],
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ClinicalCompatibilityReferenceRecord>> {
+        postgres_datasets::clinical_compatibility_reference_for_claim(
+            self,
+            diagnosis_code,
+            procedure_codes,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_unbundling_comparator_candidates(
+        &self,
+        input: SaveUnbundlingComparatorCandidatesInput,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        postgres_datasets::save_unbundling_comparator_candidates(self, input).await
+    }
+
+    async fn latest_unbundling_comparator_candidates_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<UnbundlingComparatorCandidateRecord>> {
+        postgres_datasets::latest_unbundling_comparator_candidates_for_member_provider(
+            self,
+            member_id,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_worker_data_pipeline_readiness_report(
+        &self,
+        input: SaveWorkerDataPipelineReadinessReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineReadinessReportRecord> {
+        postgres_datasets::save_worker_data_pipeline_readiness_report(self, input).await
+    }
+
+    async fn save_worker_data_pipeline_execution_report(
+        &self,
+        input: SaveWorkerDataPipelineExecutionReportInput,
+    ) -> anyhow::Result<WorkerDataPipelineExecutionReportRecord> {
+        postgres_datasets::save_worker_data_pipeline_execution_report(self, input).await
     }
 }
 
@@ -657,6 +770,108 @@ impl KnowledgeRepository for PostgresScoringRepository {
 
     async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
         postgres_providers::provider_risk_summary(self).await
+    }
+
+    async fn save_provider_sanctions(
+        &self,
+        input: SaveProviderSanctionsInput,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        postgres_providers::save_provider_sanctions(self, input).await
+    }
+
+    async fn provider_sanctions_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<ProviderSanctionRecord>> {
+        postgres_providers::provider_sanctions_for_provider(self, provider_id, customer_scope_id)
+            .await
+    }
+
+    async fn save_provider_profile_windows(
+        &self,
+        input: SaveProviderProfileWindowsInput,
+    ) -> anyhow::Result<Vec<ProviderProfileWindowRecord>> {
+        postgres_providers::save_provider_profile_windows(self, input).await
+    }
+
+    async fn latest_provider_profile_windows_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderProfileWindowRecord>> {
+        postgres_providers::latest_provider_profile_windows_for_provider(
+            self,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_provider_graph_signals(
+        &self,
+        input: SaveProviderGraphSignalsInput,
+    ) -> anyhow::Result<Vec<ProviderGraphSignalRecord>> {
+        postgres_providers::save_provider_graph_signals(self, input).await
+    }
+
+    async fn latest_provider_graph_signal_for_provider(
+        &self,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<ProviderGraphSignalRecord>> {
+        postgres_providers::latest_provider_graph_signal_for_provider(
+            self,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_peer_benchmark_groups(
+        &self,
+        input: SavePeerBenchmarkGroupsInput,
+    ) -> anyhow::Result<Vec<PeerBenchmarkGroupRecord>> {
+        postgres_providers::save_peer_benchmark_groups(self, input).await
+    }
+
+    async fn latest_peer_benchmark_group(
+        &self,
+        specialty: &str,
+        region: &str,
+        service_segment: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PeerBenchmarkGroupRecord>> {
+        postgres_providers::latest_peer_benchmark_group(
+            self,
+            specialty,
+            region,
+            service_segment,
+            customer_scope_id,
+        )
+        .await
+    }
+
+    async fn save_episode_rollups(
+        &self,
+        input: SaveEpisodeRollupsInput,
+    ) -> anyhow::Result<Vec<EpisodeRollupRecord>> {
+        postgres_providers::save_episode_rollups(self, input).await
+    }
+
+    async fn latest_episode_rollup_for_member_provider(
+        &self,
+        member_id: &str,
+        provider_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EpisodeRollupRecord>> {
+        postgres_providers::latest_episode_rollup_for_member_provider(
+            self,
+            member_id,
+            provider_id,
+            customer_scope_id,
+        )
+        .await
     }
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {

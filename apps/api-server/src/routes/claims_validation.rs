@@ -17,6 +17,9 @@ pub(super) fn validate_score_request_contract(request: &ScoreClaimRequest) -> Re
     if let Some(peer_percentile) = request.claim_amount_peer_percentile {
         require_percentile(peer_percentile, "claim_amount_peer_percentile")?;
     }
+    if let Some(service_segment) = &request.service_segment {
+        require_nonblank(service_segment, "service_segment")?;
+    }
     if let Some(inbox_run_id) = &request.inbox_run_id {
         require_nonblank(inbox_run_id, "inbox_run_id")?;
     }
@@ -61,6 +64,17 @@ pub(super) fn validate_score_request_contract(request: &ScoreClaimRequest) -> Re
     if let Some(scoring_feature_context) = &request.scoring_feature_context {
         validate_scoring_feature_context_payload(scoring_feature_context)?;
     }
+    if let (Some(top_level), Some(claim)) = (&request.service_segment, &request.claim) {
+        if let Some(nested) = &claim.service_segment {
+            if top_level.trim() != nested.trim() {
+                return Err(ApiError::new(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "AMBIGUOUS_SCORE_REQUEST",
+                    "service_segment must match claim.service_segment when both are supplied",
+                ));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -88,6 +102,9 @@ fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiErro
     }
     if let Some(peer_percentile) = payload.claim_amount_peer_percentile {
         require_percentile(peer_percentile, "claim.claim_amount_peer_percentile")?;
+    }
+    if let Some(service_segment) = &payload.service_segment {
+        require_nonblank(service_segment, "claim.service_segment")?;
     }
     if let Some(items) = &payload.items {
         for item in items {

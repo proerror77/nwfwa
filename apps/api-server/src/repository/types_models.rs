@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelVersionRecord {
@@ -33,6 +34,30 @@ pub struct ModelPromotionReviewRecord {
     pub reviewer: String,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbabilityCalibrationReportRecord {
+    pub model_key: String,
+    pub model_version: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub as_of_date: String,
+    pub row_count: usize,
+    pub minimum_calibration_rows: usize,
+    pub bin_count: usize,
+    pub expected_calibration_error: f64,
+    pub max_expected_calibration_error: f64,
+    pub brier_score: f64,
+    pub max_brier_score: f64,
+    pub calibration_status: String,
+    pub bins_json: Value,
+    pub review_tasks_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub governance_boundary: String,
+    pub submitted_by: String,
+    pub notes: String,
     pub created_at: Option<String>,
 }
 

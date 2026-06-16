@@ -211,6 +211,28 @@ pub(super) fn validate_evidence_status_update(
             "actor_id and notes are required",
         ));
     }
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EVIDENCE_REQUEST_STATUS_EVIDENCE",
+            "evidence request status evidence_refs must not be blank",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_EVIDENCE_REQUEST_STATUS",
+            "evidence request status notes and evidence_refs must not contain PII",
+        ));
+    }
+    validate_evidence_request_status_production_evidence_refs(&request.evidence_refs)?;
     if request.status == "received" && !has_document_evidence_ref(&request.evidence_refs) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -218,7 +240,32 @@ pub(super) fn validate_evidence_status_update(
             "received evidence requests require at least one evidence_documents reference",
         ));
     }
-    validate_optional_notes(Some(&request.notes), "EVIDENCE_REQUEST_NOTES_CONTAIN_PII")
+    Ok(())
+}
+
+fn validate_evidence_request_status_production_evidence_refs(
+    evidence_refs: &[String],
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        let normalized = reference.to_ascii_lowercase();
+        normalized.contains("local://")
+            || normalized.contains("file://")
+            || normalized.contains("://localhost")
+            || normalized.contains("://127.")
+            || normalized.contains("://0.0.0.0")
+            || normalized.contains("://[::1]")
+            || reference.contains('{')
+            || reference.contains('}')
+    }) {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_EVIDENCE_REQUEST_STATUS_EVIDENCE",
+            "evidence request status evidence_refs must not use local dry-run or placeholder evidence",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 pub(super) fn has_document_evidence_ref(evidence_refs: &[String]) -> bool {

@@ -7,6 +7,87 @@ use super::support::{get_json, json_request, test_config};
 async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
     let app = build_app(test_config()).unwrap();
 
+    let (status, local_report) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject local dry-run monitoring evidence.",
+          "report_uri": "local://inputs/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:local://inputs/mlops-monitoring/mlops_monitoring_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(local_report["code"], "INVALID_MLOPS_MONITORING_REPORT_URI");
+
+    let (status, file_report) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject file URI monitoring evidence.",
+          "report_uri": "file://tmp/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:file://tmp/mlops_monitoring_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(file_report["code"], "INVALID_MLOPS_MONITORING_REPORT_URI");
+
+    let (status, localhost_report) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject localhost monitoring evidence.",
+          "report_uri": "http://localhost:8080/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:http://localhost:8080/mlops-monitoring/mlops_monitoring_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        localhost_report["code"],
+        "INVALID_MLOPS_MONITORING_REPORT_URI"
+    );
+
     let (status, body) = json_request(
         app.clone(),
         "POST",
@@ -14,7 +95,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
         r#"{
           "actor": "mlops-worker",
           "notes": "Rust monitoring loop found drift and shadow review signals.",
-          "report_uri": "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
           "report_kind": "mlops_monitoring_report",
           "model_version": "0.1.0",
           "overall_status": "watch",
@@ -32,6 +113,96 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "MISSING_MLOPS_MONITORING_EVIDENCE");
 
+    let (status, local_monitoring_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject local dry-run evidence mixed with production monitoring refs.",
+          "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+            "model_monitoring_reports:local://template/mlops_monitoring_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        local_monitoring_evidence["code"],
+        "INVALID_MLOPS_MONITORING_EVIDENCE"
+    );
+
+    let (status, file_monitoring_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject file evidence mixed with production monitoring refs.",
+          "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+            "model_monitoring_reports:file://tmp/mlops_monitoring_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        file_monitoring_evidence["code"],
+        "INVALID_MLOPS_MONITORING_EVIDENCE"
+    );
+
+    let (status, localhost_monitoring_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject loopback evidence mixed with production monitoring refs.",
+          "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+            "model_monitoring_input:http://0.0.0.0:8080/mlops-monitoring/input.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        localhost_monitoring_evidence["code"],
+        "INVALID_MLOPS_MONITORING_EVIDENCE"
+    );
+
     let (status, response) = json_request(
         app.clone(),
         "POST",
@@ -39,7 +210,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
         r#"{
           "actor": "mlops-worker",
           "notes": "Rust monitoring loop found drift and shadow review signals.",
-          "report_uri": "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
           "report_kind": "mlops_monitoring_report",
           "model_version": "0.1.0",
           "overall_status": "watch",
@@ -50,7 +221,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
           ],
           "evidence_refs": [
             "model_versions:baseline_fwa:0.1.0",
-            "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
           ]
         }"#,
     )
@@ -88,7 +259,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
     assert_eq!(task["review_status"], "open");
     assert_eq!(
         task["report_uri"],
-        "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
+        "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
     );
     let task_id = task["task_id"].as_str().unwrap();
 
@@ -106,7 +277,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
               "notes": "Reject invalid decision contract.",
               "evidence_refs": [
                 "model_versions:baseline_fwa:0.1.0",
-                "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+                "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
                 "model_monitoring_review_tasks:{task_id}"
               ]
             }}"#
@@ -132,7 +303,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
           "notes": "Missing task evidence should fail.",
           "evidence_refs": [
             "model_versions:baseline_fwa:0.1.0",
-            "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
           ]
         }"#,
     )
@@ -141,6 +312,34 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
     assert_eq!(
         missing_task_evidence["code"],
         "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE"
+    );
+
+    let (status, placeholder_review_evidence) = json_request(
+        app.clone(),
+        "POST",
+        &format!(
+            "/api/v1/ops/models/baseline_fwa/mlops-monitoring-review-tasks/{}/reviews",
+            task_id.replace(':', "%3A")
+        ),
+        &format!(
+            r#"{{
+              "decision": "acknowledged",
+              "reviewer": "model-governance",
+              "notes": "Reject placeholder review receipt evidence.",
+              "evidence_refs": [
+                "model_versions:baseline_fwa:0.1.0",
+                "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+                "model_monitoring_review_tasks:{task_id}",
+                "model_monitoring_review_receipts:{{receipt_id}}"
+              ]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        placeholder_review_evidence["code"],
+        "INVALID_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE"
     );
 
     let (status, missing_task) = json_request(
@@ -153,7 +352,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
           "notes": "Missing task should fail before evidence validation.",
           "evidence_refs": [
             "model_versions:baseline_fwa:0.1.0",
-            "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
             "model_monitoring_review_tasks:missing-task"
           ]
         }"#,
@@ -179,7 +378,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
               "notes": "Approved monitoring signal for retraining preparation.",
               "evidence_refs": [
                 "model_versions:baseline_fwa:0.1.0",
-                "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+                "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
                 "model_monitoring_review_tasks:{task_id}"
               ]
             }}"#
@@ -232,7 +431,7 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
     );
     assert!(event["evidence_refs"].as_array().unwrap().contains(
         &serde_json::json!(
-            "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
+            "model_monitoring_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
         )
     ));
 
@@ -259,14 +458,14 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
 async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
     let app = build_app(test_config()).unwrap();
 
-    let (status, response) = json_request(
+    let (status, local_scheduler_report) = json_request(
         app.clone(),
         "POST",
         "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
         r#"{
           "actor": "mlops-worker",
-          "notes": "Queue alert-router delivery for drift and shadow review.",
-          "scheduler_execution_report_uri": "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+          "notes": "Reject local dry-run alert scheduler evidence.",
+          "scheduler_execution_report_uri": "local://inputs/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
           "report_kind": "mlops_scheduler_execution_report",
           "model_version": "0.1.0",
           "alert_delivery_status": "queued_for_external_alert_router",
@@ -280,7 +479,202 @@ async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
           ],
           "evidence_refs": [
             "model_versions:baseline_fwa:0.1.0",
-            "mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
+            "mlops_scheduler_execution_reports:local://inputs/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        local_scheduler_report["code"],
+        "INVALID_MLOPS_SCHEDULER_REPORT_URI"
+    );
+
+    let (status, file_scheduler_report) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject file URI alert scheduler evidence.",
+          "scheduler_execution_report_uri": "file://tmp/mlops_scheduler_execution_report.json",
+          "report_kind": "mlops_scheduler_execution_report",
+          "model_version": "0.1.0",
+          "alert_delivery_status": "queued_for_external_alert_router",
+          "alert_delivery_tasks": [
+            {
+              "task_kind": "mlops_alert_delivery",
+              "trigger": "model_drift_detected",
+              "route_key": "mlops_retraining_readiness",
+              "delivery_status": "queued_for_external_alert_router"
+            }
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "mlops_scheduler_execution_reports:file://tmp/mlops_scheduler_execution_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        file_scheduler_report["code"],
+        "INVALID_MLOPS_SCHEDULER_REPORT_URI"
+    );
+
+    let (status, localhost_scheduler_report) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject localhost alert scheduler evidence.",
+          "scheduler_execution_report_uri": "http://[::1]:8080/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+          "report_kind": "mlops_scheduler_execution_report",
+          "model_version": "0.1.0",
+          "alert_delivery_status": "queued_for_external_alert_router",
+          "alert_delivery_tasks": [
+            {
+              "task_kind": "mlops_alert_delivery",
+              "trigger": "model_drift_detected",
+              "route_key": "mlops_retraining_readiness",
+              "delivery_status": "queued_for_external_alert_router"
+            }
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "mlops_scheduler_execution_reports:http://[::1]:8080/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        localhost_scheduler_report["code"],
+        "INVALID_MLOPS_SCHEDULER_REPORT_URI"
+    );
+
+    let (status, local_alert_delivery_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Queue alert-router delivery for drift and shadow review.",
+          "scheduler_execution_report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+          "report_kind": "mlops_scheduler_execution_report",
+          "model_version": "0.1.0",
+          "alert_delivery_status": "queued_for_external_alert_router",
+          "alert_delivery_tasks": [
+            {
+              "task_kind": "mlops_alert_delivery",
+              "trigger": "model_drift_detected",
+              "route_key": "mlops_retraining_readiness",
+              "delivery_status": "queued_for_external_alert_router"
+            }
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+            "mlops_alert_delivery:local://template/alert-delivery.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        local_alert_delivery_evidence["code"],
+        "INVALID_MLOPS_ALERT_DELIVERY_EVIDENCE"
+    );
+
+    let (status, file_alert_delivery_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject file alert-router delivery evidence.",
+          "scheduler_execution_report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+          "report_kind": "mlops_scheduler_execution_report",
+          "model_version": "0.1.0",
+          "alert_delivery_status": "queued_for_external_alert_router",
+          "alert_delivery_tasks": [
+            {
+              "task_kind": "mlops_alert_delivery",
+              "trigger": "model_drift_detected",
+              "route_key": "mlops_retraining_readiness",
+              "delivery_status": "queued_for_external_alert_router"
+            }
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+            "mlops_alert_delivery:file://tmp/alert-delivery.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        file_alert_delivery_evidence["code"],
+        "INVALID_MLOPS_ALERT_DELIVERY_EVIDENCE"
+    );
+
+    let (status, localhost_alert_delivery_evidence) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Reject localhost alert-router delivery evidence.",
+          "scheduler_execution_report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+          "report_kind": "mlops_scheduler_execution_report",
+          "model_version": "0.1.0",
+          "alert_delivery_status": "queued_for_external_alert_router",
+          "alert_delivery_tasks": [
+            {
+              "task_kind": "mlops_alert_delivery",
+              "trigger": "model_drift_detected",
+              "route_key": "mlops_retraining_readiness",
+              "delivery_status": "queued_for_external_alert_router"
+            }
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+            "mlops_alert_delivery:http://127.0.0.1:8080/alert-delivery.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        localhost_alert_delivery_evidence["code"],
+        "INVALID_MLOPS_ALERT_DELIVERY_EVIDENCE"
+    );
+
+    let (status, response) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Queue alert-router delivery for drift and shadow review.",
+          "scheduler_execution_report_uri": "s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+          "report_kind": "mlops_scheduler_execution_report",
+          "model_version": "0.1.0",
+          "alert_delivery_status": "queued_for_external_alert_router",
+          "alert_delivery_tasks": [
+            {
+              "task_kind": "mlops_alert_delivery",
+              "trigger": "model_drift_detected",
+              "route_key": "mlops_retraining_readiness",
+              "delivery_status": "queued_for_external_alert_router"
+            }
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
           ]
         }"#,
     )
@@ -337,7 +731,7 @@ async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
               "notes": "Reject invalid alert decision.",
               "evidence_refs": [
                 "model_versions:baseline_fwa:0.1.0",
-                "mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+                "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
                 "mlops_alert_delivery_tasks:{alert_task_id}"
               ]
             }}"#
@@ -363,7 +757,7 @@ async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
           "notes": "Missing alert task evidence should fail.",
           "evidence_refs": [
             "model_versions:baseline_fwa:0.1.0",
-            "mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
+            "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
           ]
         }"#,
     )
@@ -372,6 +766,34 @@ async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
     assert_eq!(
         missing_alert_task_evidence["code"],
         "MISSING_MLOPS_ALERT_DELIVERY_TASK_EVIDENCE"
+    );
+
+    let (status, local_alert_task_evidence) = json_request(
+        app.clone(),
+        "POST",
+        &format!(
+            "/api/v1/ops/models/baseline_fwa/mlops-alert-delivery-tasks/{}/reviews",
+            alert_task_id.replace(':', "%3A")
+        ),
+        &format!(
+            r#"{{
+              "decision": "receipt_confirmed",
+              "reviewer": "alert-router-owner",
+              "notes": "Reject local alert task evidence.",
+              "evidence_refs": [
+                "model_versions:baseline_fwa:0.1.0",
+                "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+                "mlops_alert_delivery_tasks:{alert_task_id}",
+                "mlops_alert_delivery_receipts:{{receipt_id}}"
+              ]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        local_alert_task_evidence["code"],
+        "INVALID_MLOPS_ALERT_DELIVERY_TASK_EVIDENCE"
     );
 
     let (status, alert_review) = json_request(
@@ -388,7 +810,7 @@ async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
               "notes": "Confirmed customer alert router receipt.",
               "evidence_refs": [
                 "model_versions:baseline_fwa:0.1.0",
-                "mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+                "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
                 "mlops_alert_delivery_tasks:{alert_task_id}"
               ]
             }}"#
@@ -433,7 +855,7 @@ async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
     );
     assert!(event["evidence_refs"].as_array().unwrap().contains(
         &serde_json::json!(
-            "mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
+            "mlops_scheduler_execution_reports:s3://customer-prod-artifacts/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
         )
     ));
 

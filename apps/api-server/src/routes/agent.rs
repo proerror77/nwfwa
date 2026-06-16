@@ -24,6 +24,7 @@ const TOOL_KNOWLEDGE_SEARCH_SIMILAR: &str = "knowledge.search_similar";
 
 #[derive(Debug, Deserialize)]
 pub struct AgentInvestigationRequest {
+    pub investigation_id: Option<String>,
     pub claim_id: String,
     pub risk_score: u8,
     pub rag: String,
@@ -41,6 +42,7 @@ pub struct AgentSimilarCaseQuery {
 
 #[derive(Debug, Serialize)]
 pub struct AgentInvestigationResponse {
+    pub investigation_id: String,
     pub agent_run_id: String,
     pub decision_boundary: String,
     pub risk_summary: String,
@@ -177,7 +179,17 @@ pub async fn investigate_case(
         &context_json["canonical_claim_context_trace"]["source_refs"],
     ));
 
+    // Scope any caller-supplied investigation_id under the authenticated tenant to prevent
+    // cross-tenant audit poisoning via the ON CONFLICT upsert on the investigations table.
+    let scoped_investigation_id = request.investigation_id.as_ref().and_then(|value| {
+        let trimmed = value.trim().to_string();
+        if trimmed.is_empty() {
+            return None;
+        }
+        Some(format!("{}:{}", actor.customer_scope_id, trimmed))
+    });
     let investigation_request = InvestigationRequest {
+        investigation_id: scoped_investigation_id,
         claim_id: masked_claim_ref,
         risk_score: request.risk_score,
         rag: request.rag,
@@ -267,6 +279,7 @@ pub async fn investigate_case(
     state
         .repository
         .save_agent_run(PersistedAgentRun {
+            investigation_id: package.investigation_id.clone(),
             agent_run_id: package.agent_run_id.clone(),
             claim_id: request.claim_id.clone(),
             status: "succeeded".into(),
@@ -340,6 +353,7 @@ pub async fn investigate_case(
         .map_err(internal_error("AGENT_AUDIT_SAVE_FAILED"))?;
 
     Ok(Json(AgentInvestigationResponse {
+        investigation_id: package.investigation_id,
         agent_run_id: package.agent_run_id,
         decision_boundary: package.decision_boundary,
         risk_summary: package.risk_summary,
@@ -362,6 +376,17 @@ fn validate_agent_investigation_request(
             StatusCode::BAD_REQUEST,
             "INVALID_AGENT_CLAIM_ID",
             "claim_id is required",
+        ));
+    }
+    if request
+        .investigation_id
+        .as_ref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_INVESTIGATION_ID",
+            "investigation_id must be non-empty when provided",
         ));
     }
     if request.risk_score > 100 {

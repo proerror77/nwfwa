@@ -4,7 +4,8 @@ use super::ops_models::{
     ModelMonitoringReviewTaskReviewResponse, SubmitMlopsAlertDeliveryRequest,
     SubmitMlopsAlertDeliveryResponse, SubmitMlopsAlertDeliveryTaskReviewRequest,
     SubmitMlopsMonitoringReportRequest, SubmitMlopsMonitoringReportResponse,
-    SubmitModelMonitoringReviewTaskReviewRequest,
+    SubmitModelMonitoringReviewTaskReviewRequest, SubmitProbabilityCalibrationReportRequest,
+    SubmitProbabilityCalibrationReportResponse,
 };
 use crate::{
     app::AppState,
@@ -327,6 +328,63 @@ pub(super) async fn record_mlops_monitoring_review_task_audit(
                 "reviewer": request.reviewer,
                 "notes": request.notes,
                 "note_present": !request.notes.trim().is_empty(),
+                "governance_boundary": response.governance_boundary,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+pub(super) async fn record_probability_calibration_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    model: &ModelVersionRecord,
+    request: &SubmitProbabilityCalibrationReportRequest,
+    response: &SubmitProbabilityCalibrationReportResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "model.probability_calibration.report_submitted".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "Probability calibration report submitted: {}",
+                request.calibration_status
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "model_key": model.model_key,
+                "model_version": model.version,
+                "report_uri": request.report_uri,
+                "report_kind": request.report_kind,
+                "as_of_date": request.as_of_date,
+                "row_count": request.row_count,
+                "minimum_calibration_rows": request.minimum_calibration_rows,
+                "bin_count": request.bin_count,
+                "expected_calibration_error": request.expected_calibration_error,
+                "max_expected_calibration_error": request.max_expected_calibration_error,
+                "brier_score": request.brier_score,
+                "max_brier_score": request.max_brier_score,
+                "calibration_status": request.calibration_status,
+                "review_tasks": request.review_tasks,
+                "review_task_count": request.review_tasks.len(),
+                "submitted_by": request.actor,
+                "note_present": !request.notes.trim().is_empty(),
+                "active_calibration_change": response.active_calibration_change,
+                "calibrated_probability_serving_activation": response.calibrated_probability_serving_activation,
+                "threshold_change": response.threshold_change,
+                "label_assignment": response.label_assignment,
                 "governance_boundary": response.governance_boundary,
             }),
             evidence_refs: request

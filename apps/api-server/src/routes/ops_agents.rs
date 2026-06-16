@@ -334,6 +334,11 @@ fn validate_agent_cancel_request_shape(request: &CancelAgentRunRequest) -> Resul
             "agent cancellation reason and evidence_refs must not contain PII",
         ));
     }
+    validate_agent_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_AGENT_CANCEL_EVIDENCE",
+        "agent cancellation evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
 }
 
@@ -381,7 +386,35 @@ fn validate_agent_approval_request(request: &SubmitAgentApprovalRequest) -> Resu
             "agent approval reason and evidence_refs must not contain PII",
         ));
     }
+    validate_agent_production_evidence_refs(
+        &request.evidence_refs,
+        "INVALID_AGENT_APPROVAL_EVIDENCE",
+        "agent approval evidence_refs must not use local dry-run or placeholder evidence",
+    )?;
     Ok(())
+}
+
+fn validate_agent_production_evidence_refs(
+    evidence_refs: &[String],
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        let normalized = reference.to_ascii_lowercase();
+        normalized.contains("local://")
+            || normalized.contains("file://")
+            || normalized.contains("://localhost")
+            || normalized.contains("://127.")
+            || normalized.contains("://0.0.0.0")
+            || normalized.contains("://[::1]")
+            || reference.contains('{')
+            || reference.contains('}')
+    }) {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
+    } else {
+        Ok(())
+    }
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

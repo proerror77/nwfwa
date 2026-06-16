@@ -28,17 +28,50 @@ fn test_config() -> AppConfig {
     }
 }
 
+fn test_config_with_dataset_actors() -> AppConfig {
+    AppConfig {
+        api_key: "legacy-secret".into(),
+        api_key_principals: vec![
+            "dataset-read-secret|dataset-reader|operations_reviewer|ops-studio|demo-customer|ops:datasets:read,audit:read".into(),
+            "dataset-write-secret|dataset-writer|fwa_operator|ops-studio|demo-customer|ops:datasets:read,ops:datasets:write,audit:read".into(),
+        ],
+        source_system: "tpa-demo".into(),
+        database_url: "postgres://unused".into(),
+        model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    }
+}
+
 async fn json_request(
     app: axum::Router,
     method: &str,
     uri: &str,
     body: &str,
 ) -> (StatusCode, serde_json::Value) {
+    json_request_with_key(app, method, uri, body, "dev-secret").await
+}
+
+async fn json_request_with_key(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+    api_key: &str,
+) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .header("x-api-key", "dev-secret")
+        .header("x-api-key", api_key)
         .body(Body::from(body.to_string()))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -46,6 +79,258 @@ async fn json_request(
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
     (status, body)
+}
+
+fn scoring_feature_context_materialization_payload() -> &'static str {
+    r#"{
+      "materialization_id": "sfc-mat-2026-06-13",
+      "actor": "worker:scoring-feature-contexts",
+      "notes": "pilot worker materialization",
+      "report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
+      "report_kind": "scoring_feature_context_materialization",
+      "as_of_date": "2026-06-13",
+      "source_uris": {
+        "claims_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+        "episode_rollups_uri": "s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+        "peer_benchmarks_uri": "s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "clinical_compatibility_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "unbundling_candidates_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
+      },
+      "claim_count": 1,
+      "context_count": 1,
+      "contexts": [
+        {
+          "claim_id": "CLM-WORKER-CONTEXT-1",
+          "peer_context": {"claim_amount_peer_percentile": 90},
+          "clinical_compatibility_context": {
+            "diagnosis_procedure_match_score": 0.32,
+            "data_source": "worker.icd_cpt_compatibility_reference"
+          },
+          "episode_utilization_context": {
+            "member_provider_claim_count_30d": 2,
+            "duplicate_claim_similarity_score": 1.0,
+            "procedure_frequency_peer_percentile": 92,
+            "unbundling_candidate_count": 1,
+            "data_source": "worker.episode_utilization_rollup"
+          },
+          "evidence_refs": ["claims:CLM-WORKER-CONTEXT-1", "scoring_feature_contexts:CLM-WORKER-CONTEXT-1"]
+        }
+      ],
+      "evidence_refs": [
+        "scoring_feature_contexts:s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json",
+        "scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json",
+        "episode_rollups:s3://customer-prod-artifacts/worker-data-pipeline/episode_aggregation_report.json",
+        "peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json",
+        "clinical_compatibility:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "unbundling_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json"
+      ],
+      "governance_boundary": "materialization persists worker-owned context only; it must not assign fraud labels, deny claims, or alter scoring policy"
+    }"#
+}
+
+fn clinical_compatibility_reference_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-clinical-compatibility-reference",
+      "notes": "customer policy board approved clinical reference",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+      "report_kind": "clinical_compatibility_reference",
+      "reference_version": "clinical-policy-2026-06",
+      "effective_date": "2026-06-01",
+      "source_authority": "customer-medical-policy-board",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
+      "record_count": 1,
+      "records": [
+        {
+          "compatibility_key": "J|IMG-900",
+          "diagnosis_code_prefix": "J",
+          "procedure_code": "IMG-900",
+          "diagnosis_procedure_match_score": 0.25,
+          "data_source": "worker.icd_cpt_compatibility_reference:clinical-policy-2026-06",
+          "policy_authority_ref": "policy:clinical:J:IMG-900",
+          "rationale": "Respiratory diagnosis requires additional support for this imaging procedure.",
+          "evidence_refs": ["policy:clinical:J:IMG-900", "medical_policy:v2026-06"]
+        }
+      ],
+      "review_tasks": [
+        {
+          "task_type": "clinical_policy_review_candidate",
+          "compatibility_key": "J|IMG-900",
+          "reason": "low compatibility score should be reviewed before production activation",
+          "evidence_refs": ["policy:clinical:J:IMG-900"]
+        }
+      ],
+      "evidence_refs": [
+        "clinical_compatibility_references:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_report.json",
+        "clinical_compatibility_reference:s3://customer-prod-artifacts/worker-data-pipeline/clinical_compatibility_reference_input.json",
+        "clinical_policy_authority:customer-medical-policy-board"
+      ],
+      "governance_boundary": "clinical compatibility reference data can feed ClinicalCompatibilityFeatureContext; it must not deny claims or replace medical review without customer-approved policy authority"
+    }"#
+}
+
+fn unbundling_comparator_payload() -> &'static str {
+    r#"{
+      "actor": "worker:build-unbundling-comparator",
+      "notes": "customer-approved unbundling comparator candidates",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
+      "report_kind": "unbundling_comparator",
+      "as_of_date": "2026-06-13",
+      "source_uri": "s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json",
+      "rule_count": 1,
+      "episode_count": 1,
+      "candidate_count": 1,
+      "candidates": [
+        {
+          "candidate_id": "unbundling:rule-001:episode-001",
+          "rule_id": "rule-001",
+          "episode_key": "episode-001",
+          "member_id": "member-001",
+          "provider_id": "provider-001",
+          "window_days": 30,
+          "bundled_code": "BUNDLE-900",
+          "matched_component_codes": ["COMP-100", "COMP-200"],
+          "claim_ids": ["CLM-001", "CLM-002"],
+          "policy_authority_ref": "policy:unbundling:BUNDLE-900",
+          "evidence_refs": ["policy:unbundling:BUNDLE-900", "claims:CLM-001", "claims:CLM-002"],
+          "recommended_review": "medical_review_candidate"
+        }
+      ],
+      "evidence_refs": [
+        "unbundling_comparator_candidates:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_report.json",
+        "unbundling_comparator_input:s3://customer-prod-artifacts/worker-data-pipeline/unbundling_comparator_input.json"
+      ],
+      "governance_boundary": "unbundling comparator emits medical-review candidates from governed bundled/component code references; it must not assign fraud labels or deny claims"
+    }"#
+}
+
+fn remove_top_level_evidence_ref_with_prefix(payload: &str, prefix: &str) -> String {
+    let mut payload: serde_json::Value = serde_json::from_str(payload).expect("dataset payload");
+    let evidence_refs = payload["evidence_refs"]
+        .as_array()
+        .expect("top-level evidence_refs")
+        .iter()
+        .filter(|reference| !reference.as_str().unwrap_or_default().starts_with(prefix))
+        .cloned()
+        .collect::<Vec<_>>();
+    payload["evidence_refs"] = serde_json::Value::Array(evidence_refs);
+    payload.to_string()
+}
+
+fn worker_data_pipeline_execution_payload() -> &'static str {
+    r#"{
+      "actor": "worker:worker-data-pipeline-scheduler",
+      "notes": "daily worker data pipeline execution evidence",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+      "report_kind": "worker_data_pipeline_execution_report",
+      "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+      "run_status_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+      "readiness_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+      "readiness_gate_status": "ready",
+      "run_id": "wdp_2026_06_14",
+      "execution_date": "2026-06-14",
+      "job_count": 2,
+      "pending_or_failed_job_count": 1,
+      "review_task_count": 1,
+      "job_executions": [
+        {
+          "job_kind": "oig_sam_sanctions_sync",
+          "execution_status": "completed",
+          "reported_status": "succeeded",
+          "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+          "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
+          "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+          "required_evidence_prefixes": ["sanctions_sync_reports:"],
+          "evidence_refs": [
+            "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
+            "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+          ],
+          "submitted": true,
+          "blocked_dependencies": []
+        },
+        {
+          "job_kind": "provider_profile_window_rollup",
+          "execution_status": "artifact_pending_submission",
+          "api_path": "/api/v1/ops/providers/profile-window-rollups",
+          "required_permission": "ops:providers:write",
+          "submitted": false
+        }
+      ],
+      "review_tasks": [
+        {
+          "task_kind": "worker_data_pipeline_execution_review",
+          "job_kind": "provider_profile_window_rollup",
+          "execution_status": "artifact_pending_submission",
+          "api_path": "/api/v1/ops/providers/profile-window-rollups",
+          "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
+        }
+      ],
+      "evidence_refs": [
+        "worker_data_pipeline_execution_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json",
+        "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+        "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+        "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json"
+      ],
+      "governance_boundary": "worker data pipeline execution evidence may open operations review tasks only; it must not score claims, assign labels, deny claims, activate models, or change routing policy"
+    }"#
+}
+
+fn worker_data_pipeline_readiness_payload() -> &'static str {
+    r#"{
+      "actor": "worker:worker-data-pipeline-readiness",
+      "notes": "daily customer data readiness evidence",
+      "source_report_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+      "report_kind": "worker_data_pipeline_readiness_report",
+      "plan_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+      "readiness_input_uri": "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+      "readiness_status": "blocked",
+      "job_count": 2,
+      "ready_job_count": 1,
+      "blocked_job_count": 1,
+      "review_task_count": 1,
+      "job_readiness": [
+        {
+          "job_kind": "oig_sam_sanctions_sync",
+          "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+          "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
+          "required_evidence_prefixes": ["sanctions_sync_reports:"],
+          "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json",
+          "coverage_window_days": 1,
+          "source_freshness_status": "fresh",
+          "readiness_status": "ready",
+          "evidence_refs": [
+            "sanctions_sync_reports:s3://customer-prod-artifacts/worker-data-pipeline/sanctions_sync_report.json"
+          ]
+        },
+        {
+          "job_kind": "provider_profile_window_rollup",
+          "api_path": "/api/v1/ops/providers/profile-window-rollups",
+          "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
+          "coverage_window_days": 0,
+          "source_freshness_status": "stale",
+          "readiness_status": "blocked",
+          "blockers": ["customer_approval_missing"]
+        }
+      ],
+      "review_tasks": [
+        {
+          "task_kind": "worker_data_pipeline_readiness_review",
+          "job_kind": "provider_profile_window_rollup",
+          "api_path": "/api/v1/ops/providers/profile-window-rollups",
+          "required_permission": "ops:providers:write",
+          "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
+        }
+      ],
+      "evidence_refs": [
+        "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+        "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+        "worker_data_pipeline_readiness_inputs:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json"
+      ],
+      "governance_boundary": "readiness report validates customer data prerequisites only; it must not fetch external data, submit artifacts, score claims, assign labels, activate models, or change routing policy"
+    }"#
 }
 
 fn renewal_dataset_payload(storage_format: &str) -> String {
@@ -114,6 +399,3367 @@ fn renewal_dataset_payload(storage_format: &str) -> String {
           ]
         }}"#
     )
+}
+
+#[tokio::test]
+async fn submits_clinical_compatibility_reference() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        clinical_compatibility_reference_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "clinical_compatibility_reference");
+    assert_eq!(body["reference_version"], "clinical-policy-2026-06");
+    assert_eq!(body["record_count"], 1);
+    assert_eq!(body["review_task_count"], 1);
+    assert_eq!(
+        body["persisted_records"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_records"][0]["compatibility_key"],
+        "J|IMG-900"
+    );
+    assert_eq!(
+        body["persisted_records"][0]["policy_authority_ref"],
+        "policy:clinical:J:IMG-900"
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["medical_review_replacement"], false);
+}
+
+#[tokio::test]
+async fn clinical_compatibility_reference_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        clinical_compatibility_reference_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn clinical_compatibility_reference_requires_policy_authority_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(clinical_compatibility_reference_payload()).unwrap();
+    payload["records"][0]["evidence_refs"] = serde_json::json!(["medical_policy:v2026-06"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE");
+}
+
+#[tokio::test]
+async fn dataset_write_paths_require_top_level_source_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, missing_prefix, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "clinical_compatibility_reference:",
+            "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "clinical_policy_authority:",
+            "MISSING_CLINICAL_COMPATIBILITY_REPORT_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "unbundling_comparator_input:",
+            "MISSING_UNBUNDLING_COMPARATOR_REPORT_EVIDENCE",
+        ),
+    ] {
+        let payload = remove_top_level_evidence_ref_with_prefix(payload, missing_prefix);
+        let (status, body) =
+            json_request_with_key(app.clone(), "POST", path, &payload, "dataset-write-secret")
+                .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+        assert!(body["message"].as_str().unwrap().contains(missing_prefix));
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_template_source_report_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_report_uri"] =
+            serde_json::json!("local://template/datasets/source_report.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_template_source_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["source_uri"] = serde_json::json!("local://template/datasets/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_local_source_uris() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, field, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_report_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_report_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload[field] = serde_json::json!("local://inputs/datasets/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+        assert!(body["message"]
+            .as_str()
+            .unwrap()
+            .contains("production evidence"));
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_localhost_source_uris() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, field, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_report_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "source_uri",
+            "INVALID_CLINICAL_COMPATIBILITY_SOURCE_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_report_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_REPORT_URI",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "source_uri",
+            "INVALID_UNBUNDLING_COMPARATOR_SOURCE_URI",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload[field] = serde_json::json!("http://127.0.0.1:9000/datasets/source.json");
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+        assert!(body["message"]
+            .as_str()
+            .unwrap()
+            .contains("production evidence"));
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_template_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_template:local://template/datasets/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_file_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_report:file://tmp/datasets/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_localhost_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    for (path, payload, code) in [
+        (
+            "/api/v1/ops/clinical-compatibility-references",
+            clinical_compatibility_reference_payload(),
+            "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE",
+        ),
+        (
+            "/api/v1/ops/unbundling-comparator-candidates",
+            unbundling_comparator_payload(),
+            "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE",
+        ),
+    ] {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["evidence_refs"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(
+                "worker_report:http://localhost:9000/datasets/source.json"
+            ));
+
+        let (status, body) = json_request_with_key(
+            app.clone(),
+            "POST",
+            path,
+            &payload.to_string(),
+            "dataset-write-secret",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
+        assert_eq!(body["code"], code, "{path}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_template_record_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let mut clinical_payload: serde_json::Value =
+        serde_json::from_str(clinical_compatibility_reference_payload()).unwrap();
+    clinical_payload["records"][0]["evidence_refs"] = serde_json::json!([
+        "policy:clinical:J:IMG-900",
+        "medical_policy:local://template/datasets/clinical-policy.json"
+    ]);
+    let (status, body) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        &clinical_payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE");
+
+    let mut unbundling_payload: serde_json::Value =
+        serde_json::from_str(unbundling_comparator_payload()).unwrap();
+    unbundling_payload["candidates"][0]["evidence_refs"] = serde_json::json!([
+        "policy:unbundling:BUNDLE-900",
+        "claims:CLM-001",
+        "claims:local://template/datasets/claim.json"
+    ]);
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        &unbundling_payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE");
+}
+
+#[tokio::test]
+async fn dataset_write_paths_reject_file_record_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let mut clinical_payload: serde_json::Value =
+        serde_json::from_str(clinical_compatibility_reference_payload()).unwrap();
+    clinical_payload["records"][0]["evidence_refs"] = serde_json::json!([
+        "policy:clinical:J:IMG-900",
+        "medical_policy:file://tmp/clinical-policy.json"
+    ]);
+    let (status, body) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/clinical-compatibility-references",
+        &clinical_payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_CLINICAL_COMPATIBILITY_EVIDENCE");
+
+    let mut unbundling_payload: serde_json::Value =
+        serde_json::from_str(unbundling_comparator_payload()).unwrap();
+    unbundling_payload["candidates"][0]["evidence_refs"] = serde_json::json!([
+        "policy:unbundling:BUNDLE-900",
+        "claims:CLM-001",
+        "claims:file://tmp/claim.json"
+    ]);
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        &unbundling_payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE");
+}
+
+#[tokio::test]
+async fn submits_unbundling_comparator_candidates() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        unbundling_comparator_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "unbundling_comparator");
+    assert_eq!(body["as_of_date"], "2026-06-13");
+    assert_eq!(body["candidate_count"], 1);
+    assert_eq!(
+        body["persisted_candidates"][0]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        body["persisted_candidates"][0]["candidate_id"],
+        "unbundling:rule-001:episode-001"
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["case_creation"], false);
+    assert_eq!(body["medical_review_replacement"], false);
+}
+
+#[tokio::test]
+async fn unbundling_comparator_candidates_require_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        unbundling_comparator_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn unbundling_comparator_candidates_require_claim_source_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(unbundling_comparator_payload()).unwrap();
+    payload["candidates"][0]["evidence_refs"] =
+        serde_json::json!(["policy:unbundling:BUNDLE-900", "claims:CLM-001"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/unbundling-comparator-candidates",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_UNBUNDLING_COMPARATOR_EVIDENCE");
+}
+
+#[tokio::test]
+async fn submits_worker_data_pipeline_execution_report() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        worker_data_pipeline_execution_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "worker_data_pipeline_execution_report");
+    assert_eq!(
+        body["source_report_uri"],
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
+    );
+    assert_eq!(
+        body["readiness_report_uri"],
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
+    );
+    assert_eq!(body["readiness_gate_status"], "ready");
+    assert_eq!(body["run_id"], "wdp_2026_06_14");
+    assert_eq!(body["job_count"], 2);
+    assert_eq!(body["pending_or_failed_job_count"], 1);
+    assert_eq!(body["review_task_count"], 1);
+    assert_eq!(
+        body["persisted_report"]["source_report_uri"],
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_execution_report.json"
+    );
+    assert_eq!(body["persisted_report"]["run_id"], "wdp_2026_06_14");
+    assert_eq!(body["persisted_report"]["readiness_gate_status"], "ready");
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(body["active_scoring_policy_change"], false);
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["model_activation"], false);
+    assert_eq!(body["routing_policy_change"], false);
+    assert_eq!(
+        body["audit_event_type"],
+        "worker_data_pipeline.execution_report.submitted"
+    );
+}
+
+#[tokio::test]
+async fn submits_worker_data_pipeline_execution_report_with_dependency_blocker() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(3);
+    payload["pending_or_failed_job_count"] = serde_json::json!(2);
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["job_executions"] = serde_json::json!([
+        {
+            "job_kind": "oig_sam_sanctions_snapshot_fetch",
+            "execution_status": "scheduled_pending_customer_execution",
+            "submitted": false
+        },
+        {
+            "job_kind": "oig_sam_sanctions_sync",
+            "execution_status": "dependency_not_completed",
+            "submitted": true,
+            "blocked_dependencies": ["oig_sam_sanctions_snapshot_fetch"]
+        },
+        {
+            "job_kind": "provider_profile_window_rollup",
+            "execution_status": "completed",
+            "reported_status": "succeeded",
+            "api_path": "/api/v1/ops/providers/profile-window-rollups",
+            "required_permission": "ops:providers:write",
+            "required_submit_flags": ["--published-report-uri", "--published-source-uri"],
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+            "required_evidence_prefixes": [
+                "provider_profile_window_rollups:",
+                "provider_profile_claim_snapshot:"
+            ],
+            "evidence_refs": [
+                "worker_job_artifacts:provider_profile_window_rollup:2026-06-14",
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+                "provider_profile_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claims.json"
+            ],
+            "submitted": true,
+            "blocked_dependencies": []
+        }
+    ]);
+    payload["review_tasks"] = serde_json::json!([
+        {
+            "task_kind": "worker_data_pipeline_execution_review",
+            "job_kind": "oig_sam_sanctions_snapshot_fetch",
+            "execution_status": "scheduled_pending_customer_execution"
+        },
+        {
+            "task_kind": "worker_data_pipeline_execution_review",
+            "job_kind": "oig_sam_sanctions_sync",
+            "execution_status": "dependency_not_completed",
+            "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+            "required_permission": "ops:providers:write",
+            "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["pending_or_failed_job_count"], 2);
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"][1]["execution_status"],
+        "dependency_not_completed"
+    );
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"][1]["blocked_dependencies"],
+        serde_json::json!(["oig_sam_sanctions_snapshot_fetch"])
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_dependency_blocker_details() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["execution_status"] =
+        serde_json::json!("dependency_not_completed");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_accepts_missing_evidence_review_status() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["execution_status"] =
+        serde_json::json!("artifact_missing_evidence");
+    payload["review_tasks"][0]["execution_status"] = serde_json::json!("artifact_missing_evidence");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["persisted_report"]["job_executions_json"][1]["execution_status"],
+        "artifact_missing_evidence"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_blank_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["required_permission"] = serde_json::json!(" ");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_unknown_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["required_permission"] = serde_json::json!("ops:unknown:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_permission_api_path_mismatch() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][1]["required_permission"] = serde_json::json!("ops:datasets:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_review_task_unknown_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["required_permission"] = serde_json::json!("ops:unknown:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_review_task_permission_api_path_mismatch() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["api_path"] =
+        serde_json::json!("/api/v1/ops/providers/profile-window-rollups");
+    payload["review_tasks"][0]["required_permission"] = serde_json::json!("ops:datasets:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_submit_flags");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_submit_flags"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_wrong_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["required_submit_flags"] =
+        serde_json::json!(["--published-report-uri"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("--published-source-uri"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_pending_count_consistency() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["pending_or_failed_job_count"] = serde_json::json!(0);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PENDING_COUNT"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_review_task_for_pending_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_review_task_status_to_match_pending_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_tasks"][0]["execution_status"] =
+        serde_json::json!("scheduled_pending_customer_execution");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_unknown_review_task_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["review_tasks"]
+        .as_array_mut()
+        .expect("review tasks")
+        .push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_unknown_review"
+        }));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_review_task_for_completed_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["review_tasks"]
+        .as_array_mut()
+        .expect("review tasks")
+        .push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_execution_review",
+            "job_kind": "oig_sam_sanctions_sync",
+            "execution_status": "completed",
+            "api_path": "/api/v1/ops/providers/sanctions-sync-reports",
+            "required_permission": "ops:providers:write",
+            "required_submit_flags": ["--published-report-uri", "--published-source-uri"]
+        }));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_review_task_for_blocked_readiness_gate() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["readiness_gate_status"] = serde_json::json!("blocked");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_readiness_review_when_gate_is_ready() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["review_tasks"]
+        .as_array_mut()
+        .expect("review tasks")
+        .push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_readiness_gate_review",
+            "readiness_gate_status": "ready"
+        }));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_readiness_review_status_to_match_gate() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["readiness_gate_status"] = serde_json::json!("blocked");
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["review_tasks"]
+        .as_array_mut()
+        .expect("review tasks")
+        .push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_readiness_gate_review",
+            "readiness_gate_status": "missing"
+        }));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_READINESS_REVIEW_TASK"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_accepts_blocked_readiness_with_review_task() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["readiness_gate_status"] = serde_json::json!("blocked");
+    payload["review_task_count"] = serde_json::json!(2);
+    payload["review_tasks"]
+        .as_array_mut()
+        .expect("review tasks")
+        .push(serde_json::json!({
+            "task_kind": "worker_data_pipeline_readiness_gate_review",
+            "readiness_gate_status": "blocked"
+        }));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["readiness_gate_status"], "blocked");
+    assert_eq!(body["review_task_count"], 2);
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_without_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["reported_artifact_uri"] = serde_json::json!(" ");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_template_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["reported_artifact_uri"] =
+        serde_json::json!("local://template/worker/provider_profile_window_rollup.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_local_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["reported_artifact_uri"] =
+        serde_json::json!("local://artifacts/worker-data-pipeline/sanctions_sync_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_ARTIFACT"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("production reported_artifact_uri"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_local_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["evidence_refs"] = serde_json::json!([
+        "worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14",
+        "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"].as_str().unwrap().contains("local dry-run"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_without_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_template_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["evidence_refs"] = serde_json::json!([
+        "provider_profile_window_rollups:local://template/worker/provider_profile_window_rollup.json",
+        "provider_profile_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_claim_snapshot.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_without_required_evidence_prefixes(
+) {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_evidence_prefixes");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_evidence_prefixes"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_missing_required_evidence_prefix(
+) {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["required_evidence_prefixes"] =
+        serde_json::json!(["sanctions_sync_reports:"]);
+    payload["job_executions"][0]["evidence_refs"] =
+        serde_json::json!(["worker_job_artifacts:oig_sam_sanctions_sync:2026-06-14"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("sanctions_sync_reports:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_full_scoring_readback_prefix_set() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["pending_or_failed_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_executions"] = serde_json::json!([
+        {
+            "job_kind": "scoring_online_readback",
+            "execution_status": "completed",
+            "reported_status": "succeeded",
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
+            "required_evidence_prefixes": [
+                "scoring_readback_reports:",
+                "scoring_readback_inputs:",
+                "scoring_readback_score_requests:",
+                "scoring_readback_score_responses:"
+            ],
+            "evidence_refs": [
+                "scoring_readback_reports:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
+                "scoring_readback_inputs:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_input.json",
+                "scoring_readback_score_requests:s3://customer-prod-artifacts/worker-data-pipeline/score_request.json",
+                "scoring_readback_score_responses:s3://customer-prod-artifacts/worker-data-pipeline/score_response.json"
+            ],
+            "blocked_dependencies": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("scoring_feature_contexts:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_probability_calibration_lineage_prefixes() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["pending_or_failed_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_executions"] = serde_json::json!([
+        {
+            "job_kind": "probability_calibration_evidence",
+            "execution_status": "completed",
+            "reported_status": "succeeded",
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
+            "required_evidence_prefixes": [
+                "probability_calibration_reports:"
+            ],
+            "evidence_refs": [
+                "probability_calibration_reports:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json"
+            ],
+            "blocked_dependencies": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("probability_calibration_input:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_provider_profile_lineage_prefixes() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["pending_or_failed_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_executions"] = serde_json::json!([
+        {
+            "job_kind": "provider_profile_window_rollup",
+            "execution_status": "completed",
+            "reported_status": "succeeded",
+            "api_path": "/api/v1/ops/providers/profile-window-rollups",
+            "required_permission": "ops:providers:write",
+            "reported_artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+            "required_evidence_prefixes": [
+                "provider_profile_window_rollups:"
+            ],
+            "evidence_refs": [
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+            ],
+            "submitted": true,
+            "blocked_dependencies": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("provider_profile_claim_snapshot:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_without_success_status() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["reported_status"] = serde_json::json!("failed");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORTED_STATUS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_job_with_blocked_dependencies() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["blocked_dependencies"] =
+        serde_json::json!(["oig_sam_sanctions_snapshot_fetch"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_DEPENDENCIES"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_completed_submit_job_not_submitted() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["submitted"] = serde_json::json!(false);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_SUBMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_submit_job_api_path() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("api_path");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("/api/v1/ops/providers/sanctions-sync-reports"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_submit_job_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_submit_flags");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_submit_flags"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_wrong_submit_job_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["required_submit_flags"] =
+        serde_json::json!(["--published-report-uri"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("--published-source-uri"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_non_string_submit_job_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["required_submit_flags"] =
+        serde_json::json!(["--published-report-uri", "--published-source-uri", 123]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_submit_flags"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_readiness_evidence_when_uri_supplied() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_readiness_reports:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_WORKER_DATA_PIPELINE_READINESS_REPORT_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_plan_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE");
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_run_status_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_run_status:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_run_status.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_WORKER_DATA_PIPELINE_RUN_STATUS_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_local_lineage_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["plan_uri"] = serde_json::json!("local://plans/worker_data_pipeline_plan.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_PLAN_URI"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_local_source_report_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["source_report_uri"] =
+        serde_json::json!("local://reports/worker_data_pipeline_execution_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_REPORT_URI"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_local_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!("scheduler_notes:local://notes/run.txt"));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_EXECUTION_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_duplicate_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    let duplicate_job = payload["job_executions"][0].clone();
+    payload["job_executions"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_job);
+    payload["job_count"] = serde_json::json!(3);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB");
+    assert!(body["message"].as_str().unwrap().contains("duplicate"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_rejects_unknown_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_execution_payload()).unwrap();
+    payload["job_executions"][0]["job_kind"] = serde_json::json!("unknown_worker_job");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_EXECUTION_JOB");
+    assert!(body["message"].as_str().unwrap().contains("unknown"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_execution_report_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-executions",
+        worker_data_pipeline_execution_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn submits_worker_data_pipeline_readiness_report() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        worker_data_pipeline_readiness_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["report_kind"], "worker_data_pipeline_readiness_report");
+    assert_eq!(body["readiness_status"], "blocked");
+    assert_eq!(body["job_count"], 2);
+    assert_eq!(body["ready_job_count"], 1);
+    assert_eq!(body["blocked_job_count"], 1);
+    assert_eq!(body["review_task_count"], 1);
+    assert_eq!(
+        body["persisted_report"]["source_report_uri"],
+        "s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_report.json"
+    );
+    assert_eq!(body["persisted_report"]["readiness_status"], "blocked");
+    assert_eq!(
+        body["persisted_report"]["job_readiness_json"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(body["claim_scoring"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert_eq!(body["claim_denial"], false);
+    assert_eq!(body["model_activation"], false);
+    assert_eq!(body["routing_policy_change"], false);
+    assert_eq!(body["external_fetch_execution"], false);
+    assert_eq!(body["artifact_submission"], false);
+    assert_eq!(
+        body["audit_event_type"],
+        "worker_data_pipeline.readiness_report.submitted"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_plan_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_plans:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_plan.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_WORKER_DATA_PIPELINE_PLAN_EVIDENCE");
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_input_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some(
+                    "worker_data_pipeline_readiness_inputs:s3://customer-prod-artifacts/worker-data-pipeline/worker_data_pipeline_readiness_input.json",
+                )
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_WORKER_DATA_PIPELINE_READINESS_INPUT_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_local_lineage_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["readiness_input_uri"] =
+        serde_json::json!("local://inputs/worker_data_pipeline_readiness_input.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_INPUT_URI"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_local_source_report_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["source_report_uri"] =
+        serde_json::json!("local://reports/worker_data_pipeline_readiness_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REPORT_URI"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_local_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!("readiness_notes:local://notes/input.txt"));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_duplicate_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    let duplicate_job = payload["job_readiness"][0].clone();
+    payload["job_readiness"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_job);
+    payload["job_count"] = serde_json::json!(3);
+    payload["ready_job_count"] = serde_json::json!(2);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB");
+    assert!(body["message"].as_str().unwrap().contains("duplicate"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_unknown_job_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["job_kind"] = serde_json::json!("unknown_worker_job");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB");
+    assert!(body["message"].as_str().unwrap().contains("unknown"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_blocker_details() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][1]["blockers"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_blank_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][1]["required_permission"] = serde_json::json!(" ");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_unknown_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][1]["required_permission"] = serde_json::json!("ops:unknown:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_permission_api_path_mismatch() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][1]["api_path"] =
+        serde_json::json!("/api/v1/ops/providers/profile-window-rollups");
+    payload["job_readiness"][1]["required_permission"] = serde_json::json!("ops:datasets:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_ready_submit_job_api_path() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("api_path");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("/api/v1/ops/providers/sanctions-sync-reports"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_ready_submit_job_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_submit_flags");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_submit_flags"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_wrong_ready_submit_job_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["required_submit_flags"] =
+        serde_json::json!(["--published-report-uri"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("--published-source-uri"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_review_task_unknown_required_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["required_permission"] = serde_json::json!("ops:unknown:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_review_task_permission_api_path_mismatch() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["api_path"] =
+        serde_json::json!("/api/v1/ops/providers/profile-window-rollups");
+    payload["review_tasks"][0]["required_permission"] = serde_json::json!("ops:datasets:write");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_submit_flags");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_submit_flags"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_wrong_review_task_submit_flags() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["required_submit_flags"] =
+        serde_json::json!(["--published-report-uri"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASK_PERMISSION"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("--published-source-uri"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_review_task_for_blocked_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_unknown_review_task_kind() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["task_kind"] =
+        serde_json::json!("worker_data_pipeline_unknown_review");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_review_task_for_ready_job() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["review_tasks"][0]["job_kind"] = serde_json::json!("oig_sam_sanctions_sync");
+    payload["review_tasks"][0]["api_path"] =
+        serde_json::json!("/api/v1/ops/providers/sanctions-sync-reports");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_REVIEW_TASKS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_blockers() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["blockers"] = serde_json::json!(["stale_blocker"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_BLOCKERS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_without_fresh_source_window() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["coverage_window_days"] = serde_json::json!(0);
+    payload["job_readiness"][0]["source_freshness_status"] = serde_json::json!("stale");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_COVERAGE_WINDOW"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_without_job_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_template_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["artifact_uri"] =
+        serde_json::json!("local://template/worker/sanctions_sync_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_local_artifact() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["artifact_uri"] =
+        serde_json::json!("local://artifacts/worker-data-pipeline/sanctions_sync_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_ARTIFACT"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("production artifact_uri"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_local_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["evidence_refs"] = serde_json::json!([
+        "sanctions_sync_reports:local://artifacts/worker-data-pipeline/sanctions_sync_report.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"].as_str().unwrap().contains("local dry-run"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_template_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["evidence_refs"] = serde_json::json!([
+        "sanctions_sync_reports:local://template/worker/sanctions_sync_report.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_blank_required_evidence_prefix() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["required_evidence_prefixes"] = serde_json::json!([" "]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_without_required_evidence_prefixes(
+) {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("required_evidence_prefixes");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("required_evidence_prefixes"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_rejects_ready_job_missing_required_evidence_prefix()
+{
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_readiness"][0]["required_evidence_prefixes"] =
+        serde_json::json!(["oig_sam_snapshot:"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_full_scoring_readback_prefix_set() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["ready_job_count"] = serde_json::json!(1);
+    payload["blocked_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_readiness"] = serde_json::json!([
+        {
+            "job_kind": "scoring_online_readback",
+            "readiness_status": "ready",
+            "coverage_window_days": 1,
+            "source_freshness_status": "fresh",
+            "data_quality_status": "ready",
+            "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
+            "required_evidence_prefixes": [
+                "scoring_readback_reports:",
+                "scoring_readback_inputs:",
+                "scoring_readback_score_requests:",
+                "scoring_readback_score_responses:"
+            ],
+            "evidence_refs": [
+                "scoring_readback_reports:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_report.json",
+                "scoring_readback_inputs:s3://customer-prod-artifacts/worker-data-pipeline/scoring_readback_input.json",
+                "scoring_readback_score_requests:s3://customer-prod-artifacts/worker-data-pipeline/score_request.json",
+                "scoring_readback_score_responses:s3://customer-prod-artifacts/worker-data-pipeline/score_response.json"
+            ],
+            "blockers": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("scoring_feature_contexts:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_probability_calibration_lineage_prefixes() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["ready_job_count"] = serde_json::json!(1);
+    payload["blocked_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_readiness"] = serde_json::json!([
+        {
+            "job_kind": "probability_calibration_evidence",
+            "readiness_status": "ready",
+            "coverage_window_days": 1,
+            "source_freshness_status": "fresh",
+            "data_quality_status": "ready",
+            "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json",
+            "required_evidence_prefixes": [
+                "probability_calibration_reports:"
+            ],
+            "evidence_refs": [
+                "probability_calibration_reports:s3://customer-prod-artifacts/worker-data-pipeline/probability_calibration_report.json"
+            ],
+            "blockers": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("probability_calibration_input:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_provider_profile_lineage_prefixes() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["job_count"] = serde_json::json!(1);
+    payload["ready_job_count"] = serde_json::json!(1);
+    payload["blocked_job_count"] = serde_json::json!(0);
+    payload["review_task_count"] = serde_json::json!(0);
+    payload["review_tasks"] = serde_json::json!([]);
+    payload["job_readiness"] = serde_json::json!([
+        {
+            "job_kind": "provider_profile_window_rollup",
+            "readiness_status": "ready",
+            "api_path": "/api/v1/ops/providers/profile-window-rollups",
+            "required_permission": "ops:providers:write",
+            "coverage_window_days": 30,
+            "source_freshness_status": "fresh",
+            "data_quality_status": "ready",
+            "artifact_uri": "s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json",
+            "required_evidence_prefixes": [
+                "provider_profile_window_rollups:"
+            ],
+            "evidence_refs": [
+                "provider_profile_window_rollups:s3://customer-prod-artifacts/worker-data-pipeline/provider_profile_window_rollup_report.json"
+            ],
+            "blockers": []
+        }
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_EVIDENCE"
+    );
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("provider_profile_claim_snapshot:"));
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_per_job_count_consistency() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["ready_job_count"] = serde_json::json!(2);
+    payload["blocked_job_count"] = serde_json::json!(0);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_JOB_COUNT"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_top_level_status_consistency() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(worker_data_pipeline_readiness_payload()).unwrap();
+    payload["readiness_status"] = serde_json::json!("ready");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_WORKER_DATA_PIPELINE_READINESS_STATUS"
+    );
+}
+
+#[tokio::test]
+async fn worker_data_pipeline_readiness_report_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/worker-data-pipeline-readiness",
+        worker_data_pipeline_readiness_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
+}
+
+#[tokio::test]
+async fn submits_and_reads_scoring_feature_context_materialization() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, submitted) = json_request_with_key(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        scoring_feature_context_materialization_payload(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let materialization = &submitted["materialization"];
+    assert_eq!(materialization["materialization_id"], "sfc-mat-2026-06-13");
+    assert_eq!(materialization["customer_scope_id"], "demo-customer");
+    assert_eq!(materialization["context_count"], 1);
+    assert_eq!(
+        materialization["contexts_json"][0]["claim_id"],
+        "CLM-WORKER-CONTEXT-1"
+    );
+    assert!(materialization["governance_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("must not assign fraud labels"));
+
+    let (status, loaded) = json_request_with_key(
+        app,
+        "GET",
+        "/api/v1/ops/scoring-feature-context-materializations/sfc-mat-2026-06-13",
+        "{}",
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        loaded["materialization"]["report_uri"],
+        "s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json"
+    );
+    assert_eq!(
+        loaded["materialization"]["evidence_refs"][0],
+        "scoring_feature_contexts:s3://customer-prod-artifacts/worker-data-pipeline/scoring_feature_context_report.json"
+    );
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_source_uris() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["source_uris"]
+        .as_object_mut()
+        .unwrap()
+        .remove("peer_benchmarks_uri");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_template_report_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["report_uri"] =
+        serde_json::json!("local://template/scoring/scoring_feature_context_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_SCORING_FEATURE_CONTEXT_MATERIALIZATION"
+    );
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_template_source_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["source_uris"]["peer_benchmarks_uri"] =
+        serde_json::json!("local://template/peer/peer_percentile_benchmark.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_local_source_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["source_uris"]["episode_rollups_uri"] =
+        serde_json::json!("local://episode_aggregation_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_localhost_source_uri() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["source_uris"]["episode_rollups_uri"] =
+        serde_json::json!("http://localhost:9000/episode_aggregation_report.json");
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_SOURCE_URI");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_source_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some("peer_benchmarks:s3://customer-prod-artifacts/worker-data-pipeline/peer_percentile_benchmark.json")
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_SCORING_FEATURE_CONTEXT_SOURCE_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_template_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!(
+            "worker_template:local://template/scoring/source.json"
+        ));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_local_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!(
+            "worker_report:local://scoring/context.json"
+        ));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_file_top_level_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!(
+            "worker_report:file://tmp/scoring/context.json"
+        ));
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_claim_snapshot_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some("scoring_feature_context_claim_snapshot:s3://customer-prod-artifacts/worker-data-pipeline/scoring_claims.json")
+        });
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MISSING_SCORING_FEATURE_CONTEXT_SOURCE_EVIDENCE"
+    );
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_context_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["contexts"][0]["evidence_refs"] = serde_json::json!([]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_template_context_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["contexts"][0]["evidence_refs"] = serde_json::json!([
+        "claims:CLM-WORKER-CONTEXT-1",
+        "scoring_feature_contexts:local://template/scoring/context.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_rejects_file_context_evidence_refs() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["contexts"][0]["evidence_refs"] = serde_json::json!([
+        "claims:CLM-WORKER-CONTEXT-1",
+        "scoring_feature_contexts:file://tmp/scoring/context.json"
+    ]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_context_claim_source_evidence() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+    let mut payload: serde_json::Value =
+        serde_json::from_str(scoring_feature_context_materialization_payload()).unwrap();
+    payload["contexts"][0]["evidence_refs"] =
+        serde_json::json!(["scoring_feature_contexts:CLM-WORKER-CONTEXT-1"]);
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        &payload.to_string(),
+        "dataset-write-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SCORING_FEATURE_CONTEXT_EVIDENCE");
+}
+
+#[tokio::test]
+async fn scoring_feature_context_materialization_requires_dataset_write_permission() {
+    let app = build_app(test_config_with_dataset_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/scoring-feature-context-materializations",
+        scoring_feature_context_materialization_payload(),
+        "dataset-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:datasets:write");
 }
 
 #[tokio::test]
@@ -380,6 +4026,18 @@ async fn rejects_csv_split_uri_even_when_storage_format_says_parquet() {
 }
 
 #[tokio::test]
+async fn active_dataset_registration_requires_production_artifact_uris() {
+    let app = build_app(test_config()).unwrap();
+    let payload =
+        renewal_dataset_payload("parquet").replace(r#""status": "draft""#, r#""status": "active""#);
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_MANIFEST_INVALID");
+}
+
+#[tokio::test]
 async fn requires_split_row_counts_to_match_dataset_total() {
     let app = build_app(test_config()).unwrap();
     let payload =
@@ -639,6 +4297,28 @@ async fn rejects_csv_feature_matrix_uri() {
     assert_eq!(body["code"], "INVALID_FEATURE_SET");
 
     let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": ["member_age"],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "active"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "FEATURE_SET_FORMAT_INVALID");
+
+    let (status, body) = json_request(
         app,
         "POST",
         "/api/v1/ops/feature-sets",
@@ -739,6 +4419,14 @@ async fn rejects_invalid_model_dataset_registration() {
     let mut empty_label_distribution = valid_request.clone();
     empty_label_distribution["label_distribution_json"] = serde_json::json!({});
     let payload = empty_label_distribution.to_string();
+    let (status, body) =
+        json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_DATASET");
+
+    let mut active_local_uris = valid_request.clone();
+    active_local_uris["status"] = serde_json::json!("active");
+    let payload = active_local_uris.to_string();
     let (status, body) =
         json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);

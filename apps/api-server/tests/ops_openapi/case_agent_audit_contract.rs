@@ -258,11 +258,25 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
             .contains("must not contain PII")
     );
     assert!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
+    );
+    assert!(
         schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
             ["description"]
             .as_str()
             .unwrap()
             .contains("must not contain PII")
+    );
+    assert!(
+        schema["components"]["schemas"]["CancelAgentRunRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("not local/template refs")
     );
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["scheme_family"]
@@ -273,6 +287,25 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["claim_id"]
             ["minLength"],
         1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]
+            ["investigation_id"]["type"],
+        serde_json::json!(["string", "null"])
+    );
+    assert!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]
+            ["investigation_id"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("group multiple agent runs")
+    );
+    assert!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "investigation_id")
     );
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["risk_score"]
@@ -344,6 +377,18 @@ pub(crate) fn assert_case_agent_audit_contract(schema: &serde_json::Value) {
         schema["components"]["schemas"]["MediatedToolCall"]["properties"]["execution_mode"]
             ["const"],
         "contract_only_not_executed"
+    );
+    assert!(
+        schema["components"]["schemas"]["MediatedToolCall"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "cancellation_checkpoint")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["MediatedToolCall"]["properties"]
+            ["cancellation_checkpoint"]["type"],
+        "string"
     );
     assert!(schema["components"]["schemas"]["EvidenceSufficiency"].is_object());
     for field in ["population_definition", "reviewer", "assignment_queue"] {

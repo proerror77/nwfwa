@@ -61,6 +61,11 @@ pub(super) fn agent_investigation_schemas() -> Value {
             "type": "object",
             "required": ["claim_id", "risk_score", "rag", "top_reasons", "similar_case_query"],
             "properties": {
+                "investigation_id": {
+                    "type": ["string", "null"],
+                    "minLength": 1,
+                    "description": "Optional stable investigation id. Reuse it to group multiple agent runs under one investigation."
+                },
                 "claim_id": { "type": "string", "minLength": 1 },
                 "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
                 "rag": { "type": "string", "enum": ["GREEN", "AMBER", "RED"] },
@@ -71,8 +76,9 @@ pub(super) fn agent_investigation_schemas() -> Value {
         },
         "AgentInvestigationResponse": {
             "type": "object",
-            "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_sufficiency", "evidence_refs", "evidence_refs_by_type", "specialist_executions"],
+            "required": ["investigation_id", "agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_sufficiency", "evidence_refs", "evidence_refs_by_type", "specialist_executions"],
             "properties": {
+                "investigation_id": { "type": "string" },
                 "agent_run_id": { "type": "string" },
                 "decision_boundary": { "type": "string", "const": "assistive_only" },
                 "risk_summary": { "type": "string" },
@@ -105,12 +111,16 @@ pub(super) fn agent_investigation_schemas() -> Value {
         },
         "MediatedToolCall": {
             "type": "object",
-            "required": ["tool_name", "purpose", "input_scope", "policy_check", "execution_mode", "decision_boundary"],
+            "required": ["tool_name", "purpose", "input_scope", "policy_check", "cancellation_checkpoint", "execution_mode", "decision_boundary"],
             "properties": {
                 "tool_name": { "type": "string" },
                 "purpose": { "type": "string" },
                 "input_scope": { "type": "array", "items": { "type": "string" } },
                 "policy_check": { "type": "string" },
+                "cancellation_checkpoint": {
+                    "type": "string",
+                    "description": "Checkpoint that must be evaluated before executing the mediated tool call."
+                },
                 "execution_mode": { "type": "string", "const": "contract_only_not_executed" },
                 "decision_boundary": { "type": "string", "const": "assistive_only" }
             }

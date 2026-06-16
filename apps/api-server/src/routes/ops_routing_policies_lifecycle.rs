@@ -159,6 +159,24 @@ fn validate_routing_policy_lifecycle_request(
             "routing policy lifecycle evidence_refs must not contain PII",
         ));
     }
+    if request.evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        let normalized = reference.to_ascii_lowercase();
+        normalized.contains("local://")
+            || normalized.contains("file://")
+            || normalized.contains("://localhost")
+            || normalized.contains("://127.")
+            || normalized.contains("://0.0.0.0")
+            || normalized.contains("://[::1]")
+            || reference.contains('{')
+            || reference.contains('}')
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ROUTING_POLICY_LIFECYCLE_EVIDENCE",
+            "routing policy lifecycle evidence_refs must not use local dry-run or placeholder evidence",
+        ));
+    }
     Ok(())
 }
 

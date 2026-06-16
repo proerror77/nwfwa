@@ -13,7 +13,7 @@ pub(super) const DEFAULT_ORCHESTRATOR_VERSION: &str = "deterministic_orchestrato
 pub(super) fn agent_run_log_from_persisted(run: &PersistedAgentRun) -> AgentRunLogRecord {
     AgentRunLogRecord {
         agent_run_id: run.agent_run_id.clone(),
-        investigation_id: stable_investigation_id_for_claim(&run.claim_id),
+        investigation_id: run.investigation_id.clone(),
         agent_identity_id: DEFAULT_AGENT_IDENTITY_ID.into(),
         agent_kind: DEFAULT_AGENT_KIND.into(),
         agent_version: DEFAULT_AGENT_VERSION,
@@ -55,6 +55,7 @@ pub(super) fn agent_audit_event_from_run(
         .iter()
         .any(|approval| approval.proposed_action == "manual_review_required");
     let input_digest = sha256_json(&serde_json::json!({
+        "investigation_id": run.investigation_id,
         "agent_run_id": run.agent_run_id,
         "claim_id": run.claim_id,
         "decision_boundary": run.decision_boundary,
@@ -70,6 +71,7 @@ pub(super) fn agent_audit_event_from_run(
             .collect::<Vec<_>>(),
     }));
     let payload = serde_json::json!({
+        "investigation_id": run.investigation_id,
         "agent_identity_id": DEFAULT_AGENT_IDENTITY_ID,
         "status": run.status,
         "evidence_ref_count": run.evidence_refs.len(),
@@ -138,9 +140,12 @@ pub(super) fn default_agent_registry_record() -> AgentRegistryRecord {
     }
 }
 
-pub(super) fn agent_investigation_record_for_claim(claim_id: &str) -> AgentInvestigationRecord {
+pub(super) fn agent_investigation_record(
+    claim_id: &str,
+    investigation_id: &str,
+) -> AgentInvestigationRecord {
     AgentInvestigationRecord {
-        investigation_id: stable_investigation_id_for_claim(claim_id),
+        investigation_id: investigation_id.into(),
         claim_id: claim_id.into(),
         status: "open".into(),
         orchestrator_version: DEFAULT_ORCHESTRATOR_VERSION.into(),
@@ -175,6 +180,7 @@ mod tests {
     #[test]
     fn agent_audit_event_uses_digest_without_raw_output_payload() {
         let run = PersistedAgentRun {
+            investigation_id: "investigation_test_01HX".into(),
             agent_run_id: "agent_01HX".into(),
             claim_id: "CLM-0287".into(),
             status: "succeeded".into(),
@@ -192,7 +198,7 @@ mod tests {
             approvals: vec![],
         };
 
-        let investigation_id = stable_investigation_id_for_claim(&run.claim_id);
+        let investigation_id = run.investigation_id.clone();
         let event =
             agent_audit_event_from_run(&run, &investigation_id, Some("sha256:previous".into()));
 
