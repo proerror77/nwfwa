@@ -238,7 +238,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
               "accuracy": "0.74",
               "threshold": "0.50",
               "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
-              "feature_importance_uri": "data/eval/dashboard_model_eval/v1/feature_importance.parquet",
+              "feature_importance_uri": "s3://customer-prod-artifacts/eval/dashboard_model_eval/v1/feature_importance.parquet",
               "metrics_json": {{"score_psi": 0.31}}
             }}"#
         ),
