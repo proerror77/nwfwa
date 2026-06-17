@@ -492,6 +492,34 @@ CREATE TABLE IF NOT EXISTS agent_audit_events (
 CREATE INDEX IF NOT EXISTS agent_audit_events_run_idx
   ON agent_audit_events(agent_run_id, created_at);
 
+UPDATE agent_runs ar
+SET investigation_id = latest_event.investigation_id
+FROM (
+  SELECT DISTINCT ON (agent_run_id)
+    agent_run_id,
+    investigation_id
+  FROM agent_audit_events
+  ORDER BY agent_run_id, created_at DESC, id DESC
+) latest_event
+WHERE ar.agent_run_id = latest_event.agent_run_id
+  AND ar.investigation_id IS NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'agent_runs_investigation_id_fkey'
+      AND conrelid = 'agent_runs'::regclass
+  ) THEN
+    ALTER TABLE agent_runs
+      ADD CONSTRAINT agent_runs_investigation_id_fkey
+      FOREIGN KEY (investigation_id)
+      REFERENCES investigations(investigation_id)
+      NOT VALID;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS agent_steps (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,

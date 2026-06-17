@@ -300,14 +300,27 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
-  FROM agent_runs
-  WHERE claim_id = demo_claim_id
-    AND status = 'succeeded'
-    AND decision_boundary = 'assistive_only'
-    AND output_json ? 'evidence_sufficiency'
-    AND evidence_refs <> '[]'::jsonb;
+  FROM agent_runs ar
+  WHERE ar.claim_id = demo_claim_id
+    AND ar.status = 'succeeded'
+    AND ar.decision_boundary = 'assistive_only'
+    AND ar.output_json ? 'evidence_sufficiency'
+    AND ar.evidence_refs <> '[]'::jsonb
+    AND ar.investigation_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM investigations inv
+      WHERE inv.investigation_id = ar.investigation_id
+        AND inv.claim_id = ar.claim_id
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM agent_audit_events aae
+      WHERE aae.agent_run_id = ar.agent_run_id
+        AND aae.investigation_id = ar.investigation_id
+    );
   IF row_count < 1 THEN
-    RAISE EXCEPTION 'expected governed agent run for %', demo_claim_id;
+    RAISE EXCEPTION 'expected governed agent run with persisted investigation id for %', demo_claim_id;
   END IF;
 
   SELECT COUNT(*) INTO row_count
