@@ -264,7 +264,8 @@ grep -q "Next actions" scripts/demo/smoke_web_console.mjs
 grep -q "click to work" scripts/demo/smoke_web_console.mjs
 grep -q "FWA operating map" scripts/demo/smoke_web_console.mjs
 grep -q "PRD runtime topology" scripts/demo/smoke_web_console.mjs
-grep -q "module_context" apps/web-console/src/main.rs
+grep -q "Renderer::<OpsApp>" apps/web-console/src/main.rs
+grep -q "function_component(OpsApp)" apps/web-console/src/ops_app.rs
 grep -q "workspace-topbar" apps/web-console/src/styles.css
 grep -q "module-nav" apps/web-console/src/styles.css
 grep -q "/api/v1/health" apps/web-console/src/api/governance.rs
