@@ -1,6 +1,6 @@
 use crate::{
     comma_separated_values, request_json, RuleBacktestResponse, RuleDiscoveryCandidate,
-    RuleDiscoveryResponse,
+    RuleDiscoveryResponse, RulePerformance,
 };
 use serde_json::{json, Value};
 use yew::prelude::*;
@@ -177,6 +177,13 @@ pub(crate) async fn submit_rule_shadow_run(
         }),
     )
     .await
+}
+
+pub(crate) fn rule_performance_for<'a>(
+    performance: &'a [RulePerformance],
+    rule_id: &str,
+) -> Option<&'a RulePerformance> {
+    performance.iter().find(|item| item.rule_id == rule_id)
 }
 
 pub(crate) fn rule_demo_samples() -> Vec<Value> {
