@@ -1,15 +1,8 @@
-use super::{request_get_json, request_json};
+use super::request_get_json;
 use crate::types::*;
-use serde_json::json;
 
 pub(crate) async fn get_dashboard_summary(api_key: String) -> Result<DashboardSummary, String> {
     request_get_json("/api/v1/ops/dashboard/summary", api_key).await
-}
-
-pub(crate) async fn get_factor_readiness(
-    api_key: String,
-) -> Result<FactorReadinessResponse, String> {
-    request_get_json("/api/v1/ops/factors/readiness", api_key).await
 }
 
 pub(crate) async fn get_member_profile_summary(
@@ -44,17 +37,4 @@ pub(crate) async fn get_graph_network_data(api_key: String) -> Result<GraphNetwo
             .await?
             .providers;
     Ok(GraphNetworkData { leads, providers })
-}
-
-/// Search similar cases for knowledge graph context
-pub(crate) async fn search_knowledge_cases(
-    api_key: String,
-    scheme_family: String,
-) -> Result<serde_json::Value, String> {
-    request_json(
-        "/api/v1/knowledge/search-similar",
-        api_key,
-        json!({ "scheme_family": scheme_family, "limit": 8 }),
-    )
-    .await
 }

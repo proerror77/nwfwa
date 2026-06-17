@@ -1,6 +1,5 @@
 /// Force-directed knowledge graph for FWA Provider-Member network
 use crate::api::*;
-use crate::formatting::*;
 use crate::state::{use_api_key, ApiState};
 use crate::types::*;
 use std::collections::HashMap;
@@ -305,84 +304,6 @@ fn short_id(id: &str) -> String {
         format!("{}…", id.chars().take(12).collect::<String>())
     } else {
         id.to_string()
-    }
-}
-
-// ─── Force-directed layout (Fruchterman-Reingold, simplified) ────────────────
-
-fn apply_forces(nodes: &mut Vec<GraphNode>, edges: &[GraphEdge], w: f64, h: f64, iter: u32) {
-    let n = nodes.len();
-    if n == 0 {
-        return;
-    }
-
-    // Cooling temperature — starts high, decreases with iteration
-    let temp = (1.0 - (iter as f64 / 80.0).min(0.95)) * 12.0;
-    let k = (w * h / n as f64).sqrt() * 0.8;
-
-    // Repulsion between all node pairs
-    let positions: Vec<(f64, f64)> = nodes.iter().map(|n| (n.x, n.y)).collect();
-    let mut forces: Vec<(f64, f64)> = vec![(0.0, 0.0); n];
-
-    for i in 0..n {
-        for j in 0..n {
-            if i == j {
-                continue;
-            }
-            let dx = positions[i].0 - positions[j].0;
-            let dy = positions[i].1 - positions[j].1;
-            let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-            let repulsion = k * k / dist;
-            forces[i].0 += (dx / dist) * repulsion;
-            forces[i].1 += (dy / dist) * repulsion;
-        }
-    }
-
-    // Attraction along edges
-    let id_to_idx: HashMap<String, usize> = nodes
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (n.id.clone(), i))
-        .collect();
-
-    for edge in edges {
-        let Some(&si) = id_to_idx.get(&edge.source) else {
-            continue;
-        };
-        let Some(&ti) = id_to_idx.get(&edge.target) else {
-            continue;
-        };
-        let dx = positions[si].0 - positions[ti].0;
-        let dy = positions[si].1 - positions[ti].1;
-        let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-        let attraction = dist * dist / k * (0.5 + edge.strength * 0.5);
-        let fx = (dx / dist) * attraction;
-        let fy = (dy / dist) * attraction;
-        forces[si].0 -= fx;
-        forces[si].1 -= fy;
-        forces[ti].0 += fx;
-        forces[ti].1 += fy;
-    }
-
-    // Center gravity — gentle pull to canvas center
-    let cx = w / 2.0;
-    let cy = h / 2.0;
-    for (i, node) in nodes.iter_mut().enumerate() {
-        forces[i].0 += (cx - node.x) * 0.015;
-        forces[i].1 += (cy - node.y) * 0.015;
-    }
-
-    // Apply forces with temperature damping
-    for (i, node) in nodes.iter_mut().enumerate() {
-        let len = (forces[i].0 * forces[i].0 + forces[i].1 * forces[i].1)
-            .sqrt()
-            .max(0.001);
-        let clamped = len.min(temp);
-        node.x += (forces[i].0 / len) * clamped;
-        node.y += (forces[i].1 / len) * clamped;
-        // Keep inside canvas with padding
-        node.x = node.x.clamp(40.0, w - 40.0);
-        node.y = node.y.clamp(40.0, h - 40.0);
     }
 }
 
