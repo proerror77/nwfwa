@@ -3,6 +3,7 @@ use crate::formatting::*;
 use crate::state::{use_api_key, ApiState};
 use crate::types::*;
 use crate::visual_helpers::*;
+use gloo_timers::callback::Interval;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -40,8 +41,12 @@ pub fn dashboard_page(props: &DashboardPageProps) -> Html {
     {
         let load_summary = load_summary.clone();
         use_effect_with((), move |_| {
+            let interval_load_summary = load_summary.clone();
             load_summary.emit(());
-            || ()
+            let interval = Interval::new(30_000, move || {
+                interval_load_summary.emit(());
+            });
+            move || drop(interval)
         });
     }
 
