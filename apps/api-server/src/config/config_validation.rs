@@ -9,6 +9,14 @@ impl AppConfig {
         if env != "development" && self.api_key == "dev-secret" && principal_specs.is_empty() {
             panic!("FWA_API_KEY or FWA_API_KEY_PRINCIPALS must be set outside development");
         }
+        if env != "development"
+            && (self.model_service_url == "heuristic"
+                || self.model_service_url.starts_with("heuristic://"))
+        {
+            panic!(
+                "FWA_MODEL_SERVICE_URL must point to a customer-approved scorer outside development"
+            );
+        }
     }
 
     pub fn api_key_configuration_status(&self) -> &'static str {
