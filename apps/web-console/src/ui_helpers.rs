@@ -42,20 +42,6 @@ pub(crate) fn ratio(value: u32, total: u32) -> f64 {
     }
 }
 
-pub(crate) fn icon_class(icon: &str) -> &'static str {
-    match icon {
-        "risk" => "icon-risk",
-        "confirmed" => "icon-confirmed",
-        "amount" => "icon-amount",
-        "saving" => "icon-saving",
-        "rule" => "icon-rule",
-        "case" => "icon-case",
-        "qa" => "icon-qa-card",
-        "currency" => "icon-currency",
-        _ => "icon-default",
-    }
-}
-
 pub(crate) fn status_tone(status: &str) -> &'static str {
     let normalized = status.to_ascii_lowercase();
     if normalized.contains("fail")

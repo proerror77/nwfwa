@@ -1,7 +1,6 @@
 use crate::{
     optional_number, percent_label, percent_width, provider_signal_row, ratio, scaled_width,
-    status_tone, MlopsWorkspaceSnapshot, ModelOpsSnapshot, ModelPerformance, ModelPromotionGates,
-    ModelRetrainingReadiness, ModelVersion,
+    status_tone, ModelOpsSnapshot, ModelPerformance, ModelPromotionGates, ModelRetrainingReadiness,
 };
 use yew::prelude::*;
 
@@ -156,37 +155,5 @@ fn meter_row(label: &str, value: u32, max_value: u32) -> Html {
             <div class="bar-track"><i style={format!("width: {};", scaled_width(value, max_value.max(1)))}></i></div>
             <strong>{value}</strong>
         </div>
-    }
-}
-
-pub(crate) fn active_model_version(snapshot: &ModelOpsSnapshot) -> Option<&ModelVersion> {
-    snapshot
-        .models
-        .iter()
-        .find(|model| model.status == "active")
-        .or_else(|| snapshot.models.first())
-}
-
-pub(crate) fn provider_release_decision_label(snapshot: &MlopsWorkspaceSnapshot) -> &'static str {
-    if !snapshot.model_ops.gates.blockers.is_empty() {
-        "resolve blockers"
-    } else if snapshot
-        .model_ops
-        .gates
-        .decision
-        .to_ascii_lowercase()
-        .contains("allowed")
-    {
-        "approve rollout"
-    } else if snapshot
-        .model_ops
-        .retraining
-        .recommendation
-        .to_ascii_lowercase()
-        .contains("retraining")
-    {
-        "request retraining"
-    } else {
-        "keep monitoring"
     }
 }

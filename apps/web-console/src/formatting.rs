@@ -1,4 +1,4 @@
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::collections::BTreeMap;
 
 pub(crate) fn pretty_json(value: &Value) -> String {
@@ -11,13 +11,6 @@ pub(crate) fn display_value(value: &Value) -> String {
         .map(|number| format!("{number:.1}"))
         .or_else(|| value.as_str().map(str::to_string))
         .unwrap_or_else(|| value.to_string())
-}
-
-pub(crate) fn numeric_value(value: &Value) -> f64 {
-    value
-        .as_f64()
-        .or_else(|| value.as_str().and_then(|text| text.parse::<f64>().ok()))
-        .unwrap_or(0.0)
 }
 
 pub(crate) fn readable_token(value: &str) -> String {
@@ -126,30 +119,10 @@ pub(crate) fn localized_business_text(value: &str, language: crate::state::Langu
         .replace('，', ", ")
 }
 
-pub(crate) fn rag_label(value: &str) -> &'static str {
-    match value.trim().to_ascii_uppercase().as_str() {
-        "RED" => "High risk",
-        "AMBER" | "YELLOW" => "Watchlist risk",
-        "GREEN" => "Low risk",
-        _ => "Risk pending",
-    }
-}
-
 pub(crate) fn optional_number(value: Option<f64>) -> String {
     value
         .map(|number| format!("{number:.2}"))
         .unwrap_or_else(|| "none".into())
-}
-
-pub(crate) fn issue_counts_label(counts: &Map<String, Value>) -> String {
-    if counts.is_empty() {
-        return "none".into();
-    }
-    counts
-        .iter()
-        .map(|(key, value)| format!("{key}={}", display_value(value)))
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 pub(crate) fn map_counts_label(counts: &BTreeMap<String, u32>) -> String {
@@ -159,17 +132,6 @@ pub(crate) fn map_counts_label(counts: &BTreeMap<String, u32>) -> String {
     counts
         .iter()
         .map(|(key, value)| format!("{key}={value}"))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-pub(crate) fn map_counts_business_label(counts: &BTreeMap<String, u32>) -> String {
-    if counts.is_empty() {
-        return "none".into();
-    }
-    counts
-        .iter()
-        .map(|(key, value)| format!("{}={value}", business_label(key)))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -213,20 +175,4 @@ pub(crate) fn optional_metric(value: &Option<Value>) -> String {
         .as_ref()
         .map(display_value)
         .unwrap_or_else(|| "none".into())
-}
-
-pub(crate) fn optional_u8(value: Option<u8>) -> String {
-    value
-        .map(|number| number.to_string())
-        .unwrap_or_else(|| "none".into())
-}
-
-pub(crate) fn value_refs_label(refs: &[Value]) -> String {
-    if refs.is_empty() {
-        return "none".into();
-    }
-    refs.iter()
-        .map(display_value)
-        .collect::<Vec<_>>()
-        .join(", ")
 }

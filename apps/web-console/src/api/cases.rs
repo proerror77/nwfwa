@@ -29,19 +29,6 @@ pub(crate) async fn post_triage_lead(
     .await
 }
 
-pub(crate) async fn post_case_status(
-    api_key: String,
-    case_id: String,
-    payload: Value,
-) -> Result<UpdateCaseStatusRecord, String> {
-    request_json(
-        &format!("/api/v1/ops/cases/{case_id}/status"),
-        api_key,
-        payload,
-    )
-    .await
-}
-
 pub(crate) async fn post_investigation_result(
     api_key: String,
     payload: Value,

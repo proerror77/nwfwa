@@ -4,7 +4,6 @@ use serde::Deserialize;
 use serde_json::Value;
 
 mod audit;
-mod bootstrap;
 mod cases;
 mod data_sources;
 mod evidence;
@@ -13,11 +12,9 @@ mod medical;
 mod models;
 mod qa;
 mod rules;
-mod scoring;
 mod summaries;
 
 pub(crate) use audit::*;
-pub(crate) use bootstrap::*;
 pub(crate) use cases::*;
 pub(crate) use data_sources::*;
 pub(crate) use evidence::*;
@@ -26,7 +23,6 @@ pub(crate) use medical::*;
 pub(crate) use models::*;
 pub(crate) use qa::*;
 pub(crate) use rules::*;
-pub(crate) use scoring::*;
 pub(crate) use summaries::*;
 
 pub(crate) async fn request_json<T>(

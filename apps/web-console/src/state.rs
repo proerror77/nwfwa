@@ -32,13 +32,6 @@ impl Language {
         }
     }
 
-    pub(crate) fn code(self) -> &'static str {
-        match self {
-            Self::En => "EN",
-            Self::Zh => "中文",
-        }
-    }
-
     pub(crate) fn document_code(self) -> &'static str {
         match self {
             Self::En => "en",

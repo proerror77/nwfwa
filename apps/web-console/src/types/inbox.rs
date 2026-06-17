@@ -1,14 +1,6 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CorrectionHint {
-    pub(crate) field_path: String,
-    pub(crate) severity: String,
-    pub(crate) blocks_scoring: bool,
-    pub(crate) next_action: String,
-}
-
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub(crate) struct MemberProfileSummary {
     pub(crate) member_id: String,

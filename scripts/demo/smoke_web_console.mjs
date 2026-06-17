@@ -108,350 +108,125 @@ async function main() {
     const sourceText = await collectSourceText(srcDir);
     const bundleText = await collectBuiltText(distDir);
     const builtText = `${bundleText}\n${sourceText}`;
-    assertContains(builtText, "FWA Studio", "web console bundle");
-    assertContains(builtText, "Live operations", "web console bundle");
-    assertContains(builtText, "FWA Platform", "web console bundle");
-    assertContains(builtText, "Operations desk", "web console visual shell bundle");
-    assertContains(builtText, "Daily Work", "web console navigation bundle");
-    assertContains(builtText, "Control Rooms", "web console navigation bundle");
-    assertContains(builtText, "Intake Ops", "web console navigation bundle");
-    assertContains(builtText, "中文", "web console language toggle bundle");
-    assertContains(builtText, "实时运营", "web console language toggle bundle");
-    assertContains(builtText, "日常作业", "web console bilingual navigation bundle");
-    assertContains(builtText, "控制室", "web console bilingual navigation bundle");
-    assertContains(builtText, "线索与案件", "web console bilingual navigation bundle");
-    assertNotContains(builtText, "TPA Demo Runner", "web console business navigation bundle");
-    assertContains(builtText, "Discovery Review", "web console navigation bundle");
-    assertNotContains(builtText, "Advanced", "web console business navigation bundle");
-    assertContains(builtText, "Provider Model Intake", "web console model release drilldown bundle");
-    assertContains(builtText, "Rule & Model Discovery Review", "web console detection review bundle");
-    assertContains(builtText, "ML Rule Review Queue", "web console detection review bundle");
-    assertContains(builtText, "Provider Model Queue", "web console detection release bundle");
-    assertContains(builtText, "No ad hoc model training", "web console detection release boundary bundle");
-    assertContains(builtText, "hashchange", "web console browser history bundle");
-    assertContains(builtText, "leads-cases", "web console browser history bundle");
-    assertContains(builtText, "discovery-review", "web console browser history bundle");
-    assertContains(builtText, "Training Label Handoff", "web console navigation bundle");
-    assertContains(builtText, "Historical Replay", "web console bootstrap ops bundle");
-    assertContains(builtText, "Backfill evidence detail", "web console bootstrap ops bundle");
-    assertContains(builtText, "Evidence Requests", "web console bootstrap ops bundle");
-    assertContains(builtText, "Bootstrap evidence detail", "web console bootstrap ops bundle");
-    assertContains(builtText, "Bootstrap label detail", "web console bootstrap ops bundle");
-    assertContains(builtText, "Label Evidence Handoff", "web console bootstrap ops bundle");
-    assertContains(builtText, "Create backfill", "web console bootstrap ops bundle");
-    assertContains(builtText, "Generate evidence requests", "web console bootstrap ops bundle");
-    assertContains(builtText, "Evidence Intake", "web console bootstrap ops bundle");
-    assertContains(builtText, "Label Review", "web console bootstrap ops bundle");
-    assertContains(builtText, "training-platform handoff", "web console bootstrap ops bundle");
-    assertContains(builtText, "Mark selected request received", "web console bootstrap ops bundle");
-    assertContains(builtText, "Review selected label", "web console bootstrap ops bundle");
-    assertContains(builtText, "Provider candidate release", "web console provider model intake bundle");
-    assertContains(builtText, "Provider Candidate Release Control", "web console provider model intake bundle");
-    assertContains(builtText, "Offline Training Handoff", "web console mlops workspace bundle");
-    assertContains(sourceText, "/versions/{model_version}/promotion-gates", "web console version-scoped promotion gates API");
-    assertContains(sourceText, "/versions/{model_version}/promotion-reviews", "web console version-scoped promotion review API");
-    assertContains(sourceText, "/versions/{model_version}/activate", "web console version-scoped activation API");
-    assertContains(builtText, "Monitoring Review Queue", "web console mlops workspace bundle");
-    assertContains(builtText, "Submitted monitoring reports open human review tasks", "web console mlops review queue bundle");
-    assertContains(builtText, "No monitoring review tasks returned for this model.", "web console mlops review queue bundle");
-    assertContains(builtText, "Use for monitoring review", "web console mlops review queue fill action bundle");
-    assertContains(builtText, "Monitoring decision", "web console mlops review action bundle");
-    assertContains(builtText, "Submit monitoring decision", "web console mlops review action bundle");
-    assertContains(builtText, "Reject task", "web console mlops review action bundle");
-    assertContains(builtText, "Prepare retraining from task", "web console mlops review action bundle");
-    assertContains(builtText, "Open rollback review", "web console mlops review action bundle");
-    assertContains(builtText, "Alert Delivery Queue", "web console mlops alert delivery bundle");
-    assertContains(builtText, "Submit alert decision", "web console mlops alert delivery bundle");
-    assertContains(builtText, "Escalate alert to review", "web console mlops alert delivery bundle");
-    assertContains(builtText, "Provider Output Handoff", "web console mlops output handoff bundle");
-    assertContains(builtText, "External training payload", "web console mlops provider output payload import bundle");
-    assertContains(builtText, "Load provider output payload", "web console mlops provider output payload import bundle");
-    assertContains(sourceText, "permutation_importance_uri", "web console mlops permutation importance payload mapping");
-    assertContains(builtText, "Use for output registration", "web console mlops output handoff fill action bundle");
-    assertContains(builtText, "Register completed provider output", "web console mlops output handoff bundle");
-    assertContains(builtText, "Activation blocked by promotion gates", "web console mlops activation gate bundle");
-    assertNotContains(builtText, "Claim next queued job", "web console mlops training platform boundary bundle");
-    assertNotContains(builtText, "Update job status", "web console mlops training platform boundary bundle");
-    assertContains(builtText, "Candidate artifact SHA", "web console mlops provider output bundle");
-    assertContains(builtText, "Training artifact", "web console mlops provider output bundle");
-    assertContains(builtText, "Serving manifest", "web console mlops provider output bundle");
-    assertContains(builtText, "Candidate endpoint", "web console mlops provider output bundle");
-    assertContains(builtText, "Candidate AUC", "web console mlops provider output bundle");
-    assertContains(builtText, "Confusion matrix JSON", "web console mlops provider output bundle");
-    assertContains(builtText, "Metrics JSON", "web console mlops provider output bundle");
-    assertContains(builtText, "Draft rule candidate payload", "web console mlops provider output bundle");
-    assertContains(builtText, "Review them one by one in Discovery Review", "web console mlops rule candidate review boundary bundle");
-    assertContains(builtText, "Anomaly candidate kind", "web console mlops anomaly review bundle");
-    assertContains(builtText, "Anomaly report URI", "web console mlops anomaly review bundle");
-    assertContains(builtText, "Review anomaly candidate", "web console mlops anomaly review bundle");
-    assertContains(builtText, "Anomaly Review Queue", "web console mlops anomaly queue bundle");
-    assertContains(builtText, "No anomaly review tasks returned.", "web console mlops anomaly queue bundle");
-    assertContains(builtText, "pending_human_review", "web console mlops anomaly queue bundle");
-    assertContains(builtText, "request_more_evidence", "web console mlops anomaly queue bundle");
-    assertContains(builtText, "Use for review", "web console mlops anomaly queue bundle");
-    assertContains(sourceText, "anomaly-review-queue", "web console mlops anomaly queue API bundle");
-    assertContains(builtText, "Governed Actions", "web console mlops workspace bundle");
-    assertContains(builtText, "Request provider retraining", "web console provider model action bundle");
-    assertContains(builtText, "Submit release review", "web console provider model action bundle");
-    assertContains(builtText, "Activate approved candidate", "web console mlops action bundle");
-    assertContains(builtText, "Rollback active model", "web console mlops action bundle");
-    assertContains(builtText, "Model Candidates", "web console mlops workspace bundle");
-    assertContains(builtText, "Training job id", "web console mlops workspace bundle");
-    assertContains(builtText, "Review Workbench", "web console navigation bundle");
-    assertContains(builtText, "ML Rule Review Queue", "web console detection release bundle");
-    assertContains(builtText, "Provider Model Queue", "web console detection release bundle");
-    assertContains(builtText, "Routing Impact", "web console detection release bundle");
-    assertContains(builtText, "Release History", "web console detection release bundle");
-    assertContains(builtText, "Evidence Hub", "web console navigation bundle");
-    assertContains(builtText, "Real-time operations", "web console workspace bundle");
-    assertContains(builtText, "Scored leads", "web console global system map bundle");
-    assertContains(builtText, "Human gate", "web console global system map bundle");
-    assertContains(builtText, "Audit trail", "web console global system map bundle");
-    assertContains(builtText, "Value proof", "web console global system map bundle");
-    assertContains(builtText, "Risk Signal Breakdown", "web console risk signal visual bundle");
-    assertContains(builtText, "downstream human queue", "web console risk signal visual bundle");
-    assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
-    assertContains(builtText, "Risk mix", "web console dashboard visual bundle");
-    assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
-    assertContains(builtText, "confirmed prevented payment", "web console dashboard value wording bundle");
-    assertContains(builtText, "Savings / review cost", "web console dashboard value wording bundle");
-    assertContains(builtText, "Costs are tracked as pilot investment", "web console dashboard value wording bundle");
-    assertNotContains(builtText, "Net value", "web console dashboard value wording bundle");
-    assertNotContains(builtText, "ROI proof", "web console dashboard value wording bundle");
-    assertNotContains(builtText, "ROI pending", "web console dashboard value wording bundle");
-    assertNotContains(builtText, "ROI readiness", "web console dashboard value wording bundle");
-    assertContains(builtText, "Next actions", "web console dashboard visual bundle");
-    assertContains(builtText, "click to work", "web console dashboard visual bundle");
-    assertContains(builtText, "FWA operating map", "web console dashboard topology bundle");
-    assertContains(builtText, "PRD runtime topology", "web console dashboard topology bundle");
-    assertContains(builtText, "Risk scoring service", "web console dashboard topology bundle");
-    assertContains(builtText, "rules + risk mix", "web console dashboard topology bundle");
-    assertContains(builtText, "human queue", "web console dashboard topology bundle");
-    assertNotContains(builtText, "L2 rule hit", "web console dashboard topology bundle");
-    assertContains(builtText, "Input Contract", "web console runtime illustration bundle");
-    assertContains(builtText, "Signal Contract Map", "web console runtime signal illustration bundle");
-    assertContains(builtText, "This page validates runtime output", "web console human gate illustration bundle");
-    assertContains(builtText, "Triage", "web console dashboard queue bundle");
-    assertContains(builtText, "Investigate", "web console dashboard queue bundle");
-    assertContains(builtText, "Review", "web console dashboard queue bundle");
-    assertContains(builtText, "Govern", "web console dashboard queue bundle");
-    assertContains(builtText, "Open clinical queue", "web console review workbench bundle");
-    assertContains(builtText, "Review discovered rules", "web console detection release bundle");
-    assertContains(builtText, "Open evidence chain", "web console evidence workbench bundle");
-    assertContains(builtText, "Rule command path", "web console rules visual bundle");
-    assertContains(builtText, "Rule Discovery Workbench", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Mining Dataset URI", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Tree Depth", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Inline Labeled Evaluation Dataset", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Candidate rule workflow", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Submit shadow evidence", "web console rule shadow evidence bundle");
-    assertContains(builtText, "Shadow evidence submitted for promotion gates.", "web console rule shadow evidence bundle");
-    assertContains(builtText, "Save draft for shadow", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Accept after shadow evidence", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Reject selected candidate", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Run backtest, save a draft, submit shadow evidence, then accept or reject the selected candidate.", "web console rule candidate review gate bundle");
-    assertContains(builtText, "needs backtest", "web console rule discovery workbench bundle");
-    assertContains(builtText, "draft saved for shadow", "web console rule discovery workbench bundle");
-    assertContains(builtText, "shadow evidence ready", "web console rule discovery workbench bundle");
-    assertContains(sourceText, "saved_draft_rule_id", "web console rule discovery response handling");
-    assertNotContains(builtText, "Draft Owner", "web console rule discovery owner boundary bundle");
-    assertNotContains(
-      sourceText,
-      '<option value="completed">{"completed"}</option>',
-      "web console manual training status options"
-    );
-    assertContains(builtText, "Discover candidates", "web console rule discovery workbench bundle");
-    assertContains(builtText, "FWA Rule Pack Matrix", "web console rule pack visual bundle");
-    assertContains(builtText, "duplicate billing", "web console rule pack visual bundle");
-    assertContains(builtText, "medical necessity evidence gap", "web console rule pack visual bundle");
-    assertContains(builtText, "Model Monitoring Cockpit", "web console model monitoring visual bundle");
-    assertContains(builtText, "Shadow evidence", "web console model monitoring visual bundle");
-    assertContains(builtText, "Label readiness", "web console model monitoring visual bundle");
-    assertContains(builtText, "Agent investigation blueprint", "web console agent blueprint bundle");
-    assertContains(builtText, "Governance locks", "web console agent blueprint bundle");
-    assertContains(builtText, "no auto denial", "web console agent blueprint bundle");
-    assertContains(builtText, "Model telemetry map", "web console models visual bundle");
-    assertContains(builtText, "Queue Source", "web console leads cases queue bundle");
-    assertContains(builtText, "Investigation Control", "web console leads cases queue bundle");
-    assertContains(builtText, "SLA attention", "web console leads cases queue bundle");
-    assertContains(builtText, "Waiting evidence", "web console business status label bundle");
-    assertContains(builtText, "Pre-payment review", "web console business status label bundle");
-    assertContains(builtText, "High risk", "web console business risk label bundle");
-    assertContains(builtText, "Lead movement", "web console leads cases queue bundle");
-    assertContains(builtText, "Case movement", "web console leads cases queue bundle");
-    assertContains(builtText, "Generated Leads", "web console leads cases queue bundle");
-    assertContains(builtText, "Investigation Cases", "web console leads cases queue bundle");
-    assertContains(builtText, "Case Investigation Workspace", "web console leads cases action bundle");
-    assertContains(builtText, "Selected lead", "web console leads cases action bundle");
-    assertContains(builtText, "Selected case", "web console leads cases action bundle");
-    assertContains(builtText, "Agent-assisted case package", "web console leads cases agent bundle");
-    assertContains(builtText, "Generate case package", "web console leads cases agent bundle");
-    assertContains(builtText, "Human writeback required", "web console leads cases human gate bundle");
-    assertContains(builtText, "Case status maintenance", "web console leads cases maintenance bundle");
-    assertContains(builtText, "Inbound Claim Packet", "web console claim inbox release bundle");
-    assertContains(builtText, "Live TPA Demo Run", "web console live TPA demo bundle");
-    assertContains(builtText, "Run full TPA demo", "web console live TPA demo bundle");
-    assertContains(builtText, "TPA packet -> risk queue -> case -> value proof", "web console live TPA demo bundle");
-    assertContains(builtText, "Correction Worklist", "web console claim inbox release bundle");
-    assertContains(builtText, "Release accepted claim", "web console claim inbox release bundle");
-    assertContains(builtText, "Queue Handoff", "web console claim inbox release bundle");
-    assertContains(builtText, "Coverage limit needs correction", "web console claim inbox release bundle");
-    assertContains(builtText, "Waiting for intake check", "web console claim inbox release bundle");
-    assertContains(builtText, "Queue Ready", "web console claim inbox release bundle");
-    assertContains(builtText, "Needs review", "web console claim inbox release bundle");
-    assertContains(builtText, "Manual review", "web console business action label bundle");
-    assertContains(builtText, "No automatic denial", "web console agent boundary label bundle");
-    assertContains(builtText, "Medical review required", "web console clinical label bundle");
-    assertContains(builtText, "Technical payload editor", "web console claim inbox release bundle");
-    assertNotContains(builtText, "Approve for scoring", "web console claim inbox release bundle");
-    assertNotContains(builtText, "Scoring Release", "web console claim inbox release bundle");
-    assertContains(builtText, "Runtime Scoring", "web console bundle");
-    assertContains(builtText, "Model Performance", "web console bundle");
-    assertContains(builtText, "Promotion Gates", "web console bundle");
-    assertContains(builtText, "Retraining Readiness", "web console bundle");
-    for (const expectedModule of [
-      "Dashboard",
-      "Intake Ops",
-      "Discovery Review",
-      "Rules",
-      "Models",
-      "Routing Policies",
-      "Data Sources",
-      "Factor Factory",
-      "Leads & Cases",
+
+    for (const expected of [
+      "FWA PLATFORM",
+      "FWA Operations",
+      "Claims FWA Operations Console",
+      "FWA Platform",
+      "Live operations",
+      "实时运营",
+      "主工作流",
+      "页面路径",
+      "hashchange",
+    ]) {
+      assertContains(builtText, expected, "web console shell bundle");
+    }
+
+    for (const expectedPage of [
+      "Operations Dashboard",
+      "Claims Triage Queue",
+      "Investigation Workbench",
+      "Case Tracker",
+      "Evidence Center",
+      "Evidence Runtime",
       "Member Profile",
       "Provider Risk",
-      "Medical Review",
-      "Audit Sampling",
       "Knowledge Base",
-      "Evidence Runtime",
-      "Agent Investigator",
-      "QA Review",
-      "Governance",
-    ]) {
-      assertContains(builtText, expectedModule, "web console navigation bundle");
-    }
-    for (const expectedPanel of [
-      "Executive KPIs",
-      "Value proof",
-      "Confirmed prevented payment",
-      "Investigation Writeback",
-      "Confirm and write back",
-      "Integration Tool",
-      "Scoring Request",
-      "Scoring Response",
-      "Risk Signal Breakdown",
-      "Alerts And Top Reasons",
-      "Model Output",
-      "Evidence And Agent Prefill",
-      "Evidence Runtime",
-      "AI Evidence Foundation",
-      "Run demo evidence lifecycle",
-      "Document Packets",
-      "Selected Document Outputs",
-      "Embedding And Retrieval Audit",
-      "no raw text in UI",
+      "Data Sources",
+      "AI Investigator",
       "Rule Library",
-      "Rule library detail",
-      "Rule Performance",
-      "Performance detail",
-      "Rule Promotion Readiness",
-      "Backtest Evidence",
-      "Backtest evidence detail",
-      "Rule Promotion Gates",
-      "Rule promotion gate detail",
-      "Candidate Source",
       "Model Governance",
-      "Provider Model Intake",
-      "Governed Actions",
-      "Offline Training Handoff",
-      "Model Candidates",
-      "Training job id",
-      "Data Source Control",
-      "Data Foundation Control",
-      "registered sources",
-      "Dataset Catalog",
-      "Dataset Health",
-      "Split And Schema Coverage",
-      "Field Mapping Lineage",
-      "Model Evaluation Lineage",
-      "Evaluation evidence detail",
-      "Factor Cards",
-      "Case Workflow",
-      "Queue Source",
-      "Lead Triage",
-      "Case status maintenance",
-      "QA Queue",
-      "QA Queue Summary",
-      "Feedback Closure",
-      "Review Findings",
-      "Evidence package",
-      "QA evidence detail",
-      "Closure evidence detail",
-      "QA feedback loop cockpit",
-      "QA closed-loop routing",
-      "Feedback closure path",
-      "Audit Event Log",
-      "Agent Run Logs",
-      "risk signal findings",
-      "Governance control tower",
-      "Audit-by-design map",
-      "Payload trace detail",
-      "API evidence detail",
-      "Agent run detail",
-      "Configuration check detail",
-      "All blocking check detail",
-      "Evidence Trace Hub",
-      "Pilot Gate",
-      "Blocking Checks",
-      "Assistive Boundary",
-      "Clinical Signals",
-      "Clinical evidence cockpit",
-      "Medical necessity path",
-      "Controlled outcomes",
-      "Human Clinical Decision",
-      "Controlled outcome",
-      "Confirm clinical review",
-      "Medical Review Queue",
-      "Clinical Outcomes",
-      "Evidence Status",
-      "QA Sampling Governance",
-      "Sampling Governance Map",
-      "Deterministic seed",
-      "Selected leads",
-      "Sample output detail",
-      "Selected lead detail",
-      "Sample audit payload detail",
-      "Audit trace",
-      "Audit Sample Control",
-      "Audit Sample Inventory",
-      "Audit Sample Event Trace",
-      "Knowledge Base",
+      "Review Routing Policies",
+      "Quality & Governance",
+      "Audit Sampling",
+      "Medical Review",
+      "QA Feedback",
+    ]) {
+      assertContains(builtText, expectedPage, "web console active route bundle");
+    }
+
+    for (const expectedSlug of [
+      "dashboard",
+      "claims",
+      "review",
+      "cases",
+      "evidence",
+      "evidence-runtime",
+      "member",
+      "provider",
+      "knowledge",
+      "data-sources",
+      "agent",
+      "rules",
+      "models",
+      "routing",
+      "governance",
+      "audit",
+      "medical",
+      "qa",
+    ]) {
+      assertContains(sourceText, `"${expectedSlug}"`, "web console active route slug");
+    }
+
+    for (const expectedPanel of [
+      "Claims today",
+      "SLA compliance",
+      "Claims Triage Queue",
+      "Investigation Queue",
+      "Risk Signals",
+      "Provider 风险分析",
+      "AI Investigation Summary",
+      "Document Packets",
+      "Embedding And Retrieval Audit",
       "Confirmed Knowledge Cases",
       "Similar Case Search",
-      "Evidence Provenance",
       "Knowledge graph match",
-      "Structured + semantic retrieval",
-      "Evidence provenance path",
       "Confirmed Evidence",
-      "Assistive Investigation",
-      "Investigation Request",
+      "Data Foundation Control",
+      "Data Lineage Cockpit",
+      "Field Mapping Lineage",
+      "Rule Library",
+      "Rule Discovery Workbench",
+      "Tree Depth",
+      "Backtest Evidence",
+      "Rule Promotion Gates",
+      "Candidate rule workflow",
+      "shadow evidence ready",
+      "FWA Rule Pack Matrix",
+      "Model Monitoring Cockpit",
+      "Model telemetry map",
+      "Review Routing Policies",
+      "QA Queue Summary",
+      "QA Sampling Governance",
+      "Medical Review Queue",
+      "Clinical Signals",
+      "Human Clinical Decision",
+      "Sampling Governance Map",
       "Investigation Package",
-      "Investigation evidence detail",
-      "Agent evidence orchestration",
-      "Guardrail path",
-      "assistive package only",
-      "Agent Run Evidence Trail",
-      "Agent Run Governance Map",
-      "Agent run evidence detail",
-      "Policy check",
-      "Tool allowlist",
-      "Human approval gate",
-      "Evidence audit trail",
-      "Lineage",
-      "Audit Coverage",
+      "Evidence Status",
+      "Assistive Boundary",
+      "Agent investigation blueprint",
     ]) {
-      assertContains(builtText, expectedPanel, "web console operations panel bundle");
+      assertContains(builtText, expectedPanel, "web console active panel bundle");
+    }
+
+    for (const removedLegacySurface of [
+      "ClaimInboxPage",
+      "RuntimeScoringPage",
+      "BootstrapOpsPage",
+      "MlopsWorkspacePage",
+      "FactorFactoryPage",
+      "GovernanceSnapshot",
+      "Training Label Handoff",
+      "Live TPA Demo Run",
+      "Correction Worklist",
+      "Runtime Scoring",
+      "Provider Model Intake",
+      "Leads & Cases",
+      "Discovery Review",
+    ]) {
+      assertNotContains(sourceText, removedLegacySurface, "web console pruned legacy source");
     }
 
     const builtHtml = await readFile(path.join(distDir, "index.html"), "utf8");

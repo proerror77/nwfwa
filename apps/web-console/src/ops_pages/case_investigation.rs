@@ -9,7 +9,7 @@ use crate::state::{use_api_key, ApiState, Language};
 use crate::types::*;
 use serde_json::json;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlInputElement, HtmlTextAreaElement};
+use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 
 // ── Conclusion kind ────────────────────────────────────────────────────────────
@@ -43,16 +43,6 @@ impl Conclusion {
                 "不当支付 (非诈骗)",
             ),
             Conclusion::DocumentationIssue => tr(language, "Documentation issue", "文件问题"),
-        }
-    }
-
-    fn css_class(self) -> &'static str {
-        match self {
-            Conclusion::ConfirmedFwa => "fwa",
-            Conclusion::FalsePositive => "clear",
-            Conclusion::InsufficientEvidence => "more",
-            Conclusion::ImproperPayment => "improper",
-            Conclusion::DocumentationIssue => "doc",
         }
     }
 

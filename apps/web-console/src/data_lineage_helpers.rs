@@ -20,23 +20,6 @@ pub(crate) fn total_field_mappings(datasets: &[DatasetRecord]) -> usize {
     datasets.iter().map(|dataset| dataset.mappings.len()).sum()
 }
 
-pub(crate) fn latest_dataset(datasets: &[DatasetRecord]) -> Option<&DatasetRecord> {
-    datasets
-        .iter()
-        .max_by_key(|dataset| (&dataset.dataset_key, &dataset.dataset_version))
-}
-
-pub(crate) fn dataset_version_label(dataset: &DatasetRecord) -> String {
-    format!("{}:{}", dataset.dataset_key, dataset.dataset_version)
-}
-
-pub(crate) fn health_for_dataset<'a>(
-    health: &'a [DatasetHealthRecord],
-    dataset_id: &str,
-) -> Option<&'a DatasetHealthRecord> {
-    health.iter().find(|item| item.dataset_id == dataset_id)
-}
-
 pub(crate) fn lineage_for<'a>(
     lineage: &'a [ModelEvaluationLineageRecord],
     evaluation_run_id: &str,
