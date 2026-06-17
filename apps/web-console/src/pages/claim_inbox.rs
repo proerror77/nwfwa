@@ -301,28 +301,31 @@ pub fn claim_inbox_page() -> Html {
                 </section>
             </div>
 
-            <section class="panel result-stack live-demo-panel">
-                <div class="section-header">
-                    <div>
-                        <h3>{"Live TPA Demo Run"}</h3>
-                        <p>{"Show one raw TPA packet becoming a scored lead, investigation case, human writeback, and value proof without switching scripts mid-demo."}</p>
+            <details>
+                <summary>{"Live TPA Demo Run — expand for end-to-end demo"}</summary>
+                <section class="panel result-stack live-demo-panel">
+                    <div class="section-header">
+                        <div>
+                            <h3>{"Live TPA Demo Run"}</h3>
+                            <p>{"Show one raw TPA packet becoming a scored lead, investigation case, human writeback, and value proof without switching scripts mid-demo."}</p>
+                        </div>
+                        <span class="status-token strong">{"TPA packet -> risk queue -> case -> value proof"}</span>
                     </div>
-                    <span class="status-token strong">{"TPA packet -> risk queue -> case -> value proof"}</span>
-                </div>
-                <div class="inbox-pipeline live-demo-flow">
-                    {pipeline_step("Receive", "raw TPA packet", "done")}
-                    {pipeline_step("Normalize", "canonical claim", if matches!(&*normalize_state, ApiState::Ready(_)) { "done" } else { "pending" })}
-                    {pipeline_step("Score", "risk + routing", if matches!(&*score_state, ApiState::Ready(_)) { "done" } else { "pending" })}
-                    {pipeline_step("Investigate", "lead + case", if matches!(&*live_demo_state, ApiState::Ready(_)) { "done" } else { "pending" })}
-                    {pipeline_step("Prove Value", "prevented payment", if matches!(&*live_demo_state, ApiState::Ready(_)) { "done" } else { "pending" })}
-                </div>
-                <div class="button-row">
-                    <button onclick={run_live_demo} disabled={matches!(&*live_demo_state, ApiState::Loading)}>
-                        {if matches!(&*live_demo_state, ApiState::Loading) { "Running live demo..." } else { "Run full TPA demo" }}
-                    </button>
-                </div>
-                <LiveTpaDemoView state={(*live_demo_state).clone()} />
-            </section>
+                    <div class="inbox-pipeline live-demo-flow">
+                        {pipeline_step("Receive", "raw TPA packet", "done")}
+                        {pipeline_step("Normalize", "canonical claim", if matches!(&*normalize_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                        {pipeline_step("Score", "risk + routing", if matches!(&*score_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                        {pipeline_step("Investigate", "lead + case", if matches!(&*live_demo_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                        {pipeline_step("Prove Value", "prevented payment", if matches!(&*live_demo_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                    </div>
+                    <div class="button-row">
+                        <button onclick={run_live_demo} disabled={matches!(&*live_demo_state, ApiState::Loading)}>
+                            {if matches!(&*live_demo_state, ApiState::Loading) { "Running live demo..." } else { "Run full TPA demo" }}
+                        </button>
+                    </div>
+                    <LiveTpaDemoView state={(*live_demo_state).clone()} />
+                </section>
+            </details>
 
             <div class="action-bar">
                 <button onclick={normalize.clone()} disabled={matches!(&*normalize_state, ApiState::Loading)}>

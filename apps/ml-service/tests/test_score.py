@@ -211,6 +211,39 @@ def test_score_enforces_artifact_checksum_and_version_lock(monkeypatch, tmp_path
     assert payload["metadata"]["serving_version_lock_status"] == "passed"
 
 
+def test_score_reloads_artifact_when_same_path_checksum_changes(monkeypatch, tmp_path):
+    artifact_path, first_checksum = write_test_artifact(
+        tmp_path,
+        model_version="0.2.0-candidate",
+    )
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
+    reset_model_artifact_cache()
+
+    first_response = client.post(
+        "/score",
+        json=score_payload({"claim_amount_to_limit_ratio": 0.92}),
+    )
+
+    rewritten_path, second_checksum = write_test_artifact(
+        tmp_path,
+        model_version="0.3.0-active",
+    )
+    second_response = client.post(
+        "/score",
+        json=score_payload({"claim_amount_to_limit_ratio": 0.92}),
+    )
+
+    reset_model_artifact_cache()
+    assert rewritten_path == artifact_path
+    assert second_checksum != first_checksum
+    assert first_response.status_code == 200
+    assert first_response.json()["model_version"] == "0.2.0-candidate"
+    assert first_response.json()["metadata"]["artifact_sha256"] == first_checksum
+    assert second_response.status_code == 200
+    assert second_response.json()["model_version"] == "0.3.0-active"
+    assert second_response.json()["metadata"]["artifact_sha256"] == second_checksum
+
+
 def test_score_rejects_locked_model_version_mismatch(monkeypatch, tmp_path):
     artifact_path, _checksum = write_test_artifact(tmp_path)
     monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
