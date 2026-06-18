@@ -268,8 +268,11 @@ pub(super) fn candidate_review_outcome(
     let accepted_for_governance_review = decision == "accepted" && saved_draft_rule_id.is_some();
     CandidateReviewOutcome {
         accepted_for_governance_review,
-        saved_draft_rule_id: accepted_for_governance_review
-            .then(|| saved_draft_rule_id.expect("checked Some")),
+        saved_draft_rule_id: if accepted_for_governance_review {
+            saved_draft_rule_id
+        } else {
+            None
+        },
         active_rule_writeback: false,
     }
 }
