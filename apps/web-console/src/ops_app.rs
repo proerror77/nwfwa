@@ -1,7 +1,7 @@
 use crate::constants::API_KEY_DEFAULT;
 use crate::i18n::tr;
 use crate::ops_pages::*;
-use crate::ops_routing::{ops_page_from_hash, ops_set_hash, OpsPage, PRIMARY_OPS_NAV};
+use crate::ops_routing::{ops_page_from_hash, ops_set_hash, OpsPage, OPS_NAV_GROUPS};
 use crate::pages::*;
 use crate::state::{ApiKeyContext, Language};
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -173,34 +173,38 @@ pub fn ops_app() -> Html {
                     />
                 </div>
 
-                // Primary workflow navigation
+                // Grouped workflow navigation
                 <nav class="module-nav" aria-label="FWA operations">
-                    <div class="nav-section">
-                        <p class="nav-section-title">{tr(language, "Primary workflow", "主工作流")}</p>
-                        {for PRIMARY_OPS_NAV.iter().map(|&page| {
-                            let navigate = navigate.clone();
-                            let is_active = *active == page;
-                            html! {
-                                <button
-                                    class={classes!(is_active.then_some("active"))}
-                                    onclick={Callback::from(move |_| navigate.emit(page))}
-                                >
-                                    <span class={classes!("nav-icon", page.icon_class())}></span>
-                                    <span class="nav-copy">
-                                        <span class="nav-label">
-                                            <span>{page.label_for(language)}</span>
-                                        </span>
-                                        <span class="nav-description">
-                                            <span>{page.description_for(language)}</span>
-                                        </span>
-                                    </span>
-                                </button>
-                            }
-                        })}
-                    </div>
+                    {for OPS_NAV_GROUPS.iter().map(|group| {
+                        html! {
+                            <div class="nav-section">
+                                <p class="nav-section-title">{group.title_for(language)}</p>
+                                {for group.pages().iter().map(|&page| {
+                                    let navigate = navigate.clone();
+                                    let is_active = *active == page;
+                                    html! {
+                                        <button
+                                            class={classes!(is_active.then_some("active"))}
+                                            onclick={Callback::from(move |_| navigate.emit(page))}
+                                        >
+                                            <span class={classes!("nav-icon", page.icon_class())}></span>
+                                            <span class="nav-copy">
+                                                <span class="nav-label">
+                                                    <span>{page.label_for(language)}</span>
+                                                </span>
+                                                <span class="nav-description">
+                                                    <span>{page.description_for(language)}</span>
+                                                </span>
+                                            </span>
+                                        </button>
+                                    }
+                                })}
+                            </div>
+                        }
+                    })}
                     <div class="sidebar-workflow-note">
                         <strong>{tr(language, "Workflow path", "页面路径")}</strong>
-                        <span>{tr(language, "Dashboard prioritizes work, Claims Queue triages intake, Investigation Workbench records recommendations, Evidence Center provides context, and Governance handles second-line controls.", "仪表盘看优先级，理赔队列做分流，调查工作台形成建议，证据中心查上下文，治理页处理二线配置。")}</span>
+                        <span>{tr(language, "Daily Ops prioritizes intake, Investigation collects evidence and recommendations, Rules & Models governs scoring inputs, and Governance handles second-line controls.", "日常运营处理进件优先级，调查工具收集证据并形成建议，规则与模型管理评分输入，治理质控处理二线控制。")}</span>
                     </div>
                 </nav>
 

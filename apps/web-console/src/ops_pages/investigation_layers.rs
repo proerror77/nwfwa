@@ -65,38 +65,6 @@ fn default_min_evidence(scheme: &str) -> Vec<&'static str> {
     }
 }
 
-// ── Supplement-request button (needs local state → sub-component) ──────────────
-
-#[derive(Properties, PartialEq)]
-struct SupplementRequestButtonProps {
-    language: Language,
-}
-
-#[function_component(SupplementRequestButton)]
-fn supplement_request_button(props: &SupplementRequestButtonProps) -> Html {
-    let sent = use_state(|| false);
-    if *sent {
-        html! {
-            <div style="padding:8px 12px;background:#e8f7ee;border:1px solid #1a7a3c;border-radius:4px;font-size:0.82rem;color:#1a7a3c;">
-                {tr(props.language, "Evidence request sent (mock)", "补件通知已发送（Mock）")}
-            </div>
-        }
-    } else {
-        let on_click = {
-            let sent = sent.clone();
-            Callback::from(move |_: MouseEvent| sent.set(true))
-        };
-        html! {
-            <button
-                style="background:var(--blue);color:var(--graphite);border:none;border-radius:6px;padding:8px 16px;font-size:0.85rem;cursor:pointer;font-weight:600;"
-                onclick={on_click}
-            >
-                {tr(props.language, "Send evidence request", "发补件请求")}
-            </button>
-        }
-    }
-}
-
 // ── Layer 1: Document Completeness + Amount Reasonableness ────────────────────
 
 pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: Language) -> Html {
@@ -260,7 +228,11 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: 
 
             // Supplement request
             { if any_missing {
-                html! { <SupplementRequestButton language={language} /> }
+                html! {
+                    <div style="padding:8px 12px;background:var(--amber-soft);border:1px solid var(--amber);border-radius:4px;font-size:0.82rem;color:var(--graphite);">
+                        {tr(language, "Use the Recommendation panel to queue an evidence request through the governed lead triage path.", "请在右侧调查建议面板选择“需补充材料”，通过受控线索分流路径提交补件请求。")}
+                    </div>
+                }
             } else { html! {} } }
         </div>
     }

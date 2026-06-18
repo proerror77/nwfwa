@@ -1,12 +1,18 @@
-use crate::api::*;
-use crate::formatting::*;
+use crate::api::{
+    get_leads_cases_snapshot, load_investigation_context, post_investigation_result,
+    post_triage_lead,
+};
+use crate::formatting::{business_label, localized_business_text};
 use crate::i18n::tr;
 use crate::ops_pages::investigation_layers::{
     layer_ai_summary, layer_association_network, layer_document_completeness,
     layer_member_behavior, layer_provider_analysis, layer_risk_signals, layer_similar_cases,
 };
 use crate::state::{use_api_key, ApiState, Language};
-use crate::types::*;
+use crate::types::{
+    CaseRecord, InvestigationContext, LeadRecord, LeadsCasesSnapshot, PilotWritebackResponse,
+    TriageLeadRecord,
+};
 use serde_json::json;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlTextAreaElement;
@@ -343,7 +349,7 @@ fn conclusion_panel(
     case: Option<&CaseRecord>,
     selected_conclusion: &UseStateHandle<Option<Conclusion>>,
     supplement_docs: &UseStateHandle<Vec<String>>,
-    supplement_sent: &UseStateHandle<bool>,
+    supplement_state: &UseStateHandle<ApiState<TriageLeadRecord>>,
     notes: &UseStateHandle<String>,
     evidence_refs: &UseStateHandle<String>,
     write_state: &UseStateHandle<ApiState<PilotWritebackResponse>>,
@@ -353,7 +359,9 @@ fn conclusion_panel(
     language: Language,
 ) -> Html {
     let loading = matches!(&**write_state, ApiState::Loading);
+    let supplement_loading = matches!(&**supplement_state, ApiState::Loading);
     let shows_supplement = **selected_conclusion == Some(Conclusion::InsufficientEvidence);
+    let has_supplement_docs = !supplement_docs.is_empty();
 
     html! {
         <div style="width:340px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;">
@@ -457,21 +465,49 @@ fn conclusion_panel(
                                             }
                                         }) }
                                     </div>
-                                    { if **supplement_sent {
-                                        html! {
+                                    { match &**supplement_state {
+                                        ApiState::Ready(record) => html! {
                                             <div style="padding:8px 12px;background:#e8f7ee;border:1px solid #1a7a3c;border-radius:4px;font-size:0.82rem;color:#1a7a3c;">
-                                                {tr(language, "Evidence request sent (mock)", "补件通知已发送（Mock）")}
+                                                <strong style="display:block;margin-bottom:2px;">{tr(language, "Evidence request queued", "补件请求已入队")}</strong>
+                                                {match language {
+                                                    Language::En => format!("Lead {} status: {}", record.lead.lead_id, business_label(&record.lead.status)),
+                                                    Language::Zh => format!("线索 {} 状态：{}", record.lead.lead_id, business_label(&record.lead.status)),
+                                                }}
                                             </div>
-                                        }
-                                    } else {
-                                        html! {
+                                        },
+                                        ApiState::Failed(err) => html! {
+                                            <>
+                                                <div style="padding:8px 12px;background:var(--red-soft);border:1px solid var(--red);border-radius:4px;font-size:0.82rem;color:var(--red);">
+                                                    <strong style="display:block;margin-bottom:2px;">{tr(language, "Evidence request failed", "补件请求失败")}</strong>
+                                                    {err}
+                                                </div>
+                                                <button
+                                                    style="background:var(--blue);color:var(--graphite);border:none;border-radius:6px;padding:8px 16px;font-size:0.83rem;cursor:pointer;font-weight:600;width:100%;"
+                                                    onclick={on_send_supplement.clone()}
+                                                    disabled={supplement_loading || !has_supplement_docs}
+                                                >
+                                                    {tr(language, "Retry evidence request", "重试补件请求")}
+                                                </button>
+                                            </>
+                                        },
+                                        _ => html! {
                                             <button
-                                                style="background:var(--blue);color:var(--graphite);border:none;border-radius:6px;padding:8px 16px;font-size:0.83rem;cursor:pointer;font-weight:600;width:100%;"
-                                                onclick={on_send_supplement}
+                                                style={format!(
+                                                    "background:{};color:var(--graphite);border:none;border-radius:6px;padding:8px 16px;font-size:0.83rem;cursor:pointer;font-weight:600;width:100%;",
+                                                    if supplement_loading || !has_supplement_docs { "var(--surface-strong)" } else { "var(--blue)" }
+                                                )}
+                                                onclick={on_send_supplement.clone()}
+                                                disabled={supplement_loading || !has_supplement_docs}
                                             >
-                                                {tr(language, "Send evidence request", "发送补件通知")}
+                                                {if supplement_loading {
+                                                    tr(language, "Queueing evidence request...", "补件请求入队中...")
+                                                } else if has_supplement_docs {
+                                                    tr(language, "Send evidence request", "发送补件通知")
+                                                } else {
+                                                    tr(language, "Select evidence to request", "请选择需补充资料")
+                                                }}
                                             </button>
-                                        }
+                                        },
                                     } }
                                 </div>
                             }
@@ -606,7 +642,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
     // Conclusion form
     let selected_conclusion = use_state(|| Option::<Conclusion>::None);
     let supplement_docs = use_state(|| Vec::<String>::new());
-    let supplement_sent = use_state(|| false);
+    let supplement_state = use_state(|| ApiState::<TriageLeadRecord>::Idle);
     let notes = use_state(String::new);
     let evidence_refs = use_state(String::new);
     let write_state = use_state(|| ApiState::<PilotWritebackResponse>::Idle);
@@ -681,7 +717,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
         let ctx_state = ctx_state.clone();
         let selected_conclusion = selected_conclusion.clone();
         let supplement_docs = supplement_docs.clone();
-        let supplement_sent = supplement_sent.clone();
+        let supplement_state = supplement_state.clone();
         let notes = notes.clone();
         let evidence_refs = evidence_refs.clone();
         let confirm_msg = confirm_msg.clone();
@@ -697,7 +733,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
             // Reset form state
             selected_conclusion.set(None);
             supplement_docs.set(vec![]);
-            supplement_sent.set(false);
+            supplement_state.set(ApiState::Idle);
             notes.set(String::new());
             confirm_msg.set(None);
             write_state.set(ApiState::Idle);
@@ -734,11 +770,62 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
         })
     };
 
-    // Send supplement notification
+    // Queue an evidence request through the governed lead triage write path.
     let on_send_supplement = {
-        let supplement_sent = supplement_sent.clone();
+        let api_key = api_key.clone();
+        let selected_case = selected_case.clone();
+        let supplement_docs = supplement_docs.clone();
+        let supplement_state = supplement_state.clone();
+        let evidence_refs = evidence_refs.clone();
+        let snapshot_state = snapshot_state.clone();
         Callback::from(move |_: MouseEvent| {
-            supplement_sent.set(true);
+            let Some(case) = &selected_case else {
+                return;
+            };
+            if matches!(*supplement_state, ApiState::Loading) {
+                return;
+            }
+            let docs = (*supplement_docs).clone();
+            if docs.is_empty() {
+                return;
+            }
+            let mut refs: Vec<String> = (*evidence_refs)
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if refs.is_empty() {
+                refs.push(format!("claims:{}", case.claim_id));
+            }
+            let payload = json!({
+                "decision": "request_evidence",
+                "assignee": "evidence-coordinator",
+                "reviewer": "investigator-1",
+                "priority": case.priority.clone(),
+                "notes": format!(
+                    "Investigation Workbench: additional evidence requested before recommendation. requested_docs={}",
+                    docs.join(",")
+                ),
+                "evidence_refs": refs,
+            });
+
+            let api_key = (*api_key).clone();
+            let lead_id = case.lead_id.clone();
+            let supplement_state = supplement_state.clone();
+            let snapshot_state = snapshot_state.clone();
+            supplement_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match post_triage_lead(api_key.clone(), lead_id, payload).await {
+                    Ok(record) => {
+                        supplement_state.set(ApiState::Ready(record));
+                        snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => supplement_state.set(ApiState::Failed(error)),
+                }
+            });
         })
     };
 
@@ -929,7 +1016,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                     selected_case.as_ref(),
                     &selected_conclusion,
                     &supplement_docs,
-                    &supplement_sent,
+                    &supplement_state,
                     &notes,
                     &evidence_refs,
                     &write_state,
