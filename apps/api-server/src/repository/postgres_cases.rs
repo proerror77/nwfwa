@@ -133,7 +133,7 @@ pub(super) async fn update_case_status(
     .await?;
     let case = load_case_in_tx(&mut tx, case_id, input.customer_scope_id.as_deref())
         .await?
-        .expect("case should exist after status update");
+        .ok_or_else(|| anyhow::anyhow!("case {} not found after status update", case_id))?;
 
     let audit_id = AuditEventId::new().to_string();
     insert_audit_event(
