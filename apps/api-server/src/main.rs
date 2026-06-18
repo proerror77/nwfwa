@@ -1,7 +1,7 @@
 use api_server::{
     app::{build_app_with_parts, configured_model_scorer},
     config::AppConfig,
-    repository::{PostgresScoringRepository, SharedRepository},
+    repository::{InMemoryScoringRepository, PostgresScoringRepository, SharedRepository},
 };
 use axum::{extract::DefaultBodyLimit, Router};
 use std::sync::Arc;
@@ -11,8 +11,7 @@ use tower::limit::ConcurrencyLimitLayer;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().init();
     let config = AppConfig::from_env();
-    let repository: SharedRepository =
-        Arc::new(PostgresScoringRepository::connect(&config.database_url).await?);
+    let repository = configured_repository(&config).await?;
     let scorer = configured_model_scorer(&config)?;
     let app = apply_runtime_limits(build_app_with_parts(config, scorer, repository));
     let bind_addr = std::env::var("FWA_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
@@ -20,6 +19,24 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("api-server listening on {}", bind_addr);
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+async fn configured_repository(config: &AppConfig) -> anyhow::Result<SharedRepository> {
+    match std::env::var("FWA_REPOSITORY_KIND")
+        .unwrap_or_else(|_| "postgres".into())
+        .as_str()
+    {
+        "postgres" => Ok(Arc::new(
+            PostgresScoringRepository::connect(&config.database_url).await?,
+        )),
+        "in_memory" => {
+            tracing::warn!("api-server using in-memory repository; data is not durable");
+            Ok(InMemoryScoringRepository::shared())
+        }
+        other => {
+            anyhow::bail!("unsupported FWA_REPOSITORY_KIND={other}; expected postgres or in_memory")
+        }
+    }
 }
 
 fn apply_runtime_limits(app: Router) -> Router {
