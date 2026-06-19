@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{RuleBacktestRecord, RuleShadowRunRecord},
 };
@@ -199,9 +199,10 @@ fn backtest_evidence_refs(request: &RuleBacktestRequest) -> Vec<String> {
 
 pub async fn backtest_rule(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<RuleBacktestRequest>,
 ) -> Result<Json<RuleBacktestResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:rules:backtest")?;
     let response = build_rule_backtest_response(&request)?;
     let record = state
         .repository
