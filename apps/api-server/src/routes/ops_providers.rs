@@ -553,9 +553,10 @@ pub async fn anomaly_review_queue(
 
 pub async fn review_anomaly_candidate(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<ReviewAnomalyCandidateRequest>,
 ) -> Result<Json<ReviewAnomalyCandidateResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:anomaly:review")?;
     validate_anomaly_candidate_review(&request)?;
     let response = ReviewAnomalyCandidateResponse {
         candidate_kind: request.candidate_kind.clone(),
