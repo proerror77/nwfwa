@@ -65,7 +65,8 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
 
     let clinical = &body["clinical_evidence"];
     assert_eq!(clinical["review_required"], true);
-    assert_eq!(clinical["review_route"], "medical_review");
+    // High-risk provider + missing medical_record → escalated to fraud investigation.
+    assert_eq!(clinical["review_route"], "fraud_investigation_review");
     assert_eq!(clinical["evidence_status"], "missing_required_evidence");
     assert_eq!(body["decision_outcome"], "pending_evidence");
     assert_eq!(body["decision_authority"], "clinical_policy_rule");
@@ -134,7 +135,7 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
         .expect("audit history should include scoring.completed");
     assert_eq!(
         scoring_event["payload"]["clinical_evidence"]["review_route"],
-        "medical_review"
+        "fraud_investigation_review"
     );
     assert_eq!(
         scoring_event["payload"]["scores"]["medical_reasonableness_score"],

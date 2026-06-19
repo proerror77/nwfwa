@@ -13,11 +13,8 @@ use super::ops_rules_validation::{
     validate_rule_candidate,
 };
 use crate::{
-    app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
-    error::ApiError,
-    repository::PersistedAuditEvent,
-    routes::pii,
+    app::AppState, auth::AuthenticatedApiPrincipal, error::ApiError,
+    repository::PersistedAuditEvent, routes::pii,
 };
 use axum::{extract::State, http::StatusCode, Json};
 use fwa_core::{AuditEventId, RecommendedAction, RuleActionClass};
@@ -462,9 +459,10 @@ fn round_float(value: f64) -> f64 {
 
 pub async fn discover_rules(
     State(_state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<RuleDiscoveryRequest>,
 ) -> Result<Json<RuleDiscoveryResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:rules:read")?;
     let min_support = request.min_support.unwrap_or(1);
     let mining_samples =
         discovery_mining_samples(&request).map_err(bad_request("RULE_DISCOVERY_DATASET_FAILED"))?;

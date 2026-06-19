@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{
         CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, ModelDatasetRecord,
@@ -78,8 +78,9 @@ pub async fn register_dataset(
 
 pub async fn list_datasets(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<DatasetListResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:datasets:read")?;
     let datasets = state
         .repository
         .list_datasets()
@@ -91,8 +92,9 @@ pub async fn list_datasets(
 
 pub async fn factor_readiness(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<FactorReadinessResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:datasets:read")?;
     let datasets = state
         .repository
         .list_datasets()
@@ -103,9 +105,10 @@ pub async fn factor_readiness(
 
 pub async fn get_dataset(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(dataset_id): Path<String>,
 ) -> Result<Json<DatasetRecord>, ApiError> {
+    let _ = require_permission(principal, "ops:datasets:read")?;
     let dataset = state
         .repository
         .get_dataset(&dataset_id)
@@ -310,9 +313,10 @@ pub async fn register_model_evaluation(
 
 pub async fn get_model_evaluation(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(evaluation_run_id): Path<String>,
 ) -> Result<Json<ModelEvaluationResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:datasets:read")?;
     let evaluation = state
         .repository
         .get_model_evaluation(&evaluation_run_id)
@@ -330,8 +334,9 @@ pub async fn get_model_evaluation(
 
 pub async fn list_model_evaluations(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<ModelEvaluationListResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:datasets:read")?;
     let evaluations = state
         .repository
         .list_model_evaluations()

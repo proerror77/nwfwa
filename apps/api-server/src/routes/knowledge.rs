@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{
         normalize_scheme_family, scheme_family_from_knowledge_signals, AuditEventListFilter,
@@ -57,8 +57,9 @@ pub struct SimilarCaseSearchResponse {
 
 pub async fn list_cases(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<KnowledgeCaseListResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:knowledge:read")?;
     let cases = state
         .repository
         .list_knowledge_cases()

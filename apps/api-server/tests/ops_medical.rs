@@ -110,7 +110,8 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
     let items = queue["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["claim_id"], "CLM-MEDICAL-QUEUE-1");
-    assert_eq!(items[0]["review_route"], "medical_review");
+    // High-risk provider + missing medical_record → fraud_investigation_review
+    assert_eq!(items[0]["review_route"], "fraud_investigation_review");
     assert_eq!(items[0]["evidence_status"], "missing_required_evidence");
     assert_eq!(items[0]["medical_reasonableness_score"], 100);
     assert_eq!(items[0]["first_item_code"], "IMG-900");

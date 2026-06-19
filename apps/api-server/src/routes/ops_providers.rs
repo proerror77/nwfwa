@@ -31,8 +31,9 @@ use validation::{
 
 pub async fn provider_risk_summary(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<ProviderRiskSummaryRecord>, ApiError> {
+    let _ = require_permission(principal, "ops:providers:read")?;
     let summary = state
         .repository
         .provider_risk_summary()

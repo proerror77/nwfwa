@@ -32,8 +32,8 @@ pub(super) fn test_config_with_rule_actors() -> AppConfig {
         api_key: "dev-secret".into(),
         api_key_principals: vec![
             "dev-secret|test-operator|fwa_operator|tpa-demo|demo-customer|ops:*,tpa:*".into(),
-            "submit-secret|rule-submitter|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review".into(),
-            "approve-secret|rule-approver|fwa_operator|ops-studio|demo-customer|ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review".into(),
+            "submit-secret|rule-submitter|fwa_operator|ops-studio|demo-customer|ops:rules:read,ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review".into(),
+            "approve-secret|rule-approver|fwa_operator|ops-studio|demo-customer|ops:rules:read,ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review".into(),
         ],
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),

@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{PersistedAuditEvent, RoutingPolicyRecord},
 };
@@ -56,8 +56,9 @@ pub struct RoutingPolicyLifecycleRequest {
 
 pub async fn list_routing_policies(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<RoutingPolicyListResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:routing:read")?;
     let policies = state
         .repository
         .list_routing_policies()
