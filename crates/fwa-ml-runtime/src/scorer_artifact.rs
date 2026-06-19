@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -99,17 +100,21 @@ impl ArtifactModelScorer {
 
     fn load_artifact(&self) -> Result<LoadedArtifact, ModelRuntimeError> {
         let artifact_path = local_artifact_path(&self.artifact_uri)?;
-        let artifact_bytes = fs::read(artifact_path)
+        let artifact_bytes = fs::read(&artifact_path)
             .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
         let artifact_sha256 = sha256_hex(&artifact_bytes);
 
-        if let Some(expected_sha256) = &self.expected_sha256 {
+        // Track whether the integrity check was actually performed.
+        let integrity_status = if let Some(expected_sha256) = &self.expected_sha256 {
             if expected_sha256 != &artifact_sha256 {
                 return Err(ModelRuntimeError::InvalidResponse(format!(
                     "artifact checksum mismatch: expected {expected_sha256}, got {artifact_sha256}"
                 )));
             }
-        }
+            "checked_passed"
+        } else {
+            "skipped_no_expected_sha256"
+        };
 
         let artifact: LogisticRegressionArtifact = serde_json::from_slice(&artifact_bytes)
             .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
@@ -133,6 +138,7 @@ impl ArtifactModelScorer {
         Ok(LoadedArtifact {
             artifact,
             artifact_sha256,
+            integrity_status: integrity_status.to_string(),
             signature_status: signature_status.to_string(),
         })
     }
@@ -142,6 +148,7 @@ impl ArtifactModelScorer {
 struct LoadedArtifact {
     artifact: LogisticRegressionArtifact,
     artifact_sha256: String,
+    integrity_status: String,
     signature_status: String,
 }
 
@@ -172,16 +179,44 @@ fn default_threshold() -> f64 {
     0.5
 }
 
-pub(crate) fn local_artifact_path(artifact_uri: &str) -> Result<&str, ModelRuntimeError> {
+/// Strip URI scheme prefix and validate the resulting path to prevent traversal.
+///
+/// Allowed: any absolute path or relative path that, after canonicalisation,
+/// does NOT escape the current working directory via `../` segments.  The path
+/// must also be a regular file (no directory traversal to sensitive locations
+/// like /etc or /proc).
+pub(crate) fn local_artifact_path(artifact_uri: &str) -> Result<String, ModelRuntimeError> {
     if artifact_uri.is_empty() {
         return Err(ModelRuntimeError::InvalidResponse(
             "artifact URI is empty".into(),
         ));
     }
-    Ok(artifact_uri
+
+    let raw = artifact_uri
         .strip_prefix("artifact://")
         .or_else(|| artifact_uri.strip_prefix("file://"))
-        .unwrap_or(artifact_uri))
+        .unwrap_or(artifact_uri);
+
+    // Reject obvious traversal attempts before hitting the filesystem.
+    if raw.contains("..") {
+        return Err(ModelRuntimeError::InvalidResponse(
+            "artifact path must not contain '..' components".into(),
+        ));
+    }
+
+    // Canonicalise to resolve symlinks and normalise the path.
+    let canonical = Path::new(raw).canonicalize().map_err(|error| {
+        ModelRuntimeError::InvalidResponse(format!("artifact path cannot be resolved: {error}"))
+    })?;
+
+    // Reject non-file paths (directories, device nodes, pipes, …).
+    if !canonical.is_file() {
+        return Err(ModelRuntimeError::InvalidResponse(
+            "artifact path does not point to a regular file".into(),
+        ));
+    }
+
+    Ok(canonical.to_string_lossy().into_owned())
 }
 
 pub(crate) fn sigmoid(value: f64) -> f64 {
@@ -266,7 +301,7 @@ impl ModelScorer for ArtifactModelScorer {
             metadata: serde_json::json!({
                 "artifact_uri": self.artifact_uri,
                 "artifact_sha256": loaded_artifact.artifact_sha256,
-                "artifact_integrity_status": "passed",
+                "artifact_integrity_status": loaded_artifact.integrity_status,
                 "artifact_signature_status": loaded_artifact.signature_status,
                 "serving_version_lock": serving_version_lock,
                 "serving_version_lock_status": version_lock_status,

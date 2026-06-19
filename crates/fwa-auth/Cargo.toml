@@ -6,4 +6,5 @@ publish.workspace = true
 
 [dependencies]
 fwa-core = { path = "../fwa-core" }
+subtle = "2"
 thiserror.workspace = true

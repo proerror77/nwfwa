@@ -1325,6 +1325,7 @@ name = "fwa-auth"
 version = "0.1.0"
 dependencies = [
  "fwa-core",
+ "subtle",
  "thiserror",
 ]
 

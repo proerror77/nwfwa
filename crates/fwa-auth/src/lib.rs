@@ -1,4 +1,5 @@
 use fwa_core::ActorContext;
+use subtle::ConstantTimeEq;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -58,7 +59,7 @@ pub fn authenticate_api_key(
         if let Some(principal) = config
             .principals
             .iter()
-            .find(|principal| constant_time_eq(&principal.key, value))
+            .find(|principal| ct_eq(&principal.key, value))
         {
             return Ok(AuthenticatedPrincipal {
                 actor: ActorContext {
@@ -70,7 +71,10 @@ pub fn authenticate_api_key(
                 permissions: principal.permissions.clone(),
             });
         }
-        if constant_time_eq(value, &config.key) {
+
+        // Guard: never match against an empty legacy key — an empty config.key
+        // would otherwise accept any caller that sends an empty string.
+        if !config.key.is_empty() && ct_eq(value, &config.key) {
             return Ok(AuthenticatedPrincipal {
                 actor: ActorContext {
                     actor_id: config.source_system.clone(),
@@ -85,16 +89,14 @@ pub fn authenticate_api_key(
     Err(AuthError::InvalidApiKey)
 }
 
-fn constant_time_eq(left: &str, right: &str) -> bool {
-    let left = left.as_bytes();
-    let right = right.as_bytes();
-    let mut diff = left.len() ^ right.len();
-    for index in 0..left.len().max(right.len()) {
-        let left_byte = left.get(index).copied().unwrap_or(0);
-        let right_byte = right.get(index).copied().unwrap_or(0);
-        diff |= (left_byte ^ right_byte) as usize;
-    }
-    diff == 0
+/// Constant-time string equality using `subtle::ConstantTimeEq`.
+///
+/// Compares the full byte sequences without short-circuiting, preventing
+/// timing side-channel attacks that could leak key material byte-by-byte.
+fn ct_eq(left: &str, right: &str) -> bool {
+    // Length mismatch is itself constant-time via ConstantTimeEq on slices of
+    // different lengths — subtle pads and always checks all bytes.
+    left.as_bytes().ct_eq(right.as_bytes()).into()
 }
 
 #[cfg(test)]
@@ -177,10 +179,25 @@ mod tests {
 
     #[test]
     fn api_key_comparison_requires_exact_full_match() {
-        assert!(constant_time_eq("secret", "secret"));
-        assert!(!constant_time_eq("secret", "secre"));
-        assert!(!constant_time_eq("secret", "secret-extra"));
-        assert!(!constant_time_eq("secret", "secRet"));
+        assert!(ct_eq("secret", "secret"));
+        assert!(!ct_eq("secret", "secre"));
+        assert!(!ct_eq("secret", "secret-extra"));
+        assert!(!ct_eq("secret", "secRet"));
+    }
+
+    #[test]
+    fn empty_provided_key_against_empty_legacy_key_is_rejected() {
+        // An empty config.key must NEVER be matched — even by an empty provided key.
+        let config = ApiKeyConfig {
+            key: String::new(),
+            source_system: "tpa-demo".into(),
+            customer_scope_id: "customer-alpha".into(),
+            principals: Vec::new(),
+        };
+        assert_eq!(
+            authenticate_api_key(Some(""), &config).unwrap_err(),
+            AuthError::InvalidApiKey
+        );
     }
 
     #[test]

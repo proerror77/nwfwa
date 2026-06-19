@@ -201,7 +201,7 @@ pub(crate) fn score_onnx_manifest(
         Entry::Occupied(entry) => entry.into_mut(),
         Entry::Vacant(entry) => {
             cache_status = "miss";
-            entry.insert(build_cached_onnx_session(artifact_path)?)
+            entry.insert(build_cached_onnx_session(&artifact_path)?)
         }
     };
     let input_name = cached.input_name.clone();
@@ -229,7 +229,8 @@ pub(crate) fn score_onnx_manifest(
         metadata: serde_json::json!({
             "artifact_uri": manifest.artifact_uri,
             "artifact_sha256": manifest.artifact_sha256,
-            "artifact_integrity_status": "passed",
+            // SHA-256 was verified by validate_onnx_artifact above; status is accurate.
+            "artifact_integrity_status": "checked_passed",
             "artifact_signature_status": signature_status,
             "serving_manifest_uri": manifest_uri,
             "serving_manifest_status": "passed",
