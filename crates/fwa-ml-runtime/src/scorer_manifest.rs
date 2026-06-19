@@ -9,15 +9,16 @@ use ort::{
 use serde::Deserialize;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct ServingManifestModelScorer {
     pub(crate) manifest_uri: String,
     pub(crate) signing_key: Option<String>,
-    pub(crate) manifest_cache: Arc<Mutex<Option<Arc<ServingManifest>>>>,
-    pub(crate) onnx_sessions: Arc<Mutex<BTreeMap<String, CachedOnnxSession>>>,
+    pub(crate) manifest_cache: Arc<RwLock<Option<Arc<ServingManifest>>>>,
+    pub(crate) onnx_sessions: Arc<RwLock<BTreeMap<String, CachedOnnxSession>>>,
 }
 
 impl std::fmt::Debug for ServingManifestModelScorer {
@@ -57,8 +58,8 @@ impl ServingManifestModelScorer {
         Self {
             manifest_uri: manifest_uri.into(),
             signing_key: None,
-            manifest_cache: Arc::new(Mutex::new(None)),
-            onnx_sessions: Arc::new(Mutex::new(BTreeMap::new())),
+            manifest_cache: Arc::new(RwLock::new(None)),
+            onnx_sessions: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
@@ -71,29 +72,24 @@ impl ServingManifestModelScorer {
         Self {
             manifest_uri: manifest_uri.into(),
             signing_key: signing_key.filter(|value| !value.trim().is_empty()),
-            manifest_cache: Arc::new(Mutex::new(None)),
-            onnx_sessions: Arc::new(Mutex::new(BTreeMap::new())),
+            manifest_cache: Arc::new(RwLock::new(None)),
+            onnx_sessions: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
-    fn loaded_manifest(&self) -> Result<Arc<ServingManifest>, ModelRuntimeError> {
-        if let Some(manifest) = self.manifest_cache_guard().clone() {
+    async fn loaded_manifest(&self) -> Result<Arc<ServingManifest>, ModelRuntimeError> {
+        // Fast path: concurrent readers don't block each other post-warmup.
+        if let Some(manifest) = self.manifest_cache.read().await.clone() {
             return Ok(manifest);
         }
-
+        // Slow path: write lock with double-check.
+        let mut cache = self.manifest_cache.write().await;
+        if let Some(manifest) = cache.clone() {
+            return Ok(manifest);
+        }
         let manifest = Arc::new(self.load_manifest()?);
-        *self.manifest_cache_guard() = Some(manifest.clone());
+        *cache = Some(manifest.clone());
         Ok(manifest)
-    }
-
-    fn manifest_cache_guard(&self) -> MutexGuard<'_, Option<Arc<ServingManifest>>> {
-        self.manifest_cache.lock().unwrap_or_else(|error| {
-            tracing::error!(
-                error = %error,
-                "serving manifest cache lock poisoned; recovering"
-            );
-            error.into_inner()
-        })
     }
 
     fn load_manifest(&self) -> Result<ServingManifest, ModelRuntimeError> {
@@ -108,7 +104,7 @@ impl ServingManifestModelScorer {
 #[async_trait]
 impl ModelScorer for ServingManifestModelScorer {
     async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
-        let manifest = self.loaded_manifest()?;
+        let manifest = self.loaded_manifest().await?;
         validate_serving_manifest(&manifest, &request)?;
         validate_manifest_feature_order(&manifest, &request)?;
 
@@ -138,6 +134,7 @@ impl ModelScorer for ServingManifestModelScorer {
                     self.signing_key.as_deref(),
                     &self.onnx_sessions,
                 )
+                .await
             }
             "xgboost_classifier" | "lightgbm_classifier" => {
                 Err(ModelRuntimeError::InvalidResponse(format!(
@@ -152,12 +149,12 @@ impl ModelScorer for ServingManifestModelScorer {
     }
 }
 
-pub(crate) fn score_onnx_manifest(
+pub(crate) async fn score_onnx_manifest(
     manifest: &ServingManifest,
     request: &ModelScoreRequest,
     manifest_uri: &str,
     signing_key: Option<&str>,
-    onnx_sessions: &Mutex<BTreeMap<String, CachedOnnxSession>>,
+    onnx_sessions: &RwLock<BTreeMap<String, CachedOnnxSession>>,
 ) -> Result<ModelScore, ModelRuntimeError> {
     let started_at = Instant::now();
     validate_onnx_artifact(manifest)?;
@@ -189,13 +186,9 @@ pub(crate) fn score_onnx_manifest(
     let input_tensor = Tensor::from_array(([1usize, feature_count], feature_values))
         .map_err(onnx_runtime_error)?;
     let cache_key = onnx_session_cache_key(manifest);
-    let mut sessions = onnx_sessions.lock().unwrap_or_else(|error| {
-        tracing::error!(
-            error = %error,
-            "ONNX session cache lock poisoned; recovering"
-        );
-        error.into_inner()
-    });
+
+    // Acquire write lock for potential session insertion (double-check inside).
+    let mut sessions = onnx_sessions.write().await;
     let mut cache_status = "hit";
     let cached = match sessions.entry(cache_key) {
         Entry::Occupied(entry) => entry.into_mut(),
@@ -209,8 +202,14 @@ pub(crate) fn score_onnx_manifest(
         .session
         .run(ort::inputs![input_name.as_str() => input_tensor])
         .map_err(onnx_runtime_error)?;
-    let (probability, output_name) = extract_positive_probability(&outputs)?;
-    let probability = normalize_probability(probability)?;
+    // Extract the probability value while the session (and lock guard) is still
+    // in scope, then release the lock.
+    let (probability_raw, output_name) = extract_positive_probability(&outputs)?;
+    let probability_raw = normalize_probability(probability_raw)?;
+    let _ = cache_status;
+    drop(outputs);
+    drop(sessions);
+    let probability = probability_raw;
     let score = (probability * 100.0).round().clamp(0.0, 100.0) as u8;
 
     Ok(ModelScore {

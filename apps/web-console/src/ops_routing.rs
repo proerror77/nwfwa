@@ -188,6 +188,18 @@ impl OpsPage {
             Language::Zh => self.description(),
         }
     }
+
+    /// Resolve a page by its English label string.
+    ///
+    /// Used by cross-page navigation callbacks (e.g. `navigate_by_name` in
+    /// `OpsApp`) so that label→page dispatch is defined in one place and a
+    /// typo produces `None` rather than a silent fallback to Dashboard.
+    pub(crate) fn from_label(label: &str) -> Option<Self> {
+        ALL_OPS_PAGES
+            .iter()
+            .copied()
+            .find(|p| p.label_en() == label)
+    }
 }
 
 pub(crate) struct OpsNavGroup {
@@ -284,7 +296,9 @@ pub(crate) const ALL_OPS_PAGES: &[OpsPage] = &[
 ];
 
 pub(crate) fn ops_page_from_hash(hash: &str) -> OpsPage {
+    // Strip leading '#' and any query-string sub-state (`?key=value`).
     let slug = hash.trim_start_matches('#');
+    let slug = slug.split('?').next().unwrap_or(slug);
     ALL_OPS_PAGES
         .iter()
         .copied()
@@ -292,8 +306,40 @@ pub(crate) fn ops_page_from_hash(hash: &str) -> OpsPage {
         .unwrap_or(OpsPage::Dashboard)
 }
 
+/// Parse a deep-link sub-id from the hash fragment.
+///
+/// Format: `#<page-slug>?id=<sub-id>`, e.g. `#review?id=CASE-001`
+///
+/// Returns `Some(sub_id)` when a `?id=` parameter is present in the hash.
+pub(crate) fn ops_sub_id_from_hash(hash: &str) -> Option<String> {
+    let hash = hash.trim_start_matches('#');
+    let query = hash.split_once('?')?.1;
+    for pair in query.split('&') {
+        if let Some(value) = pair.strip_prefix("id=") {
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
 pub(crate) fn ops_set_hash(page: OpsPage) {
     if let Some(window) = web_sys::window() {
         let _ = window.location().set_hash(page.slug());
+    }
+}
+
+/// Set the URL hash with a deep-link sub-id, e.g. `#review?id=CASE-001`.
+///
+/// Used to make specific case/lead URLs shareable between operators.
+pub(crate) fn ops_set_hash_with_id(page: OpsPage, sub_id: &str) {
+    if let Some(window) = web_sys::window() {
+        let hash = if sub_id.is_empty() {
+            page.slug().to_string()
+        } else {
+            format!("{}?id={}", page.slug(), sub_id)
+        };
+        let _ = window.location().set_hash(&hash);
     }
 }

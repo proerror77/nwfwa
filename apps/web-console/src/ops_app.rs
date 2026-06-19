@@ -1,7 +1,9 @@
 use crate::constants::API_KEY_DEFAULT;
 use crate::i18n::tr;
 use crate::ops_pages::*;
-use crate::ops_routing::{ops_page_from_hash, ops_set_hash, OpsPage, OPS_NAV_GROUPS};
+use crate::ops_routing::{
+    ops_page_from_hash, ops_set_hash, ops_sub_id_from_hash, OpsPage, OPS_NAV_GROUPS,
+};
 use crate::pages::*;
 use crate::state::{ApiKeyContext, Language};
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -52,13 +54,15 @@ fn governance_hub_page(navigate: Callback<OpsPage>, language: Language) -> Html 
 
 #[function_component(OpsApp)]
 pub fn ops_app() -> Html {
-    let active = use_state(|| {
-        ops_page_from_hash(
-            &web_sys::window()
-                .and_then(|w| w.location().hash().ok())
-                .unwrap_or_default(),
-        )
-    });
+    let initial_hash = web_sys::window()
+        .and_then(|w| w.location().hash().ok())
+        .unwrap_or_default();
+    let active = use_state(|| ops_page_from_hash(&initial_hash));
+    /// Deep-link sub-id parsed from the hash, e.g. `#review?id=CASE-001` → `"CASE-001"`.
+    /// Passed down to ReviewWorkbench and CaseTracker so they can pre-select the
+    /// identified case when the page is opened via a shared link.
+    let deep_link_id: yew::UseStateHandle<Option<String>> =
+        use_state(|| ops_sub_id_from_hash(&initial_hash));
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
     let language = use_state(|| Language::Zh);
 
@@ -74,17 +78,20 @@ pub fn ops_app() -> Html {
         });
     }
 
-    // Hash routing
+    // Hash routing — parse page and optional deep-link sub-id on every navigation.
     {
         let active = active.clone();
+        let deep_link_id = deep_link_id.clone();
         use_effect_with((), move |_| {
             let listener = web_sys::window().and_then(|window| {
                 let active = active.clone();
+                let deep_link_id = deep_link_id.clone();
                 let callback = Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_| {
                     let hash = web_sys::window()
                         .and_then(|w| w.location().hash().ok())
                         .unwrap_or_default();
                     active.set(ops_page_from_hash(&hash));
+                    deep_link_id.set(ops_sub_id_from_hash(&hash));
                 }));
                 window
                     .add_event_listener_with_callback(
@@ -116,24 +123,8 @@ pub fn ops_app() -> Html {
     let navigate_by_name = {
         let navigate = navigate.clone();
         Callback::from(move |name: String| {
-            // Map old module names to new OpsPage for cross-page links
-            let page = match name.as_str() {
-                "Member Profile" => OpsPage::MemberProfile,
-                "Provider Risk" => OpsPage::ProviderRisk,
-                "Knowledge Base" => OpsPage::KnowledgeBase,
-                "Evidence Runtime" => OpsPage::EvidenceRuntime,
-                "Data Sources" => OpsPage::DataSources,
-                "Medical Review" => OpsPage::MedicalReview,
-                "QA Review" => OpsPage::QaReview,
-                "Agent Investigator" => OpsPage::AgentInvestigator,
-                "Rules" => OpsPage::RuleLibrary,
-                "Models" => OpsPage::ModelGovernance,
-                "Routing Policies" => OpsPage::RoutingPolicies,
-                "Case Tracker" => OpsPage::CaseTracker,
-                "Governance" => OpsPage::GovernanceHub,
-                "Dashboard" => OpsPage::Dashboard,
-                _ => OpsPage::Dashboard,
-            };
+            // Resolve page by English label; unknown names fall back to Dashboard.
+            let page = OpsPage::from_label(&name).unwrap_or(OpsPage::Dashboard);
             navigate.emit(page);
         })
     };
