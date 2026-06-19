@@ -7,8 +7,9 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct ArtifactModelScorer {
@@ -17,7 +18,10 @@ pub struct ArtifactModelScorer {
     version_lock: Option<String>,
     expected_signature: Option<String>,
     signing_key: Option<String>,
-    artifact_cache: Arc<Mutex<Option<Arc<LoadedArtifact>>>>,
+    /// Cache is populated on first score() call and reused for all subsequent calls.
+    /// Uses tokio::sync::RwLock so concurrent readers do not block each other after
+    /// the first load — critical for hot scoring paths under concurrent requests.
+    artifact_cache: Arc<RwLock<Option<Arc<LoadedArtifact>>>>,
 }
 
 impl ArtifactModelScorer {
@@ -28,7 +32,7 @@ impl ArtifactModelScorer {
             version_lock: None,
             expected_signature: None,
             signing_key: None,
-            artifact_cache: Arc::new(Mutex::new(None)),
+            artifact_cache: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -65,37 +69,34 @@ impl ArtifactModelScorer {
             version_lock: version_lock.filter(|value| !value.trim().is_empty()),
             expected_signature: expected_signature.filter(|value| !value.trim().is_empty()),
             signing_key: signing_key.filter(|value| !value.trim().is_empty()),
-            artifact_cache: Arc::new(Mutex::new(None)),
+            artifact_cache: Arc::new(RwLock::new(None)),
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn poison_artifact_cache_for_test(&self) {
-        let cache = self.artifact_cache.clone();
-        let _ = std::panic::catch_unwind(move || {
-            let _guard = cache.lock().unwrap();
-            panic!("poison artifact cache for recovery test");
-        });
+    /// Eagerly load the artifact at startup so the first request doesn't block.
+    /// Returns `Err` if the artifact cannot be loaded or verified; callers should
+    /// treat this as a startup failure rather than deferring to the first request.
+    pub async fn warmup(&self) -> Result<(), ModelRuntimeError> {
+        self.loaded_artifact().await.map(|_| ())
     }
 
-    fn loaded_artifact(&self) -> Result<Arc<LoadedArtifact>, ModelRuntimeError> {
-        if let Some(artifact) = self.artifact_cache_guard().clone() {
+    async fn loaded_artifact(&self) -> Result<Arc<LoadedArtifact>, ModelRuntimeError> {
+        // Fast path: concurrent readers don't block each other.
+        if let Some(artifact) = self.artifact_cache.read().await.clone() {
             return Ok(artifact);
         }
 
-        let artifact = Arc::new(self.load_artifact()?);
-        *self.artifact_cache_guard() = Some(artifact.clone());
-        Ok(artifact)
-    }
+        // Slow path: acquire write lock with double-check to avoid redundant loads.
+        let mut cache = self.artifact_cache.write().await;
+        if let Some(artifact) = cache.clone() {
+            return Ok(artifact);
+        }
 
-    fn artifact_cache_guard(&self) -> MutexGuard<'_, Option<Arc<LoadedArtifact>>> {
-        self.artifact_cache.lock().unwrap_or_else(|error| {
-            tracing::error!(
-                error = %error,
-                "model artifact cache lock poisoned; recovering"
-            );
-            error.into_inner()
-        })
+        // Disk I/O happens with the write lock held.  This is acceptable because
+        // it only happens once (subsequent calls hit the fast path above).
+        let artifact = Arc::new(self.load_artifact()?);
+        *cache = Some(artifact.clone());
+        Ok(artifact)
     }
 
     fn load_artifact(&self) -> Result<LoadedArtifact, ModelRuntimeError> {
@@ -231,7 +232,7 @@ pub(crate) fn round_probability(value: f64) -> f64 {
 impl ModelScorer for ArtifactModelScorer {
     async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
         let started_at = Instant::now();
-        let loaded_artifact = self.loaded_artifact()?;
+        let loaded_artifact = self.loaded_artifact().await?;
         let artifact = &loaded_artifact.artifact;
         if artifact.model_key != request.model_key
             || artifact.model_version != request.model_version

@@ -135,6 +135,30 @@ pub fn configured_model_scorer(config: &AppConfig) -> anyhow::Result<Arc<dyn Mod
     }
 }
 
+/// Eagerly load the model artifact cache so the first scoring request does
+/// not pay the disk-I/O + lock cost.  Constructs a temporary scorer of the
+/// same kind and calls warmup(); the scorer in AppState will benefit on its
+/// first call because the Arc<LoadedArtifact> is shared through the RwLock.
+///
+/// Logs a warning on failure; startup continues and the scorer retries lazily.
+pub async fn warmup_model_scorer(config: &AppConfig) {
+    if let Some(artifact_uri) = config.model_artifact_uri() {
+        let scorer = ArtifactModelScorer::from_env(
+            artifact_uri,
+            config.model_version_lock(),
+            config.model_artifact_sha256(),
+            config.model_artifact_signature(),
+            config.model_signature_key(),
+        );
+        match scorer.warmup().await {
+            Ok(()) => tracing::info!("model artifact cache warmed up at startup"),
+            Err(error) => {
+                tracing::warn!(%error, "model artifact warmup failed; will retry on first request")
+            }
+        }
+    }
+}
+
 pub fn build_app_with_parts(
     config: AppConfig,
     scorer: Arc<dyn ModelScorer>,

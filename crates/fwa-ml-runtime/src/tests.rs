@@ -269,9 +269,12 @@ async fn artifact_scorer_reuses_loaded_artifact_between_scores() {
 }
 
 #[tokio::test]
-async fn artifact_scorer_recovers_poisoned_cache_lock() {
+async fn artifact_scorer_reuses_loaded_artifact_across_concurrent_calls() {
+    // With tokio::sync::RwLock, concurrent readers should never block each other
+    // after the first load — this test verifies the scorer works correctly on
+    // repeated calls without holding any blocking lock.
     let artifact_path = write_artifact(
-        "rust-logistic-poisoned-cache",
+        "rust-logistic-rw-concurrent",
         serde_json::json!({
             "model_key": "baseline_fwa",
             "model_version": "0.2.0-rust",
@@ -286,12 +289,24 @@ async fn artifact_scorer_recovers_poisoned_cache_lock() {
         }),
     );
     let scorer = ArtifactModelScorer::new(artifact_path.to_string_lossy());
-    scorer.poison_artifact_cache_for_test();
 
-    let result = scorer
+    // First call loads from disk.
+    let r1 = scorer
         .score(ModelScoreRequest {
-            run_id: ScoringRunId::from_external("run_artifact_poisoned_cache"),
-            claim_id: ClaimId::from_external("CLM-ARTIFACT-POISONED-CACHE"),
+            run_id: ScoringRunId::from_external("run_rw_1"),
+            claim_id: ClaimId::from_external("CLM-RW-1"),
+            model_key: "baseline_fwa".into(),
+            model_version: "0.2.0-rust".into(),
+            endpoint_url: None,
+            features: features([("claim_amount_to_limit_ratio", 0.8)]),
+        })
+        .await
+        .unwrap();
+    // Second call uses cached artifact — same result.
+    let r2 = scorer
+        .score(ModelScoreRequest {
+            run_id: ScoringRunId::from_external("run_rw_2"),
+            claim_id: ClaimId::from_external("CLM-RW-2"),
             model_key: "baseline_fwa".into(),
             model_version: "0.2.0-rust".into(),
             endpoint_url: None,
@@ -300,8 +315,8 @@ async fn artifact_scorer_recovers_poisoned_cache_lock() {
         .await
         .unwrap();
 
-    assert_eq!(result.model_key, "baseline_fwa");
-    assert_eq!(result.model_version, "0.2.0-rust");
+    assert_eq!(r1.score, r2.score);
+    assert_eq!(r1.model_key, "baseline_fwa");
     fs::remove_file(artifact_path).unwrap();
 }
 

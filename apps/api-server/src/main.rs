@@ -1,5 +1,5 @@
 use api_server::{
-    app::{build_app_with_parts, configured_model_scorer},
+    app::{build_app_with_parts, configured_model_scorer, warmup_model_scorer},
     config::AppConfig,
     repository::{InMemoryScoringRepository, PostgresScoringRepository, SharedRepository},
 };
@@ -20,6 +20,9 @@ async fn main() -> anyhow::Result<()> {
     let config = AppConfig::from_env();
     let repository = configured_repository(&config).await?;
     let scorer = configured_model_scorer(&config)?;
+    // Warm up the model artifact cache before serving traffic so the first
+    // scoring request doesn't pay the disk-I/O + write-lock cost.
+    warmup_model_scorer(&config).await;
     let app = apply_runtime_limits(build_app_with_parts(config, scorer, repository));
     let bind_addr = std::env::var("FWA_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
     let listener = tokio::net::TcpListener::bind(bind_addr.as_str()).await?;
