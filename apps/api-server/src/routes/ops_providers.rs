@@ -302,9 +302,10 @@ pub struct AnomalyReviewQueueTask {
 
 pub async fn submit_anomaly_clustering_report(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<SubmitAnomalyClusteringReportRequest>,
 ) -> Result<Json<SubmitAnomalyClusteringReportResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:providers:write")?;
     validate_anomaly_clustering_report_submission(&request)?;
     let response = SubmitAnomalyClusteringReportResponse {
         report_kind: request.report_kind.clone(),
