@@ -295,6 +295,7 @@ fn missing_id_warnings(fields: &[(&str, &Option<String>)]) -> Vec<String> {
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn summary(
     format: ConnectorFormat,
     source_system: &str,
