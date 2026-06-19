@@ -6,10 +6,17 @@ use api_server::{
 use axum::{extract::DefaultBodyLimit, Router};
 use std::sync::Arc;
 use tower::limit::ConcurrencyLimitLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().init();
+    // Respect RUST_LOG for runtime log-level control.  Default to "info" so
+    // production logs are not silent when the env var is absent.
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let config = AppConfig::from_env();
     let repository = configured_repository(&config).await?;
     let scorer = configured_model_scorer(&config)?;
@@ -17,8 +24,43 @@ async fn main() -> anyhow::Result<()> {
     let bind_addr = std::env::var("FWA_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
     let listener = tokio::net::TcpListener::bind(bind_addr.as_str()).await?;
     tracing::info!("api-server listening on {}", bind_addr);
-    axum::serve(listener, app).await?;
+
+    // Graceful shutdown: wait for SIGTERM or Ctrl-C before dropping in-flight
+    // requests.  Without this, SIGTERM abruptly terminates active connections.
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    tracing::info!("api-server shut down cleanly");
     Ok(())
+}
+
+/// Resolves when SIGTERM (Unix) or Ctrl-C is received, whichever comes first.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
+
+    #[cfg(unix)]
+    {
+        let terminate = async {
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("failed to install SIGTERM handler")
+                .recv()
+                .await;
+        };
+        tokio::select! {
+            () = ctrl_c => {},
+            () = terminate => {},
+        }
+    }
+
+    #[cfg(not(unix))]
+    ctrl_c.await;
+
+    tracing::info!("shutdown signal received");
 }
 
 async fn configured_repository(config: &AppConfig) -> anyhow::Result<SharedRepository> {
