@@ -408,7 +408,11 @@ fn recommended_action(
     policy: &RoutingPolicy,
     provider_network_score: u8,
 ) -> RecommendedAction {
-    if confidence_score < policy.confidence_thresholds.low_confidence_below {
+    // The low-confidence gate applies only when there is a non-trivial risk
+    // signal to be uncertain about.  A genuinely low-risk claim with no
+    // rules firing and a low composite score should go to StandardProcessing,
+    // not RequestEvidence — there is no claim to investigate further.
+    if risk_level != "Low" && confidence_score < policy.confidence_thresholds.low_confidence_below {
         return RecommendedAction::RequestEvidence;
     }
     if policy.review_mode == "post_payment" {
