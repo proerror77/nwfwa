@@ -1,4 +1,4 @@
-use crate::{parse_risk_score, parse_tags, DashboardSummary, LIVE_TPA_DEMO_PAYLOAD};
+use crate::{parse_risk_score, parse_tags};
 use serde_json::{json, Value};
 
 pub(crate) fn agent_investigation_payload(
@@ -92,18 +92,6 @@ pub(crate) fn audit_sample_payload(
             Value::String(deterministic_seed.to_string())
         }
     }))
-}
-
-pub(crate) fn live_tpa_demo_payload(summary: &DashboardSummary) -> Result<Value, String> {
-    let suffix = format!(
-        "{}-{}-{}",
-        summary.suspected_claims, summary.confirmed_fwa, summary.rule_hits
-    );
-    let mut payload = serde_json::from_str::<Value>(LIVE_TPA_DEMO_PAYLOAD)
-        .map_err(|error| format!("live demo payload JSON is invalid: {error}"))?;
-    payload["transNo"] = Value::String(format!("TPA-LIVE-DEMO-{suffix}"));
-    payload["reportCase"]["reportNo"] = Value::String(format!("CLM-LIVE-DEMO-{suffix}"));
-    Ok(payload)
 }
 
 pub(crate) fn refs_or_fallback(refs_text: &str, fallback: Vec<String>) -> Vec<String> {

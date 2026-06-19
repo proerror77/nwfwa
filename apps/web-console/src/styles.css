@@ -7630,7 +7630,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .form-field textarea:focus,
 .form-field input[type="text"]:focus,
 .form-field select:focus {
-  outline: none;
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(23,105,224,0.1);
 }

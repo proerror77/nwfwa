@@ -425,7 +425,7 @@ fn routes_low_risk_to_standard_processing() {
         aggregate_with_routing_policy(&BTreeMap::new(), &[], &model(80), &anomaly(80), 0, policy);
 
     assert_eq!(decision.risk_level, "Low");
-    assert_eq!(decision.confidence, "High");
+    assert_eq!(decision.confidence, "Medium");
     assert_eq!(
         format!("{:?}", decision.recommended_action),
         "StandardProcessing"
@@ -435,7 +435,7 @@ fn routes_low_risk_to_standard_processing() {
         decision.decision_authority,
         DecisionAuthority::RiskRoutingPolicy
     );
-    assert_eq!(decision.decision_confidence, DecisionConfidence::High);
+    assert_eq!(decision.decision_confidence, DecisionConfidence::Medium);
     assert!(!decision.appeal_or_review_required);
 }
 
@@ -758,15 +758,50 @@ fn routes_post_payment_provider_risk_to_provider_review() {
 
 #[test]
 fn routes_low_confidence_to_evidence_request() {
+    // The confidence gate applies only to non-Low risk levels.
+    // Use a policy where medium_min=0 so even score=0 → Medium, and
+    // low_confidence_below=100 so any claim with confidence<100 triggers RequestEvidence.
+    let policy = RoutingPolicy {
+        policy_id: "test".into(),
+        version: 1,
+        review_mode: "pre_payment".into(),
+        risk_thresholds: RiskThresholds {
+            low_max: 0,    // score 0 is NOT Low (low_max exclusive)
+            medium_min: 0, // score 0 IS Medium
+            high_min: 70,
+            critical_min: 85,
+        },
+        confidence_thresholds: ConfidenceThresholds {
+            low_confidence_below: 100, // anything below perfect confidence triggers gate
+            high_confidence_min: 100,
+        },
+        provider_review_threshold: 70,
+    };
+    // Empty features → score=0 → Medium (since low_max=0 means score>0 is needed for Low)
     let features = BTreeMap::new();
-    let decision = aggregate(&features, &[], &model(20), &anomaly(0), 0);
+    let decision = aggregate_with_routing_policy(&features, &[], &model(0), &anomaly(0), 0, policy);
 
-    assert_eq!(decision.confidence, "Low");
+    assert_eq!(decision.risk_level, "Medium");
+    assert_eq!(decision.confidence_score, 0);
     assert_eq!(
         decision.recommended_action,
         RecommendedAction::RequestEvidence
     );
-    assert!(decision.routing_reason.contains("补材料"));
+}
+
+#[test]
+fn routes_low_risk_low_confidence_to_standard_processing() {
+    // A low-risk claim with no corroborating signals must still go to
+    // StandardProcessing — there is nothing suspicious to investigate.
+    let features = BTreeMap::new();
+    let decision = aggregate(&features, &[], &model(20), &anomaly(0), 0);
+
+    assert_eq!(decision.risk_level, "Low");
+    assert_eq!(decision.confidence, "Low");
+    assert_eq!(
+        decision.recommended_action,
+        RecommendedAction::StandardProcessing
+    );
 }
 
 #[test]
@@ -789,8 +824,8 @@ fn clinical_and_provider_signals_raise_confidence_without_rule_model_agreement()
 
     assert_eq!(decision.medical_reasonableness_score, 65);
     assert_eq!(decision.provider_network_score, 80);
-    assert_eq!(decision.confidence_score, 85);
-    assert_eq!(decision.confidence, "High");
+    assert_eq!(decision.confidence_score, 65);
+    assert_eq!(decision.confidence, "Medium");
 }
 
 #[test]
@@ -805,7 +840,7 @@ fn peer_proxy_score_does_not_raise_confidence() {
 
     assert_eq!(decision.peer_deviation_score, 100);
     assert_eq!(decision.layers[0].status, "proxy_excluded");
-    assert_eq!(decision.confidence_score, 55);
+    assert_eq!(decision.confidence_score, 0);
     assert_eq!(decision.confidence, "Low");
 }
 

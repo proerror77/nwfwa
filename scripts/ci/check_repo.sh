@@ -234,45 +234,34 @@ if [[ -f apps/web-console/package.json || -f apps/web-console/package-lock.json 
 fi
 grep -q "yew = " apps/web-console/Cargo.toml
 grep -q "gloo-net" apps/web-console/Cargo.toml
-grep -q "/api/v1/inbox/claims/normalize" apps/web-console/src/api/scoring.rs
-grep -q "Correction Worklist" apps/web-console/src/pages/claim_inbox.rs
-grep -q "correction_overlay_template_for" apps/web-console/src/inbox_helpers.rs
-grep -q "merge_overlay" apps/web-console/src/inbox_helpers.rs
-grep -q "Executive KPIs" scripts/demo/smoke_web_console.mjs
+grep -q "OpsApp" apps/web-console/src/main.rs
+grep -q "ClaimsQueuePage" apps/web-console/src/ops_pages/claims_queue.rs
+grep -q "Investigation Workbench" apps/web-console/src/ops_routing.rs
+grep -q "Review Routing Policies" apps/web-console/src/ops_routing.rs
+grep -q "Claims today" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Rule Discovery Workbench" scripts/demo/smoke_web_console.mjs
-grep -q "Candidate Source" scripts/demo/smoke_web_console.mjs
 grep -q "Tree Depth" scripts/demo/smoke_web_console.mjs
-grep -q "Training job id" scripts/demo/smoke_web_console.mjs
 grep -q "Backtest Evidence" scripts/demo/smoke_web_console.mjs
 grep -q "Candidate rule workflow" scripts/demo/smoke_web_console.mjs
 grep -q "shadow evidence ready" scripts/demo/smoke_web_console.mjs
 grep -q "Rule Promotion Gates" scripts/demo/smoke_web_console.mjs
-grep -q "Factor Cards" scripts/demo/smoke_web_console.mjs
 grep -q "Data Foundation Control" scripts/demo/smoke_web_console.mjs
-grep -q "Split And Schema Coverage" scripts/demo/smoke_web_console.mjs
-grep -q "SLA attention" scripts/demo/smoke_web_console.mjs
+grep -q "Field Mapping Lineage" scripts/demo/smoke_web_console.mjs
+grep -q "SLA compliance" scripts/demo/smoke_web_console.mjs
 grep -q "QA Sampling Governance" scripts/demo/smoke_web_console.mjs
-grep -q "Audit Event Log" scripts/demo/smoke_web_console.mjs
-grep -q "Pilot Gate" scripts/demo/smoke_web_console.mjs
+grep -q "Investigation Package" scripts/demo/smoke_web_console.mjs
 grep -q "Live operations" scripts/demo/smoke_web_console.mjs
-grep -q "Daily Work" scripts/demo/smoke_web_console.mjs
-grep -q "Control Rooms" scripts/demo/smoke_web_console.mjs
-grep -q "Review Workbench" scripts/demo/smoke_web_console.mjs
-grep -q "Evidence Hub" scripts/demo/smoke_web_console.mjs
-grep -q "Next actions" scripts/demo/smoke_web_console.mjs
-grep -q "click to work" scripts/demo/smoke_web_console.mjs
-grep -q "FWA operating map" scripts/demo/smoke_web_console.mjs
-grep -q "PRD runtime topology" scripts/demo/smoke_web_console.mjs
-grep -q "module_context" apps/web-console/src/main.rs
+grep -q "Investigation Workbench" scripts/demo/smoke_web_console.mjs
+grep -q "Evidence Center" scripts/demo/smoke_web_console.mjs
+grep -q "Renderer::<OpsApp>" apps/web-console/src/main.rs
+grep -q "function_component(OpsApp)" apps/web-console/src/ops_app.rs
 grep -q "workspace-topbar" apps/web-console/src/styles.css
 grep -q "module-nav" apps/web-console/src/styles.css
-grep -q "/api/v1/health" apps/web-console/src/api/governance.rs
 grep -q "remediation" apps/api-server/src/routes/health.rs
 grep -q "Non-secret remediation hint" apps/api-server/src/routes/openapi_schemas_health.rs
 grep -Fq 'properties"]["remediation"]' apps/api-server/tests/ops_openapi/schema_basics.rs
 grep -q "Non-secret remediation hint" apps/api-server/tests/ops_openapi/schema_basics.rs
-grep -q "remediation" apps/web-console/src/pages/governance.rs
 grep -q "remediation hints" docs/engineering/pilot-readiness.md
 grep -q "remediation hints" docs/project/api-reference.md
 grep -q "Assistive Boundary" scripts/demo/smoke_web_console.mjs
@@ -283,7 +272,7 @@ grep -q "Evidence Status" scripts/demo/smoke_web_console.mjs
 grep -q "QA Sampling Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Knowledge graph match" scripts/demo/smoke_web_console.mjs
 grep -q "Confirmed Evidence" scripts/demo/smoke_web_console.mjs
-grep -q "Lineage" scripts/demo/smoke_web_console.mjs
+grep -q "Data Lineage Cockpit" scripts/demo/smoke_web_console.mjs
 grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py
@@ -405,17 +394,15 @@ grep -q "FWA_API_KEY_PRINCIPALS" scripts/dev/start_local_runtime.sh
 grep -q "/api/v1/ops/dashboard/summary" scripts/dev/start_local_runtime.sh
 grep -q -- "--customer-principal-smoke" docs/engineering/demo-runbook.md
 grep -q -- "--customer-principal-smoke" docs/engineering/pilot-readiness.md
-grep -q "API Call Records" apps/web-console/src/pages/governance.rs
 grep -q "/api/v1/claims/score" scripts/demo/smoke_demo.py
 grep -q "score_normalized_inbox_context" scripts/demo/smoke_demo.py
 grep -q "canonical_claim_context" scripts/demo/smoke_demo.py
 grep -q "has_canonical_trace=true" scripts/demo/smoke_demo.py
 grep -q "has_canonical_trace" apps/api-server/src/routes/openapi_paths_data_ops_operations.rs
 grep -q "has_canonical_trace" apps/api-server/src/routes/ops_audit.rs
-grep -q "Lineage" scripts/demo/smoke_web_console.mjs
+grep -q "Data Lineage Cockpit" scripts/demo/smoke_web_console.mjs
 grep -q "audit_coverage" apps/api-server/src/routes/openapi_schemas_ops_dashboard.rs
-grep -q "Audit Coverage" apps/web-console/src/pages/governance.rs
-grep -q "Audit Coverage" scripts/demo/smoke_web_console.mjs
+grep -q "SLA compliance" scripts/demo/smoke_web_console.mjs
 grep -q "latest_canonical_claim_context_trace" apps/api-server/src/routes/agent.rs
 grep -q "Agent context snapshot carries" docs/project/api-reference.md
 grep -q "canonical scoring trace" docs/project/api-reference.md
@@ -430,7 +417,7 @@ grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_
 grep -q "QA result writeback merges" docs/project/api-reference.md
 grep -q "merge_canonical_evidence_refs_for_medical_review" apps/api-server/src/routes/ops_medical.rs
 grep -q "Medical review result writeback merges" docs/project/api-reference.md
-grep -q "Evidence Trace Hub" scripts/demo/smoke_web_console.mjs
+grep -q "Evidence Runtime" scripts/demo/smoke_web_console.mjs
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py
 grep -q "/api/v1/qa/results" scripts/demo/smoke_demo.py

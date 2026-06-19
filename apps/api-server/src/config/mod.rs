@@ -93,6 +93,7 @@ impl Default for AppConfig {
 mod tests {
     use super::*;
     use config_validation::{api_key_principal_configuration_status, api_key_principal_from_spec};
+    use std::sync::{Mutex, MutexGuard, OnceLock};
 
     #[test]
     fn parses_api_key_principal_spec() {
@@ -184,6 +185,7 @@ mod tests {
 
     #[test]
     fn rejects_default_dev_key_outside_development() {
+        let _guard = env_guard();
         let previous_env = std::env::var_os("FWA_ENV");
         let previous_api_key = std::env::var_os("FWA_API_KEY");
         let previous_principals = std::env::var_os("FWA_API_KEY_PRINCIPALS");
@@ -213,6 +215,7 @@ mod tests {
 
     #[test]
     fn allows_principal_map_outside_development_without_legacy_key() {
+        let _guard = env_guard();
         let previous_env = std::env::var_os("FWA_ENV");
         let previous_api_key = std::env::var_os("FWA_API_KEY");
         let previous_principals = std::env::var_os("FWA_API_KEY_PRINCIPALS");
@@ -234,7 +237,45 @@ mod tests {
     }
 
     #[test]
+    fn rejects_heuristic_model_scorer_outside_development() {
+        let _guard = env_guard();
+        let previous_env = std::env::var_os("FWA_ENV");
+        let previous_api_key = std::env::var_os("FWA_API_KEY");
+        let previous_principals = std::env::var_os("FWA_API_KEY_PRINCIPALS");
+        let previous_model_service_url = std::env::var_os("FWA_MODEL_SERVICE_URL");
+        std::env::set_var("FWA_ENV", "production");
+        std::env::remove_var("FWA_API_KEY");
+        std::env::set_var(
+            "FWA_API_KEY_PRINCIPALS",
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta",
+        );
+        std::env::set_var("FWA_MODEL_SERVICE_URL", "heuristic://local");
+
+        let result = std::panic::catch_unwind(AppConfig::from_env);
+
+        restore_env("FWA_ENV", previous_env);
+        restore_env("FWA_API_KEY", previous_api_key);
+        restore_env("FWA_API_KEY_PRINCIPALS", previous_principals);
+        restore_env("FWA_MODEL_SERVICE_URL", previous_model_service_url);
+
+        let panic_message = result
+            .unwrap_err()
+            .downcast::<String>()
+            .map(|message| *message)
+            .unwrap_or_else(|payload| {
+                payload
+                    .downcast::<&'static str>()
+                    .map(|message| (*message).to_string())
+                    .unwrap_or_default()
+            });
+        assert!(panic_message.contains(
+            "FWA_MODEL_SERVICE_URL must point to a customer-approved scorer outside development"
+        ));
+    }
+
+    #[test]
     fn rust_artifact_model_runtime_counts_as_configured_model_service() {
+        let _guard = env_guard();
         let previous_artifact_uri = std::env::var_os("FWA_MODEL_ARTIFACT_URI");
         std::env::set_var(
             "FWA_MODEL_ARTIFACT_URI",
@@ -308,5 +349,13 @@ mod tests {
         } else {
             std::env::remove_var(name);
         }
+    }
+
+    fn env_guard() -> MutexGuard<'static, ()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("config env test lock poisoned")
     }
 }

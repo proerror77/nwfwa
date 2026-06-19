@@ -8,6 +8,12 @@ use thiserror::Error;
 pub enum RuleError {
     #[error("unsupported operator: {0}")]
     UnsupportedOperator(String),
+    #[error("operator '{operator}' requires a numeric feature value, got {actual_type} for field '{field}'")]
+    NonNumericFeatureValue {
+        operator: String,
+        field: String,
+        actual_type: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,10 +159,31 @@ fn evaluate_condition(condition: &Condition, features: &FeatureMap) -> Result<bo
     };
 
     match condition.operator.as_str() {
-        "<=" => Ok(as_f64(&feature.value) <= as_f64(&condition.value)),
-        "<" => Ok(as_f64(&feature.value) < as_f64(&condition.value)),
-        ">=" => Ok(as_f64(&feature.value) >= as_f64(&condition.value)),
-        ">" => Ok(as_f64(&feature.value) > as_f64(&condition.value)),
+        op @ ("<=" | "<" | ">=" | ">") => {
+            // For ordering comparisons both sides must be numeric.  A null,
+            // bool, or string feature value is not silently coerced to 0.0 —
+            // that would cause wrong-type features to fire rules unexpectedly.
+            let lhs =
+                numeric_value(&feature.value).ok_or_else(|| RuleError::NonNumericFeatureValue {
+                    operator: op.to_string(),
+                    field: condition.field.clone(),
+                    actual_type: json_type_name(&feature.value).to_string(),
+                })?;
+            let rhs = numeric_value(&condition.value).ok_or_else(|| {
+                RuleError::NonNumericFeatureValue {
+                    operator: op.to_string(),
+                    field: condition.field.clone(),
+                    actual_type: json_type_name(&condition.value).to_string(),
+                }
+            })?;
+            Ok(match op {
+                "<=" => lhs <= rhs,
+                "<" => lhs < rhs,
+                ">=" => lhs >= rhs,
+                ">" => lhs > rhs,
+                _ => unreachable!(),
+            })
+        }
         "==" => Ok(feature.value == condition.value),
         "in" => Ok(condition
             .value
@@ -166,11 +193,22 @@ fn evaluate_condition(condition: &Condition, features: &FeatureMap) -> Result<bo
     }
 }
 
-fn as_f64(value: &Value) -> f64 {
-    value
-        .as_f64()
-        .or_else(|| value.as_i64().map(|v| v as f64))
-        .unwrap_or(0.0)
+/// Extract a numeric value from a JSON value.  Returns `None` for null,
+/// bool, string, array, and object — none of which have a meaningful
+/// numeric interpretation in a rule condition context.
+fn numeric_value(value: &Value) -> Option<f64> {
+    value.as_f64().or_else(|| value.as_i64().map(|v| v as f64))
+}
+
+fn json_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "bool",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
 }
 
 #[cfg(test)]
@@ -481,5 +519,67 @@ mod tests {
         assert_eq!(matches[0].alert_code, "APPROVED_EXCEPTION_STP");
         assert_eq!(matches[1].action_class, RuleActionClass::HardDeny);
         assert_eq!(matches[1].alert_code, "COVERAGE_EXCLUSION_HARD_DENY");
+    }
+
+    #[test]
+    fn numeric_operator_on_null_feature_returns_error() {
+        // A null feature value must NOT silently coerce to 0.0 — that would
+        // cause unrelated null fields to fire ordering rules.
+        let mut features = BTreeMap::new();
+        features.insert(
+            "peer_percentile".into(),
+            FeatureValue {
+                name: "peer_percentile".into(),
+                version: 1,
+                value: serde_json::Value::Null,
+                is_proxy: false,
+                data_source: "test_fixture".into(),
+                evidence_refs: vec![],
+            },
+        );
+
+        let result = evaluate_condition(
+            &Condition {
+                field: "peer_percentile".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(95),
+            },
+            &features,
+        );
+
+        assert!(
+            matches!(result, Err(RuleError::NonNumericFeatureValue { .. })),
+            "expected NonNumericFeatureValue error, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn numeric_operator_on_string_feature_returns_error() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount".into(),
+            FeatureValue {
+                name: "claim_amount".into(),
+                version: 1,
+                value: serde_json::json!("not-a-number"),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
+                evidence_refs: vec![],
+            },
+        );
+
+        let result = evaluate_condition(
+            &Condition {
+                field: "claim_amount".into(),
+                operator: ">".into(),
+                value: serde_json::json!(100),
+            },
+            &features,
+        );
+
+        assert!(matches!(
+            result,
+            Err(RuleError::NonNumericFeatureValue { .. })
+        ));
     }
 }

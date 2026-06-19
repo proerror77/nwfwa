@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{AgentApprovalRecord, AgentRunLogRecord, PersistedAuditEvent},
     routes::pii,
@@ -10,6 +10,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::AuditEventId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -60,10 +61,11 @@ pub async fn list_agent_runs(
 
 pub async fn cancel_agent_run(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(agent_run_id): Path<String>,
     Json(request): Json<CancelAgentRunRequest>,
 ) -> Result<Json<CancelAgentRunResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:agent:manage")?;
     validate_agent_cancel_request_shape(&request)?;
     let run = state
         .repository
@@ -154,10 +156,11 @@ pub async fn cancel_agent_run(
 
 pub async fn submit_agent_approval(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(agent_run_id): Path<String>,
     Json(request): Json<SubmitAgentApprovalRequest>,
 ) -> Result<Json<SubmitAgentApprovalResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:agent:manage")?;
     validate_agent_approval_request(&request)?;
     let run = state
         .repository
@@ -419,4 +422,18 @@ fn validate_agent_production_evidence_refs(
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

@@ -1,9 +1,8 @@
 /// Force-directed knowledge graph for FWA Provider-Member network
 use crate::api::*;
-use crate::formatting::*;
 use crate::state::{use_api_key, ApiState};
 use crate::types::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::f64::consts::PI;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -308,84 +307,6 @@ fn short_id(id: &str) -> String {
     }
 }
 
-// ─── Force-directed layout (Fruchterman-Reingold, simplified) ────────────────
-
-fn apply_forces(nodes: &mut Vec<GraphNode>, edges: &[GraphEdge], w: f64, h: f64, iter: u32) {
-    let n = nodes.len();
-    if n == 0 {
-        return;
-    }
-
-    // Cooling temperature — starts high, decreases with iteration
-    let temp = (1.0 - (iter as f64 / 80.0).min(0.95)) * 12.0;
-    let k = (w * h / n as f64).sqrt() * 0.8;
-
-    // Repulsion between all node pairs
-    let positions: Vec<(f64, f64)> = nodes.iter().map(|n| (n.x, n.y)).collect();
-    let mut forces: Vec<(f64, f64)> = vec![(0.0, 0.0); n];
-
-    for i in 0..n {
-        for j in 0..n {
-            if i == j {
-                continue;
-            }
-            let dx = positions[i].0 - positions[j].0;
-            let dy = positions[i].1 - positions[j].1;
-            let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-            let repulsion = k * k / dist;
-            forces[i].0 += (dx / dist) * repulsion;
-            forces[i].1 += (dy / dist) * repulsion;
-        }
-    }
-
-    // Attraction along edges
-    let id_to_idx: HashMap<String, usize> = nodes
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (n.id.clone(), i))
-        .collect();
-
-    for edge in edges {
-        let Some(&si) = id_to_idx.get(&edge.source) else {
-            continue;
-        };
-        let Some(&ti) = id_to_idx.get(&edge.target) else {
-            continue;
-        };
-        let dx = positions[si].0 - positions[ti].0;
-        let dy = positions[si].1 - positions[ti].1;
-        let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-        let attraction = dist * dist / k * (0.5 + edge.strength * 0.5);
-        let fx = (dx / dist) * attraction;
-        let fy = (dy / dist) * attraction;
-        forces[si].0 -= fx;
-        forces[si].1 -= fy;
-        forces[ti].0 += fx;
-        forces[ti].1 += fy;
-    }
-
-    // Center gravity — gentle pull to canvas center
-    let cx = w / 2.0;
-    let cy = h / 2.0;
-    for (i, node) in nodes.iter_mut().enumerate() {
-        forces[i].0 += (cx - node.x) * 0.015;
-        forces[i].1 += (cy - node.y) * 0.015;
-    }
-
-    // Apply forces with temperature damping
-    for (i, node) in nodes.iter_mut().enumerate() {
-        let len = (forces[i].0 * forces[i].0 + forces[i].1 * forces[i].1)
-            .sqrt()
-            .max(0.001);
-        let clamped = len.min(temp);
-        node.x += (forces[i].0 / len) * clamped;
-        node.y += (forces[i].1 / len) * clamped;
-        // Keep inside canvas with padding
-        node.x = node.x.clamp(40.0, w - 40.0);
-        node.y = node.y.clamp(40.0, h - 40.0);
-    }
-}
-
 // ─── Main graph component ─────────────────────────────────────────────────────
 
 #[derive(Properties, PartialEq)]
@@ -448,164 +369,9 @@ fn force_graph(props: &ForceGraphProps) -> Html {
                     {stat_chip("布局完成 ✓", "#5f6f85")}
                 </div>
 
-                // Dark canvas
+                // Interactive HTML graph canvas
                 <div style="border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(5,38,73,0.3);">
-                    <svg
-                        viewBox={format!("0 0 {w} {h}")}
-                        style="width:100%;height:520px;display:block;background:#0d1117;"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <defs>
-                            <filter id="glow-red">
-                                <feGaussianBlur stdDeviation="4" result="blur"/>
-                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                            </filter>
-                            <filter id="glow-blue">
-                                <feGaussianBlur stdDeviation="3" result="blur"/>
-                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                            </filter>
-                            // Subtle grid
-                            <pattern id="dark-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                <path d="M 40 0 L 0 0 0 40" fill="none"
-                                      stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
-                            </pattern>
-                        </defs>
-                        <rect width={w.to_string()} height={h.to_string()} fill="url(#dark-grid)"/>
-
-                        // ── Edges ──────────────────────────────────────────────
-                        {for edges.iter().map(|edge| {
-                            let s_pos = nodes.iter().find(|n| n.id == edge.source)
-                                .map(|n| (n.x, n.y));
-                            let t_pos = nodes.iter().find(|n| n.id == edge.target)
-                                .map(|n| (n.x, n.y));
-                            if let (Some((sx, sy)), Some((tx, ty))) = (s_pos, t_pos) {
-                                let opacity = 0.15 + edge.strength * 0.35;
-                                let (stroke, dash) = if edge.is_risk_link {
-                                    ("#ff4d6d", "")
-                                } else {
-                                    ("#4c9be8", "4,4")
-                                };
-                                let sw = 0.5 + edge.strength * 1.5;
-                                html! {
-                                    <line
-                                        x1={sx.to_string()} y1={sy.to_string()}
-                                        x2={tx.to_string()} y2={ty.to_string()}
-                                        stroke={stroke}
-                                        stroke-width={format!("{sw:.1}")}
-                                        stroke-opacity={format!("{opacity:.2}")}
-                                        stroke-dasharray={dash}
-                                    />
-                                }
-                            } else {
-                                html! {}
-                            }
-                        })}
-
-                        // ── Nodes ──────────────────────────────────────────────
-                        {for nodes.iter().map(|node| {
-                            let is_sel = selected_id == Some(&node.id);
-                            let on_select = props.on_select.clone();
-                            let nid = node.id.clone();
-
-                            match node.kind {
-                                NodeKind::Provider => {
-                                    let base_r = 10.0 + 22.0 * (node.claim_count as f64 / max_claims as f64).sqrt();
-                                    let r = if is_sel { base_r + 4.0 } else { base_r };
-                                    let (fill, glow_id) = match node.risk_tier.as_str() {
-                                        "high" | "critical" => ("#ff4d6d", "glow-red"),
-                                        "medium" => ("#f59e0b", "glow-red"),
-                                        _ => ("#34d399", "glow-blue"),
-                                    };
-                                    let fill_dim = match node.risk_tier.as_str() {
-                                        "high" | "critical" => "rgba(255,77,109,0.15)",
-                                        "medium" => "rgba(245,158,11,0.15)",
-                                        _ => "rgba(52,211,153,0.15)",
-                                    };
-
-                                    html! {
-                                        <g style="cursor:pointer;"
-                                           onclick={Callback::from(move |_| on_select.emit(nid.clone()))}>
-                                            // Halo
-                                            if is_sel {
-                                                <circle cx={node.x.to_string()} cy={node.y.to_string()}
-                                                        r={(r + 10.0).to_string()}
-                                                        fill={fill_dim}
-                                                        stroke={fill}
-                                                        stroke-width="1"
-                                                        stroke-opacity="0.4"/>
-                                            }
-                                            // Node
-                                            <circle cx={node.x.to_string()} cy={node.y.to_string()}
-                                                    r={r.to_string()}
-                                                    fill={fill_dim}
-                                                    stroke={fill}
-                                                    stroke-width={if is_sel { "2.5" } else { "1.5" }}
-                                                    filter={if is_sel { glow_id } else { "" }}/>
-                                            // Score label inside
-                                            <text x={node.x.to_string()} y={node.y.to_string()}
-                                                  text-anchor="middle" dominant-baseline="central"
-                                                  font-size={if r > 16.0 { "11" } else { "9" }}
-                                                  font-weight="700" fill={fill}>
-                                                {node.risk_score.to_string()}
-                                            </text>
-                                            // Name label below
-                                            <text x={node.x.to_string()} y={(node.y + r + 12.0).to_string()}
-                                                  text-anchor="middle"
-                                                  font-size="9" fill="rgba(200,210,230,0.7)">
-                                                {&node.label}
-                                            </text>
-                                            // Outlier count badge
-                                            if !node.outlier_flags.is_empty() {
-                                                <circle cx={(node.x + r * 0.72).to_string()}
-                                                        cy={(node.y - r * 0.72).to_string()}
-                                                        r="7" fill="#ff4d6d" stroke="#0d1117" stroke-width="1.5"/>
-                                                <text x={(node.x + r * 0.72).to_string()}
-                                                      y={(node.y - r * 0.72).to_string()}
-                                                      text-anchor="middle" dominant-baseline="central"
-                                                      font-size="7" font-weight="700" fill="white">
-                                                    {node.outlier_flags.len().to_string()}
-                                                </text>
-                                            }
-                                        </g>
-                                    }
-                                }
-                                NodeKind::Member => {
-                                    let r = if is_sel { 9.0 } else { 6.0 };
-                                    html! {
-                                        <g style="cursor:pointer;"
-                                           onclick={Callback::from(move |_| on_select.emit(nid.clone()))}>
-                                            <circle cx={node.x.to_string()} cy={node.y.to_string()}
-                                                    r={r.to_string()}
-                                                    fill="rgba(71,153,232,0.2)"
-                                                    stroke={if is_sel { "#60a5fa" } else { "#4c9be8" }}
-                                                    stroke-width={if is_sel { "2" } else { "1" }}
-                                                    filter={if is_sel { "url(#glow-blue)" } else { "" }}/>
-                                            <text x={node.x.to_string()} y={(node.y + r + 10.0).to_string()}
-                                                  text-anchor="middle"
-                                                  font-size="8" fill="rgba(147,186,234,0.65)">
-                                                {&node.label}
-                                            </text>
-                                        </g>
-                                    }
-                                }
-                            }
-                        })}
-
-                        // ── Legend ─────────────────────────────────────────────
-                        <g transform="translate(12, 490)">
-                            <circle cx="8" cy="7" r="5" fill="rgba(255,77,109,0.2)" stroke="#ff4d6d" stroke-width="1.5"/>
-                            <text x="18" y="11" font-size="9" fill="rgba(200,210,230,0.6)">{"高风险 Provider"}</text>
-                            <circle cx="108" cy="7" r="5" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="1.5"/>
-                            <text x="118" y="11" font-size="9" fill="rgba(200,210,230,0.6)">{"中风险"}</text>
-                            <circle cx="168" cy="7" r="4" fill="rgba(71,153,232,0.2)" stroke="#4c9be8" stroke-width="1"/>
-                            <text x="178" y="11" font-size="9" fill="rgba(200,210,230,0.6)">{"Member"}</text>
-                            <line x1="240" y1="7" x2="260" y2="7" stroke="#ff4d6d" stroke-width="1.5" stroke-opacity="0.6"/>
-                            <text x="265" y="11" font-size="9" fill="rgba(200,210,230,0.6)">{"风险连接"}</text>
-                            <line x1="330" y1="7" x2="350" y2="7" stroke="#4c9be8" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.6"/>
-                            <text x="355" y="11" font-size="9" fill="rgba(200,210,230,0.6)">{"理赔连接"}</text>
-                            <text x="430" y="11" font-size="9" fill="rgba(200,210,230,0.4)">{"节点大小 = 理赔量　数字 = 风险分"}</text>
-                        </g>
-                    </svg>
+                    {interactive_graph_canvas(nodes, &edges, selected_id, max_claims, props.on_select.clone(), h)}
                 </div>
             </div>
 
@@ -627,6 +393,246 @@ fn force_graph(props: &ForceGraphProps) -> Html {
                 }}
             </div>
         </div>
+    }
+}
+
+fn interactive_graph_canvas(
+    nodes: &[GraphNode],
+    edges: &[GraphEdge],
+    selected_id: Option<&str>,
+    max_claims: u32,
+    on_select: Callback<String>,
+    h: f64,
+) -> Html {
+    let connected: HashSet<&str> = selected_id
+        .map(|selected| {
+            edges
+                .iter()
+                .filter_map(|edge| {
+                    if edge.source == selected {
+                        Some(edge.target.as_str())
+                    } else if edge.target == selected {
+                        Some(edge.source.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    html! {
+        <div
+            class="provider-network-html-canvas"
+            style={format!(
+                "position:relative;width:100%;height:{h}px;overflow:hidden;background:
+                 radial-gradient(circle at 50% 46%, rgba(255,77,109,0.18), transparent 32%),
+                 linear-gradient(135deg, rgba(96,165,250,0.08) 0 1px, transparent 1px),
+                 linear-gradient(45deg, rgba(255,255,255,0.035) 0 1px, transparent 1px),
+                 #0d1117;background-size:auto, 28px 28px, 28px 28px, auto;"
+            )}
+        >
+            <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(13,17,23,0.05),rgba(13,17,23,0.42));pointer-events:none;"></div>
+
+            {for edges.iter().map(|edge| {
+                let source = nodes.iter().find(|node| node.id == edge.source);
+                let target = nodes.iter().find(|node| node.id == edge.target);
+                match (source, target) {
+                    (Some(source), Some(target)) => network_edge(edge, source, target, selected_id),
+                    _ => html! {},
+                }
+            })}
+
+            {for nodes.iter().map(|node| {
+                let is_selected = selected_id == Some(node.id.as_str());
+                let is_related = connected.contains(node.id.as_str());
+                interactive_graph_node(node, is_selected, is_related, max_claims, on_select.clone())
+            })}
+
+            <div style={format!("position:absolute;left:12px;right:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 10px;border:1px solid rgba(148,163,184,0.18);border-radius:8px;background:rgba(13,17,23,0.72);backdrop-filter:blur(8px);")}>
+                {legend_dot("#ff4d6d", "高风险 Provider")}
+                {legend_dot("#f59e0b", "中风险")}
+                {legend_dot("#4c9be8", "Member")}
+                {legend_line("#ff4d6d", false, "风险连接")}
+                {legend_line("#4c9be8", true, "理赔连接")}
+                <span style="margin-left:auto;color:rgba(200,210,230,0.48);font-size:10px;">{"点击节点聚焦一跳关系 · 节点大小 = 理赔量 · 数字 = 风险分"}</span>
+            </div>
+        </div>
+    }
+}
+
+fn network_edge(
+    edge: &GraphEdge,
+    source: &GraphNode,
+    target: &GraphNode,
+    selected_id: Option<&str>,
+) -> Html {
+    let dx = target.x - source.x;
+    let dy = target.y - source.y;
+    let length = (dx * dx + dy * dy).sqrt();
+    let angle = dy.atan2(dx).to_degrees();
+    let selected = selected_id.is_some_and(|id| edge.source == id || edge.target == id);
+    let faded = selected_id.is_some() && !selected;
+    let color = if edge.is_risk_link {
+        "#ff4d6d"
+    } else {
+        "#4c9be8"
+    };
+    let opacity = if faded {
+        0.12
+    } else if selected {
+        0.82
+    } else {
+        0.22 + edge.strength * 0.35
+    };
+    let thickness = if selected {
+        3.0
+    } else {
+        1.0 + edge.strength * 2.0
+    };
+    let line_style = if edge.is_risk_link {
+        format!(
+            "background:linear-gradient(90deg, transparent, {color}, transparent);height:{thickness:.1}px;"
+        )
+    } else {
+        format!("border-top:{thickness:.1}px dashed {color};height:0;background:transparent;")
+    };
+
+    html! {
+        <div
+            title={edge.label.clone()}
+            style={format!(
+                "position:absolute;left:{:.2}px;top:{:.2}px;width:{:.2}px;{}opacity:{:.2};
+                 transform:rotate({:.2}deg);transform-origin:left center;pointer-events:none;
+                 filter:{};transition:opacity 160ms ease, filter 160ms ease;",
+                source.x,
+                source.y,
+                length,
+                line_style,
+                opacity,
+                angle,
+                if selected { format!("drop-shadow(0 0 7px {color})") } else { "none".into() },
+            )}
+        />
+    }
+}
+
+fn interactive_graph_node(
+    node: &GraphNode,
+    is_selected: bool,
+    is_related: bool,
+    max_claims: u32,
+    on_select: Callback<String>,
+) -> Html {
+    let on_select = {
+        let on_select = on_select.clone();
+        let id = node.id.clone();
+        Callback::from(move |_| on_select.emit(id.clone()))
+    };
+    let faded = !is_selected && !is_related;
+
+    match node.kind {
+        NodeKind::Provider => {
+            let base_r = 14.0 + 24.0 * (node.claim_count as f64 / max_claims as f64).sqrt();
+            let size = if is_selected {
+                base_r * 2.25
+            } else {
+                base_r * 2.0
+            };
+            let fill = provider_color(&node.risk_tier, node.risk_score);
+            let dim = rgb_from_hex(fill);
+            html! {
+                <button
+                    onclick={on_select}
+                    style={format!(
+                        "position:absolute;left:{:.2}px;top:{:.2}px;width:{:.2}px;height:{:.2}px;
+                         transform:translate(-50%,-50%);border-radius:999px;border:{} solid {};
+                         background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.22), rgba({},0.22) 42%, rgba({},0.08) 100%);
+                         color:{};display:grid;place-items:center;cursor:pointer;padding:0;
+                         opacity:{:.2};box-shadow:{};transition:transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;",
+                        node.x,
+                        node.y,
+                        size,
+                        size,
+                        if is_selected { "3px" } else { "1.5px" },
+                        fill,
+                        dim,
+                        dim,
+                        fill,
+                        if selected_visibility(faded, is_selected) { 1.0 } else { 0.36 },
+                        if is_selected {
+                            format!("0 0 0 12px rgba({},0.12), 0 0 28px rgba({},0.52)", dim, dim)
+                        } else {
+                            format!("0 0 16px rgba({},0.24)", dim)
+                        },
+                    )}
+                >
+                    <span style="font-size:13px;font-weight:850;line-height:1;">{node.risk_score}</span>
+                    if !node.outlier_flags.is_empty() {
+                        <span style="position:absolute;right:-4px;top:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#ff4d6d;color:white;border:2px solid #0d1117;font-size:9px;font-weight:850;display:grid;place-items:center;">
+                            {node.outlier_flags.len()}
+                        </span>
+                    }
+                    <span style="position:absolute;left:50%;top:calc(100% + 7px);transform:translateX(-50%);max-width:110px;color:rgba(200,210,230,0.76);font-size:10px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        {node.label.clone()}
+                    </span>
+                </button>
+            }
+        }
+        NodeKind::Member => {
+            let size = if is_selected { 24.0 } else { 17.0 };
+            html! {
+                <button
+                    onclick={on_select}
+                    style={format!(
+                        "position:absolute;left:{:.2}px;top:{:.2}px;width:{:.2}px;height:{:.2}px;
+                         transform:translate(-50%,-50%);border-radius:999px;border:{} solid {};
+                         background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.2), rgba(76,155,232,0.22));
+                         color:#60a5fa;display:grid;place-items:center;cursor:pointer;padding:0;
+                         opacity:{:.2};box-shadow:{};transition:transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;",
+                        node.x,
+                        node.y,
+                        size,
+                        size,
+                        if is_selected { "2px" } else { "1px" },
+                        if is_selected { "#60a5fa" } else { "#4c9be8" },
+                        if selected_visibility(faded, is_selected) { 1.0 } else { 0.32 },
+                        if is_selected {
+                            "0 0 0 9px rgba(96,165,250,0.12), 0 0 20px rgba(96,165,250,0.45)"
+                        } else {
+                            "0 0 10px rgba(76,155,232,0.25)"
+                        },
+                    )}
+                >
+                    <span style="font-size:9px;font-weight:850;">{"M"}</span>
+                    <span style="position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);max-width:86px;color:rgba(147,186,234,0.7);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        {node.label.clone()}
+                    </span>
+                </button>
+            }
+        }
+    }
+}
+
+fn selected_visibility(faded: bool, is_selected: bool) -> bool {
+    !faded || is_selected
+}
+
+fn legend_dot(color: &str, label: &str) -> Html {
+    html! {
+        <span style="display:inline-flex;align-items:center;gap:5px;color:rgba(200,210,230,0.66);font-size:10px;">
+            <i style={format!("width:9px;height:9px;border-radius:999px;background:rgba({},0.22);border:1px solid {color};display:inline-block;", rgb_from_hex(color))}></i>
+            {label}
+        </span>
+    }
+}
+
+fn legend_line(color: &str, dashed: bool, label: &str) -> Html {
+    html! {
+        <span style="display:inline-flex;align-items:center;gap:5px;color:rgba(200,210,230,0.66);font-size:10px;">
+            <i style={format!("width:22px;height:0;border-top:1.5px {} {color};display:inline-block;", if dashed { "dashed" } else { "solid" })}></i>
+            {label}
+        </span>
     }
 }
 

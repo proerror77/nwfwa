@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         CaseRecord, LeadRecord, TriageLeadInput, TriageLeadRecord, UpdateCaseStatusInput,
@@ -13,6 +13,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use fwa_auth::AuthenticatedPrincipal;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -39,10 +40,11 @@ pub async fn list_leads(
 
 pub async fn triage_lead(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(lead_id): Path<String>,
     Json(mut request): Json<TriageLeadInput>,
 ) -> Result<Json<TriageLeadRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:cases:write")?;
     validate_triage_request(&lead_id, &request)?;
     request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
@@ -134,10 +136,11 @@ pub async fn list_cases(
 
 pub async fn update_case_status(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(case_id): Path<String>,
     Json(mut request): Json<UpdateCaseStatusInput>,
 ) -> Result<Json<UpdateCaseStatusRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:cases:write")?;
     if !is_supported_case_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -228,4 +231,18 @@ fn validate_case_workflow_production_evidence_refs(
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

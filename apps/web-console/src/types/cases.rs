@@ -71,12 +71,6 @@ pub(crate) struct TriageLeadRecord {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
-pub(crate) struct UpdateCaseStatusRecord {
-    pub(crate) case: CaseRecord,
-    pub(crate) audit_id: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
 pub(crate) struct PilotWritebackResponse {
     pub(crate) claim_id: String,
     pub(crate) event_type: String,

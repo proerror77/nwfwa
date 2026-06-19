@@ -381,12 +381,19 @@ fn insert_number_with_metadata(
     field: &str,
     metadata: FeatureMetadata<'_>,
 ) {
+    // serde_json::to_value succeeds for all numeric/string primitives currently
+    // passed here.  We propagate failure by skipping the insertion rather than
+    // panicking in the hot scoring path — a missing feature causes a zero
+    // contribution rather than a crash.
+    let Ok(json_value) = serde_json::to_value(value) else {
+        return;
+    };
     features.insert(
         name.to_string(),
         FeatureValue {
             name: name.to_string(),
             version: 1,
-            value: serde_json::to_value(value).expect("feature value serializes"),
+            value: json_value,
             is_proxy: metadata.is_proxy,
             data_source: metadata.data_source.to_string(),
             evidence_refs: vec![EvidenceRef {

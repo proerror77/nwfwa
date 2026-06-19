@@ -18,6 +18,19 @@ pub struct AnomalyScore {
 // BASELINE: heuristic thresholds; replace with IQR/MAD or unsupervised ensemble
 // scoring after accumulated labels/history are sufficient, initially defined as
 // >=500 confirmed_fwa labels or 30-day recall below 0.70 in monitoring.
+//
+// Signal weights:                      contribution  score weight
+//   claim_amount_peer_percentile        0.30          +30
+//   diagnosis_procedure_match_score     0.25          +25
+//   high_cost_item_ratio                0.25          +25  (was +20 — raised to
+//                                                           reach max score 100)
+//   provider_profile_score              0.20          +20
+//                                       ────          ────
+//   maximum achievable score            1.00          100
+//
+// `contribution` is the relative weight as a fraction of the theoretical maximum;
+// it is NOT computed dynamically per-evaluation.  A future ML-driven anomaly scorer
+// should replace these with SHAP or integrated-gradient values.
 pub fn detect_anomaly(features: &FeatureMap) -> AnomalyScore {
     let mut score = 0_u16;
     let mut explanations = Vec::new();
@@ -32,10 +45,10 @@ pub fn detect_anomaly(features: &FeatureMap) -> AnomalyScore {
     }
 
     if numeric_feature(features, "high_cost_item_ratio").unwrap_or(0.0) >= 0.8 {
-        score += 20;
+        score += 25;
         explanations.push(AnomalyExplanation {
             signal: "high_cost_item_ratio".into(),
-            contribution: 0.20,
+            contribution: 0.25,
             reason: "高价项目占比较高".into(),
         });
     }
@@ -124,8 +137,68 @@ mod tests {
 
         let anomaly = detect_anomaly(&features);
 
-        assert_eq!(anomaly.score, 75);
+        // 30 (peer) + 25 (high_cost) + 25 (diagnosis) = 80
+        assert_eq!(anomaly.score, 80);
         assert_eq!(anomaly.anomaly_type, "rare_claim_pattern");
         assert_eq!(anomaly.explanations.len(), 3);
+    }
+
+    #[test]
+    fn all_four_signals_reach_max_score_100() {
+        let mut features = BTreeMap::new();
+        for (name, value) in [
+            ("claim_amount_peer_percentile", serde_json::json!(99)),
+            ("high_cost_item_ratio", serde_json::json!(0.9)),
+            ("diagnosis_procedure_match_score", serde_json::json!(0.1)),
+            ("provider_profile_score", serde_json::json!(80)),
+        ] {
+            features.insert(
+                name.into(),
+                FeatureValue {
+                    name: name.into(),
+                    version: 1,
+                    value,
+                    is_proxy: false,
+                    data_source: "test_fixture".into(),
+                    evidence_refs: vec![],
+                },
+            );
+        }
+
+        let anomaly = detect_anomaly(&features);
+        // 30 + 25 + 25 + 20 = 100 — all signals fire, max score is now reachable
+        assert_eq!(anomaly.score, 100);
+        assert_eq!(anomaly.anomaly_type, "rare_claim_pattern");
+        assert_eq!(anomaly.explanations.len(), 4);
+        // Contributions must sum to exactly 1.0
+        let total: f64 = anomaly.explanations.iter().map(|e| e.contribution).sum();
+        assert!((total - 1.0).abs() < 1e-9, "contributions sum to {total}");
+    }
+
+    #[test]
+    fn no_signals_produce_zero_score() {
+        let anomaly = detect_anomaly(&BTreeMap::new());
+        assert_eq!(anomaly.score, 0);
+        assert_eq!(anomaly.anomaly_type, "routine_pattern");
+        assert!(anomaly.explanations.is_empty());
+    }
+
+    #[test]
+    fn single_peer_outlier_signal_does_not_exceed_30() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount_peer_percentile".into(),
+            FeatureValue {
+                name: "claim_amount_peer_percentile".into(),
+                version: 1,
+                value: serde_json::json!(98),
+                is_proxy: false,
+                data_source: "test_fixture".into(),
+                evidence_refs: vec![],
+            },
+        );
+        let anomaly = detect_anomaly(&features);
+        assert_eq!(anomaly.score, 30);
+        assert_eq!(anomaly.anomaly_type, "routine_pattern");
     }
 }

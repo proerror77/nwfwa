@@ -3,10 +3,6 @@ use crate::state::Language;
 use crate::visual_helpers::*;
 use yew::prelude::*;
 
-pub fn evidence_hub_page(on_navigate: Callback<String>) -> Html {
-    evidence_hub_page_with_language(on_navigate, Language::Zh)
-}
-
 pub fn evidence_hub_page_with_language(on_navigate: Callback<String>, language: Language) -> Html {
     html! {
         <section class="workflow-hub">

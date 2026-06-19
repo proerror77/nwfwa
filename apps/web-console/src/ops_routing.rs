@@ -190,12 +190,76 @@ impl OpsPage {
     }
 }
 
-pub(crate) const PRIMARY_OPS_NAV: &[OpsPage] = &[
+pub(crate) struct OpsNavGroup {
+    title_en: &'static str,
+    title_zh: &'static str,
+    pages: &'static [OpsPage],
+}
+
+impl OpsNavGroup {
+    pub(crate) fn title_for(&self, language: Language) -> &'static str {
+        match language {
+            Language::En => self.title_en,
+            Language::Zh => self.title_zh,
+        }
+    }
+
+    pub(crate) fn pages(&self) -> &'static [OpsPage] {
+        self.pages
+    }
+}
+
+pub(crate) const DAILY_OPS_NAV: &[OpsPage] = &[
     OpsPage::Dashboard,
     OpsPage::ClaimsQueue,
+    OpsPage::CaseTracker,
+];
+
+pub(crate) const INVESTIGATION_NAV: &[OpsPage] = &[
     OpsPage::ReviewWorkbench,
     OpsPage::EvidenceHub,
+    OpsPage::EvidenceRuntime,
+    OpsPage::MemberProfile,
+    OpsPage::ProviderRisk,
+    OpsPage::KnowledgeBase,
+    OpsPage::DataSources,
+    OpsPage::AgentInvestigator,
+];
+
+pub(crate) const RULES_MODELS_NAV: &[OpsPage] = &[
+    OpsPage::RuleLibrary,
+    OpsPage::ModelGovernance,
+    OpsPage::RoutingPolicies,
+];
+
+pub(crate) const GOVERNANCE_NAV: &[OpsPage] = &[
     OpsPage::GovernanceHub,
+    OpsPage::AuditSampling,
+    OpsPage::MedicalReview,
+    OpsPage::QaReview,
+];
+
+pub(crate) const OPS_NAV_GROUPS: &[OpsNavGroup] = &[
+    OpsNavGroup {
+        title_en: "Daily Ops",
+        title_zh: "日常运营",
+        pages: DAILY_OPS_NAV,
+    },
+    OpsNavGroup {
+        title_en: "Investigation",
+        title_zh: "调查工具",
+        pages: INVESTIGATION_NAV,
+    },
+    OpsNavGroup {
+        title_en: "Rules & Models",
+        title_zh: "规则与模型",
+        pages: RULES_MODELS_NAV,
+    },
+    OpsNavGroup {
+        title_en: "Governance",
+        title_zh: "治理质控",
+        pages: GOVERNANCE_NAV,
+    },
 ];
 
 pub(crate) const ALL_OPS_PAGES: &[OpsPage] = &[

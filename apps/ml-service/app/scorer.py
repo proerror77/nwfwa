@@ -60,7 +60,7 @@ def score_with_heuristic(request: ScoreRequest) -> ScoreResponse:
 
 def score_with_artifact(request: ScoreRequest, artifact_uri: str) -> ScoreResponse:
     artifact_sha256 = verify_artifact_checksum(artifact_uri)
-    bundle = load_model_artifact(artifact_uri)
+    bundle = load_model_artifact(artifact_uri, artifact_sha256)
     verify_model_version_lock(str(bundle["model_version"]))
     verify_artifact_signature(
         str(bundle["model_key"]),
@@ -186,7 +186,7 @@ def shadow_status(delta: int) -> str:
 
 
 @lru_cache(maxsize=4)
-def load_model_artifact(artifact_uri: str) -> dict[str, Any]:
+def load_model_artifact(artifact_uri: str, artifact_sha256: str) -> dict[str, Any]:
     bundle = joblib.load(artifact_uri)
     required_keys = {
         "model_key",

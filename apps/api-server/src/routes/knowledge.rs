@@ -9,6 +9,7 @@ use crate::{
     routes::pii,
 };
 use axum::{extract::State, http::StatusCode, Json};
+use fwa_audit::ActorContext;
 use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
@@ -68,9 +69,10 @@ pub async fn list_cases(
 
 pub async fn publish_case(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(mut request): Json<PublishKnowledgeCaseRequest>,
 ) -> Result<Json<PublishKnowledgeCaseResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:knowledge:write")?;
     validate_publish_knowledge_case(&request)?;
     merge_latest_canonical_evidence_refs(&state, &actor.customer_scope_id, &mut request).await?;
 
@@ -317,7 +319,10 @@ fn validate_similar_case_search(request: &SimilarCaseSearchRequest) -> Result<()
     Ok(())
 }
 
-fn require_permission(principal: AuthenticatedPrincipal, permission: &str) -> Result<(), ApiError> {
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
     if !principal.has_permission(permission) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
@@ -325,7 +330,7 @@ fn require_permission(principal: AuthenticatedPrincipal, permission: &str) -> Re
             format!("missing permission: {permission}"),
         ));
     }
-    Ok(())
+    Ok(principal.actor)
 }
 
 fn internal_error(

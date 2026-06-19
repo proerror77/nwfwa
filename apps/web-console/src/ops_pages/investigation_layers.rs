@@ -65,38 +65,6 @@ fn default_min_evidence(scheme: &str) -> Vec<&'static str> {
     }
 }
 
-// ── Supplement-request button (needs local state → sub-component) ──────────────
-
-#[derive(Properties, PartialEq)]
-struct SupplementRequestButtonProps {
-    language: Language,
-}
-
-#[function_component(SupplementRequestButton)]
-fn supplement_request_button(props: &SupplementRequestButtonProps) -> Html {
-    let sent = use_state(|| false);
-    if *sent {
-        html! {
-            <div style="padding:8px 12px;background:#e8f7ee;border:1px solid #1a7a3c;border-radius:4px;font-size:0.82rem;color:#1a7a3c;">
-                {tr(props.language, "Evidence request sent (mock)", "补件通知已发送（Mock）")}
-            </div>
-        }
-    } else {
-        let on_click = {
-            let sent = sent.clone();
-            Callback::from(move |_: MouseEvent| sent.set(true))
-        };
-        html! {
-            <button
-                style="background:var(--blue);color:var(--graphite);border:none;border-radius:6px;padding:8px 16px;font-size:0.85rem;cursor:pointer;font-weight:600;"
-                onclick={on_click}
-            >
-                {tr(props.language, "Send evidence request", "发补件请求")}
-            </button>
-        }
-    }
-}
-
 // ── Layer 1: Document Completeness + Amount Reasonableness ────────────────────
 
 pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: Language) -> Html {
@@ -260,7 +228,11 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: 
 
             // Supplement request
             { if any_missing {
-                html! { <SupplementRequestButton language={language} /> }
+                html! {
+                    <div style="padding:8px 12px;background:var(--amber-soft);border:1px solid var(--amber);border-radius:4px;font-size:0.82rem;color:var(--graphite);">
+                        {tr(language, "Use the Recommendation panel to queue an evidence request through the governed lead triage path.", "请在右侧调查建议面板选择“需补充材料”，通过受控线索分流路径提交补件请求。")}
+                    </div>
+                }
             } else { html! {} } }
         </div>
     }
@@ -1013,84 +985,84 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext, language: La
                 <span style="font-size:0.75rem;color:var(--muted);">{tr(language, "Cluster effect check", "是否存在群聚效应？")}</span>
             </div>
 
-            // Mini SVG graph
+            // Mini interactive HTML graph
             <div style="display:flex;justify-content:center;margin-bottom:14px;">
-                <svg width="340" height="220"
-                     style="background:var(--surface-muted);border:1px solid var(--line);border-radius:8px;display:block;">
-
-                    // Edges: Member → Provider
-                    <line x1="70" y1="110" x2={format!("{}", 170 - prov_r as i32)}
-                          y2="110" stroke="var(--blue)" stroke-width="1.5" />
-
-                    // Edge label for Member → Provider
-                    <text x="115" y="103" font-size="10" fill="var(--muted)" text-anchor="middle">
+                <div style="position:relative;width:340px;height:220px;background:
+                            radial-gradient(circle at 50% 48%, rgba(216,40,79,0.12), transparent 42%),
+                            repeating-linear-gradient(0deg, rgba(23,105,224,0.06) 0 1px, transparent 1px 24px),
+                            repeating-linear-gradient(90deg, rgba(23,105,224,0.06) 0 1px, transparent 1px 24px),
+                            var(--surface-muted);
+                            border:1px solid var(--line);border-radius:8px;overflow:hidden;">
+                    {mini_relation_edge(70.0, 110.0, 170.0 - prov_r as f64, 110.0, "var(--blue)", false, 1.5)}
+                    <span style="position:absolute;left:94px;top:91px;font-size:10px;color:var(--muted);background:rgba(247,250,255,0.82);padding:1px 5px;border-radius:999px;">
                         {match language {
                             Language::En => format!("{claim_count} claims"),
                             Language::Zh => format!("{claim_count}笔理赔"),
                         }}
-                    </text>
+                    </span>
 
-                    // Edges: Provider → Other providers (dashed red)
                     { for other_nodes.iter().map(|(_, ox, oy)| {
-                        let x1 = 170 + prov_r as i32;
-                        let y1 = 110i32;
-                        let x2 = *ox as i32 - 12;
-                        let y2 = *oy as i32;
-                        html! {
-                            <line x1={format!("{x1}")} y1={format!("{y1}")}
-                                  x2={format!("{x2}")} y2={format!("{y2}")}
-                                  stroke="var(--red)" stroke-width="1.2"
-                                  stroke-dasharray="4 3" />
-                        }
+                        mini_relation_edge(170.0 + prov_r as f64, 110.0, *ox as f64 - 13.0, *oy as f64, "var(--red)", true, 1.2)
                     }) }
 
-                    // Member node (blue, fixed size 14)
-                    <circle cx="70" cy="110" r="14" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2" />
-                    <text x="70" y="114" font-size="9" fill="var(--blue)" text-anchor="middle">{"M"}</text>
-                    <text x="70" y="133" font-size="8" fill="var(--muted)" text-anchor="middle">
-                        { member_label.chars().take(8).collect::<String>() }
-                    </text>
-
-                    // Provider node (red, size from risk score)
-                    <circle cx="170" cy="110" r={format!("{prov_r}")}
-                            fill="#2d0a0a" stroke="var(--red)" stroke-width="2" />
-                    <text x="170" y="114" font-size="9" fill="var(--red)" text-anchor="middle">{"P"}</text>
-                    <text x="170" y={format!("{}", 110 + prov_r as i32 + 12)}
-                          font-size="8" fill="var(--muted)" text-anchor="middle">
-                        { provider_label.chars().take(10).collect::<String>() }
-                    </text>
-
-                    // Other provider nodes (smaller, orange)
-                    { for other_nodes.iter().map(|(pid, ox, oy)| {
-                        html! {
-                            <>
-                                <circle cx={format!("{ox}")} cy={format!("{oy}")} r="12"
-                                        fill="#fff1e8" stroke="var(--amber)" stroke-width="1.5" />
-                                <text x={format!("{ox}")} y={format!("{}", *oy + 4)}
-                                      font-size="9" fill="var(--amber)" text-anchor="middle">{"P"}</text>
-                                <text x={format!("{ox}")} y={format!("{}", *oy + 20)}
-                                      font-size="7" fill="var(--muted)" text-anchor="middle">
-                                    { pid.chars().take(8).collect::<String>() }
-                                </text>
-                            </>
-                        }
-                    }) }
-
-                    // Confirmed FWA label at bottom
                     { if has_confirmed_fwa_audit || confirmed_fwa_count > 0 {
                         html! {
                             <>
-                                <rect x="115" y="182" width="110" height="20"
-                                      rx="4" fill="var(--red-soft)" stroke="var(--red)" stroke-width="1" />
-                                <text x="170" y="196" font-size="9" fill="var(--red)"
-                                      text-anchor="middle">{tr(language, "Confirmed FWA", "已确认 FWA")}</text>
-                                <line x1="170" y1={format!("{}", 110 + prov_r as i32)}
-                                      x2="170" y2="182"
-                                      stroke="var(--red)" stroke-width="1" stroke-dasharray="3 2" />
+                                {mini_relation_edge(170.0, 110.0 + prov_r as f64, 170.0, 182.0, "var(--red)", true, 1.0)}
+                                <span style="position:absolute;left:115px;top:182px;width:110px;height:22px;display:grid;place-items:center;border-radius:5px;background:var(--red-soft);border:1px solid var(--red);color:var(--red);font-size:9px;font-weight:750;">
+                                    {tr(language, "Confirmed FWA", "已确认 FWA")}
+                                </span>
                             </>
                         }
                     } else { html! {} } }
-                </svg>
+
+                    <button title={member_label.clone()} style="position:absolute;left:70px;top:110px;width:32px;height:32px;transform:translate(-50%,-50%);border-radius:999px;background:var(--blue-soft);border:2px solid var(--blue);color:var(--blue);font-size:10px;font-weight:850;box-shadow:0 0 0 7px rgba(23,105,224,0.08);">
+                        {"M"}
+                    </button>
+                    <span style="position:absolute;left:42px;top:128px;width:56px;text-align:center;font-size:8px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        { member_label.chars().take(8).collect::<String>() }
+                    </span>
+
+                    <button title={provider_label.to_string()} style={format!(
+                        "position:absolute;left:170px;top:110px;width:{}px;height:{}px;transform:translate(-50%,-50%);
+                         border-radius:999px;background:radial-gradient(circle at 35% 28%, rgba(255,255,255,0.2), rgba(216,40,79,0.18));
+                         border:2px solid var(--red);color:var(--red);font-size:10px;font-weight:850;
+                         box-shadow:0 0 0 9px rgba(216,40,79,0.09),0 0 22px rgba(216,40,79,0.26);",
+                        prov_r * 2,
+                        prov_r * 2
+                    )}>
+                        {"P"}
+                    </button>
+                    <span style={format!(
+                        "position:absolute;left:120px;top:{}px;width:100px;text-align:center;font-size:8px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                        110 + prov_r as i32 + 8
+                    )}>
+                        { provider_label.chars().take(10).collect::<String>() }
+                    </span>
+
+                    { for other_nodes.iter().map(|(pid, ox, oy)| {
+                        html! {
+                            <>
+                                <button title={pid.to_string()} style={format!(
+                                    "position:absolute;left:{}px;top:{}px;width:28px;height:28px;transform:translate(-50%,-50%);
+                                     border-radius:999px;background:var(--amber-soft);border:1.5px solid var(--amber);
+                                     color:var(--amber);font-size:10px;font-weight:850;box-shadow:0 0 0 6px rgba(183,121,31,0.08);",
+                                    ox,
+                                    oy
+                                )}>
+                                    {"P"}
+                                </button>
+                                <span style={format!(
+                                    "position:absolute;left:{}px;top:{}px;width:58px;transform:translateX(-50%);text-align:center;font-size:7px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                                    ox,
+                                    oy + 17
+                                )}>
+                                    { pid.chars().take(8).collect::<String>() }
+                                </span>
+                            </>
+                        }
+                    }) }
+                </div>
             </div>
 
             // Text summary below graph
@@ -1126,6 +1098,34 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext, language: La
                 } else { html! {} } }
             </div>
         </div>
+    }
+}
+
+fn mini_relation_edge(
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    color: &str,
+    dashed: bool,
+    thickness: f64,
+) -> Html {
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let length = (dx * dx + dy * dy).sqrt();
+    let angle = dy.atan2(dx).to_degrees();
+    let line_style = if dashed {
+        format!("border-top:{thickness:.1}px dashed {color};height:0;")
+    } else {
+        format!("height:{thickness:.1}px;background:{color};")
+    };
+
+    html! {
+        <span style={format!(
+            "position:absolute;left:{x1:.1}px;top:{y1:.1}px;width:{length:.1}px;{};
+             transform:rotate({angle:.2}deg);transform-origin:left center;opacity:0.72;pointer-events:none;",
+            line_style
+        )}></span>
     }
 }
 

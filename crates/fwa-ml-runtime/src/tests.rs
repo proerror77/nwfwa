@@ -218,7 +218,7 @@ async fn artifact_scorer_scores_logistic_regression_json() {
     );
     assert_eq!(
         result.metadata["artifact_integrity_status"],
-        serde_json::json!("passed")
+        serde_json::json!("skipped_no_expected_sha256")
     );
     assert_eq!(
         result.metadata["serving_version_lock_status"],

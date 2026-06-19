@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent},
     routes::pii,
@@ -10,6 +10,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -107,9 +108,10 @@ pub async fn medical_review_queue(
 
 pub async fn submit_medical_review_result(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(mut request): Json<SubmitMedicalReviewResultRequest>,
 ) -> Result<Json<MedicalReviewResultResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:medical:write")?;
     validate_medical_review_result(&request)?;
     merge_canonical_evidence_refs_for_medical_review(
         &state,
@@ -460,4 +462,18 @@ fn medical_review_status(decision: &str) -> &'static str {
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
