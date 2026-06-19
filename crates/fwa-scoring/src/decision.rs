@@ -18,8 +18,21 @@ pub(crate) fn decision_context(
     confidence: &str,
     policy: &RoutingPolicy,
 ) -> DecisionContext {
+    // Within each action class, the highest-scoring rule wins.  Sort a local
+    // slice so `first_rule_with_action_class` is deterministic regardless of
+    // the order rules were evaluated.
+    let mut sorted: Vec<&RuleMatch> = rule_matches.iter().collect();
+    sorted.sort_by(|a, b| {
+        b.score_contribution
+            .cmp(&a.score_contribution)
+            .then_with(|| a.rule_id.cmp(&b.rule_id))
+            .then_with(|| a.alert_code.cmp(&b.alert_code))
+    });
+
     if policy.review_mode == "post_payment" {
-        if let Some(rule_match) = rule_matches.iter().find(|rule_match| {
+        // ScoreOnly and StraightThrough rules are excluded from post-payment
+        // escalation — they carry no investigation authority.
+        if let Some(rule_match) = sorted.iter().copied().find(|rule_match| {
             rule_match.action_class != RuleActionClass::ScoreOnly
                 && rule_match.action_class != RuleActionClass::StraightThrough
         }) {
@@ -31,8 +44,7 @@ pub(crate) fn decision_context(
             );
         }
     }
-    if let Some(rule_match) = first_rule_with_action_class(rule_matches, RuleActionClass::HardDeny)
-    {
+    if let Some(rule_match) = first_rule_with_action_class(&sorted, RuleActionClass::HardDeny) {
         if deterministic_adjudication_ready(rule_match) {
             return rule_decision_context(
                 rule_match,
@@ -49,7 +61,7 @@ pub(crate) fn decision_context(
         );
     }
     if let Some(rule_match) =
-        first_rule_with_action_class(rule_matches, RuleActionClass::PendingEvidence)
+        first_rule_with_action_class(&sorted, RuleActionClass::PendingEvidence)
     {
         return rule_decision_context(
             rule_match,
@@ -58,9 +70,7 @@ pub(crate) fn decision_context(
             rule_authority(rule_match),
         );
     }
-    if let Some(rule_match) =
-        first_rule_with_action_class(rule_matches, RuleActionClass::ManualReview)
-    {
+    if let Some(rule_match) = first_rule_with_action_class(&sorted, RuleActionClass::ManualReview) {
         return rule_decision_context(
             rule_match,
             DecisionOutcome::ManualReview,
@@ -69,7 +79,7 @@ pub(crate) fn decision_context(
         );
     }
     if let Some(rule_match) =
-        first_rule_with_action_class(rule_matches, RuleActionClass::StraightThrough)
+        first_rule_with_action_class(&sorted, RuleActionClass::StraightThrough)
     {
         if !deterministic_adjudication_ready(rule_match) {
             return rule_decision_context(
@@ -100,12 +110,13 @@ pub(crate) fn decision_context(
     }
 }
 
-fn first_rule_with_action_class(
-    rule_matches: &[RuleMatch],
+fn first_rule_with_action_class<'a>(
+    rule_matches: &[&'a RuleMatch],
     action_class: RuleActionClass,
-) -> Option<&RuleMatch> {
+) -> Option<&'a RuleMatch> {
     rule_matches
         .iter()
+        .copied()
         .find(|rule_match| rule_match.action_class == action_class)
 }
 

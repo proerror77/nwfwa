@@ -268,7 +268,7 @@ fn excludes_peer_proxy_from_final_weight_when_peer_percentile_is_missing() {
 
     let decision = aggregate(&features, &[], &model(0), &anomaly(0), 0);
 
-    assert_eq!(decision.peer_deviation_score, 100);
+    assert_eq!(decision.peer_deviation_score, 0);
     assert_eq!(decision.layers[0].status, "proxy_excluded");
     assert!(decision.layers[0].reason.contains("已从最终加权分排除"));
     assert_eq!(decision.risk_score.value(), 0);
@@ -620,6 +620,29 @@ fn pending_evidence_takes_precedence_over_approved_straight_through_rule() {
 }
 
 #[test]
+fn same_action_class_uses_highest_scoring_rule_for_reason_code() {
+    let mut lower_manual_rule = rule(20);
+    lower_manual_rule.rule_id = "rule_lower_manual".into();
+    lower_manual_rule.alert_code = "LOWER_MANUAL_REVIEW".into();
+
+    let mut higher_manual_rule = rule(60);
+    higher_manual_rule.rule_id = "rule_higher_manual".into();
+    higher_manual_rule.alert_code = "HIGHER_MANUAL_REVIEW".into();
+
+    let decision = aggregate(
+        &BTreeMap::new(),
+        &[lower_manual_rule, higher_manual_rule],
+        &model(10),
+        &anomaly(0),
+        0,
+    );
+
+    assert_eq!(decision.decision_outcome, DecisionOutcome::ManualReview);
+    assert_eq!(decision.reason_code, "HIGHER_MANUAL_REVIEW");
+    assert!(decision.appeal_or_review_required);
+}
+
+#[test]
 fn model_and_anomaly_risk_do_not_auto_deny_without_hard_rule() {
     let decision = aggregate(&BTreeMap::new(), &[], &model(100), &anomaly(100), 100);
 
@@ -838,7 +861,7 @@ fn peer_proxy_score_does_not_raise_confidence() {
 
     let decision = aggregate(&features, &[], &model(0), &anomaly(0), 0);
 
-    assert_eq!(decision.peer_deviation_score, 100);
+    assert_eq!(decision.peer_deviation_score, 0);
     assert_eq!(decision.layers[0].status, "proxy_excluded");
     assert_eq!(decision.confidence_score, 0);
     assert_eq!(decision.confidence, "Low");

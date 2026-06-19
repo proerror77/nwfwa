@@ -526,12 +526,12 @@ fn amount_ratio_score(features: &FeatureMap) -> u8 {
     if let Some(percentile) = numeric_feature(features, "claim_amount_peer_percentile") {
         return percentile.round().clamp(0.0, 100.0) as u8;
     }
-    // PROXY BASELINE: this fallback is an amount-to-limit ratio, not a real
-    // peer percentile. Production L1 scoring must use peer distribution data or
-    // downweight/exclude this layer when peer context is missing.
-    numeric_feature(features, "claim_amount_to_limit_ratio")
-        .map(|ratio| (ratio * 100.0).round().clamp(0.0, 100.0) as u8)
-        .unwrap_or(0)
+    // PROXY BASELINE: no real peer distribution is available.
+    // Return 0 so the displayed L1 score is consistent with the
+    // `proxy_excluded` layer status and the weighted-score exclusion — a
+    // non-zero proxy value would mislead reviewers into thinking a real peer
+    // comparison fired.  The amount-to-limit ratio is not a peer percentile.
+    0
 }
 
 fn medical_reasonableness_score(features: &FeatureMap) -> u8 {
