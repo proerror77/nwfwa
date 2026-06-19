@@ -1,7 +1,7 @@
 use super::ops_bootstrap_types::*;
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{AuditEventListFilter, AuditHistoryEventRecord, LeadRecord, PersistedAuditEvent},
     routes::pii,
@@ -12,6 +12,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -60,4 +61,18 @@ fn not_found(code: &'static str, message: &'static str) -> impl FnOnce() -> ApiE
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+pub(super) fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

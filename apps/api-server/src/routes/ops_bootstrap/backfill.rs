@@ -2,9 +2,10 @@ use super::*;
 
 pub async fn create_historical_backfill(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<CreateHistoricalBackfillRequest>,
 ) -> Result<Json<HistoricalBackfillResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:bootstrap:write")?;
     validate_backfill_request(&request)?;
     let leads = state
         .repository
