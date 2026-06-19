@@ -137,8 +137,10 @@ pub struct DeterministicInvestigator;
 
 impl DeterministicInvestigator {
     pub fn investigate(self, request: InvestigationRequest) -> InvestigationPackage {
+        // NoopInvestigationCancellation::is_cancelled() always returns false, so
+        // investigate_with_cancellation cannot return Err on this path.
         self.investigate_with_cancellation(request, &NoopInvestigationCancellation)
-            .expect("noop cancellation cannot cancel")
+            .unwrap_or_else(|_| unreachable!("noop cancellation never cancels"))
     }
 
     pub fn investigate_with_cancellation(
