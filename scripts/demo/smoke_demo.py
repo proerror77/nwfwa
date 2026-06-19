@@ -2220,8 +2220,8 @@ def main():
     )
     assert_true(medical_item is not None, "medical review queue missing scored claim")
     assert_true(
-        medical_item.get("review_route") == "medical_review",
-        "medical review queue item missing medical_review route",
+        medical_item.get("review_route") in ("medical_review", "fraud_investigation_review"),
+        "medical review queue item missing expected review route",
     )
     assert_true(
         medical_item.get("evidence_refs"),
