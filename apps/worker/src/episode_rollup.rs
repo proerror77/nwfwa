@@ -290,7 +290,10 @@ fn episode_rollup(
     episode_key: String,
     claims: Vec<EpisodeClaimInput>,
 ) -> MemberProviderEpisodeRollup {
-    debug_assert!(!claims.is_empty(), "episode_rollup called with empty claims vec");
+    debug_assert!(
+        !claims.is_empty(),
+        "episode_rollup called with empty claims vec"
+    );
     let first = &claims[0];
     let member_id = first.member_id.trim().to_string();
     let provider_id = first.provider_id.trim().to_string();
