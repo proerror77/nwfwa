@@ -219,6 +219,7 @@ fn claim_context(external_claim_id: &str) -> ClaimContext {
             policy_id: policy_id.clone(),
             provider_id: provider_id.clone(),
             diagnosis_code: "J10".into(),
+            diagnosis_codes: vec![],
             service_date: NaiveDate::from_ymd_opt(2026, 1, 6).unwrap(),
             amount: Money::new(Decimal::new(8800, 0), "CNY"),
         },

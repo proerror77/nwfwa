@@ -53,7 +53,15 @@ pub struct Claim {
     pub member_id: MemberId,
     pub policy_id: PolicyId,
     pub provider_id: ProviderId,
+    /// Primary diagnosis code (ICD-10 or scheme-specific).  Required; used
+    /// as the single-code key in knowledge search, unbundling, and DB indexes.
     pub diagnosis_code: String,
+    /// Additional secondary diagnosis codes.  Optional; empty in legacy/demo
+    /// payloads.  Checked alongside `diagnosis_code` in rule conditions and
+    /// clinical evidence matching to avoid false negatives on multi-diagnosis
+    /// claims.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnosis_codes: Vec<String>,
     pub service_date: NaiveDate,
     pub amount: Money,
 }

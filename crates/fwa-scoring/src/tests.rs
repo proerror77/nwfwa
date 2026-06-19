@@ -223,7 +223,7 @@ fn aggregates_seven_layer_scores() {
     assert_eq!(decision.rule_score, 80);
     assert_eq!(decision.anomaly_score, 72);
     assert_eq!(decision.ml_score, 90);
-    assert_eq!(decision.medical_reasonableness_score, 90);
+    assert_eq!(decision.medical_reasonableness_score, 100); // proxy diagnosis_match halved → higher mismatch risk
     assert_eq!(decision.provider_network_score, 92);
     assert_eq!(decision.similar_case_score, 90);
     let layer_ids = decision
@@ -246,7 +246,7 @@ fn aggregates_seven_layer_scores() {
     assert_eq!(decision.layers[0].score, 95);
     assert_eq!(decision.layers[6].score, decision.risk_score.value());
     assert_eq!(decision.layers[6].status, "active");
-    assert_eq!(decision.risk_score.value(), 86);
+    assert_eq!(decision.risk_score.value(), 87); // medical_reasonableness raised by proxy dampening
     assert_eq!(decision.rag, RiskLevel::Red);
     assert_eq!(decision.risk_level, "Critical");
     assert_eq!(decision.confidence_score, 100);
