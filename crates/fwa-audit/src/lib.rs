@@ -72,7 +72,7 @@ impl AuditEventType {
     }
 
     /// Parse a string into the matching variant (returns `Other` for unknowns).
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_event_type(s: &str) -> Self {
         match s {
             "scoring.completed" => Self::ScoringCompleted,
             "scoring.failed" => Self::ScoringFailed,
@@ -116,7 +116,7 @@ pub struct AuditEvent {
     pub run_id: ScoringRunId,
     pub claim_id: ClaimId,
     pub actor: ActorContext,
-    /// Canonical event type string — use `AuditEventType::from_str` to match
+    /// Canonical event type string — use `AuditEventType::from_event_type` to match
     /// against known variants.
     pub event_type: String,
     pub event_status: AuditEventStatus,
@@ -402,13 +402,13 @@ mod tests {
         ];
         for variant in known {
             let s = variant.as_str().to_string();
-            assert_eq!(AuditEventType::from_str(&s).as_str(), s);
+            assert_eq!(AuditEventType::from_event_type(&s).as_str(), s);
         }
     }
 
     #[test]
     fn unknown_event_type_becomes_other() {
-        let t = AuditEventType::from_str("custom.event.type");
+        let t = AuditEventType::from_event_type("custom.event.type");
         assert!(matches!(t, AuditEventType::Other(_)));
         assert_eq!(t.as_str(), "custom.event.type");
     }

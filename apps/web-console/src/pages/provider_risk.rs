@@ -473,7 +473,11 @@ fn network_edge(
     let angle = dy.atan2(dx).to_degrees();
     let selected = selected_id.is_some_and(|id| edge.source == id || edge.target == id);
     let faded = selected_id.is_some() && !selected;
-    let color = if edge.is_risk_link { "#ff4d6d" } else { "#4c9be8" };
+    let color = if edge.is_risk_link {
+        "#ff4d6d"
+    } else {
+        "#4c9be8"
+    };
     let opacity = if faded {
         0.12
     } else if selected {
@@ -481,15 +485,17 @@ fn network_edge(
     } else {
         0.22 + edge.strength * 0.35
     };
-    let thickness = if selected { 3.0 } else { 1.0 + edge.strength * 2.0 };
+    let thickness = if selected {
+        3.0
+    } else {
+        1.0 + edge.strength * 2.0
+    };
     let line_style = if edge.is_risk_link {
         format!(
             "background:linear-gradient(90deg, transparent, {color}, transparent);height:{thickness:.1}px;"
         )
     } else {
-        format!(
-            "border-top:{thickness:.1}px dashed {color};height:0;background:transparent;"
-        )
+        format!("border-top:{thickness:.1}px dashed {color};height:0;background:transparent;")
     };
 
     html! {
@@ -528,7 +534,11 @@ fn interactive_graph_node(
     match node.kind {
         NodeKind::Provider => {
             let base_r = 14.0 + 24.0 * (node.claim_count as f64 / max_claims as f64).sqrt();
-            let size = if is_selected { base_r * 2.25 } else { base_r * 2.0 };
+            let size = if is_selected {
+                base_r * 2.25
+            } else {
+                base_r * 2.0
+            };
             let fill = provider_color(&node.risk_tier, node.risk_score);
             let dim = rgb_from_hex(fill);
             html! {
