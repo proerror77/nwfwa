@@ -99,11 +99,13 @@ CREATE INDEX IF NOT EXISTS idx_model_retraining_jobs_model_status
 -- CHECK CONSTRAINTS — enum / status columns
 --
 -- Use DO blocks with IF NOT EXISTS logic so this migration is idempotent.
+-- Values are verified against the Rust repository layer before being added.
 -- ──────────────────────────────────────────────────────────────────────────────
 
 DO $$
 BEGIN
   -- claims.status
+  -- Actual value written by postgres_claims.rs INSERT: 'submitted'.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'claims' AND constraint_name = 'chk_claims_status'
@@ -111,32 +113,37 @@ BEGIN
     ALTER TABLE claims
       ADD CONSTRAINT chk_claims_status
       CHECK (status IN (
-        'received', 'pending', 'scoring', 'scored', 'adjudicated',
-        'paid', 'denied', 'void', 'under_review'
+        'submitted', 'received', 'pending', 'scoring', 'scored',
+        'adjudicated', 'paid', 'denied', 'void', 'under_review'
       ));
   END IF;
 
   -- scoring_runs.rag
+  -- Stored via format!("{:?}", RagBand::Green) → PascalCase.
+  -- RagBand variants: Green, Amber, Red (no Critical in the enum).
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'scoring_runs' AND constraint_name = 'chk_scoring_runs_rag'
   ) THEN
     ALTER TABLE scoring_runs
       ADD CONSTRAINT chk_scoring_runs_rag
-      CHECK (rag IS NULL OR rag IN ('green', 'amber', 'red', 'critical'));
+      CHECK (rag IS NULL OR rag IN ('Green', 'Amber', 'Red'));
   END IF;
 
   -- scoring_runs.status
+  -- Values from postgres_scoring.rs: 'succeeded' on success path.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'scoring_runs' AND constraint_name = 'chk_scoring_runs_status'
   ) THEN
     ALTER TABLE scoring_runs
       ADD CONSTRAINT chk_scoring_runs_status
-      CHECK (status IN ('started', 'completed', 'failed'));
+      CHECK (status IN ('succeeded', 'failed', 'started', 'running'));
   END IF;
 
   -- fwa_leads.disposition
+  -- Values from triage_helpers.rs triage_disposition_for_decision:
+  -- 'open_case', 'rejected', 'pending_evidence', 'merged', 'pending_triage'.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'fwa_leads' AND constraint_name = 'chk_fwa_leads_disposition'
@@ -144,22 +151,25 @@ BEGIN
     ALTER TABLE fwa_leads
       ADD CONSTRAINT chk_fwa_leads_disposition
       CHECK (disposition IN (
-        'open', 'open_case', 'reject_lead', 'request_evidence',
-        'merge_lead', 'merged', 'closed'
+        'pending_triage', 'open_case', 'rejected', 'request_evidence',
+        'pending_evidence', 'merged', 'closed'
       ));
   END IF;
 
   -- fwa_leads.rag
+  -- Same format!("{:?}", RagBand) as scoring_runs.rag → PascalCase.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'fwa_leads' AND constraint_name = 'chk_fwa_leads_rag'
   ) THEN
     ALTER TABLE fwa_leads
       ADD CONSTRAINT chk_fwa_leads_rag
-      CHECK (rag IN ('green', 'amber', 'red', 'critical'));
+      CHECK (rag IN ('Green', 'Amber', 'Red'));
   END IF;
 
   -- investigation_cases.status
+  -- Values from triage_helpers.rs: 'triage' (initial), then
+  -- 'investigating', 'pending_evidence', 'confirmed', 'rejected', 'closed'.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'investigation_cases' AND constraint_name = 'chk_investigation_cases_status'
@@ -183,13 +193,14 @@ BEGIN
   END IF;
 
   -- providers.risk_tier
+  -- Stored via format!("{:?}", ProviderRiskTier::High) → PascalCase.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'providers' AND constraint_name = 'chk_providers_risk_tier'
   ) THEN
     ALTER TABLE providers
       ADD CONSTRAINT chk_providers_risk_tier
-      CHECK (risk_tier IN ('low', 'medium', 'high', 'LOW', 'MEDIUM', 'HIGH'));
+      CHECK (risk_tier IN ('Low', 'Medium', 'High'));
   END IF;
 
   -- qa_reviews.feedback_status
@@ -216,6 +227,7 @@ BEGIN
   END IF;
 
   -- audit_events.event_status
+  -- Values used throughout the codebase: 'succeeded', 'failed'.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'audit_events' AND constraint_name = 'chk_audit_events_event_status'
@@ -226,3 +238,4 @@ BEGIN
   END IF;
 END
 $$;
+
