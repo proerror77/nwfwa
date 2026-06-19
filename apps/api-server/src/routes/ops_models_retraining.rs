@@ -16,7 +16,7 @@ use super::ops_models_validation::{
 };
 use crate::{
     app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{
         CompleteModelRetrainingJobInput, ModelPerformanceRecord, ModelRetrainingJobRecord,
@@ -32,9 +32,10 @@ use fwa_auth::AuthenticatedPrincipal;
 
 pub async fn model_retraining_readiness(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelRetrainingReadinessResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:models:read")?;
     Ok(Json(
         load_model_retraining_readiness(&state, &model_key).await?,
     ))
@@ -42,9 +43,10 @@ pub async fn model_retraining_readiness(
 
 pub async fn list_model_retraining_jobs(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelRetrainingJobListResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:models:read")?;
     ensure_model_exists(&state, &model_key).await?;
     let jobs = state
         .repository

@@ -1,7 +1,7 @@
 use super::ops_rules_gates::{
     build_rule_promotion_gates, empty_rule_performance, latest_rule_action,
 };
-use crate::{app::AppState, auth::AuthenticatedActor, error::ApiError};
+use crate::{app::AppState, auth::AuthenticatedApiPrincipal, error::ApiError};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -19,8 +19,9 @@ pub use super::ops_rules_types::*;
 
 pub async fn list_rules(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<RuleListResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:rules:read")?;
     let rules = state
         .repository
         .list_rules()
@@ -31,8 +32,9 @@ pub async fn list_rules(
 
 pub async fn rule_performance(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<RulePerformanceResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:rules:read")?;
     let rules = state
         .repository
         .rule_performance()
@@ -43,8 +45,9 @@ pub async fn rule_performance(
 
 pub async fn list_rule_conditions(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<RuleConditionLibraryResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:rules:read")?;
     let conditions = state
         .repository
         .list_rule_conditions()
@@ -55,9 +58,10 @@ pub async fn list_rule_conditions(
 
 pub async fn rule_promotion_gates(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
 ) -> Result<Json<RulePromotionGatesResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:rules:read")?;
     Ok(Json(load_rule_promotion_gates(&state, &rule_id).await?))
 }
 
@@ -121,9 +125,10 @@ pub(super) async fn load_rule_promotion_gates(
 
 pub async fn get_rule(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
 ) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
+    let _ = require_permission(principal, "ops:rules:read")?;
     let rule = state
         .repository
         .get_rule(&rule_id)

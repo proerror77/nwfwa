@@ -1,4 +1,4 @@
-use fwa_core::ClaimContext;
+use fwa_core::{ClaimContext, ProviderRiskTier};
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -75,9 +75,9 @@ pub fn assess_clinical_evidence(
             item_code: item.item_code.clone(),
             issue_type: issue_type_for_item(item),
             required_evidence: required,
-            missing_evidence,
+            missing_evidence: missing_evidence.clone(),
             reason: reason_for_item(item),
-            review_route: "medical_review".into(),
+            review_route: review_route_for_item(context, item, &missing_evidence),
             evidence_refs,
         });
     }
@@ -109,13 +109,18 @@ pub fn assess_clinical_evidence(
         "sufficient_for_basic_review"
     };
 
+    // Graduated assessment-level route: escalate to fraud investigation when
+    // provider risk is High and medical necessity gaps exist; fall back to
+    // documentation review when only non-clinical records are missing.
+    let assessment_route = if review_required {
+        review_route_for_assessment(context, &item_findings)
+    } else {
+        "none".into()
+    };
+
     ClinicalEvidenceAssessment {
         review_required,
-        review_route: if review_required {
-            "medical_review".into()
-        } else {
-            "none".into()
-        },
+        review_route: assessment_route,
         evidence_status: evidence_status.into(),
         minimum_evidence,
         missing_evidence,
@@ -187,6 +192,80 @@ fn issue_type_for_item(item: &fwa_core::ClaimItem) -> String {
     } else {
         "medical_necessity_review_required".into()
     }
+}
+
+/// Determine the review route for a single item finding.
+///
+/// Routing tiers (in priority order):
+/// 1. `fraud_investigation_review` — provider is HIGH risk and there are
+///    medical necessity gaps; the combination of elevated provider risk and
+///    missing clinical evidence is a strong indicator of potential fraud.
+/// 2. `medical_review` — medical necessity evidence is missing (default for
+///    most items with gaps).
+/// 3. `documentation_review` — only non-clinical administrative records are
+///    missing (invoice, prescription_detail) — no medical necessity concern.
+fn review_route_for_item(
+    context: &ClaimContext,
+    item: &fwa_core::ClaimItem,
+    missing: &[String],
+) -> String {
+    if missing.is_empty() {
+        return "none".into();
+    }
+    let is_high_risk_provider = context.provider.risk_tier == ProviderRiskTier::High;
+    let has_medical_necessity_gap = missing.iter().any(|evidence| {
+        matches!(
+            evidence.as_str(),
+            "medical_record"
+                | "operation_record"
+                | "radiology_report"
+                | "lab_result"
+                | "dental_xray"
+                | "clinical_order"
+                | "lab_order"
+        )
+    });
+    let documentation_only = missing.iter().all(|evidence| {
+        matches!(
+            evidence.as_str(),
+            "invoice" | "prescription_detail" | "medication_order"
+        )
+    });
+    // Suppress unused-variable lint for item — item type could add more routing
+    // logic in future; keep it in the signature for forward-compatibility.
+    let _ = item;
+    if is_high_risk_provider && has_medical_necessity_gap {
+        "fraud_investigation_review".into()
+    } else if documentation_only {
+        "documentation_review".into()
+    } else {
+        "medical_review".into()
+    }
+}
+
+/// Determine the top-level assessment review route from all item findings.
+///
+/// If any item was routed to `fraud_investigation_review` the assessment
+/// inherits that route.  Otherwise the most severe individual route wins.
+fn review_route_for_assessment(
+    context: &ClaimContext,
+    item_findings: &[ClinicalEvidenceFinding],
+) -> String {
+    let has_fraud_route = item_findings
+        .iter()
+        .any(|f| !f.missing_evidence.is_empty() && f.review_route == "fraud_investigation_review");
+    if has_fraud_route {
+        return "fraud_investigation_review".into();
+    }
+    let has_medical_route = item_findings
+        .iter()
+        .any(|f| !f.missing_evidence.is_empty() && f.review_route == "medical_review");
+    if has_medical_route {
+        return "medical_review".into();
+    }
+    // Only documentation gaps remain.
+    let _ = context; // reserved for future context-driven escalation
+    "documentation_review".into()
 }
 
 fn reason_for_item(item: &fwa_core::ClaimItem) -> String {
@@ -299,7 +378,9 @@ mod tests {
         let assessment = assess_clinical_evidence(&context(), &[]);
 
         assert!(assessment.review_required);
-        assert_eq!(assessment.review_route, "medical_review");
+        // High-risk provider (ProviderRiskTier::High in test fixture) + missing
+        // medical_record → escalated to fraud_investigation_review.
+        assert_eq!(assessment.review_route, "fraud_investigation_review");
         assert!(assessment
             .missing_evidence
             .contains(&"medical_record".to_string()));

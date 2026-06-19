@@ -12,7 +12,7 @@ use super::ops_models_validation::{
 };
 use crate::{
     app::AppState,
-    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{
         AuditEventListFilter, ModelPerformanceRecord, ModelPromotionReviewRecord,
@@ -36,8 +36,9 @@ pub use super::ops_models_types::*;
 
 pub async fn list_models(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<ModelListResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:models:read")?;
     let models = state
         .repository
         .list_models()
@@ -48,9 +49,10 @@ pub async fn list_models(
 
 pub async fn model_performance(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
 ) -> Result<Json<crate::repository::ModelPerformanceRecord>, ApiError> {
+    let _ = require_permission(principal, "ops:models:read")?;
     let performance = state
         .repository
         .model_performance(&model_key)
@@ -64,18 +66,20 @@ pub async fn model_performance(
 
 pub async fn model_promotion_gates(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelPromotionGatesResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:models:read")?;
     let (_, gates) = load_model_promotion_gates(&state, &model_key).await?;
     Ok(Json(gates))
 }
 
 pub async fn model_version_promotion_gates(
     State(state): State<AppState>,
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((model_key, model_version)): Path<(String, String)>,
 ) -> Result<Json<ModelPromotionGatesResponse>, ApiError> {
+    let _ = require_permission(principal, "ops:models:read")?;
     let (_, gates) =
         load_model_promotion_gates_for_version(&state, &model_key, &model_version).await?;
     Ok(Json(gates))

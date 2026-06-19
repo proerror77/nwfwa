@@ -1,5 +1,6 @@
-use crate::{auth::AuthenticatedActor, error::ApiError};
-use axum::Json;
+use crate::{auth::AuthenticatedApiPrincipal, error::ApiError};
+use axum::{http::StatusCode, Json};
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{fwa_scheme_taxonomy, FwaSchemeDefinition};
 use serde::Serialize;
 
@@ -10,11 +11,23 @@ pub struct FwaSchemeListResponse {
 }
 
 pub async fn list_fwa_schemes(
-    _actor: AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
 ) -> Result<Json<FwaSchemeListResponse>, ApiError> {
+    require_permission(principal, "ops:schemes:read")?;
     let schemes = fwa_scheme_taxonomy();
     Ok(Json(FwaSchemeListResponse {
         scheme_count: schemes.len(),
         schemes,
     }))
+}
+
+fn require_permission(principal: AuthenticatedPrincipal, permission: &str) -> Result<(), ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(())
 }
