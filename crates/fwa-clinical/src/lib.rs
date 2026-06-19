@@ -243,6 +243,7 @@ mod tests {
                 policy_id: policy_id.clone(),
                 provider_id: provider_id.clone(),
                 diagnosis_code: "J10".into(),
+                diagnosis_codes: vec![],
                 service_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 6).unwrap(),
                 amount: Money::new(Decimal::new(12000, 0), "CNY"),
             },

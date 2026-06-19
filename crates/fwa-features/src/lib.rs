@@ -314,7 +314,11 @@ fn diagnosis_procedure_match_score(context: &ClaimContext) -> f64 {
         item.item_type.eq_ignore_ascii_case("procedure")
             && item.description.to_ascii_lowercase().contains("imaging")
     });
-    if has_imaging && context.claim.diagnosis_code.starts_with('J') {
+    // Check both the primary diagnosis code and any secondary codes.
+    let any_j_code = std::iter::once(context.claim.diagnosis_code.as_str())
+        .chain(context.claim.diagnosis_codes.iter().map(String::as_str))
+        .any(|code| code.starts_with('J'));
+    if has_imaging && any_j_code {
         0.35
     } else if has_imaging {
         0.55
@@ -448,6 +452,7 @@ mod tests {
                 policy_id: policy_id.clone(),
                 provider_id: provider_id.clone(),
                 diagnosis_code: "J10".into(),
+                diagnosis_codes: vec![],
                 service_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 6).unwrap(),
                 amount: Money::new(Decimal::new(8000, 0), "CNY"),
             },

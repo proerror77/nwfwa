@@ -149,6 +149,7 @@ pub fn aggregate_with_routing_policy(
         medical_reasonableness_score,
         provider_network_score,
         similar_case_score,
+        features,
     );
     let confidence = confidence_level_for_policy(confidence_score, &routing_policy).to_string();
     let recommended_action = recommended_action(
@@ -341,9 +342,10 @@ fn rag_for_policy(score: RiskScore, policy: &RoutingPolicy) -> RiskLevel {
 /// * 2 layers — 65  (multiple corroborating signals)
 /// * 3+       — 100 (strong multi-layer agreement)
 ///
-/// Previous versions returned 55 for the 0-layer case to avoid displaying
-/// "0% confidence" in the UI.  That is now handled in the display layer;
-/// the scoring function itself must be honest about evidence strength.
+/// Proxy features — heuristic estimates rather than observed measurements —
+/// only contribute a half-count toward the confidence tally.  Two proxy-backed
+/// layers that cross their threshold are treated as one real supporting layer.
+#[allow(clippy::too_many_arguments)]
 fn confidence_score(
     rule_score: u8,
     anomaly_score: u8,
@@ -352,20 +354,34 @@ fn confidence_score(
     medical_reasonableness_score: u8,
     provider_network_score: u8,
     similar_case_score: u8,
+    features: &FeatureMap,
 ) -> u8 {
-    let supporting_layers = [
-        Some(rule_score >= 60),
-        Some(anomaly_score >= 60),
-        Some(ml_score >= 60),
-        peer_score.map(|score| score >= 60),
-        Some(medical_reasonableness_score >= 60),
-        Some(provider_network_score >= 60),
-        Some(similar_case_score >= 70),
-    ]
-    .into_iter()
-    .filter(|supported| matches!(supported, Some(true)))
-    .count();
-    match supporting_layers {
+    // Each entry: (layer_fires, is_proxy_backed)
+    let layers: &[(bool, bool)] = &[
+        (rule_score >= 60, false),
+        (anomaly_score >= 60, false),
+        (ml_score >= 60, false),
+        (peer_score.is_some_and(|s| s >= 60), false),
+        (
+            medical_reasonableness_score >= 60,
+            is_proxy_feature(features, "diagnosis_procedure_match_score"),
+        ),
+        (
+            provider_network_score >= 60,
+            is_proxy_feature(features, "provider_profile_score"),
+        ),
+        (similar_case_score >= 70, false),
+    ];
+
+    // Full layers count as 1.0; proxy-backed layers count as 0.5.
+    let effective: f64 = layers
+        .iter()
+        .filter(|(fires, _)| *fires)
+        .map(|(_, is_proxy)| if *is_proxy { 0.5 } else { 1.0 })
+        .sum();
+
+    let effective_rounded = effective.round() as u32;
+    match effective_rounded {
         0 => 0,
         1 => 30,
         2 => 65,
@@ -519,7 +535,7 @@ fn amount_ratio_score(features: &FeatureMap) -> u8 {
 }
 
 fn medical_reasonableness_score(features: &FeatureMap) -> u8 {
-    let clinical_gap_risk = numeric_feature(features, "clinical_missing_evidence_count")
+    let clinical_gap_risk = numeric_feature_effective(features, "clinical_missing_evidence_count")
         .map(|count| (count * 15.0).round().clamp(0.0, 45.0))
         .unwrap_or(0.0);
     let clinical_review_risk = numeric_feature(features, "clinical_review_required")
@@ -527,7 +543,10 @@ fn medical_reasonableness_score(features: &FeatureMap) -> u8 {
         .unwrap_or(0.0);
     let episode_utilization_risk = episode_utilization_risk(features);
 
-    if let Some(match_score) = numeric_feature(features, "diagnosis_procedure_match_score") {
+    // Use effective value so proxy diagnosis-procedure match score is halved.
+    if let Some(match_score) =
+        numeric_feature_effective(features, "diagnosis_procedure_match_score")
+    {
         let mismatch_risk = ((1.0 - match_score) * 100.0).round().clamp(0.0, 100.0);
         let high_cost_risk = numeric_feature(features, "high_cost_item_ratio")
             .map(|ratio| (ratio * 25.0).round().clamp(0.0, 25.0))
@@ -571,20 +590,24 @@ fn episode_utilization_risk(features: &FeatureMap) -> f64 {
 }
 
 fn provider_network_score(features: &FeatureMap) -> u8 {
-    let profile_score = numeric_feature(features, "provider_profile_score")
+    // Use effective value so proxy provider_profile_score (from risk tier
+    // baseline) is halved relative to an observed worker-computed score.
+    let profile_score = numeric_feature_effective(features, "provider_profile_score")
         .map(|score| score.round().clamp(0.0, 100.0) as u8)
         .unwrap_or_else(|| {
-            match features
+            // provider_risk_tier fallback is always a proxy — halve the baseline.
+            let tier_score = match features
                 .get("provider_risk_tier")
                 .and_then(|feature| feature.value.as_str())
             {
-                Some("HIGH") => 80,
+                Some("HIGH") => 80u8,
                 Some("MEDIUM") => 45,
                 Some("LOW") => 10,
                 _ => 0,
-            }
+            };
+            tier_score / 2
         });
-    let graph_score = numeric_feature(features, "provider_graph_risk_score")
+    let graph_score = numeric_feature_effective(features, "provider_graph_risk_score")
         .map(|score| score.round().clamp(0.0, 100.0) as u8)
         .unwrap_or(0);
     profile_score.max(graph_score)
@@ -597,6 +620,29 @@ fn numeric_feature(features: &FeatureMap, name: &str) -> Option<f64> {
             .as_f64()
             .or_else(|| feature.value.as_i64().map(|value| value as f64))
     })
+}
+
+/// Return the numeric value of a feature, **halved when `is_proxy == true`**.
+///
+/// Proxy features (heuristic estimates derived from available data rather than
+/// observed measurements) contribute less certainty to the scoring signal.
+/// Halving the effective value prevents a proxy estimate from having the same
+/// weight as an observed peer-distribution or worker-computed value.
+fn numeric_feature_effective(features: &FeatureMap, name: &str) -> Option<f64> {
+    features.get(name).and_then(|feature| {
+        let raw = feature
+            .value
+            .as_f64()
+            .or_else(|| feature.value.as_i64().map(|v| v as f64))?;
+        Some(if feature.is_proxy { raw * 0.5 } else { raw })
+    })
+}
+
+fn is_proxy_feature(features: &FeatureMap, name: &str) -> bool {
+    features
+        .get(name)
+        .map(|feature| feature.is_proxy)
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

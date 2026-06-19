@@ -43,6 +43,10 @@ pub struct FullClaimPayload {
     pub service_segment: Option<String>,
     pub service_date: Option<NaiveDate>,
     pub diagnosis_code: Option<String>,
+    /// Secondary diagnosis codes (ICD-10 additional codes).  Optional; empty
+    /// for legacy payloads that only carry a primary diagnosis code.
+    #[serde(default)]
+    pub diagnosis_codes: Vec<String>,
     pub items: Option<Vec<ClaimItemPayload>>,
     pub member: Option<MemberPayload>,
     pub policy: Option<PolicyPayload>,

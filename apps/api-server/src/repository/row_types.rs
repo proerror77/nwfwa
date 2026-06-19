@@ -117,6 +117,7 @@ impl IntoClaimContext for ClaimContextRow {
                 policy_id: policy_id.clone(),
                 provider_id: provider_id.clone(),
                 diagnosis_code: self.diagnosis_code,
+                diagnosis_codes: vec![],
                 service_date: self.service_date,
                 amount: Money::new(self.claim_amount, self.claim_currency),
             },

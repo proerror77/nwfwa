@@ -109,6 +109,7 @@ fn sample_context(sample: &RuleBacktestSample) -> ClaimContext {
             policy_id: policy_id.clone(),
             provider_id: provider_id.clone(),
             diagnosis_code: "J10".into(),
+            diagnosis_codes: vec![],
             service_date: sample.service_date,
             amount: Money::new(sample.claim_amount, sample.currency.clone()),
         },
