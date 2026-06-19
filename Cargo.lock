@@ -1342,6 +1342,11 @@ dependencies = [
 [[package]]
 name = "fwa-connectors"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "fwa-core"

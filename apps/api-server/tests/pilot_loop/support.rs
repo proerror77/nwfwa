@@ -31,17 +31,39 @@ pub(super) fn scoped_config(customer_scope_id: &str) -> AppConfig {
     config
 }
 
+pub(super) fn restricted_config(permissions: &[&str]) -> (AppConfig, String) {
+    let restricted_key = "restricted-pilot-loop-key";
+    let mut config = test_config();
+    config.api_key = "legacy-secret".into();
+    config.api_key_principals = vec![format!(
+        "{}|restricted-pilot-loop|fwa_operator|ops-studio|demo-customer|{}",
+        restricted_key,
+        permissions.join(",")
+    )];
+    (config, restricted_key.into())
+}
+
 pub(super) async fn json_request(
     app: axum::Router,
     method: &str,
     uri: &str,
     body: &str,
 ) -> (StatusCode, serde_json::Value) {
+    json_request_with_key(app, method, uri, body, "dev-secret").await
+}
+
+pub(super) async fn json_request_with_key(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+    api_key: &str,
+) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .header("x-api-key", "dev-secret")
+        .header("x-api-key", api_key)
         .body(Body::from(body.to_string()))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();

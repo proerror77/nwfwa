@@ -19,7 +19,56 @@ mod support;
 #[path = "pilot_loop/writebacks.rs"]
 mod writebacks;
 
-use support::{json_request, scoped_config, test_config, unauthenticated_request};
+use support::{
+    json_request, json_request_with_key, restricted_config, scoped_config, test_config,
+    unauthenticated_request,
+};
+
+#[tokio::test]
+async fn qa_feedback_status_update_requires_qa_write_permission() {
+    let (config, restricted_key) = restricted_config(&["ops:qa:read", "audit:read"]);
+    let app = build_app(config).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_test/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "qa-ops",
+          "notes": "Resolve QA feedback after model operations review.",
+          "evidence_refs": ["qa_feedback:qa_feedback_test"]
+        }"#,
+        &restricted_key,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:qa:write");
+}
+
+#[tokio::test]
+async fn webhook_delivery_attempt_requires_webhook_write_permission() {
+    let (config, restricted_key) = restricted_config(&["ops:webhooks:read", "audit:read"]);
+    let app = build_app(config).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/webhook-events/webhook_test/delivery-attempts",
+        r#"{
+          "delivery_status": "delivered",
+          "response_status_code": 200
+        }"#,
+        &restricted_key,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:webhooks:write");
+}
 
 #[tokio::test]
 async fn lists_governed_outcome_labels_from_investigation_and_qa() {

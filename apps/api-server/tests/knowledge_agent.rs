@@ -44,23 +44,79 @@ fn scoped_config(customer_scope_id: &str) -> AppConfig {
     config
 }
 
+fn restricted_config(permissions: &[&str]) -> (AppConfig, String) {
+    let restricted_key = "restricted-agent-key";
+    let mut config = test_config();
+    config.api_key = "legacy-secret".into();
+    config.api_key_principals = vec![format!(
+        "{}|restricted-agent|fwa_operator|ops-studio|demo-customer|{}",
+        restricted_key,
+        permissions.join(",")
+    )];
+    (config, restricted_key.into())
+}
+
 async fn json_request(
     app: axum::Router,
     method: &str,
     uri: &str,
     body: &str,
 ) -> (StatusCode, String) {
+    json_request_with_key(app, method, uri, body, "dev-secret").await
+}
+
+async fn json_request_with_key(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+    api_key: &str,
+) -> (StatusCode, String) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .header("x-api-key", "dev-secret")
+        .header("x-api-key", api_key)
         .body(Body::from(body.to_string()))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     (status, String::from_utf8(body.to_vec()).unwrap())
+}
+
+#[tokio::test]
+async fn investigate_case_requires_agent_investigate_permission() {
+    let (config, restricted_key) = restricted_config(&["ops:agent:read", "audit:read"]);
+    let app = build_app(config).unwrap();
+
+    // Provide a valid body so Axum's Json extractor succeeds and the handler
+    // reaches the permission check before returning a 403.
+    let body_json = r#"{
+        "claim_id": "CLM-PERM-TEST",
+        "risk_score": 50,
+        "rag": "amber",
+        "top_reasons": ["test reason"],
+        "similar_case_query": {
+            "diagnosis_code": "J00",
+            "provider_region": "SH",
+            "tags": []
+        }
+    }"#;
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        body_json,
+        &restricted_key,
+    )
+    .await;
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:agent:investigate");
 }
 
 #[tokio::test]
