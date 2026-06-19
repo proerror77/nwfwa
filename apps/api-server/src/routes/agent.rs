@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{
         AgentApprovalRecord, AgentContextSnapshotRecord, AgentPolicyCheckRecord,
@@ -14,6 +14,7 @@ use fwa_agent::{
     DeterministicInvestigator, EvidenceSufficiency, InvestigationOrchestrator,
     InvestigationRequest, NoopInvestigationCancellation, SimilarCaseInput,
 };
+use fwa_auth::AuthenticatedPrincipal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
@@ -58,9 +59,10 @@ pub struct AgentInvestigationResponse {
 
 pub async fn investigate_case(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:agent:investigate")?;
     validate_agent_investigation_request(&request)?;
     let masked_claim_ref = mask_agent_claim_ref(&request.claim_id);
     let scheme_family = request
@@ -608,4 +610,18 @@ fn internal_error(
     code: &'static str,
 ) -> impl Fn(anyhow::Error) -> ApiError + Clone + Send + Sync + 'static {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            axum::http::StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

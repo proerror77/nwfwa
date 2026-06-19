@@ -16,7 +16,7 @@ use super::ops_models_validation::{
 };
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         CompleteModelRetrainingJobInput, ModelPerformanceRecord, ModelRetrainingJobRecord,
@@ -28,6 +28,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use fwa_auth::AuthenticatedPrincipal;
 
 pub async fn model_retraining_readiness(
     State(state): State<AppState>,
@@ -55,10 +56,11 @@ pub async fn list_model_retraining_jobs(
 
 pub async fn create_model_retraining_job(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
     Json(request): Json<CreateModelRetrainingJobRequest>,
 ) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:models:write")?;
     if request.requested_by.trim().is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -120,10 +122,11 @@ pub async fn create_model_retraining_job(
 
 pub async fn update_model_retraining_job_status(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(job_id): Path<String>,
     Json(request): Json<UpdateModelRetrainingJobStatusRequest>,
 ) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:models:write")?;
     if !matches!(
         request.status.as_str(),
         "queued" | "running" | "validation" | "failed" | "cancelled"
@@ -174,9 +177,10 @@ pub async fn update_model_retraining_job_status(
 
 pub async fn claim_next_model_retraining_job(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<ClaimModelRetrainingJobRequest>,
 ) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:models:write")?;
     if request.actor.trim().is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -216,10 +220,11 @@ pub async fn claim_next_model_retraining_job(
 
 pub async fn complete_model_retraining_job(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(job_id): Path<String>,
     Json(request): Json<CompleteModelRetrainingJobRequest>,
 ) -> Result<Json<CompleteModelRetrainingJobResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:models:write")?;
     validate_retraining_output_request(&request)?;
     let job = state
         .repository
@@ -415,4 +420,18 @@ async fn load_model_retraining_readiness(
         &feedback_items,
         model_dataset_lineage.as_ref(),
     ))
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

@@ -4,14 +4,15 @@ use super::ops_evidence_documents::{
 };
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         CreateEvidenceEmbeddingJobInput, CreateEvidenceRetrievalAuditEventInput,
         EvidenceEmbeddingJobRecord, EvidenceRetrievalAuditEventRecord,
     },
 };
-use axum::{extract::State, Json};
+use axum::{extract::State, http::StatusCode, Json};
+use fwa_auth::AuthenticatedPrincipal;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -61,9 +62,10 @@ pub struct EvidenceRetrievalAuditEventListResponse {
 
 pub async fn create_embedding_job(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<CreateEvidenceEmbeddingJobRequest>,
 ) -> Result<Json<EvidenceEmbeddingJobRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:evidence:write")?;
     validate_embedding_job_request(&request)?;
     let job = state
         .repository
@@ -123,9 +125,10 @@ pub async fn list_embedding_jobs(
 
 pub async fn create_retrieval_audit_event(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<CreateEvidenceRetrievalAuditEventRequest>,
 ) -> Result<Json<EvidenceRetrievalAuditEventRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:evidence:write")?;
     validate_retrieval_audit_request(&request)?;
     let event = state
         .repository
@@ -228,4 +231,18 @@ fn validate_retrieval_audit_request(
     validate_evidence_refs(&request.source_refs)?;
     validate_evidence_refs(&request.result_refs)?;
     validate_evidence_refs(&request.evidence_refs)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

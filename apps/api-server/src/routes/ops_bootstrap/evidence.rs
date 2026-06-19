@@ -2,9 +2,10 @@ use super::*;
 
 pub async fn generate_evidence_requests(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<GenerateEvidenceRequestsRequest>,
 ) -> Result<Json<EvidenceRequestGenerateResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:bootstrap:write")?;
     validate_generate_evidence_request(&request)?;
     let events = state
         .repository
@@ -68,10 +69,11 @@ pub async fn list_evidence_requests(
 
 pub async fn update_evidence_request_status(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(request_id): Path<String>,
     Json(request): Json<UpdateEvidenceRequestStatusRequest>,
 ) -> Result<Json<EvidenceRequestRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:bootstrap:write")?;
     validate_evidence_status_update(&request)?;
     let current = load_evidence_requests(&state, &actor.customer_scope_id)
         .await?

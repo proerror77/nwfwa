@@ -11,10 +11,11 @@ pub async fn label_bootstrap_queue(
 
 pub async fn review_label_bootstrap_item(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(item_id): Path<String>,
     Json(request): Json<ReviewLabelBootstrapItemRequest>,
 ) -> Result<Json<LabelBootstrapReviewResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:bootstrap:write")?;
     validate_label_review(&request)?;
     let mut item = load_label_bootstrap_items(&state, &actor.customer_scope_id)
         .await?

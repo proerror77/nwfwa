@@ -1,6 +1,6 @@
 use crate::{
     app::AppState,
-    auth::AuthenticatedActor,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         CreateEvidenceDocumentChunkInput, CreateEvidenceDocumentInput,
@@ -14,6 +14,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -82,9 +83,10 @@ pub struct EvidenceOcrOutputListResponse {
 
 pub async fn create_document(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<CreateEvidenceDocumentRequest>,
 ) -> Result<Json<EvidenceDocumentRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:evidence:write")?;
     validate_document_request(&request)?;
     let document = state
         .repository
@@ -165,10 +167,11 @@ pub async fn get_document(
 
 pub async fn create_document_chunk(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(document_id): Path<String>,
     Json(request): Json<CreateEvidenceDocumentChunkRequest>,
 ) -> Result<Json<EvidenceDocumentChunkRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:evidence:write")?;
     validate_chunk_request(&request)?;
     let chunk = state
         .repository
@@ -228,10 +231,11 @@ pub async fn list_document_chunks(
 
 pub async fn create_ocr_output(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(document_id): Path<String>,
     Json(request): Json<CreateEvidenceOcrOutputRequest>,
 ) -> Result<Json<EvidenceOcrOutputRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:evidence:write")?;
     validate_ocr_request(&request)?;
     let output = state
         .repository
@@ -421,4 +425,18 @@ pub(super) fn internal_error<E: std::fmt::Display>(
     code: &'static str,
 ) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::internal(code, error)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<fwa_audit::ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }

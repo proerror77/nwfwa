@@ -38,9 +38,10 @@ use validation::{
 
 pub async fn register_dataset(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<RegisterDatasetInput>,
 ) -> Result<Json<DatasetRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
     validate_dataset_contract(&request)?;
     let dataset = state
         .repository
@@ -122,10 +123,11 @@ pub async fn get_dataset(
 
 pub async fn add_field_mapping(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(dataset_id): Path<String>,
     Json(request): Json<CreateFieldMappingInput>,
 ) -> Result<Json<FieldMappingResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
     validate_field_mapping(&request)?;
     let mapping = state
         .repository
@@ -167,9 +169,10 @@ pub async fn add_field_mapping(
 
 pub async fn register_feature_set(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<RegisterFeatureSetInput>,
 ) -> Result<Json<FeatureSetRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
     validate_feature_set_registration(&request)?;
     validate_parquet_uri(&request.features_uri, "FEATURE_SET_FORMAT_INVALID")?;
     let feature_set = state
@@ -214,9 +217,10 @@ pub async fn register_feature_set(
 
 pub async fn register_model_dataset(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<RegisterModelDatasetInput>,
 ) -> Result<Json<ModelDatasetRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
     validate_model_dataset_registration(&request)?;
     validate_parquet_uri(&request.train_uri, "MODEL_DATASET_FORMAT_INVALID")?;
     validate_parquet_uri(&request.validation_uri, "MODEL_DATASET_FORMAT_INVALID")?;
@@ -260,9 +264,10 @@ pub async fn register_model_dataset(
 
 pub async fn register_model_evaluation(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(mut request): Json<RegisterModelEvaluationInput>,
 ) -> Result<Json<ModelEvaluationResponse>, ApiError> {
+    let actor = require_permission(principal, "ops:datasets:write")?;
     validate_model_evaluation_registration(&request)?;
     request.scheme_family = canonical_scheme_family(&request.scheme_family).unwrap();
     let evaluation = state

@@ -25,17 +25,38 @@ fn test_config() -> AppConfig {
     }
 }
 
+fn test_config_with_bootstrap_actors() -> AppConfig {
+    AppConfig {
+        api_key: "legacy-secret".into(),
+        api_key_principals: vec![
+            "bootstrap-read-secret|bootstrap-reader|operations_reviewer|ops-studio|demo-customer|ops:bootstrap:read,audit:read".into(),
+            "bootstrap-write-secret|bootstrap-writer|fwa_operator|ops-studio|demo-customer|ops:bootstrap:write,audit:read".into(),
+        ],
+        ..test_config()
+    }
+}
+
 async fn json_request(
     app: axum::Router,
     method: &str,
     uri: &str,
     body: &str,
 ) -> (StatusCode, serde_json::Value) {
+    json_request_with_key(app, method, uri, body, "dev-secret").await
+}
+
+async fn json_request_with_key(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+    api_key: &str,
+) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .header("x-api-key", "dev-secret")
+        .header("x-api-key", api_key)
         .body(Body::from(body.to_string()))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -43,6 +64,24 @@ async fn json_request(
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
     (status, body)
+}
+
+#[tokio::test]
+async fn backfill_creation_requires_bootstrap_write_permission() {
+    let app = build_app(test_config_with_bootstrap_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/backfills",
+        "{}",
+        "bootstrap-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:bootstrap:write");
 }
 
 async fn score_claim_with_missing_clinical_evidence(app: axum::Router, claim_id: &str) {

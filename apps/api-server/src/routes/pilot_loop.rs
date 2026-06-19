@@ -68,10 +68,11 @@ pub async fn list_qa_feedback_items(
 
 pub async fn update_qa_feedback_status(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(feedback_id): Path<String>,
     Json(mut request): Json<UpdateQaFeedbackStatusInput>,
 ) -> Result<Json<UpdateQaFeedbackStatusRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:qa:write")?;
     if !is_supported_qa_feedback_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -287,10 +288,11 @@ pub async fn list_webhook_events(
 
 pub async fn submit_webhook_delivery_attempt(
     State(state): State<AppState>,
-    AuthenticatedActor(actor): AuthenticatedActor,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(event_id): Path<String>,
     Json(request): Json<SubmitWebhookDeliveryAttemptRequest>,
 ) -> Result<Json<WebhookDeliveryAttemptRecord>, ApiError> {
+    let actor = require_permission(principal, "ops:webhooks:write")?;
     if !matches!(request.delivery_status.as_str(), "delivered" | "failed") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
