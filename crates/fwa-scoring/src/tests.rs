@@ -425,7 +425,7 @@ fn routes_low_risk_to_standard_processing() {
         aggregate_with_routing_policy(&BTreeMap::new(), &[], &model(80), &anomaly(80), 0, policy);
 
     assert_eq!(decision.risk_level, "Low");
-    assert_eq!(decision.confidence, "High");
+    assert_eq!(decision.confidence, "Medium");
     assert_eq!(
         format!("{:?}", decision.recommended_action),
         "StandardProcessing"
@@ -435,7 +435,7 @@ fn routes_low_risk_to_standard_processing() {
         decision.decision_authority,
         DecisionAuthority::RiskRoutingPolicy
     );
-    assert_eq!(decision.decision_confidence, DecisionConfidence::High);
+    assert_eq!(decision.decision_confidence, DecisionConfidence::Medium);
     assert!(!decision.appeal_or_review_required);
 }
 
@@ -789,8 +789,8 @@ fn clinical_and_provider_signals_raise_confidence_without_rule_model_agreement()
 
     assert_eq!(decision.medical_reasonableness_score, 65);
     assert_eq!(decision.provider_network_score, 80);
-    assert_eq!(decision.confidence_score, 85);
-    assert_eq!(decision.confidence, "High");
+    assert_eq!(decision.confidence_score, 65);
+    assert_eq!(decision.confidence, "Medium");
 }
 
 #[test]
@@ -805,7 +805,7 @@ fn peer_proxy_score_does_not_raise_confidence() {
 
     assert_eq!(decision.peer_deviation_score, 100);
     assert_eq!(decision.layers[0].status, "proxy_excluded");
-    assert_eq!(decision.confidence_score, 55);
+    assert_eq!(decision.confidence_score, 0);
     assert_eq!(decision.confidence, "Low");
 }
 

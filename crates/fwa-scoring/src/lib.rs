@@ -332,6 +332,18 @@ fn rag_for_policy(score: RiskScore, policy: &RoutingPolicy) -> RiskLevel {
     )
 }
 
+/// Compute a composite confidence score (0–100) from how many detection layers
+/// crossed their respective thresholds.
+///
+/// The mapping is:
+/// * 0 layers — 0   (no corroborating signal; genuine low-confidence)
+/// * 1 layer  — 30  (one corroborating signal)
+/// * 2 layers — 65  (multiple corroborating signals)
+/// * 3+       — 100 (strong multi-layer agreement)
+///
+/// Previous versions returned 55 for the 0-layer case to avoid displaying
+/// "0% confidence" in the UI.  That is now handled in the display layer;
+/// the scoring function itself must be honest about evidence strength.
 fn confidence_score(
     rule_score: u8,
     anomaly_score: u8,
@@ -354,9 +366,9 @@ fn confidence_score(
     .filter(|supported| matches!(supported, Some(true)))
     .count();
     match supporting_layers {
-        0 => 55,
-        1 => 70,
-        2 => 85,
+        0 => 0,
+        1 => 30,
+        2 => 65,
         _ => 100,
     }
 }
