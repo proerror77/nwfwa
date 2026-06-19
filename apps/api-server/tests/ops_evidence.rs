@@ -31,6 +31,17 @@ fn test_config() -> AppConfig {
     }
 }
 
+fn test_config_with_evidence_actors() -> AppConfig {
+    AppConfig {
+        api_key: "legacy-secret".into(),
+        api_key_principals: vec![
+            "evidence-read-secret|evidence-reader|operations_reviewer|ops-studio|demo-customer|ops:evidence:read,audit:read".into(),
+            "evidence-write-secret|evidence-writer|fwa_operator|ops-studio|demo-customer|ops:evidence:write,audit:read".into(),
+        ],
+        ..test_config()
+    }
+}
+
 fn scoped_config(api_key: &str, customer_scope_id: &str) -> AppConfig {
     AppConfig {
         api_key: api_key.into(),
@@ -67,6 +78,36 @@ async fn json_request_with_key(
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
     (status, body)
+}
+
+#[tokio::test]
+async fn document_registration_requires_evidence_write_permission() {
+    let app = build_app(test_config_with_evidence_actors()).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/evidence/documents",
+        r#"{
+          "document_id": "doc-permission",
+          "source_record_ref": "claim-documents:CLM-PERMISSION:invoice-1",
+          "claim_id": "CLM-PERMISSION",
+          "external_document_id": "invoice-1",
+          "document_type": "invoice",
+          "storage_uri": "s3://customer-approved/documents/doc-permission.pdf",
+          "content_checksum": "sha256:docpermission",
+          "ingestion_status": "registered",
+          "redaction_status": "pending",
+          "evidence_refs": ["claim_documents:CLM-PERMISSION:invoice-1"],
+          "metadata_json": {"source": "permission_test"}
+        }"#,
+        "evidence-read-secret",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:evidence:write");
 }
 
 #[tokio::test]

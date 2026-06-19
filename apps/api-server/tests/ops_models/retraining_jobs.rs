@@ -1,7 +1,32 @@
 use api_server::app::build_app;
 use axum::http::StatusCode;
 
-use super::support::{get_json, json_request, register_model_dataset_for_test, test_config};
+use super::support::{
+    get_json, json_request, json_request_with_key, register_model_dataset_for_test,
+    restricted_test_config, test_config,
+};
+
+#[tokio::test]
+async fn model_retraining_job_creation_requires_models_write_permission() {
+    let (config, restricted_key) = restricted_test_config(&["ops:models:review", "audit:read"]);
+    let app = build_app(config).unwrap();
+
+    let (status, body) = json_request_with_key(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+        r#"{
+          "requested_by": "model-ops",
+          "notes": "Queue retraining from model drift."
+        }"#,
+        &restricted_key,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "PERMISSION_DENIED");
+    assert_eq!(body["message"], "missing permission: ops:models:write");
+}
 
 #[tokio::test]
 async fn blocks_model_retraining_job_when_readiness_is_blocked() {
