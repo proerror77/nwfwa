@@ -236,9 +236,9 @@ grep -q "yew = " apps/web-console/Cargo.toml
 grep -q "gloo-net" apps/web-console/Cargo.toml
 grep -q "OpsApp" apps/web-console/src/main.rs
 grep -q "ClaimsQueuePage" apps/web-console/src/ops_pages/claims_queue.rs
-grep -q "Investigation Workbench" apps/web-console/src/ops_routing.rs
-grep -q "Review Routing Policies" apps/web-console/src/ops_routing.rs
-grep -q "Claims today" scripts/demo/smoke_web_console.mjs
+grep -q "Action Queue" apps/web-console/src/ops_routing.rs
+grep -q "System Governance" apps/web-console/src/ops_routing.rs
+grep -q "Prevented today" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Rule Discovery Workbench" scripts/demo/smoke_web_console.mjs
 grep -q "Tree Depth" scripts/demo/smoke_web_console.mjs
@@ -252,8 +252,8 @@ grep -q "SLA compliance" scripts/demo/smoke_web_console.mjs
 grep -q "QA Sampling Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Investigation Package" scripts/demo/smoke_web_console.mjs
 grep -q "Live operations" scripts/demo/smoke_web_console.mjs
-grep -q "Investigation Workbench" scripts/demo/smoke_web_console.mjs
-grep -q "Evidence Center" scripts/demo/smoke_web_console.mjs
+grep -q "Investigate" scripts/demo/smoke_web_console.mjs
+grep -q "Action Queue" scripts/demo/smoke_web_console.mjs
 grep -q "Renderer::<OpsApp>" apps/web-console/src/main.rs
 grep -q "function_component(OpsApp)" apps/web-console/src/ops_app.rs
 grep -q "workspace-topbar" apps/web-console/src/styles.css
