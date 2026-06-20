@@ -2,74 +2,32 @@ use crate::state::Language;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OpsPage {
-    // ── 运营工作台 ────────────────────────────────────────────────────────────
+    /// Default home — prevention KPIs, system health, action counters, live feed.
     Dashboard,
-    ClaimsQueue,
-    ReviewWorkbench,
-    CaseTracker,
-    // ── 调查工具 ─────────────────────────────────────────────────────────────
-    EvidenceHub,
-    EvidenceRuntime,
-    MemberProfile,
-    ProviderRisk,
-    KnowledgeBase,
-    DataSources,
-    AgentInvestigator,
-    // ── 规则与模型（推送接收）────────────────────────────────────────────────
-    RuleLibrary,
-    ModelGovernance,
-    RoutingPolicies,
-    // ── 质量管理 ─────────────────────────────────────────────────────────────
-    GovernanceHub,
-    AuditSampling,
-    MedicalReview,
-    QaReview,
+    /// Items needing human action: 3 tabs (investigate / pending-evidence / medical).
+    ActionQueue,
+    /// Single-case deep-dive workbench.  Entered from ActionQueue; returns to it on submit.
+    Investigate,
+    /// Governance: rule candidates (new fraud patterns), model updates, QA feedback.
+    SystemLearning,
 }
 
 impl OpsPage {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "运营仪表盘",
-            OpsPage::ClaimsQueue => "理赔队列",
-            OpsPage::ReviewWorkbench => "调查工作台",
-            OpsPage::CaseTracker => "案件追踪",
-            OpsPage::EvidenceHub => "证据中心",
-            OpsPage::EvidenceRuntime => "证据运行时",
-            OpsPage::MemberProfile => "成员画像",
-            OpsPage::ProviderRisk => "Provider 风险",
-            OpsPage::KnowledgeBase => "知识库",
-            OpsPage::DataSources => "数据来源",
-            OpsPage::AgentInvestigator => "AI 调查员",
-            OpsPage::RuleLibrary => "规则库",
-            OpsPage::ModelGovernance => "模型管理",
-            OpsPage::RoutingPolicies => "审核分流策略",
-            OpsPage::GovernanceHub => "质控与治理",
-            OpsPage::AuditSampling => "抽样审核",
-            OpsPage::MedicalReview => "医疗复核",
-            OpsPage::QaReview => "QA 反馈",
+            OpsPage::Dashboard => "运营概况",
+            OpsPage::ActionQueue => "需要处理",
+            OpsPage::Investigate => "调查工作台",
+            OpsPage::SystemLearning => "系统治理",
         }
     }
 
     pub(crate) fn label_en(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "Operations Dashboard",
-            OpsPage::ClaimsQueue => "Claims Triage Queue",
-            OpsPage::ReviewWorkbench => "Investigation Workbench",
-            OpsPage::CaseTracker => "Case Tracker",
-            OpsPage::EvidenceHub => "Evidence Center",
-            OpsPage::EvidenceRuntime => "Evidence Runtime",
-            OpsPage::MemberProfile => "Member Profile",
-            OpsPage::ProviderRisk => "Provider Risk",
-            OpsPage::KnowledgeBase => "Knowledge Base",
-            OpsPage::DataSources => "Data Sources",
-            OpsPage::AgentInvestigator => "AI Investigator",
-            OpsPage::RuleLibrary => "Rule Library",
-            OpsPage::ModelGovernance => "Model Governance",
-            OpsPage::RoutingPolicies => "Review Routing Policies",
-            OpsPage::GovernanceHub => "Quality & Governance",
-            OpsPage::AuditSampling => "Audit Sampling",
-            OpsPage::MedicalReview => "Medical Review",
-            OpsPage::QaReview => "QA Feedback",
+            OpsPage::Dashboard => "Overview",
+            OpsPage::ActionQueue => "Action Queue",
+            OpsPage::Investigate => "Investigate",
+            OpsPage::SystemLearning => "System Governance",
         }
     }
 
@@ -83,102 +41,36 @@ impl OpsPage {
     pub(crate) fn slug(self) -> &'static str {
         match self {
             OpsPage::Dashboard => "dashboard",
-            OpsPage::ClaimsQueue => "claims",
-            OpsPage::ReviewWorkbench => "review",
-            OpsPage::CaseTracker => "cases",
-            OpsPage::EvidenceHub => "evidence",
-            OpsPage::EvidenceRuntime => "evidence-runtime",
-            OpsPage::MemberProfile => "member",
-            OpsPage::ProviderRisk => "provider",
-            OpsPage::KnowledgeBase => "knowledge",
-            OpsPage::DataSources => "data-sources",
-            OpsPage::AgentInvestigator => "agent",
-            OpsPage::RuleLibrary => "rules",
-            OpsPage::ModelGovernance => "models",
-            OpsPage::RoutingPolicies => "routing",
-            OpsPage::GovernanceHub => "governance",
-            OpsPage::AuditSampling => "audit",
-            OpsPage::MedicalReview => "medical",
-            OpsPage::QaReview => "qa",
+            OpsPage::ActionQueue => "queue",
+            OpsPage::Investigate => "investigate",
+            OpsPage::SystemLearning => "governance",
         }
     }
 
     pub(crate) fn icon_class(self) -> &'static str {
         match self {
             OpsPage::Dashboard => "icon-dashboard",
-            OpsPage::ClaimsQueue => "icon-inbox",
-            OpsPage::ReviewWorkbench => "icon-qa",
-            OpsPage::CaseTracker => "icon-cases",
-            OpsPage::EvidenceHub => "icon-knowledge",
-            OpsPage::EvidenceRuntime => "icon-evidence",
-            OpsPage::MemberProfile => "icon-member",
-            OpsPage::ProviderRisk => "icon-provider",
-            OpsPage::KnowledgeBase => "icon-knowledge",
-            OpsPage::DataSources => "icon-data",
-            OpsPage::AgentInvestigator => "icon-agent",
-            OpsPage::RuleLibrary => "icon-rules",
-            OpsPage::ModelGovernance => "icon-models",
-            OpsPage::RoutingPolicies => "icon-routing",
-            OpsPage::GovernanceHub => "icon-governance",
-            OpsPage::AuditSampling => "icon-audit",
-            OpsPage::MedicalReview => "icon-medical",
-            OpsPage::QaReview => "icon-qa",
+            OpsPage::ActionQueue => "icon-inbox",
+            OpsPage::Investigate => "icon-qa",
+            OpsPage::SystemLearning => "icon-governance",
         }
     }
 
     pub(crate) fn description(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "看今日风险、SLA 与队列负载",
-            OpsPage::ClaimsQueue => "TPA 进件分流，不直接裁决",
-            OpsPage::ReviewWorkbench => "人工调查证据、建议与补件",
-            OpsPage::CaseTracker => "进行中案件 SLA 与进度",
-            OpsPage::EvidenceHub => "证据链、画像、图谱与知识库",
-            OpsPage::EvidenceRuntime => "证据文件、OCR、切片与检索审计",
-            OpsPage::MemberProfile => "成员历史理赔与风险",
-            OpsPage::ProviderRisk => "Provider 档案与图谱信号",
-            OpsPage::KnowledgeBase => "相似案例与知识检索",
-            OpsPage::DataSources => "数据集、字段映射与评估血缘",
-            OpsPage::AgentInvestigator => "AI 辅助调查包生成",
-            OpsPage::RuleLibrary => "活跃规则 + 推送规则审核",
-            OpsPage::ModelGovernance => "推送模型版本 + 激活决策",
-            OpsPage::RoutingPolicies => "配置风险等级进入自动通过、抽样复核或人工审核",
-            OpsPage::GovernanceHub => "抽样、QA、医疗复核、规则模型治理",
-            OpsPage::AuditSampling => "抽样质控与覆盖率",
-            OpsPage::MedicalReview => "医疗必要性人工复核",
-            OpsPage::QaReview => "QA 反馈闭环",
+            OpsPage::Dashboard => "防损金额、精准率、系统健康与进件流水",
+            OpsPage::ActionQueue => "高风险待审 / 补件逾期 / 医疗复核",
+            OpsPage::Investigate => "单案调查，一眼判断，提交即返回队列",
+            OpsPage::SystemLearning => "新诈骗模式候选、模型更新、QA 反馈闭环",
         }
     }
 
     pub(crate) fn description_en(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "Daily risk, SLA, queue load, and governance watchlist",
-            OpsPage::ClaimsQueue => "TPA intake triage without final adjudication",
-            OpsPage::ReviewWorkbench => "Evidence-backed human investigation and recommendations",
-            OpsPage::CaseTracker => "Open case status, SLA, and progress tracking",
-            OpsPage::EvidenceHub => {
-                "Evidence chain, member profile, provider graph, and knowledge lookup"
-            }
-            OpsPage::EvidenceRuntime => {
-                "Document packets, OCR, chunks, embeddings, and retrieval audit"
-            }
-            OpsPage::MemberProfile => "Member claim history and risk context",
-            OpsPage::ProviderRisk => "Provider profile, network signals, and anomaly patterns",
-            OpsPage::KnowledgeBase => "Similar confirmed cases and evidence-backed references",
-            OpsPage::DataSources => "Dataset lineage, field mappings, and model evaluation inputs",
-            OpsPage::AgentInvestigator => "Assistive-only AI investigation package generation",
-            OpsPage::RuleLibrary => "Active rules and pushed candidate review",
-            OpsPage::ModelGovernance => {
-                "Model versions, evaluation, drift, and activation decisions"
-            }
-            OpsPage::RoutingPolicies => {
-                "Risk-band routing policy configuration for STP, QA sampling, and manual review"
-            }
-            OpsPage::GovernanceHub => {
-                "Sampling, QA, medical review, rule, model, and routing governance"
-            }
-            OpsPage::AuditSampling => "QA sample coverage and disagreement monitoring",
-            OpsPage::MedicalReview => "Human clinical necessity review",
-            OpsPage::QaReview => "QA feedback closure loop",
+            OpsPage::Dashboard => "Prevention KPIs, precision, system health, live intake feed",
+            OpsPage::ActionQueue => "High-risk / pending-evidence / medical-review items",
+            OpsPage::Investigate => "Single-case deep dive; submit returns to queue",
+            OpsPage::SystemLearning => "New fraud pattern candidates, model updates, QA closure",
         }
     }
 
@@ -190,10 +82,6 @@ impl OpsPage {
     }
 
     /// Resolve a page by its English label string.
-    ///
-    /// Used by cross-page navigation callbacks (e.g. `navigate_by_name` in
-    /// `OpsApp`) so that label→page dispatch is defined in one place and a
-    /// typo produces `None` rather than a silent fallback to Dashboard.
     pub(crate) fn from_label(label: &str) -> Option<Self> {
         ALL_OPS_PAGES
             .iter()
@@ -221,82 +109,20 @@ impl OpsNavGroup {
     }
 }
 
-pub(crate) const DAILY_OPS_NAV: &[OpsPage] = &[
-    OpsPage::Dashboard,
-    OpsPage::ClaimsQueue,
-    OpsPage::CaseTracker,
-];
-
-pub(crate) const INVESTIGATION_NAV: &[OpsPage] = &[
-    OpsPage::ReviewWorkbench,
-    OpsPage::EvidenceHub,
-    OpsPage::EvidenceRuntime,
-    OpsPage::MemberProfile,
-    OpsPage::ProviderRisk,
-    OpsPage::KnowledgeBase,
-    OpsPage::DataSources,
-    OpsPage::AgentInvestigator,
-];
-
-pub(crate) const RULES_MODELS_NAV: &[OpsPage] = &[
-    OpsPage::RuleLibrary,
-    OpsPage::ModelGovernance,
-    OpsPage::RoutingPolicies,
-];
-
-pub(crate) const GOVERNANCE_NAV: &[OpsPage] = &[
-    OpsPage::GovernanceHub,
-    OpsPage::AuditSampling,
-    OpsPage::MedicalReview,
-    OpsPage::QaReview,
-];
-
-pub(crate) const OPS_NAV_GROUPS: &[OpsNavGroup] = &[
-    OpsNavGroup {
-        title_en: "Daily Ops",
-        title_zh: "日常运营",
-        pages: DAILY_OPS_NAV,
-    },
-    OpsNavGroup {
-        title_en: "Investigation",
-        title_zh: "调查工具",
-        pages: INVESTIGATION_NAV,
-    },
-    OpsNavGroup {
-        title_en: "Rules & Models",
-        title_zh: "规则与模型",
-        pages: RULES_MODELS_NAV,
-    },
-    OpsNavGroup {
-        title_en: "Governance",
-        title_zh: "治理质控",
-        pages: GOVERNANCE_NAV,
-    },
-];
-
 pub(crate) const ALL_OPS_PAGES: &[OpsPage] = &[
     OpsPage::Dashboard,
-    OpsPage::ClaimsQueue,
-    OpsPage::ReviewWorkbench,
-    OpsPage::CaseTracker,
-    OpsPage::EvidenceHub,
-    OpsPage::EvidenceRuntime,
-    OpsPage::MemberProfile,
-    OpsPage::ProviderRisk,
-    OpsPage::KnowledgeBase,
-    OpsPage::DataSources,
-    OpsPage::AgentInvestigator,
-    OpsPage::RuleLibrary,
-    OpsPage::ModelGovernance,
-    OpsPage::RoutingPolicies,
-    OpsPage::GovernanceHub,
-    OpsPage::AuditSampling,
-    OpsPage::MedicalReview,
-    OpsPage::QaReview,
+    OpsPage::ActionQueue,
+    OpsPage::Investigate,
+    OpsPage::SystemLearning,
 ];
 
+pub(crate) const OPS_NAV_GROUPS: &[OpsNavGroup] = &[OpsNavGroup {
+    title_en: "",
+    title_zh: "",
+    pages: ALL_OPS_PAGES,
+}];
+
 pub(crate) fn ops_page_from_hash(hash: &str) -> OpsPage {
-    // Strip leading '#' and any query-string sub-state (`?key=value`).
     let slug = hash.trim_start_matches('#');
     let slug = slug.split('?').next().unwrap_or(slug);
     ALL_OPS_PAGES
@@ -307,10 +133,7 @@ pub(crate) fn ops_page_from_hash(hash: &str) -> OpsPage {
 }
 
 /// Parse a deep-link sub-id from the hash fragment.
-///
-/// Format: `#<page-slug>?id=<sub-id>`, e.g. `#review?id=CASE-001`
-///
-/// Returns `Some(sub_id)` when a `?id=` parameter is present in the hash.
+/// Format: `#<slug>?id=<case-id>`
 pub(crate) fn ops_sub_id_from_hash(hash: &str) -> Option<String> {
     let hash = hash.trim_start_matches('#');
     let query = hash.split_once('?')?.1;
@@ -330,9 +153,7 @@ pub(crate) fn ops_set_hash(page: OpsPage) {
     }
 }
 
-/// Set the URL hash with a deep-link sub-id, e.g. `#review?id=CASE-001`.
-///
-/// Used to make specific case/lead URLs shareable between operators.
+/// Set the URL hash with a deep-link sub-id, e.g. `#investigate?id=CASE-001`.
 pub(crate) fn ops_set_hash_with_id(page: OpsPage, sub_id: &str) {
     if let Some(window) = web_sys::window() {
         let hash = if sub_id.is_empty() {
