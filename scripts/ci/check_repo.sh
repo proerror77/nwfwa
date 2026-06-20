@@ -249,8 +249,8 @@ grep -q "Rule Promotion Gates" scripts/demo/smoke_web_console.mjs
 grep -q "Data Foundation Control" scripts/demo/smoke_web_console.mjs
 grep -q "Field Mapping Lineage" scripts/demo/smoke_web_console.mjs
 grep -q "SLA compliance" scripts/demo/smoke_web_console.mjs
-grep -q "QA Sampling Governance" scripts/demo/smoke_web_console.mjs
-grep -q "Investigation Package" scripts/demo/smoke_web_console.mjs
+grep -q "Action Queue" scripts/demo/smoke_web_console.mjs
+grep -q "Investigate" scripts/demo/smoke_web_console.mjs
 grep -q "Live operations" scripts/demo/smoke_web_console.mjs
 grep -q "Investigate" scripts/demo/smoke_web_console.mjs
 grep -q "Action Queue" scripts/demo/smoke_web_console.mjs
@@ -265,14 +265,11 @@ grep -q "Non-secret remediation hint" apps/api-server/tests/ops_openapi/schema_b
 grep -q "remediation hints" docs/engineering/pilot-readiness.md
 grep -q "remediation hints" docs/project/api-reference.md
 grep -q "Assistive Boundary" scripts/demo/smoke_web_console.mjs
-grep -q "Human Clinical Decision" scripts/demo/smoke_web_console.mjs
-grep -q "Clinical Signals" scripts/demo/smoke_web_console.mjs
-grep -q "Clinical Signals" scripts/demo/smoke_web_console.mjs
 grep -q "Evidence Status" scripts/demo/smoke_web_console.mjs
-grep -q "QA Sampling Governance" scripts/demo/smoke_web_console.mjs
-grep -q "Knowledge graph match" scripts/demo/smoke_web_console.mjs
-grep -q "Confirmed Evidence" scripts/demo/smoke_web_console.mjs
-grep -q "Data Lineage Cockpit" scripts/demo/smoke_web_console.mjs
+grep -q "Prevention today" scripts/demo/smoke_web_console.mjs
+grep -q "Action Queue" scripts/demo/smoke_web_console.mjs
+grep -q "Investigate" scripts/demo/smoke_web_console.mjs
+grep -q "Medical Review Queue" scripts/demo/smoke_web_console.mjs
 grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py

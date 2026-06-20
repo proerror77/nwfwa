@@ -156,8 +156,8 @@ async function main() {
 
     for (const expectedPanel of [
       // Dashboard panels (new)
-      "Prevention today",
       "Prevented today",
+      "Action needed",
       "Action needed",
       "Live intake",
       "Precision",
