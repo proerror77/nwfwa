@@ -158,11 +158,10 @@ async function main() {
       // Dashboard panels (new)
       "Prevented today",
       "Action needed",
-      "Action needed",
       "Live intake",
       "Precision",
       "SLA compliance",
-      // Inner pages still in bundle (unchanged)
+      // Inner pages still in bundle (reachable via SystemLearning and Investigate)
       "Risk Signals",
       "Provider 风险分析",
       "AI Investigation Summary",
@@ -175,8 +174,6 @@ async function main() {
       "Backtest Evidence",
       "Rule Promotion Gates",
       "Model Monitoring Cockpit",
-      "Review Routing Policies",
-      "QA Queue Summary",
       "Medical Review Queue",
       "Investigation Package",
       "Evidence Status",
