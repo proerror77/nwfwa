@@ -531,9 +531,9 @@ CAPABILITIES = [
             "scripts/demo/smoke_web_console.mjs",
         ],
         "required_text": [
-            ("apps/web-console/src/ops_routing.rs", "Claims Triage Queue"),
-            ("apps/web-console/src/ops_routing.rs", "Medical Review"),
-            ("scripts/demo/smoke_web_console.mjs", "Investigation Workbench"),
+            ("apps/web-console/src/ops_routing.rs", "Action Queue"),
+            ("apps/web-console/src/ops_routing.rs", "System Governance"),
+            ("scripts/demo/smoke_web_console.mjs", "Action needed"),
         ],
         "customer_data_required": False,
     },
