@@ -1,18 +1,60 @@
 # nwfwa
 
-Agentic FWA Risk & Operations Platform.
+`nwfwa` is a pilot platform for health-insurance fraud, waste, and abuse
+operations.
 
-`nwfwa` is a health-insurance fraud, waste, and abuse risk operations workspace.
-It combines deterministic scoring, rule governance, model operations, case
-workflow, knowledge search, agent-assisted investigation, QA feedback, and audit
-tracing into one pilot-oriented platform.
+The short version: it helps an insurance or TPA operations team decide which
+claims need a closer look, why they look risky, who should review them, and what
+evidence was used. It is not a claim-payment engine and it is not an autonomous
+fraud accuser. It is a review, evidence, governance, and workflow system around
+claim risk.
 
-The platform is assistive only. It can surface suspicious patterns, explain risk
-signals, route cases, and prepare evidence packages. It must not automatically
-deny claims, approve claims, or accuse fraud without a customer-controlled
-adjudication process. Pre-payment automatic denial or straight-through approval
-is allowed only for customer-approved deterministic policy, eligibility,
-coverage, or clinical-compatibility rules; ML, anomaly, provider graph,
+## What Problem It Solves
+
+Health-insurance claim teams usually have several disconnected problems:
+
+- claim data arrives in customer-specific formats;
+- risky claims need to be scored before or after payment;
+- rules, model scores, provider patterns, documents, and clinical findings need
+  to be explained in one place;
+- investigators need cases, evidence packages, QA feedback, and audit trails;
+- model and rule changes need governance before they affect real workflows.
+
+`nwfwa` ties those pieces together. A claim can be normalized, scored, routed to
+review, investigated, written back by QA or medical review, and audited later
+with the same evidence references.
+
+## Who It Is For
+
+The product is aimed at:
+
+- TPAs and insurers that receive medical or health-insurance claims;
+- operations teams that need review queues and case workflow;
+- fraud, waste, and abuse analysts who need explainable risk signals;
+- data and model teams that need governed datasets, model evaluation, promotion,
+  monitoring, and rollback;
+- compliance teams that need audit history rather than black-box decisions.
+
+## What The System Does
+
+At a high level, the platform supports this flow:
+
+1. A claim or TPA packet is normalized into a canonical claim context.
+2. The runtime scores the claim with deterministic rules, model signals,
+   anomaly signals, provider signals, clinical checks, and document evidence.
+3. The response explains the risk with reason codes, score layers, and evidence
+   refs.
+4. Risky claims become leads or cases for human review.
+5. Investigators, QA reviewers, and medical reviewers write back outcomes.
+6. Rules, models, datasets, labels, and audit records preserve the governance
+   trail.
+
+The platform is assistive by default. It can surface suspicious patterns,
+explain risk signals, route cases, and prepare evidence packages. It must not
+automatically deny claims, approve claims, or accuse fraud without a
+customer-controlled adjudication process. Automatic denial or straight-through
+approval is only for customer-approved deterministic policy, eligibility,
+coverage, or clinical-compatibility rules. ML, anomaly, provider graph,
 similar-case, and Agent outputs remain review-routing signals, not sole
 adjudication authority.
 
