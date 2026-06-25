@@ -50,17 +50,17 @@ pub fn models_page() -> Html {
         <section class="module-status">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"Models"}</h2>
-                    <p>{"Monitor model versions, scoring drift, promotion gates, QA feedback closure, and retraining readiness."}</p>
+                    <h2>{"模型治理"}</h2>
+                    <p>{"监控模型版本、评分漂移、发布门禁、QA 反馈闭环与重训准备度。"}</p>
                 </div>
-                <span class="status-pill">{"Model Governance"}</span>
+                <span class="status-pill">{"模型治理"}</span>
             </div>
 
             <section class="panel">
-                <h3>{"Model Source"}</h3>
+                <h3>{"模型来源"}</h3>
                 <div class="form-grid">
                     <label>
-                        {"Model key"}
+                        {"模型标识"}
                         <input
                             value={(*model_key).clone()}
                             oninput={{
@@ -74,7 +74,7 @@ pub fn models_page() -> Html {
                 </div>
                 <div class="button-row">
                     <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
-                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh model governance" }}
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "刷新中..." } else { "刷新模型治理" }}
                     </button>
                 </div>
             </section>
@@ -94,14 +94,14 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
     html! {
         <>
             {match &props.state {
-                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load model governance to inspect production readiness."}</p></section> },
-                ApiState::Loading => html! { <section class="panel"><p>{"Loading model governance..."}</p></section> },
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"加载模型治理数据后可检查生产准备度。"}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"正在加载模型治理数据..."}</p></section> },
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <>
                         {model_monitoring_cockpit(snapshot)}
                         <section class="panel result-stack">
-                            <h3>{"Model Inventory"}</h3>
+                            <h3>{"模型清单"}</h3>
                             <div class="factor-card-grid">
                                 {for snapshot.models.iter().map(|model| html! {
                                     <div class="factor-card">
@@ -118,46 +118,46 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
                                             <span>{format!("{} / {} / {}", model.model_type, model.runtime_kind, model.execution_provider)}</span>
                                         </div>
                                         <div class="summary-grid">
-                                            <div><span>{"Status"}</span><strong>{&model.status}</strong></div>
-                                            <div><span>{"Review Mode"}</span><strong>{&model.review_mode}</strong></div>
-                                            <div><span>{"Endpoint"}</span><strong>{model.endpoint_url.as_deref().unwrap_or("none")}</strong></div>
+                                            <div><span>{"状态"}</span><strong>{&model.status}</strong></div>
+                                            <div><span>{"复核模式"}</span><strong>{&model.review_mode}</strong></div>
+                                            <div><span>{"端点"}</span><strong>{model.endpoint_url.as_deref().unwrap_or("无")}</strong></div>
                                         </div>
-                                        <small>{format!("artifact: {}", model.artifact_uri.as_deref().unwrap_or("none"))}</small>
+                                        <small>{format!("产物：{}", model.artifact_uri.as_deref().unwrap_or("无"))}</small>
                                     </div>
                                 })}
                             </div>
                         </section>
 
                         <section class="panel result-stack">
-                            <h3>{"Model Performance"}</h3>
+                            <h3>{"模型表现"}</h3>
                             {model_telemetry_visual(&snapshot.performance, &snapshot.gates, &snapshot.retraining)}
                             <div class="score-hero">
-                                <div><span>{"Model"}</span><strong>{&snapshot.performance.model_key}</strong></div>
-                                <div><span>{"Drift"}</span><strong>{&snapshot.performance.drift_status}</strong></div>
-                                <div><span>{"Score PSI"}</span><strong>{optional_number(snapshot.performance.score_psi)}</strong></div>
+                                <div><span>{"模型"}</span><strong>{&snapshot.performance.model_key}</strong></div>
+                                <div><span>{"漂移"}</span><strong>{&snapshot.performance.drift_status}</strong></div>
+                                <div><span>{"评分 PSI"}</span><strong>{optional_number(snapshot.performance.score_psi)}</strong></div>
                             </div>
                             <div class="summary-grid">
-                                <div><span>{"Scored Runs"}</span><strong>{snapshot.performance.scored_runs}</strong></div>
-                                <div><span>{"Avg Score"}</span><strong>{format!("{:.1}", snapshot.performance.average_score)}</strong></div>
-                                <div><span>{"High Risk"}</span><strong>{snapshot.performance.high_risk_count}</strong></div>
+                                <div><span>{"评分运行"}</span><strong>{snapshot.performance.scored_runs}</strong></div>
+                                <div><span>{"平均分"}</span><strong>{format!("{:.1}", snapshot.performance.average_score)}</strong></div>
+                                <div><span>{"高风险"}</span><strong>{snapshot.performance.high_risk_count}</strong></div>
                             </div>
-                            <small>{format!("data: {} / latest scored: {}", snapshot.performance.data_status, snapshot.performance.latest_scored_at.as_deref().unwrap_or("none"))}</small>
+                            <small>{format!("数据：{} / 最新评分：{}", snapshot.performance.data_status, snapshot.performance.latest_scored_at.as_deref().unwrap_or("无"))}</small>
                         </section>
 
                         <section class="panel result-stack">
-                            <h3>{"Promotion Gates"}</h3>
+                            <h3>{"发布门禁"}</h3>
                             <div class="score-hero">
-                                <div><span>{"Decision"}</span><strong>{&snapshot.gates.decision}</strong></div>
-                                <div><span>{"Passed"}</span><strong>{format!("{} / {}", snapshot.gates.passed_count, snapshot.gates.total_count)}</strong></div>
-                                <div><span>{"Evaluation"}</span><strong>{&snapshot.gates.latest_evaluation_id}</strong></div>
+                                <div><span>{"决策"}</span><strong>{&snapshot.gates.decision}</strong></div>
+                                <div><span>{"通过"}</span><strong>{format!("{} / {}", snapshot.gates.passed_count, snapshot.gates.total_count)}</strong></div>
+                                <div><span>{"评估"}</span><strong>{&snapshot.gates.latest_evaluation_id}</strong></div>
                             </div>
                             <div class="summary-grid">
-                                <div><span>{"Data Quality"}</span><strong>{&snapshot.gates.source_data_quality_status}</strong></div>
-                                <div><span>{"Labels"}</span><strong>{snapshot.gates.approved_label_count}</strong></div>
-                                <div><span>{"Open Feedback"}</span><strong>{snapshot.gates.unresolved_model_feedback_count}</strong></div>
+                                <div><span>{"数据质量"}</span><strong>{&snapshot.gates.source_data_quality_status}</strong></div>
+                                <div><span>{"标签"}</span><strong>{snapshot.gates.approved_label_count}</strong></div>
+                                <div><span>{"未关闭反馈"}</span><strong>{snapshot.gates.unresolved_model_feedback_count}</strong></div>
                             </div>
                             if snapshot.gates.blockers.is_empty() {
-                                <p class="empty">{"No promotion blockers."}</p>
+                                <p class="empty">{"没有发布阻塞项。"}</p>
                             } else {
                                 <ul class="result-list compact-list">
                                     {for snapshot.gates.blockers.iter().map(|blocker| html! { <li>{blocker}</li> })}
@@ -167,7 +167,7 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
                                 {for snapshot.gates.gates.iter().map(|gate| html! {
                                     <div class="metric-row">
                                         <span>{&gate.label}</span>
-                                        <strong>{if gate.passed { "passed" } else { "blocked" }}</strong>
+                                        <strong>{if gate.passed { "通过" } else { "阻塞" }}</strong>
                                         <small>{&gate.evidence_source}</small>
                                         <small>{&gate.blocker}</small>
                                     </div>
@@ -176,28 +176,28 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
                         </section>
 
                         <section class="panel result-stack">
-                            <h3>{"Retraining Readiness"}</h3>
+                            <h3>{"重训准备度"}</h3>
                             <div class="score-hero">
-                                <div><span>{"Recommendation"}</span><strong>{&snapshot.retraining.recommendation}</strong></div>
-                                <div><span>{"Drift"}</span><strong>{&snapshot.retraining.drift_status}</strong></div>
-                                <div><span>{"Data Quality"}</span><strong>{&snapshot.retraining.source_data_quality_status}</strong></div>
+                                <div><span>{"建议"}</span><strong>{&snapshot.retraining.recommendation}</strong></div>
+                                <div><span>{"漂移"}</span><strong>{&snapshot.retraining.drift_status}</strong></div>
+                                <div><span>{"数据质量"}</span><strong>{&snapshot.retraining.source_data_quality_status}</strong></div>
                             </div>
                             <div class="summary-grid">
-                                <div><span>{"Open Feedback"}</span><strong>{snapshot.retraining.open_model_feedback_count}</strong></div>
-                                <div><span>{"Approved Labels"}</span><strong>{snapshot.retraining.approved_label_count}</strong></div>
-                                <div><span>{"Needs Review"}</span><strong>{snapshot.retraining.needs_review_label_count}</strong></div>
+                                <div><span>{"开放反馈"}</span><strong>{snapshot.retraining.open_model_feedback_count}</strong></div>
+                                <div><span>{"已批准标签"}</span><strong>{snapshot.retraining.approved_label_count}</strong></div>
+                                <div><span>{"待复核"}</span><strong>{snapshot.retraining.needs_review_label_count}</strong></div>
                             </div>
-                            <h4>{"Triggers"}</h4>
+                            <h4>{"触发条件"}</h4>
                             if snapshot.retraining.retraining_triggers.is_empty() {
-                                <p class="empty">{"No retraining triggers."}</p>
+                                <p class="empty">{"没有重训触发条件。"}</p>
                             } else {
                                 <ul class="result-list">
                                     {for snapshot.retraining.retraining_triggers.iter().map(|trigger| html! { <li>{trigger}</li> })}
                                 </ul>
                             }
-                            <h4>{"Blockers"}</h4>
+                            <h4>{"阻塞项"}</h4>
                             if snapshot.retraining.blockers.is_empty() {
-                                <p class="empty">{"No retraining blockers."}</p>
+                                <p class="empty">{"没有重训阻塞项。"}</p>
                             } else {
                                 <ul class="result-list">
                                     {for snapshot.retraining.blockers.iter().map(|blocker| html! { <li>{blocker}</li> })}

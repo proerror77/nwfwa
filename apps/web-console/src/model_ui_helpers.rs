@@ -19,27 +19,27 @@ pub(crate) fn model_telemetry_visual(
     html! {
         <div class="visual-board model-telemetry">
             <div class="visual-panel">
-                <h4>{"Model telemetry map"}</h4>
+                <h4>{"模型遥测图"}</h4>
                 <div class="telemetry-orbit">
                     <div class="orbit-core">
                         <strong>{format!("{:.1}", performance.average_score)}</strong>
-                        <span>{"avg score"}</span>
+                        <span>{"平均分"}</span>
                     </div>
-                    {telemetry_node("score", score_level, "Score")}
-                    {telemetry_node("density", high_risk_density, "High risk")}
+                    {telemetry_node("score", score_level, "评分")}
+                    {telemetry_node("density", high_risk_density, "高风险")}
                     {telemetry_node("psi", psi_level, "PSI")}
-                    {telemetry_node("gates", ratio(gates.passed_count as u32, gates.total_count as u32), "Gates")}
+                    {telemetry_node("gates", ratio(gates.passed_count as u32, gates.total_count as u32), "门禁")}
                 </div>
             </div>
             <div class="visual-panel">
-                <h4>{"Retraining control"}</h4>
+                <h4>{"重训控制"}</h4>
                 <div class="bar-stack">
-                    {meter_row("Approved labels", gates.approved_label_count as u32, 100)}
-                    {meter_row("Open feedback", retraining.open_model_feedback_count, 20)}
-                    {meter_row("Needs review", retraining.needs_review_label_count, 20)}
+                    {meter_row("已批准标签", gates.approved_label_count as u32, 100)}
+                    {meter_row("开放反馈", retraining.open_model_feedback_count, 20)}
+                    {meter_row("待复核", retraining.needs_review_label_count, 20)}
                 </div>
                 <div class="status-ribbon">
-                    <span>{format!("drift: {}", retraining.drift_status)}</span>
+                    <span>{format!("漂移：{}", retraining.drift_status)}</span>
                     <strong>{&retraining.recommendation}</strong>
                 </div>
             </div>
@@ -68,26 +68,26 @@ pub(crate) fn model_monitoring_cockpit(snapshot: &ModelOpsSnapshot) -> Html {
         .first()
         .map(String::as_str)
         .or_else(|| snapshot.retraining.blockers.first().map(String::as_str))
-        .unwrap_or("no blocker");
+        .unwrap_or("无阻塞项");
 
     html! {
         <section class="panel result-stack">
             <div class="section-header">
                 <div>
-                    <h3>{"Model Monitoring Cockpit"}</h3>
-                    <p>{"A pilot-facing view of model version, drift, shadow evidence, promotion gates, QA labels, and retraining readiness before any model affects routing."}</p>
+                    <h3>{"模型监控驾驶舱"}</h3>
+                    <p>{"面向试点演示的模型版本、漂移、影子证据、发布门禁、QA 标签和重训准备度视图，任何模型影响路由前都先在这里确认。"}</p>
                 </div>
                 <span class={classes!("status-token", status_tone(&snapshot.gates.decision))}>{&snapshot.gates.decision}</span>
             </div>
             <div class="model-monitoring-cockpit">
                 <aside class="model-monitoring-brief">
-                    <span class="eyebrow">{"Active candidate"}</span>
+                    <span class="eyebrow">{"当前候选模型"}</span>
                     <strong>{model_label}</strong>
                     <dl>
-                        <div><dt>{"Runtime"}</dt><dd>{active_model.map(|model| model.runtime_kind.as_str()).unwrap_or("runtime pending")}</dd></div>
-                        <div><dt>{"Provider"}</dt><dd>{active_model.map(|model| model.execution_provider.as_str()).unwrap_or("provider pending")}</dd></div>
-                        <div><dt>{"Review mode"}</dt><dd>{active_model.map(|model| model.review_mode.as_str()).unwrap_or("review pending")}</dd></div>
-                        <div><dt>{"Latest eval"}</dt><dd>{&snapshot.gates.latest_evaluation_id}</dd></div>
+                        <div><dt>{"运行时"}</dt><dd>{active_model.map(|model| model.runtime_kind.as_str()).unwrap_or("运行时待定")}</dd></div>
+                        <div><dt>{"提供方"}</dt><dd>{active_model.map(|model| model.execution_provider.as_str()).unwrap_or("提供方待定")}</dd></div>
+                        <div><dt>{"复核模式"}</dt><dd>{active_model.map(|model| model.review_mode.as_str()).unwrap_or("复核待定")}</dd></div>
+                        <div><dt>{"最新评估"}</dt><dd>{&snapshot.gates.latest_evaluation_id}</dd></div>
                     </dl>
                 </aside>
 
@@ -96,33 +96,33 @@ pub(crate) fn model_monitoring_cockpit(snapshot: &ModelOpsSnapshot) -> Html {
                     <div class="model-monitoring-link diagonal-a"></div>
                     <div class="model-monitoring-link diagonal-b"></div>
                     <div class="model-monitoring-core">
-                        <span>{"Release gate"}</span>
+                        <span>{"发布门禁"}</span>
                         <strong>{&snapshot.performance.model_key}</strong>
                     </div>
-                    {model_monitoring_node("Version lock", active_model.map(|model| model.version.as_str()).unwrap_or("pending"), "top", "version")}
-                    {model_monitoring_node("Drift watch", &format!("{} / PSI {}", snapshot.performance.drift_status, psi_label), "right", "drift")}
-                    {model_monitoring_node("Shadow evidence", &snapshot.gates.latest_evaluation_id, "bottom", "shadow")}
-                    {model_monitoring_node("QA labels", &format!("{} approved", snapshot.gates.approved_label_count), "left", "labels")}
-                    {model_monitoring_node("Retraining", &snapshot.retraining.recommendation, "lower-right", "train")}
+                    {model_monitoring_node("版本锁定", active_model.map(|model| model.version.as_str()).unwrap_or("待定"), "top", "version")}
+                    {model_monitoring_node("漂移监控", &format!("{} / PSI {}", snapshot.performance.drift_status, psi_label), "right", "drift")}
+                    {model_monitoring_node("影子证据", &snapshot.gates.latest_evaluation_id, "bottom", "shadow")}
+                    {model_monitoring_node("QA 标签", &format!("{} 已批准", snapshot.gates.approved_label_count), "left", "labels")}
+                    {model_monitoring_node("重训", &snapshot.retraining.recommendation, "lower-right", "train")}
                 </div>
 
                 <aside class="model-monitoring-actions">
-                    <span class="eyebrow">{"Promotion readiness"}</span>
+                    <span class="eyebrow">{"发布准备度"}</span>
                     <div class="model-monitoring-meter">
-                        <span>{"Gate pass"}</span>
+                        <span>{"门禁通过"}</span>
                         <div><i style={format!("width: {};", percent_width(gate_ratio))}></i></div>
                         <strong>{percent_label(gate_ratio)}</strong>
                     </div>
                     <div class="model-monitoring-meter">
-                        <span>{"Label readiness"}</span>
+                        <span>{"标签准备度"}</span>
                         <div><i style={format!("width: {};", percent_width(label_ratio))}></i></div>
                         <strong>{snapshot.gates.approved_label_count}</strong>
                     </div>
                     <div class="provider-signal-stack">
-                        {provider_signal_row("Data quality", &snapshot.gates.source_data_quality_status, "strong")}
-                        {provider_signal_row("Drift", &snapshot.retraining.drift_status, "warning")}
-                        {provider_signal_row("Open feedback", &snapshot.retraining.open_model_feedback_count.to_string(), "neutral")}
-                        {provider_signal_row("Blocker", first_blocker, "danger")}
+                        {provider_signal_row("数据质量", &snapshot.gates.source_data_quality_status, "strong")}
+                        {provider_signal_row("漂移", &snapshot.retraining.drift_status, "warning")}
+                        {provider_signal_row("开放反馈", &snapshot.retraining.open_model_feedback_count.to_string(), "neutral")}
+                        {provider_signal_row("阻塞项", first_blocker, "danger")}
                     </div>
                 </aside>
             </div>

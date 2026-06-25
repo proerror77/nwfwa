@@ -17,7 +17,7 @@ pub(crate) fn rule_performance_visual(performance: &[RulePerformance]) -> Html {
         .unwrap_or(1);
     html! {
         <div class="visual-panel wide-visual">
-            <h4>{"Rule command path"}</h4>
+            <h4>{"规则命中路径"}</h4>
             <div class="rule-bars">
                 {for performance.iter().map(|item| html! {
                     <div class="rule-bar-row">
@@ -32,7 +32,7 @@ pub(crate) fn rule_performance_visual(performance: &[RulePerformance]) -> Html {
                             <span style={format!("width: {};", percent_width(item.precision))}></span>
                             <em style={format!("width: {};", percent_width(item.false_positive_rate))}></em>
                         </div>
-                        <small>{format!("precision {} / FP {}", percent_label(item.precision), percent_label(item.false_positive_rate))}</small>
+                        <small>{format!("精准率 {} / 误报 {}", percent_label(item.precision), percent_label(item.false_positive_rate))}</small>
                     </div>
                 })}
             </div>
@@ -51,39 +51,39 @@ pub(crate) fn rule_pack_matrix(snapshot: &RuleOpsSnapshot) -> Html {
         <section class="panel result-stack">
             <div class="section-header">
                 <div>
-                    <h3>{"FWA Rule Pack Matrix"}</h3>
-                    <p>{"Productized rule families for the pilot demo: each family shows current coverage from the live rule library and operational performance."}</p>
+                    <h3>{"FWA 规则包矩阵"}</h3>
+                    <p>{"试点演示使用的产品化规则族：每个规则族展示当前规则库覆盖情况和运营表现。"}</p>
                 </div>
-                <span class="status-token strong">{"rule pack"}</span>
+                <span class="status-token strong">{"规则包"}</span>
             </div>
             <div class="rule-pack-cockpit">
                 <aside class="rule-pack-brief">
-                    <span class="eyebrow">{"PRD rule coverage"}</span>
-                    <strong>{format!("{} active / {} listed", active_rules, total_rules)}</strong>
-                    <small>{"Deterministic rules stay explainable, versioned, backtested, and human-approved before production routing."}</small>
+                    <span class="eyebrow">{"PRD 规则覆盖"}</span>
+                    <strong>{format!("{} 条启用 / {} 条已列出", active_rules, total_rules)}</strong>
+                    <small>{"确定性规则必须可解释、可版本化、可回测，并经人工批准后才能进入生产路由。"}</small>
                     <div class="rule-pack-meter">
                         <i style={format!("width: {};", percent_width(rule_pack_coverage_ratio(snapshot))) }></i>
                     </div>
-                    <small>{format!("covered families: {} / 5", covered_rule_pack_count(snapshot))}</small>
+                    <small>{format!("已覆盖规则族：{} / 5", covered_rule_pack_count(snapshot))}</small>
                 </aside>
                 <div class="rule-pack-map">
                     <div class="rule-pack-link"></div>
                     <div class="rule-pack-core">
                         <span>{"L2"}</span>
-                        <strong>{"Rule engine"}</strong>
+                        <strong>{"规则引擎"}</strong>
                     </div>
-                    {rule_pack_family_node(snapshot, "duplicate billing", "same service / amount", "duplicate", "top")}
-                    {rule_pack_family_node(snapshot, "early high-value claim", "new policy + high amount", "early", "right")}
-                    {rule_pack_family_node(snapshot, "provider peer outlier", "provider cohort deviation", "provider", "bottom")}
-                    {rule_pack_family_node(snapshot, "diagnosis-procedure mismatch", "coding consistency", "diagnosis", "left")}
-                    {rule_pack_family_node(snapshot, "medical necessity evidence gap", "chart support required", "medical", "lower-right")}
+                    {rule_pack_family_node(snapshot, "重复计费", "同服务 / 同金额", "duplicate", "top")}
+                    {rule_pack_family_node(snapshot, "早期高额理赔", "新保单 + 高金额", "early", "right")}
+                    {rule_pack_family_node(snapshot, "机构同侪异常", "同组机构偏离", "provider", "bottom")}
+                    {rule_pack_family_node(snapshot, "诊断-项目不匹配", "编码一致性", "diagnosis", "left")}
+                    {rule_pack_family_node(snapshot, "医疗必要性证据缺口", "需要病历支撑", "medical", "lower-right")}
                 </div>
                 <aside class="rule-pack-legend">
-                    <span class="eyebrow">{"Human-safe lifecycle"}</span>
-                    {rule_pack_lifecycle_row("Draft", "sandbox / backtest", "neutral")}
-                    {rule_pack_lifecycle_row("Review", "QA + false positives", "warning")}
-                    {rule_pack_lifecycle_row("Approve", "owner sign-off", "strong")}
-                    {rule_pack_lifecycle_row("Route", "recommend review only", "danger")}
+                    <span class="eyebrow">{"人工安全生命周期"}</span>
+                    {rule_pack_lifecycle_row("草稿", "沙箱 / 回测", "neutral")}
+                    {rule_pack_lifecycle_row("复核", "QA + 误报", "warning")}
+                    {rule_pack_lifecycle_row("批准", "负责人确认", "strong")}
+                    {rule_pack_lifecycle_row("路由", "仅建议复核", "danger")}
                 </aside>
             </div>
         </section>
@@ -117,9 +117,9 @@ fn rule_pack_family_node(
     html! {
         <div class={classes!("rule-pack-node", position, tone)}>
             <span>{label}</span>
-            <strong>{if rule_count > 0 { format!("{rule_count} rules") } else { "gap".into() }}</strong>
+            <strong>{if rule_count > 0 { format!("{rule_count} 条规则") } else { "缺口".into() }}</strong>
             <small>{caption}</small>
-            <em>{format!("triggers {} / precision {}", trigger_count, precision.map(percent_label).unwrap_or_else(|| "n/a".into()))}</em>
+            <em>{format!("命中 {} / 精准率 {}", trigger_count, precision.map(percent_label).unwrap_or_else(|| "无".into()))}</em>
         </div>
     }
 }
@@ -188,32 +188,32 @@ pub(crate) fn rule_backfill_pipeline(
 ) -> Html {
     let nodes = [
         (
-            "Discover",
+            "发现",
             matches!(&**discovery_state, ApiState::Ready(_)),
             state_label(discovery_state),
         ),
         (
-            "Backtest",
+            "回测",
             matches!(&**backtest_state, ApiState::Ready(_)),
             state_label(backtest_state),
         ),
         (
-            "Draft",
+            "草稿",
             matches!(&**save_state, ApiState::Ready(_)),
             state_label(save_state),
         ),
         (
-            "Shadow",
+            "影子验证",
             matches!(&**shadow_state, ApiState::Ready(_)),
             state_label(shadow_state),
         ),
         (
-            "Review",
+            "审核",
             matches!(&**review_state, ApiState::Ready(_)),
             state_label(review_state),
         ),
     ];
-    gate_pipeline("Candidate rule workflow", &nodes)
+    gate_pipeline("候选规则流程", &nodes)
 }
 
 fn state_label<T>(state: &UseStateHandle<ApiState<T>>) -> &'static str
@@ -221,10 +221,10 @@ where
     T: Clone + PartialEq + 'static,
 {
     match &**state {
-        ApiState::Idle => "pending",
-        ApiState::Loading => "running",
-        ApiState::Ready(_) => "ready",
-        ApiState::Failed(_) => "blocked",
+        ApiState::Idle => "待处理",
+        ApiState::Loading => "运行中",
+        ApiState::Ready(_) => "已就绪",
+        ApiState::Failed(_) => "阻塞",
     }
 }
 
@@ -266,16 +266,16 @@ fn rule_discovery_candidates_view(
 ) -> Html {
     match &**discovery_state {
         ApiState::Idle => {
-            html! { <p class="empty">{"Run discovery to generate governed rule candidates from explainable model signals."}</p> }
+            html! { <p class="empty">{"运行规则发现，从可解释模型信号生成受治理的候选规则。"}</p> }
         }
-        ApiState::Loading => html! { <p>{"Discovering candidate rules..."}</p> },
+        ApiState::Loading => html! { <p>{"正在发现候选规则..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(response) => html! {
             <div class="result-stack">
                 <div class="summary-grid">
-                    <div><span>{"Samples"}</span><strong>{response.sample_count}</strong></div>
-                    <div><span>{"Positive Labels"}</span><strong>{response.positive_count}</strong></div>
-                    <div><span>{"Candidates"}</span><strong>{response.candidates.len()}</strong></div>
+                    <div><span>{"样本"}</span><strong>{response.sample_count}</strong></div>
+                    <div><span>{"阳性标签"}</span><strong>{response.positive_count}</strong></div>
+                    <div><span>{"候选规则"}</span><strong>{response.candidates.len()}</strong></div>
                 </div>
                 <div class="factor-card-grid">
                     {for response.candidates.iter().map(|candidate| {
@@ -307,14 +307,14 @@ fn rule_discovery_candidates_view(
                                 <strong>{rule_candidate_name(candidate)}</strong>
                                 <small>{&candidate.explanation}</small>
                                 <div class="summary-grid compact-summary-grid">
-                                    <div><span>{"Support"}</span><strong>{candidate.support}</strong></div>
-                                    <div><span>{"Precision"}</span><strong>{percent_label(candidate.precision)}</strong></div>
-                                    <div><span>{"Lift"}</span><strong>{format!("{:.2}", candidate.lift)}</strong></div>
-                                    <div><span>{"Saving"}</span><strong>{&candidate.estimated_saving}</strong></div>
+                                    <div><span>{"支持度"}</span><strong>{candidate.support}</strong></div>
+                                    <div><span>{"精准率"}</span><strong>{percent_label(candidate.precision)}</strong></div>
+                                    <div><span>{"提升"}</span><strong>{format!("{:.2}", candidate.lift)}</strong></div>
+                                    <div><span>{"节省金额"}</span><strong>{&candidate.estimated_saving}</strong></div>
                                 </div>
                                 <div class="candidate-evidence-strip">
-                                    <small>{format!("matched: {}", refs_label(&candidate.matched_claim_ids))}</small>
-                                    <small>{format!("evidence: {}", refs_label(&candidate.evidence_refs))}</small>
+                                    <small>{format!("匹配理赔：{}", refs_label(&candidate.matched_claim_ids))}</small>
+                                    <small>{format!("证据：{}", refs_label(&candidate.evidence_refs))}</small>
                                 </div>
                             </button>
                         }
@@ -336,24 +336,24 @@ fn candidate_review_label(
         .iter()
         .any(|rejected_id| rejected_id == candidate_id)
     {
-        "rejected"
+        "已拒绝"
     } else if final_accepted_candidate_ids
         .iter()
         .any(|accepted_id| accepted_id == candidate_id)
     {
-        "accepted after shadow review"
+        "影子复核后已接受"
     } else if shadowed_candidate_ids
         .iter()
         .any(|shadowed_id| shadowed_id == candidate_id)
     {
-        "shadow evidence ready"
+        "影子证据已就绪"
     } else if accepted_candidate_ids
         .iter()
         .any(|draft_id| draft_id == candidate_id)
     {
-        "draft saved for shadow"
+        "草稿已保存用于影子验证"
     } else {
-        "needs backtest"
+        "需要回测"
     }
 }
 
@@ -392,18 +392,18 @@ fn candidate_review_tone(
 fn rule_backtest_view(backtest_state: &UseStateHandle<ApiState<RuleBacktestResponse>>) -> Html {
     match &**backtest_state {
         ApiState::Idle => html! {},
-        ApiState::Loading => html! { <p>{"Backtesting selected candidate..."}</p> },
+        ApiState::Loading => html! { <p>{"正在回测所选候选规则..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(backtest) => html! {
             <section class="visual-panel">
-                <h4>{"Backtest Evidence"}</h4>
+                <h4>{"回测证据"}</h4>
                 <div class="summary-grid">
-                    <div><span>{"Matched"}</span><strong>{format!("{} / {}", backtest.matched_count, backtest.sample_count)}</strong></div>
-                    <div><span>{"Precision"}</span><strong>{percent_label(backtest.precision)}</strong></div>
-                    <div><span>{"Recall"}</span><strong>{percent_label(backtest.recall)}</strong></div>
-                    <div><span>{"False Positive"}</span><strong>{percent_label(backtest.false_positive_rate)}</strong></div>
-                    <div><span>{"Saving"}</span><strong>{&backtest.estimated_saving}</strong></div>
-                    <div><span>{"Recommendation"}</span><strong>{&backtest.promotion_recommendation}</strong></div>
+                    <div><span>{"匹配"}</span><strong>{format!("{} / {}", backtest.matched_count, backtest.sample_count)}</strong></div>
+                    <div><span>{"精准率"}</span><strong>{percent_label(backtest.precision)}</strong></div>
+                    <div><span>{"召回率"}</span><strong>{percent_label(backtest.recall)}</strong></div>
+                    <div><span>{"误报率"}</span><strong>{percent_label(backtest.false_positive_rate)}</strong></div>
+                    <div><span>{"节省金额"}</span><strong>{&backtest.estimated_saving}</strong></div>
+                    <div><span>{"建议"}</span><strong>{&backtest.promotion_recommendation}</strong></div>
                 </div>
                 if !backtest.blockers.is_empty() {
                     <div class="compact-list">
@@ -418,13 +418,13 @@ fn rule_backtest_view(backtest_state: &UseStateHandle<ApiState<RuleBacktestRespo
 fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
     match &**save_state {
         ApiState::Idle => html! {},
-        ApiState::Loading => html! { <p>{"Saving draft candidate for shadow..."}</p> },
+        ApiState::Loading => html! { <p>{"正在保存影子验证候选草稿..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(saved) => {
             let rule_id = response_rule_id(saved).unwrap_or_else(|| "draft rule".into());
             html! {
                 <div class="success-note">
-                    {format!("Saved {rule_id} as draft candidate for shadow evidence.")}
+                    {format!("已将 {rule_id} 保存为影子验证候选草稿。")}
                 </div>
             }
         }
@@ -434,13 +434,13 @@ fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
 fn rule_shadow_run_state(shadow_state: &UseStateHandle<ApiState<Value>>) -> Html {
     match &**shadow_state {
         ApiState::Idle => html! {
-            <p class="empty">{"Run backtest, then submit shadow evidence before promotion review."}</p>
+            <p class="empty">{"先运行回测，再提交影子证据，之后才能进入发布审核。"}</p>
         },
-        ApiState::Loading => html! { <p>{"Submitting rule shadow evidence..."}</p> },
+        ApiState::Loading => html! { <p>{"正在提交规则影子证据..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(response) => html! {
             <div class="success-note">
-                <span>{"Shadow evidence submitted for promotion gates."}</span>
+                <span>{"影子证据已提交到发布门禁。"}</span>
                 <pre>{pretty_json(response)}</pre>
             </div>
         },
@@ -450,13 +450,13 @@ fn rule_shadow_run_state(shadow_state: &UseStateHandle<ApiState<Value>>) -> Html
 pub(crate) fn rule_candidate_review_state(review_state: &UseStateHandle<ApiState<Value>>) -> Html {
     match &**review_state {
         ApiState::Idle => html! {
-            <p class="empty">{"Run backtest, save a draft, submit shadow evidence, then accept or reject the selected candidate."}</p>
+            <p class="empty">{"请先运行回测、保存草稿、提交影子证据，然后接受或拒绝所选候选规则。"}</p>
         },
-        ApiState::Loading => html! { <p>{"Submitting rule candidate review action..."}</p> },
+        ApiState::Loading => html! { <p>{"正在提交候选规则审核操作..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(response) => html! {
             <div class="success-note">
-                <span>{"Rule candidate review action accepted."}</span>
+                <span>{"候选规则审核操作已受理。"}</span>
                 <pre>{pretty_json(response)}</pre>
             </div>
         },
@@ -483,7 +483,7 @@ pub(crate) fn rule_gate_pipeline(gates: &RulePromotionGates) -> Html {
             )
         })
         .collect::<Vec<_>>();
-    gate_pipeline("Rule promotion pipeline", &nodes)
+    gate_pipeline("规则发布流程", &nodes)
 }
 
 fn gate_pipeline(title: &str, nodes: &[(&str, bool, &str)]) -> Html {
@@ -496,7 +496,7 @@ fn gate_pipeline(title: &str, nodes: &[(&str, bool, &str)]) -> Html {
             <div class="gate-pipeline">
                 {for nodes.iter().map(|(label, passed, evidence)| html! {
                     <div class={classes!("gate-node", if *passed { "passed" } else { "blocked" })}>
-                        <span>{if *passed { "pass" } else { "block" }}</span>
+                        <span>{if *passed { "通过" } else { "阻塞" }}</span>
                         <strong>{label}</strong>
                         <small>{evidence}</small>
                     </div>

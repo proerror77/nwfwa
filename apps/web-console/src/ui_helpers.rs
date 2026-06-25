@@ -123,11 +123,3 @@ pub(crate) fn approval_count_label(approvals: &[AgentApprovalView]) -> String {
         format!("{} approval records", approvals.len())
     }
 }
-
-pub(crate) fn yes_no(value: bool) -> &'static str {
-    if value {
-        "yes"
-    } else {
-        "no"
-    }
-}
