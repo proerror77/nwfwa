@@ -8134,7 +8134,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .reviewer-workflow-step span,
-.governance-action-card span,
+.improvement-item-card span,
 .case-brief-facts span {
   display: block;
   color: var(--muted);
@@ -8554,7 +8554,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .governance-metric-grid,
-.governance-action-grid {
+.improvement-worklist {
   display: grid;
   gap: 12px;
 }
@@ -8563,12 +8563,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.governance-action-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.governance-metric,
-.governance-action-card {
+.governance-metric {
   min-width: 0;
   padding: 15px;
   background: #ffffff;
@@ -8605,58 +8600,116 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   line-height: 1;
 }
 
-.governance-action-card {
+.improvement-worklist {
+  grid-template-columns: 1fr;
+}
+
+.improvement-item-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+  align-items: stretch;
   width: 100%;
-  gap: 10px;
+  min-width: 0;
+  gap: 14px;
+  padding: 15px;
   color: inherit;
   text-align: left;
-  border-top-color: var(--teal);
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(15, 46, 89, 0.04);
   cursor: pointer;
 }
 
-.governance-action-card:hover {
+.improvement-item-card:hover {
   border-color: #bad4fb;
+  border-left-color: var(--blue);
   box-shadow: 0 12px 28px rgba(23, 105, 224, 0.14);
   transform: translateY(-1px);
 }
 
-.governance-action-card.warning {
-  border-top-color: var(--amber);
+.improvement-item-card.warning {
+  border-left-color: var(--amber);
 }
 
-.governance-action-card.danger {
-  border-top-color: var(--red);
+.improvement-item-card.danger {
+  border-left-color: var(--red);
 }
 
-.governance-action-card.neutral {
-  border-top-color: var(--teal);
+.improvement-item-card.neutral {
+  border-left-color: var(--teal);
 }
 
-.governance-action-card strong {
-  display: block;
-  margin-top: 5px;
+.improvement-item-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.improvement-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.improvement-item-head strong {
   color: var(--graphite);
   font-size: 16px;
   line-height: 1.25;
 }
 
-.governance-action-card p {
+.improvement-item-head span {
+  width: fit-content;
+  padding: 4px 7px;
+  color: #17436f;
+  background: var(--blue-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.improvement-item-card.warning .improvement-item-head span {
+  color: #7a4d0b;
+  background: var(--amber-soft);
+}
+
+.improvement-item-card.danger .improvement-item-head span {
+  color: #a31334;
+  background: var(--red-soft);
+}
+
+.improvement-item-card p {
   margin: 0;
   color: var(--text);
   font-size: 13px;
   line-height: 1.55;
 }
 
-.governance-action-card span,
-.governance-action-card small {
+.improvement-item-card small {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.governance-action-card b {
+.improvement-item-side {
+  display: grid;
+  align-content: space-between;
+  justify-items: end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.improvement-item-side span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.improvement-item-side b {
   width: fit-content;
+  max-width: 100%;
   padding: 6px 9px;
   color: #17436f;
   background: var(--blue-soft);
@@ -8706,8 +8759,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
   .dashboard-mid-row,
   .case-brief-panel,
-  .governance-thesis,
-  .governance-action-grid {
+  .governance-thesis {
     grid-template-columns: 1fr;
   }
 
@@ -8725,6 +8777,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
   .action-queue-page .queue-row {
     grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .improvement-item-card {
+    grid-template-columns: 1fr;
+  }
+
+  .improvement-item-side {
+    justify-items: start;
   }
 
   .queue-next-action {

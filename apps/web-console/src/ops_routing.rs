@@ -18,7 +18,7 @@ impl OpsPage {
             OpsPage::Dashboard => "今日概况",
             OpsPage::ActionQueue => "需要处理",
             OpsPage::Investigate => "调查工作台",
-            OpsPage::SystemLearning => "复盘改进",
+            OpsPage::SystemLearning => "改进事项",
         }
     }
 
@@ -27,7 +27,7 @@ impl OpsPage {
             OpsPage::Dashboard => "Today",
             OpsPage::ActionQueue => "Work Queue",
             OpsPage::Investigate => "Case Workbench",
-            OpsPage::SystemLearning => "Improve",
+            OpsPage::SystemLearning => "Worklist",
         }
     }
 
@@ -61,7 +61,7 @@ impl OpsPage {
             OpsPage::Dashboard => "今天有哪些风险线索需要人处理",
             OpsPage::ActionQueue => "按下一步动作整理线索和案件",
             OpsPage::Investigate => "事实、证据、建议和审计同屏处理",
-            OpsPage::SystemLearning => "决定要改规则、证据还是模型",
+            OpsPage::SystemLearning => "复核后沉淀的系统侧工作",
         }
     }
 
@@ -70,7 +70,7 @@ impl OpsPage {
             OpsPage::Dashboard => "What needs human review today",
             OpsPage::ActionQueue => "Leads and cases grouped by next action",
             OpsPage::Investigate => "Facts, evidence, recommendation, and audit trail together",
-            OpsPage::SystemLearning => "Turn review outcomes into follow-up work",
+            OpsPage::SystemLearning => "System-side work from review outcomes",
         }
     }
 

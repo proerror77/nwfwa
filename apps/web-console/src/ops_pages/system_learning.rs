@@ -20,29 +20,55 @@ fn governance_metric(label: &str, value: String, note: &str, tone: &'static str)
     }
 }
 
-fn governance_action(
+fn improvement_status(count: u32, language: Language) -> String {
+    match language {
+        Language::En => {
+            if count == 0 {
+                "Watching".to_string()
+            } else {
+                format!("{count} signals")
+            }
+        }
+        Language::Zh => {
+            if count == 0 {
+                "观察中".to_string()
+            } else {
+                format!("{count} 个信号")
+            }
+        }
+    }
+}
+
+fn improvement_item(
     title: &str,
     owner: &str,
-    body: &str,
+    trigger: &str,
     evidence: &str,
     action: &str,
+    count: u32,
     target: OpsPage,
     tone: &'static str,
     on_navigate: &Callback<OpsPage>,
+    language: Language,
 ) -> Html {
     let on_navigate = on_navigate.clone();
     html! {
         <button
-            class={classes!("governance-action-card", tone)}
+            class={classes!("improvement-item-card", tone)}
             onclick={Callback::from(move |_: MouseEvent| on_navigate.emit(target))}
         >
-            <div>
-                <span>{owner}</span>
-                <strong>{title}</strong>
+            <div class="improvement-item-main">
+                <div class="improvement-item-head">
+                    <strong>{title}</strong>
+                    <span>{improvement_status(count, language)}</span>
+                </div>
+                <p>{trigger}</p>
+                <small>{evidence}</small>
             </div>
-            <p>{body}</p>
-            <small>{evidence}</small>
-            <b>{action}</b>
+            <div class="improvement-item-side">
+                <span>{owner}</span>
+                <b>{action}</b>
+            </div>
         </button>
     }
 }
@@ -54,36 +80,45 @@ fn governance_body(
 ) -> Html {
     let disagreement = percent_label(summary.qa_queue.disagreement_rate);
     let false_positive = percent_label(summary.rule_governance.false_positive_rate);
-    let precision = percent_label(summary.rule_governance.precision);
     let drift = summary.model_governance.drift_detected_count;
     let breached = summary.case_sla.breached_cases;
+    let unresolved = summary.qa_queue.unresolved_feedback_count;
+    let rule_backlog = summary.qa_queue.rules_unresolved_feedback_count
+        + summary.rule_governance.false_positive_count;
+    let evidence_backlog = summary.qa_queue.features_unresolved_feedback_count
+        + summary.qa_queue.provider_profile_unresolved_feedback_count
+        + summary.qa_queue.workflow_unresolved_feedback_count;
+    let model_backlog = summary.qa_queue.models_unresolved_feedback_count + drift;
+    let calibration_backlog = summary.qa_queue.disagreement_cases;
+    let total_backlog =
+        calibration_backlog + rule_backlog + evidence_backlog + model_backlog + breached;
 
     html! {
         <div class="governance-loop-layout">
             <div class="governance-thesis">
                 <div>
-                    <p class="section-eyebrow">{tr(language, "When to use this page", "什么时候用这个页面")}</p>
-                    <h3>{tr(language, "After reviewers finish cases, decide what the system team must fix next.", "复核员处理完案件后，用这里决定系统侧下一步要修什么。")}</h3>
+                    <p class="section-eyebrow">{tr(language, "Review follow-up", "复核后的改进事项")}</p>
+                    <h3>{tr(language, "Do not review another case here. Decide which repeated review problem becomes system work.", "这里不处理单个案件；这里只处理复核后反复出现、需要系统侧修正的问题。")}</h3>
                 </div>
                 <p>{tr(
                     language,
-                    "It is not the daily case queue. It turns repeated review outcomes into follow-up work for QA, rules, evidence intake, and routing signals.",
-                    "它不是每天处理单案的队列；它把重复出现的复核结果变成质检、规则、证据进件和分流信号的改进任务。"
+                    "Each item below comes from reviewer disagreement, unresolved feedback, rule noise, delayed investigations, or model drift. The owner decides whether to fix policy wording, rule behavior, evidence intake, or routing signals.",
+                    "下面每一项都来自复核分歧、未关闭反馈、规则噪声、超时调查或模型漂移。负责人要判断该修口径、规则、进件证据，还是分流信号。"
                 )}</p>
             </div>
 
             <div class="governance-metric-grid">
                 {governance_metric(
-                    tr(language, "Rule precision", "规则命中率"),
-                    precision,
-                    tr(language, "Confirmed cases after review", "人工复核后的确认比例"),
-                    if summary.rule_governance.precision >= 0.70 { "success" } else { "warning" },
+                    tr(language, "Review signals", "复盘信号"),
+                    total_backlog.to_string(),
+                    tr(language, "System-side issues from review outcomes", "复核结果沉淀出的系统侧问题"),
+                    if total_backlog == 0 { "success" } else { "warning" },
                 )}
                 {governance_metric(
-                    tr(language, "False positives", "误报率"),
-                    false_positive,
-                    tr(language, "Noise reviewers must correct", "需要复核员纠正的噪声"),
-                    if summary.rule_governance.false_positive_rate <= 0.25 { "success" } else { "danger" },
+                    tr(language, "Unclosed feedback", "未关闭反馈"),
+                    unresolved.to_string(),
+                    tr(language, "QA feedback still needs an owner", "仍需负责人处理的 QA 反馈"),
+                    if unresolved == 0 { "success" } else { "warning" },
                 )}
                 {governance_metric(
                     tr(language, "QA disagreement", "质检分歧"),
@@ -92,60 +127,73 @@ fn governance_body(
                     if summary.qa_queue.disagreement_rate <= 0.15 { "success" } else { "warning" },
                 )}
                 {governance_metric(
-                    tr(language, "Signal drift", "信号漂移"),
-                    drift.to_string(),
-                    tr(language, "Model signals needing owner review", "需要负责人查看的模型信号"),
-                    if drift == 0 { "success" } else { "danger" },
+                    tr(language, "False positives", "误报率"),
+                    false_positive,
+                    tr(language, "Rule noise that reviewers corrected", "复核员纠正过的规则噪声"),
+                    if summary.rule_governance.false_positive_rate <= 0.25 { "success" } else { "danger" },
                 )}
             </div>
 
-            <div class="governance-action-grid">
-                {governance_action(
-                    tr(language, "Close reviewer disagreement", "关闭复核分歧"),
+            <div class="improvement-worklist">
+                {improvement_item(
+                    tr(language, "Calibrate review policy", "统一复核口径"),
                     tr(language, "QA owner", "质检负责人"),
-                    tr(language, "Use sampled cases to decide whether the issue is reviewer training, unclear policy, or weak evidence.", "用抽样案件判断问题来自复核口径、政策不清，还是证据不足。"),
-                    tr(language, "Audit output: QA decision, reviewer note, evidence refs", "审计输出：QA 结论、复核备注、证据引用"),
-                    tr(language, "Open work queue", "打开处理队列"),
+                    tr(language, "Reviewer decisions diverged on sampled cases. Decide whether the issue is training, unclear policy wording, or missing evidence.", "抽样案件出现复核分歧。先判断问题来自培训、政策口径不清，还是证据不足。"),
+                    tr(language, "Evidence: sampled cases, QA decisions, reviewer notes", "依据：抽样案件、QA 结论、复核备注"),
+                    tr(language, "Handle in queue", "去处理反馈"),
+                    calibration_backlog,
                     OpsPage::ActionQueue,
-                    if summary.qa_queue.open_cases > 0 { "warning" } else { "neutral" },
+                    if calibration_backlog > 0 { "warning" } else { "neutral" },
                     on_navigate,
+                    language,
                 )}
-                {governance_action(
-                    tr(language, "Promote or retire rules", "上线或下线规则"),
+                {improvement_item(
+                    tr(language, "Reduce rule noise", "降低规则噪声"),
                     tr(language, "Rule owner", "规则负责人"),
-                    tr(language, "Rules should move only when review outcomes show they reduce risk without creating too much operational noise.", "规则只有在复核结果证明能降风险且不会制造过多噪声时才应调整。"),
-                    tr(language, "Audit output: rule version, backtest result, approval", "审计输出：规则版本、回测结果、审批记录"),
-                    tr(language, "Review noisy leads", "查看噪声来源"),
+                    tr(language, "Reviewers corrected rule hits as false positives. Decide whether to narrow the rule, pause it, or collect more evidence before changing it.", "复核员把部分规则命中纠正为误报。判断是收窄规则、暂停规则，还是先补证据再改。"),
+                    tr(language, "Evidence: rule feedback, false-positive count, reviewed hits", "依据：规则反馈、误报数量、已复核命中"),
+                    tr(language, "Review rule feedback", "查看规则反馈"),
+                    rule_backlog,
                     OpsPage::ActionQueue,
                     if summary.rule_governance.false_positive_rate > 0.25 { "danger" } else { "neutral" },
                     on_navigate,
+                    language,
                 )}
-                {governance_action(
-                    tr(language, "Watch model signals", "观察模型信号"),
-                    tr(language, "Model owner", "模型负责人"),
-                    tr(language, "Model scores route work, but they do not decide claims. Drift means the routing signal needs review.", "模型分数用于分流，不直接决定理赔；漂移表示分流信号需要复核。"),
-                    tr(language, "Audit output: evaluation run, drift alert, promotion gate", "审计输出：评估运行、漂移告警、发布门禁"),
-                    tr(language, "Open today view", "回到今日概况"),
-                    OpsPage::Dashboard,
-                    if drift > 0 { "danger" } else { "neutral" },
-                    on_navigate,
-                )}
-                {governance_action(
-                    tr(language, "Repair evidence gaps", "修复证据缺口"),
+                {improvement_item(
+                    tr(language, "Repair evidence intake", "修复证据进件"),
                     tr(language, "Evidence owner", "证据负责人"),
-                    tr(language, "If reviewers keep choosing 'need more evidence', the intake packet or OCR/retrieval workflow needs correction.", "如果复核员频繁选择“需补充材料”，说明进件包或 OCR/检索流程要修正。"),
-                    tr(language, "Audit output: requested document type, source ref, retrieval audit", "审计输出：补件类型、来源引用、检索审计"),
-                    match language {
-                        Language::En => {
-                            if breached > 0 { "Open late investigations" } else { "Open investigation workbench" }
-                        }
-                        Language::Zh => {
-                            if breached > 0 { "查看超时调查" } else { "打开调查工作台" }
-                        }
-                    },
+                    tr(language, "Feedback points to missing fields, provider profile gaps, or workflow friction. Fix the intake packet before reviewers keep asking for the same documents.", "反馈指向字段缺失、机构画像不足或流程摩擦。先修进件包，避免复核员反复补同类材料。"),
+                    tr(language, "Evidence: feature feedback, provider-profile feedback, workflow feedback", "依据：字段反馈、机构画像反馈、流程反馈"),
+                    tr(language, "Open workbench", "打开工作台"),
+                    evidence_backlog,
+                    OpsPage::Investigate,
+                    if evidence_backlog > 0 { "warning" } else { "neutral" },
+                    on_navigate,
+                    language,
+                )}
+                {improvement_item(
+                    tr(language, "Review routing signal", "复核分流信号"),
+                    tr(language, "Model owner", "模型负责人"),
+                    tr(language, "Model signals only route work. Drift or model feedback means the team should review whether high-risk items are still being prioritized correctly.", "模型信号只负责分流。出现漂移或模型反馈时，要复核高风险线索是否仍被正确排优先级。"),
+                    tr(language, "Evidence: drift alerts, model feedback, precision and recall", "依据：漂移告警、模型反馈、precision/recall"),
+                    tr(language, "Check today view", "查看今日概况"),
+                    model_backlog,
+                    OpsPage::Dashboard,
+                    if model_backlog > 0 { "danger" } else { "neutral" },
+                    on_navigate,
+                    language,
+                )}
+                {improvement_item(
+                    tr(language, "Shorten late investigations", "压缩超时调查"),
+                    tr(language, "Review lead", "复核主管"),
+                    tr(language, "Open cases are breaching SLA. Decide whether the blocker is missing evidence, unclear ownership, or too many low-value alerts.", "调查案件已经超时。判断阻塞来自缺证据、归属不清，还是低价值警报过多。"),
+                    tr(language, "Evidence: breached cases, open investigations, triage time", "依据：超时案件、调查中案件、分诊耗时"),
+                    tr(language, "Open late cases", "查看超时案件"),
+                    breached,
                     OpsPage::Investigate,
                     if breached > 0 { "warning" } else { "neutral" },
                     on_navigate,
+                    language,
                 )}
             </div>
         </div>
@@ -185,8 +233,8 @@ pub fn system_learning_page(props: &SystemLearningPageProps) -> Html {
         <div class="ops-page system-learning-page">
             <div class="ops-page-header">
                 <div>
-                    <h2>{tr(language, "Review Improvements", "复盘改进")}</h2>
-                    <p class="muted">{tr(language, "This page exists only when review outcomes create follow-up work.", "这个页面只回答一件事：复核结果暴露了什么系统问题，下一步去哪处理。")}</p>
+                    <h2>{tr(language, "Improvement Worklist", "改进事项")}</h2>
+                    <p class="muted">{tr(language, "System-side work created by human review outcomes.", "人工复核结果沉淀出的系统侧工作。")}</p>
                 </div>
             </div>
 
