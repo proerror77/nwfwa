@@ -1,7 +1,6 @@
 use crate::api::*;
-use crate::formatting::percent_label;
+use crate::formatting::{business_label, percent_label};
 use crate::i18n::tr;
-use crate::ops_routing::{ops_set_hash_with_id, OpsPage};
 use crate::state::{use_api_key, ApiState, Language};
 use crate::types::*;
 use wasm_bindgen_futures::spawn_local;
@@ -65,22 +64,22 @@ fn prevention_banner(s: &DashboardSummary, language: Language) -> Html {
     html! {
         <div class="prevention-banner">
             <div class="prevention-stat">
-                <span class="prevention-label">{tr(language, "Prevented today", "今日拦截")}</span>
+                <span class="prevention-label">{tr(language, "Held for review", "建议暂缓金额")}</span>
                 <strong class="prevention-value success">{prevented}</strong>
             </div>
             <div class="prevention-divider"/>
             <div class="prevention-stat">
-                <span class="prevention-label">{tr(language, "Recovered", "追回")}</span>
+                <span class="prevention-label">{tr(language, "Confirmed recovery", "已确认追回")}</span>
                 <strong class="prevention-value neutral">{recovered}</strong>
             </div>
             <div class="prevention-divider"/>
             <div class="prevention-stat">
-                <span class="prevention-label">{tr(language, "Auto-passed", "自动通过")}</span>
+                <span class="prevention-label">{tr(language, "Low-risk cleared", "低风险放行")}</span>
                 <strong class="prevention-value muted">{format!("{pass} ({pass_pct}%)")}</strong>
             </div>
             <div class="prevention-divider"/>
             <div class="prevention-stat">
-                <span class="prevention-label">{tr(language, "Flagged for review", "标记复核")}</span>
+                <span class="prevention-label">{tr(language, "Needs human review", "转人工复核")}</span>
                 <strong class="prevention-value danger">{flagged.to_string()}</strong>
             </div>
         </div>
@@ -99,17 +98,17 @@ fn system_performance_row(s: &DashboardSummary, language: Language) -> Html {
     html! {
         <div class="perf-row">
             <div class={classes!("perf-card", pt)}>
-                <span class="perf-label">{tr(language, "Precision", "精准率")}</span>
+                <span class="perf-label">{tr(language, "Review precision", "复核命中率")}</span>
                 <strong class="perf-value">{percent_label(precision)}</strong>
-                <small class="perf-note">{tr(language, "Confirmed / reviewed", "确认 / 复核比")}</small>
+                <small class="perf-note">{tr(language, "Confirmed after human review", "人工复核后确认比例")}</small>
             </div>
             <div class="perf-card neutral">
-                <span class="perf-label">{tr(language, "False positive rate", "误报率")}</span>
+                <span class="perf-label">{tr(language, "False positives", "误报成本")}</span>
                 <strong class="perf-value">{percent_label(fp_rate)}</strong>
-                <small class="perf-note">{tr(language, "Lower is better", "越低越好")}</small>
+                <small class="perf-note">{tr(language, "Follow up in QA loop", "进入 QA 反馈闭环")}</small>
             </div>
             <div class={classes!("perf-card", if sla_ok >= 0.95 { "success" } else { "warning" })}>
-                <span class="perf-label">{tr(language, "SLA compliance", "SLA 达标")}</span>
+                <span class="perf-label">{tr(language, "Review SLA", "复核时效")}</span>
                 <strong class="perf-value">{percent_label(sla_ok)}</strong>
                 <small class="perf-note">
                     {match language {
@@ -119,7 +118,7 @@ fn system_performance_row(s: &DashboardSummary, language: Language) -> Html {
                 </small>
             </div>
             <div class={classes!("perf-card", if drift == 0 { "success" } else { "danger" })}>
-                <span class="perf-label">{tr(language, "Model drift", "模型漂移")}</span>
+                <span class="perf-label">{tr(language, "Signal drift", "信号稳定性")}</span>
                 <strong class="perf-value">{if drift == 0 { tr(language, "OK", "正常") } else { tr(language, "Alert", "警告") }}</strong>
                 <small class="perf-note">
                     {match language {
@@ -146,14 +145,14 @@ fn action_counters(
 
     html! {
         <div class="action-counters">
-            <p class="section-eyebrow">{tr(language, "Action needed", "需要你处理")}</p>
+            <p class="section-eyebrow">{tr(language, "Decision queue", "今天要点的动作")}</p>
             <div class="action-counter-grid">
                 <button
                     class={classes!("action-counter-card", if red > 0 { "danger" } else { "neutral" })}
                     onclick={on_queue.clone()}
                 >
                     <strong class="action-count">{red}</strong>
-                    <span class="action-label">{tr(language, "High-risk flagged", "高风险待审")}</span>
+                    <span class="action-label">{tr(language, "Open high-risk leads", "高风险线索待判断")}</span>
                 </button>
                 <button
                     class={classes!("action-counter-card", if sla_breach > 0 { "warning" } else { "neutral" })}
@@ -162,8 +161,8 @@ fn action_counters(
                     <strong class="action-count">{open}</strong>
                     <span class="action-label">
                         {match language {
-                            Language::En => format!("Open cases ({sla_breach} SLA breach)"),
-                            Language::Zh => format!("待结案 ({sla_breach} 超时)"),
+                            Language::En => format!("Open investigations ({sla_breach} late)"),
+                            Language::Zh => format!("调查中案件（{sla_breach} 个超时）"),
                         }}
                     </span>
                 </button>
@@ -172,7 +171,7 @@ fn action_counters(
                     onclick={on_queue}
                 >
                     <strong class="action-count">{qa_open}</strong>
-                    <span class="action-label">{tr(language, "Pending QA / feedback", "待 QA / 反馈")}</span>
+                    <span class="action-label">{tr(language, "QA feedback to close", "待关闭质检反馈")}</span>
                 </button>
             </div>
         </div>
@@ -193,6 +192,23 @@ fn live_feed_row(label: &str, value: &str, tone: &'static str) -> Html {
     }
 }
 
+fn scheme_label(scheme: &str, language: Language) -> String {
+    let key = scheme.trim().to_ascii_lowercase();
+    match (key.as_str(), language) {
+        ("diagnosis_procedure_mismatch", Language::Zh) => "诊疗不匹配".to_string(),
+        ("early_high_value_claim" | "high_amount", Language::Zh) => "金额异常".to_string(),
+        ("duplicate_billing" | "duplicate_claim", Language::Zh) => "重复理赔".to_string(),
+        ("provider_peer_outlier" | "provider_pattern", Language::Zh) => "机构模式异常".to_string(),
+        ("upcoding", Language::Zh) => "高码计费".to_string(),
+        ("unbundling", Language::Zh) => "拆分计费".to_string(),
+        ("medically_unnecessary_service", Language::Zh) => "非必要医疗服务".to_string(),
+        ("excessive_utilization", Language::Zh) => "过度使用".to_string(),
+        ("relationship_concentration", Language::Zh) => "关系集中异常".to_string(),
+        ("high_risk_claim", Language::Zh) => "高风险理赔".to_string(),
+        _ => business_label(&key),
+    }
+}
+
 fn live_intake_feed(s: &DashboardSummary, language: Language) -> Html {
     // Derive a few representative feed items from live summary data.
     let total = s.suspected_claims;
@@ -206,38 +222,95 @@ fn live_intake_feed(s: &DashboardSummary, language: Language) -> Html {
         <div class="live-feed">
             <div class="live-feed-header">
                 <span class="live-dot-pulse"/>
-                <p class="section-eyebrow">{tr(language, "Live intake", "实时进件流水")}</p>
+                <p class="section-eyebrow">{tr(language, "Why the queue moved", "队列变化原因")}</p>
             </div>
             <div class="feed-rows">
                 {live_feed_row(
-                    tr(language, "Claims processed", "理赔处理"),
+                    tr(language, "Claims normalized", "已归一化理赔"),
                     &total.to_string(),
                     "neutral"
                 )}
                 {live_feed_row(
-                    tr(language, "High risk flagged", "高风险标记"),
+                    tr(language, "High-risk review leads", "高风险复核线索"),
                     &red.to_string(),
                     if red > 0 { "danger" } else { "neutral" }
                 )}
                 {live_feed_row(
-                    tr(language, "Watchlist (amber)", "可疑（黄色）"),
+                    tr(language, "Watchlist leads", "观察名单线索"),
                     &amber.to_string(),
                     if amber > 0 { "warning" } else { "neutral" }
                 )}
                 {live_feed_row(
-                    tr(language, "Rules triggered", "规则命中"),
+                    tr(language, "Rule reasons attached", "已附规则原因"),
                     &rule_hits.to_string(),
                     "neutral"
                 )}
                 {live_feed_row(
-                    tr(language, "Confirmed FWA", "确认 FWA"),
+                    tr(language, "Reviewer-confirmed FWA", "复核确认 FWA"),
                     &confirmed.to_string(),
                     if confirmed > 0 { "success" } else { "muted" }
                 )}
                 { for schemes.iter().map(|(scheme, count)| {
-                    live_feed_row(scheme, &count.to_string(), "muted")
+                    live_feed_row(&scheme_label(scheme, language), &count.to_string(), "muted")
                 }) }
             </div>
+        </div>
+    }
+}
+
+fn reviewer_workflow_strip(language: Language) -> Html {
+    let steps = [
+        (
+            tr(language, "Normalize", "进件归一"),
+            tr(
+                language,
+                "Claim, member, provider, and documents become one review context.",
+                "理赔、成员、机构和单据先合成同一个复核上下文。",
+            ),
+        ),
+        (
+            tr(language, "Explain", "解释风险"),
+            tr(
+                language,
+                "Rules, model signals, and similar cases must point to evidence.",
+                "规则、模型信号和相似案例都必须指向证据。",
+            ),
+        ),
+        (
+            tr(language, "Review", "人工判断"),
+            tr(
+                language,
+                "The system routes work; the reviewer records the recommendation.",
+                "系统负责分流，人负责给出可追溯建议。",
+            ),
+        ),
+        (
+            tr(language, "Audit", "审计留痕"),
+            tr(
+                language,
+                "Every decision keeps evidence refs and writeback status.",
+                "每次处理都留下证据引用和回写状态。",
+            ),
+        ),
+        (
+            tr(language, "Improve", "治理回流"),
+            tr(
+                language,
+                "QA outcomes tune rules, models, and queue policy.",
+                "QA 结果回流到规则、模型和队列策略。",
+            ),
+        ),
+    ];
+
+    html! {
+        <div class="reviewer-workflow-strip" aria-label={tr(language, "Reviewer workflow", "复核工作流")}>
+            { for steps.iter().enumerate().map(|(idx, (title, body))| html! {
+                <div class="reviewer-workflow-step">
+                    <span>{format!("{:02}", idx + 1)}</span>
+                    <strong>{title}</strong>
+                    <small>{body}</small>
+                </div>
+            }) }
         </div>
     }
 }
@@ -253,6 +326,8 @@ fn dashboard_body(
         <div class="dashboard-layout">
             // ── Top: prevention banner ──────────────────────────────────
             { prevention_banner(s, language) }
+
+            { reviewer_workflow_strip(language) }
 
             // ── Middle row: left = performance + action, right = feed ───
             <div class="dashboard-mid-row">
@@ -321,14 +396,14 @@ pub fn ops_dashboard_page(props: &OpsDashboardPageProps) -> Html {
         <div class="ops-page ops-dashboard-page">
             <div class="ops-page-header">
                 <div>
-                    <h2>{tr(language, "Operations Overview", "运营概况")}</h2>
+                    <h2>{tr(language, "Today’s Review Desk", "今日复核台")}</h2>
                     <p class="muted">{match language {
-                        Language::En => format!("{} · Prevention value, system health, action counters, live feed", today_label()),
-                        Language::Zh => format!("{} · 防损金额、系统健康、待处理计数与进件流水", today_label()),
+                        Language::En => format!("{} · What changed, what needs a human decision, and what will be audited", today_label()),
+                        Language::Zh => format!("{} · 看今天哪些线索要人工判断、为什么重要、会留下什么审计记录", today_label()),
                     }}</p>
                 </div>
                 <button onclick={refresh} disabled={loading}>
-                    {if loading { tr(language, "Refreshing...", "刷新中...") } else { tr(language, "↺ Refresh", "↺ 刷新") }}
+                    {if loading { tr(language, "Refreshing...", "刷新中...") } else { tr(language, "Refresh", "刷新") }}
                 </button>
             </div>
 
@@ -336,7 +411,7 @@ pub fn ops_dashboard_page(props: &OpsDashboardPageProps) -> Html {
                 ApiState::Idle | ApiState::Loading => html! {
                     <div class="loading-placeholder">
                         <span class="loading-pulse"/>
-                        <p class="muted">{tr(language, "Loading dashboard...", "加载中...")}</p>
+                        <p class="muted">{tr(language, "Loading today’s review state...", "正在加载今日复核状态...")}</p>
                     </div>
                 },
                 ApiState::Failed(err) => html! {

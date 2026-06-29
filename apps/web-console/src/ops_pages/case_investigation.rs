@@ -153,6 +153,16 @@ fn scheme_chip(scheme: &str) -> Html {
     }
 }
 
+fn localized_scheme_label(scheme: &str, language: Language) -> String {
+    match (scheme, language) {
+        ("diagnosis_procedure_mismatch", Language::Zh) => "诊疗不匹配".to_string(),
+        ("high_amount", Language::Zh) => "金额异常".to_string(),
+        ("duplicate_claim", Language::Zh) => "重复理赔".to_string(),
+        ("provider_pattern", Language::Zh) => "机构模式异常".to_string(),
+        _ => localized_business_text(scheme, language),
+    }
+}
+
 fn sla_badge(sla_status: &str, language: Language) -> Html {
     let (bg, fg, label) = match sla_status.to_ascii_lowercase().as_str() {
         "breached" => (
@@ -178,16 +188,22 @@ fn sla_badge(sla_status: &str, language: Language) -> Html {
     }
 }
 
-fn status_badge(status: &str) -> Html {
+fn status_badge(status: &str, language: Language) -> Html {
     let (bg, fg) = match status.to_ascii_lowercase().as_str() {
         "investigating" => ("var(--blue-soft)", "var(--blue)"),
         "triage" => ("var(--amber-soft)", "var(--amber)"),
         "pending_evidence" => ("#fff1e8", "#a65414"),
         _ => ("var(--surface-strong)", "var(--muted)"),
     };
+    let label = match (status, language) {
+        ("triage", Language::Zh) => "待分诊".to_string(),
+        ("investigating", Language::Zh) => "调查中".to_string(),
+        ("pending_evidence", Language::Zh) => "待补证据".to_string(),
+        _ => business_label(status),
+    };
     html! {
         <span style={format!("background:{bg};color:{fg};border:1px solid {fg};border-radius:4px;padding:1px 6px;font-size:0.7rem;")}>
-            {status}
+            {label}
         </span>
     }
 }
@@ -237,7 +253,7 @@ const LAYER_META: &[LayerMeta] = &[
     LayerMeta {
         number: "④",
         title_en: "Provider Risk Analysis",
-        title_zh: "Provider 风险分析",
+        title_zh: "医疗机构风险分析",
     },
     LayerMeta {
         number: "⑤",
@@ -315,21 +331,24 @@ fn queue_panel(
                                     </div>
                                     <div style="font-size:0.78rem;color:var(--graphite);font-weight:650;margin-bottom:4px;">
                                         {match language {
-                                            Language::En => format!("Claim {} · {}", &c.claim_id, &c.scheme_family),
-                                            Language::Zh => format!("理赔 {} · {}", &c.claim_id, &c.scheme_family),
+                                            Language::En => format!("Claim {} · {}", &c.claim_id, localized_scheme_label(&c.scheme_family, language)),
+                                            Language::Zh => format!("理赔 {} · {}", &c.claim_id, localized_scheme_label(&c.scheme_family, language)),
                                         }}
                                     </div>
                                     <div style="font-size:0.72rem;color:var(--muted);line-height:1.35;margin-bottom:6px;">
-                                        {format!("Member {} · Provider {} · reviewer {}", &c.member_id, &c.provider_id, &c.reviewer)}
+                                        {match language {
+                                            Language::En => format!("Member {} · Provider {} · reviewer {}", &c.member_id, &c.provider_id, &c.reviewer),
+                                            Language::Zh => format!("成员 {} · 医疗机构 {} · 复核员 {}", &c.member_id, &c.provider_id, &c.reviewer),
+                                        }}
                                     </div>
                                     <div style="font-size:0.74rem;color:var(--graphite);line-height:1.35;margin-bottom:8px;">
                                         <strong>{tr(language, "Investigation focus: ", "调查焦点：")}</strong>
                                         {focus_summary}
                                     </div>
                                     <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-                                        { scheme_chip(&c.scheme_family) }
+                                        { scheme_chip(&localized_scheme_label(&c.scheme_family, language)) }
                                         { sla_badge(&c.sla_status, language) }
-                                        { status_badge(&c.status) }
+                                        { status_badge(&c.status, language) }
                                     </div>
                                 </div>
                             }
@@ -398,7 +417,7 @@ fn conclusion_panel(
                                 <span style="color:var(--graphite);font-family:monospace;">{&case.claim_id}</span>
                                 <span style="color:var(--muted);">{tr(language, "Member ID", "成员 ID")}</span>
                                 <span style="color:var(--graphite);font-family:monospace;">{&case.member_id}</span>
-                                <span style="color:var(--muted);">{tr(language, "Provider ID", "供应商 ID")}</span>
+                                <span style="color:var(--muted);">{tr(language, "Provider ID", "医疗机构 ID")}</span>
                                 <span style="color:var(--graphite);font-family:monospace;">{&case.provider_id}</span>
                             </div>
                         </div>
@@ -621,16 +640,72 @@ fn evidence_refs_from_package(package: &serde_json::Value) -> Vec<String> {
     }
 }
 
+fn case_brief_panel(ctx: &InvestigationContext, language: Language) -> Html {
+    let case = &ctx.case;
+    let evidence_count = evidence_refs_from_package(&case.evidence_package).len();
+    let risk_score = case
+        .evidence_package
+        .get("risk_score")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let rag = case
+        .evidence_package
+        .get("rag")
+        .and_then(|v| v.as_str())
+        .unwrap_or("amber");
+    let focus = case_focus_summary(case, language);
+
+    html! {
+        <div class="case-brief-panel">
+            <div class="case-brief-main">
+                <span class="section-eyebrow">{tr(language, "Case question", "本案要判断什么")}</span>
+                <h3>
+                    {match language {
+                        Language::En => format!("Claim {} needs a human recommendation", case.claim_id),
+                        Language::Zh => format!("理赔 {} 需要人工形成建议", case.claim_id),
+                    }}
+                </h3>
+                <p>{focus}</p>
+            </div>
+            <div class="case-brief-facts">
+                <div>
+                    <span>{tr(language, "Risk", "风险")}</span>
+                    <strong>{risk_score}</strong>
+                    { rag_badge(rag, language) }
+                </div>
+                <div>
+                    <span>{tr(language, "Evidence", "证据")}</span>
+                    <strong>{evidence_count}</strong>
+                    <small>{tr(language, "refs attached", "条引用")}</small>
+                </div>
+                <div>
+                    <span>{tr(language, "SLA", "时效")}</span>
+                    { sla_badge(&case.sla_status, language) }
+                    <small>{format!("{}h", case.sla_target_hours)}</small>
+                </div>
+                <div>
+                    <span>{tr(language, "Audit", "审计")}</span>
+                    <strong>{tr(language, "Required", "必须留痕")}</strong>
+                    <small>{tr(language, "decision + evidence refs", "结论 + 证据引用")}</small>
+                </div>
+            </div>
+        </div>
+    }
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 #[derive(Properties, PartialEq)]
 pub struct CaseInvestigationPageProps {
     pub language: Language,
+    pub initial_case_id: Option<String>,
+    pub on_done: Callback<()>,
 }
 
 #[function_component(CaseInvestigationPage)]
 pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
     let language = props.language;
+    let initial_case_id = props.initial_case_id.clone();
     let api_key = use_api_key();
     let snapshot_state = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
     let selected_case_id = use_state(String::new);
@@ -653,6 +728,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
         let api_key = api_key.clone();
         let snapshot_state = snapshot_state.clone();
         let selected_case_id = selected_case_id.clone();
+        let initial_case_id = initial_case_id.clone();
         use_effect_with((), move |_| {
             let api_key = (*api_key).clone();
             let snapshot_state = snapshot_state.clone();
@@ -661,6 +737,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
             spawn_local(async move {
                 match get_leads_cases_snapshot(api_key).await {
                     Ok(snap) => {
+                        let requested_id = initial_case_id.as_deref();
                         let first_id = snap
                             .cases
                             .iter()
@@ -668,8 +745,26 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                                 let s = c.status.to_ascii_lowercase();
                                 s == "investigating" || s == "triage" || s == "pending_evidence"
                             })
-                            .min_by_key(|c| {
-                                (sla_sort_key(&c.sla_status), priority_sort_key(&c.priority))
+                            .find(|c| {
+                                requested_id
+                                    .map(|id| c.case_id == id || c.lead_id == id)
+                                    .unwrap_or(false)
+                            })
+                            .or_else(|| {
+                                snap.cases
+                                    .iter()
+                                    .filter(|c| {
+                                        let s = c.status.to_ascii_lowercase();
+                                        s == "investigating"
+                                            || s == "triage"
+                                            || s == "pending_evidence"
+                                    })
+                                    .min_by_key(|c| {
+                                        (
+                                            sla_sort_key(&c.sla_status),
+                                            priority_sort_key(&c.priority),
+                                        )
+                                    })
                             })
                             .map(|c| c.case_id.clone())
                             .unwrap_or_default();
@@ -841,6 +936,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
         let confirm_msg = confirm_msg.clone();
         let selected_case_id = selected_case_id.clone();
         let snapshot_state = snapshot_state.clone();
+        let on_done = props.on_done.clone();
 
         Callback::from(move |_: MouseEvent| {
             let Some(case) = &selected_case else {
@@ -882,6 +978,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
             let selected_case_id = selected_case_id.clone();
             let snapshot_state = snapshot_state.clone();
             let claim_id = case.claim_id.clone();
+            let on_done = on_done.clone();
 
             write_state.set(ApiState::Loading);
             confirm_msg.set(None);
@@ -925,6 +1022,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                             selected_case_id.set(next_id);
                             snapshot_state.set(ApiState::Ready(snap));
                         }
+                        on_done.emit(());
                     }
                     Err(e) => write_state.set(ApiState::Failed(e)),
                 }
@@ -944,7 +1042,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                     <h2 class="bilingual-title" style="margin:0;color:var(--graphite);">
                         <span>{tr(language, "Investigation Workbench", "调查工作台")}</span>
                     </h2>
-                    <p style="margin:2px 0 0;font-size:0.78rem;color:var(--muted);">{tr(language, "Seven-layer investigation, evidence requests, and auditable human recommendations.", "7层调查分析、补证据、形成可审计的人工建议。")}</p>
+                    <p style="margin:2px 0 0;font-size:0.78rem;color:var(--muted);">{tr(language, "Facts, evidence requests, and auditable human recommendations.", "案件事实、补证据动作、可审计的人工建议。")}</p>
                 </div>
             </div>
 
@@ -990,6 +1088,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                                 ];
                                 html! {
                                     <>
+                                    { case_brief_panel(&ctx, language) }
                                     { for layers.into_iter().enumerate().map(|(i, layer_html)| {
                                         let exp = expanded.get(i).copied().unwrap_or(false);
                                         let tog = on_layer_toggle.clone();

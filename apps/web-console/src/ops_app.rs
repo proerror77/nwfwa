@@ -5,7 +5,6 @@ use crate::ops_routing::{
     ops_page_from_hash, ops_set_hash, ops_set_hash_with_id, ops_sub_id_from_hash, OpsPage,
     OPS_NAV_GROUPS,
 };
-use crate::pages::*;
 use crate::state::{ApiKeyContext, Language};
 use wasm_bindgen::{closure::Closure, JsCast};
 use yew::prelude::*;
@@ -136,9 +135,9 @@ pub fn ops_app() -> Html {
             // ── Sidebar ──────────────────────────────────────────────────────
             <aside class="sidebar">
                 <div class="brand-block">
-                    <span>{"FWA PLATFORM"}</span>
-                    <h1>{tr(language, "FWA Operations", "风控运营")}</h1>
-                    <p>{tr(language, "Claims FWA Operations Console", "保险理赔 FWA 运营控制台")}</p>
+                    <span>{tr(language, "FWA REVIEW WORKBENCH", "理赔风险复核台")}</span>
+                    <h1>{tr(language, "FWA Review", "人工复核")}</h1>
+                    <p>{tr(language, "Evidence, decisions, and audit trail for claim-risk review", "围绕风险线索、证据链、人工决策和审计留痕工作")}</p>
                 </div>
 
                 // API key (pilot)
@@ -146,7 +145,7 @@ pub fn ops_app() -> Html {
                     <input
                         type="text"
                         style="background:rgba(255,255,255,0.07);border:1px solid rgba(226,239,255,0.15);color:#f0f7ff;border-radius:6px;padding:5px 8px;font-size:11px;width:100%;box-sizing:border-box;"
-                        placeholder="API Key"
+                        placeholder={tr(language, "Demo API key", "演示密钥")}
                         value={(*api_key).clone()}
                         oninput={{
                             let api_key = api_key.clone();
@@ -185,7 +184,7 @@ pub fn ops_app() -> Html {
                 <div style="padding:12px 10px 8px;border-top:1px solid rgba(226,239,255,0.1);margin-top:8px;">
                     <span style="font-size:10px;color:rgba(226,239,255,0.35);display:flex;align-items:center;gap:6px;">
                         <span style="width:6px;height:6px;border-radius:50%;background:#34d399;flex-shrink:0;box-shadow:0 0 0 2px rgba(52,211,153,0.3);display:inline-block;"></span>
-                        {tr(language, "Live operations", "实时运营")}
+                        {tr(language, "Review desk active", "复核台运行中")}
                     </span>
                 </div>
             </aside>
@@ -194,15 +193,15 @@ pub fn ops_app() -> Html {
             <main class="workspace">
                 <div class="workspace-topbar">
                     <div class="topbar-context">
-                        <span class="eyebrow">{tr(language, "FWA Platform", "FWA 风控平台")}</span>
+                        <span class="eyebrow">{tr(language, "Claim-risk review", "理赔风险复核")}</span>
                         <strong>{(*active).label_for(language)}</strong>
                         <small>{(*active).description_for(language)}</small>
                     </div>
                     <div class="topbar-actions">
                         <button class="language-toggle" onclick={toggle_language}>
                             {match language {
-                                Language::Zh => "English",
-                                Language::En => "中文",
+                                Language::Zh => "切换英文",
+                                Language::En => "切换中文",
                             }}
                         </button>
                         <span class="api-chip status-live">{tr(language, "Live", "运营中")}</span>

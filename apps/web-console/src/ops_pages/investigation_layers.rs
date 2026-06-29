@@ -65,6 +65,22 @@ fn default_min_evidence(scheme: &str) -> Vec<&'static str> {
     }
 }
 
+fn evidence_item_label(item: &str, language: Language) -> String {
+    match (item, language) {
+        ("diagnosis", Language::Zh) => "诊断材料".to_string(),
+        ("procedure", Language::Zh) => "治疗项目".to_string(),
+        ("medical_record", Language::Zh) => "病历记录".to_string(),
+        ("invoice", Language::Zh) => "费用票据".to_string(),
+        ("clinical_rationale", Language::Zh) => "临床依据".to_string(),
+        ("policy_rule", Language::Zh) => "保障/政策依据".to_string(),
+        ("treatment_plan", Language::Zh) => "治疗计划".to_string(),
+        ("x_ray", Language::Zh) => "影像资料".to_string(),
+        ("prescription", Language::Zh) => "处方".to_string(),
+        ("dispense_record", Language::Zh) => "发药记录".to_string(),
+        _ => localized_business_text(item, language),
+    }
+}
+
 // ── Layer 1: Document Completeness + Amount Reasonableness ────────────────────
 
 pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: Language) -> Html {
@@ -153,7 +169,7 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: 
                         html! {
                             <div style="display:flex;align-items:center;gap:8px;">
                                 <span style={format!("font-size:0.9rem;font-weight:700;color:{color};")}>{icon}</span>
-                                <span style="font-size:0.85rem;color:var(--graphite);flex:1;">{*item}</span>
+                                <span style="font-size:0.85rem;color:var(--graphite);flex:1;">{evidence_item_label(item, language)}</span>
                                 <span style={format!("font-size:0.75rem;color:{color};")}>{label}</span>
                             </div>
                         }
@@ -165,7 +181,7 @@ pub(crate) fn layer_document_completeness(ctx: &InvestigationContext, language: 
                         html! {
                             <div style="display:flex;align-items:center;gap:8px;">
                                 <span style="font-size:0.9rem;font-weight:700;color:var(--red);">{"✗"}</span>
-                                <span style="font-size:0.85rem;color:var(--graphite);flex:1;">{m.as_str()}</span>
+                                <span style="font-size:0.85rem;color:var(--graphite);flex:1;">{evidence_item_label(m, language)}</span>
                                 <span style="font-size:0.75rem;color:var(--red);">{tr(language, "Missing", "缺失")}</span>
                             </div>
                         }
@@ -319,6 +335,16 @@ fn scheme_chip_color(scheme: &str) -> (&'static str, &'static str) {
     }
 }
 
+fn scheme_label(scheme: &str, language: Language) -> String {
+    match (scheme, language) {
+        ("diagnosis_procedure_mismatch", Language::Zh) => "诊疗不匹配".to_string(),
+        ("high_amount", Language::Zh) => "金额异常".to_string(),
+        ("duplicate_claim", Language::Zh) => "重复理赔".to_string(),
+        ("provider_pattern", Language::Zh) => "机构模式异常".to_string(),
+        _ => localized_business_text(scheme, language),
+    }
+}
+
 fn evidence_ref_type_label(r: &str, language: Language) -> (&'static str, &'static str) {
     if r.starts_with("rule_runs:") {
         (tr(language, "Rule hit", "规则命中"), "var(--amber)")
@@ -378,7 +404,7 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext, language: Language)
             scores.medical,
         ),
         (
-            tr(language, "Provider network", "供应商网络"),
+            tr(language, "Provider network", "医疗机构网络"),
             scores.provider_network,
         ),
         (
@@ -409,7 +435,7 @@ pub(crate) fn layer_risk_signals(ctx: &InvestigationContext, language: Language)
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
                 <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "② Risk Signals", "② 风险信号")}</h4>
                 <span style={format!("background:{chip_bg};color:{chip_fg};border:1px solid {chip_fg};border-radius:12px;padding:2px 10px;font-size:0.75rem;font-weight:600;")}>
-                    {scheme}
+                    {scheme_label(scheme, language)}
                 </span>
                 <span style={format!("margin-left:auto;font-size:0.82rem;font-weight:700;color:{score_color};")}>
                     {format!("{} ({})", score_label, risk_score)}
@@ -682,12 +708,12 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext, language: Lang
         return html! {
             <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "④ Provider Risk Analysis", "④ Provider 风险分析")}</h4>
+                    <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "④ Provider Risk Analysis", "④ 医疗机构风险分析")}</h4>
                 </div>
                 <p style="color:var(--muted);font-size:0.85rem;margin:0;">
                     {match language {
                         Language::En => format!("Provider {} has no risk profile.", ctx.case.provider_id),
-                        Language::Zh => format!("Provider {} 暂无风险档案", ctx.case.provider_id),
+                        Language::Zh => format!("医疗机构 {} 暂无风险档案", ctx.case.provider_id),
                     }}
                 </p>
             </div>
@@ -757,7 +783,7 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext, language: Lang
     html! {
         <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "④ Provider Risk Analysis", "④ Provider 风险分析")}</h4>
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "④ Provider Risk Analysis", "④ 医疗机构风险分析")}</h4>
                 <span style={format!("background:var(--surface-strong);border:1px solid {score_color};border-radius:12px;padding:2px 10px;font-size:0.75rem;font-weight:600;color:{score_color};")}>
                     {score_label}
                 </span>
@@ -795,7 +821,7 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext, language: Lang
                 </div>
                 <div style="display:grid;grid-template-columns:7rem 1fr 1fr 3.5rem;gap:4px 10px;font-size:0.8rem;">
                     <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "Metric", "指标")}</span>
-                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "This Provider", "本 Provider")}</span>
+                    <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "This Provider", "本医疗机构")}</span>
                     <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "Peer average", "同行均值")}</span>
                     <span style="color:var(--muted);font-weight:600;padding-bottom:4px;border-bottom:1px solid var(--line);">{tr(language, "Rank", "排名")}</span>
 
@@ -889,7 +915,7 @@ pub(crate) fn layer_provider_analysis(ctx: &InvestigationContext, language: Lang
             // Member–Provider relationship signal
             <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:12px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-size:0.83rem;color:var(--muted);">{tr(language, "Claims linking this Provider and member", "该 Provider 与本成员理赔关联")}</span>
+                    <span style="font-size:0.83rem;color:var(--muted);">{tr(language, "Claims linking this Provider and member", "该医疗机构与本成员理赔关联")}</span>
                     <span style={format!("font-size:0.9rem;font-weight:700;color:{};",
                         if member_prov_link_count > 3 { "var(--red)" } else { "var(--graphite)" })}>
                         {match language {
@@ -1072,7 +1098,7 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext, language: La
                         <div style="padding:6px 10px;background:var(--red-soft);border:1px solid var(--red);border-radius:4px;font-size:0.82rem;color:var(--red);">
                             {match language {
                                 Language::En => format!("This Provider is linked to {confirmed_fwa_count} confirmed FWA members."),
-                                Language::Zh => format!("该 Provider 关联 {confirmed_fwa_count} 个已确认 FWA 成员"),
+                                Language::Zh => format!("该医疗机构关联 {confirmed_fwa_count} 个已确认 FWA 成员"),
                             }}
                         </div>
                     }
@@ -1083,7 +1109,7 @@ pub(crate) fn layer_association_network(ctx: &InvestigationContext, language: La
                         <div style="padding:6px 10px;background:var(--amber-soft);border:1px solid var(--amber);border-radius:4px;font-size:0.82rem;color:var(--amber);">
                             {match language {
                                 Language::En => format!("Shares outlier flags with {shared_outlier_count} high-risk Providers."),
-                                Language::Zh => format!("与 {shared_outlier_count} 个高风险 Provider 存在共同异常标记"),
+                                Language::Zh => format!("与 {shared_outlier_count} 个高风险医疗机构存在共同异常标记"),
                             }}
                         </div>
                     }

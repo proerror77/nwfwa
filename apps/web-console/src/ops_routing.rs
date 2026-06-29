@@ -2,32 +2,32 @@ use crate::state::Language;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OpsPage {
-    /// Default home — prevention KPIs, system health, action counters, live feed.
+    /// Default home: what needs review today and why it matters.
     Dashboard,
-    /// Items needing human action: 3 tabs (investigate / pending-evidence / medical).
+    /// Items needing human action: investigate / pending-evidence / medical.
     ActionQueue,
-    /// Single-case deep-dive workbench.  Entered from ActionQueue; returns to it on submit.
+    /// Single-case deep-dive workbench entered from ActionQueue.
     Investigate,
-    /// Governance: rule candidates (new fraud patterns), model updates, QA feedback.
+    /// Governance loop: reviewer feedback, rules, model drift, QA.
     SystemLearning,
 }
 
 impl OpsPage {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "运营概况",
+            OpsPage::Dashboard => "今日概况",
             OpsPage::ActionQueue => "需要处理",
             OpsPage::Investigate => "调查工作台",
-            OpsPage::SystemLearning => "系统治理",
+            OpsPage::SystemLearning => "治理闭环",
         }
     }
 
     pub(crate) fn label_en(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "Overview",
-            OpsPage::ActionQueue => "Action Queue",
-            OpsPage::Investigate => "Investigate",
-            OpsPage::SystemLearning => "System Governance",
+            OpsPage::Dashboard => "Today",
+            OpsPage::ActionQueue => "Work Queue",
+            OpsPage::Investigate => "Case Workbench",
+            OpsPage::SystemLearning => "Governance Loop",
         }
     }
 
@@ -58,19 +58,19 @@ impl OpsPage {
 
     pub(crate) fn description(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "防损金额、精准率、系统健康与进件流水",
-            OpsPage::ActionQueue => "高风险待审 / 补件逾期 / 医疗复核",
-            OpsPage::Investigate => "单案调查，一眼判断，提交即返回队列",
-            OpsPage::SystemLearning => "新诈骗模式候选、模型更新、QA 反馈闭环",
+            OpsPage::Dashboard => "今天有哪些风险线索需要人处理",
+            OpsPage::ActionQueue => "按下一步动作整理线索和案件",
+            OpsPage::Investigate => "事实、证据、建议和审计同屏处理",
+            OpsPage::SystemLearning => "把复核结论回流到规则、模型和质检",
         }
     }
 
     pub(crate) fn description_en(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "Prevention KPIs, precision, system health, live intake feed",
-            OpsPage::ActionQueue => "High-risk / pending-evidence / medical-review items",
-            OpsPage::Investigate => "Single-case deep dive; submit returns to queue",
-            OpsPage::SystemLearning => "New fraud pattern candidates, model updates, QA closure",
+            OpsPage::Dashboard => "What needs human review today",
+            OpsPage::ActionQueue => "Leads and cases grouped by next action",
+            OpsPage::Investigate => "Facts, evidence, recommendation, and audit trail together",
+            OpsPage::SystemLearning => "Reviewer outcomes feed rules, models, and QA",
         }
     }
 
