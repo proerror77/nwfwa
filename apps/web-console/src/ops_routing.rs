@@ -8,7 +8,7 @@ pub(crate) enum OpsPage {
     ActionQueue,
     /// Single-case deep-dive workbench entered from ActionQueue.
     Investigate,
-    /// Governance loop: reviewer feedback, rules, model drift, QA.
+    /// Improvement loop: reviewer feedback becomes concrete follow-up work.
     SystemLearning,
 }
 
@@ -18,7 +18,7 @@ impl OpsPage {
             OpsPage::Dashboard => "今日概况",
             OpsPage::ActionQueue => "需要处理",
             OpsPage::Investigate => "调查工作台",
-            OpsPage::SystemLearning => "治理闭环",
+            OpsPage::SystemLearning => "复盘改进",
         }
     }
 
@@ -27,7 +27,7 @@ impl OpsPage {
             OpsPage::Dashboard => "Today",
             OpsPage::ActionQueue => "Work Queue",
             OpsPage::Investigate => "Case Workbench",
-            OpsPage::SystemLearning => "Governance Loop",
+            OpsPage::SystemLearning => "Improve",
         }
     }
 
@@ -61,7 +61,7 @@ impl OpsPage {
             OpsPage::Dashboard => "今天有哪些风险线索需要人处理",
             OpsPage::ActionQueue => "按下一步动作整理线索和案件",
             OpsPage::Investigate => "事实、证据、建议和审计同屏处理",
-            OpsPage::SystemLearning => "把复核结论回流到规则、模型和质检",
+            OpsPage::SystemLearning => "决定要改规则、证据还是模型",
         }
     }
 
@@ -70,7 +70,7 @@ impl OpsPage {
             OpsPage::Dashboard => "What needs human review today",
             OpsPage::ActionQueue => "Leads and cases grouped by next action",
             OpsPage::Investigate => "Facts, evidence, recommendation, and audit trail together",
-            OpsPage::SystemLearning => "Reviewer outcomes feed rules, models, and QA",
+            OpsPage::SystemLearning => "Turn review outcomes into follow-up work",
         }
     }
 

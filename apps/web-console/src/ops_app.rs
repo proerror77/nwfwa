@@ -230,7 +230,10 @@ pub fn ops_app() -> Html {
                             />
                         },
                         OpsPage::SystemLearning => html! {
-                            <SystemLearningPage language={language} />
+                            <SystemLearningPage
+                                language={language}
+                                on_navigate={navigate.clone()}
+                            />
                         },
                     } }
                 </div>

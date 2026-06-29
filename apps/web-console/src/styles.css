@@ -6594,13 +6594,13 @@ pre {
   }
 
   .sidebar {
-    position: sticky;
+    position: static;
     top: 0;
     z-index: 4;
-    height: 42vh;
-    max-height: 380px;
-    min-height: 280px;
-    overflow: auto;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
     padding: 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   }
@@ -8134,7 +8134,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .reviewer-workflow-step span,
-.governance-lane span,
+.governance-action-card span,
 .case-brief-facts span {
   display: block;
   color: var(--muted);
@@ -8554,7 +8554,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .governance-metric-grid,
-.governance-lane-grid {
+.governance-action-grid {
   display: grid;
   gap: 12px;
 }
@@ -8563,12 +8563,12 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.governance-lane-grid {
+.governance-action-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .governance-metric,
-.governance-lane {
+.governance-action-card {
   min-width: 0;
   padding: 15px;
   background: #ffffff;
@@ -8605,13 +8605,35 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   line-height: 1;
 }
 
-.governance-lane {
+.governance-action-card {
   display: grid;
+  width: 100%;
   gap: 10px;
+  color: inherit;
+  text-align: left;
+  border-top-color: var(--teal);
+  cursor: pointer;
+}
+
+.governance-action-card:hover {
+  border-color: #bad4fb;
+  box-shadow: 0 12px 28px rgba(23, 105, 224, 0.14);
+  transform: translateY(-1px);
+}
+
+.governance-action-card.warning {
+  border-top-color: var(--amber);
+}
+
+.governance-action-card.danger {
+  border-top-color: var(--red);
+}
+
+.governance-action-card.neutral {
   border-top-color: var(--teal);
 }
 
-.governance-lane strong {
+.governance-action-card strong {
   display: block;
   margin-top: 5px;
   color: var(--graphite);
@@ -8619,17 +8641,29 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   line-height: 1.25;
 }
 
-.governance-lane p {
+.governance-action-card p {
   margin: 0;
   color: var(--text);
   font-size: 13px;
   line-height: 1.55;
 }
 
-.governance-lane small {
+.governance-action-card span,
+.governance-action-card small {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.governance-action-card b {
+  width: fit-content;
+  padding: 6px 9px;
+  color: #17436f;
+  background: var(--blue-soft);
+  border: 1px solid #bad4fb;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* ── Misc ── */
@@ -8673,7 +8707,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .dashboard-mid-row,
   .case-brief-panel,
   .governance-thesis,
-  .governance-lane-grid {
+  .governance-action-grid {
     grid-template-columns: 1fr;
   }
 
