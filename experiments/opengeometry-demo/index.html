@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenGeometry PoC | nwfwa</title>
+  </head>
+  <body>
+    <script>
+      window.addEventListener("error", (event) => {
+        document.documentElement.dataset.moduleError = event.message;
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        document.documentElement.dataset.moduleError = event.reason?.message || String(event.reason);
+      });
+    </script>
+    <main id="app">
+      <section class="workspace">
+        <div class="stage" id="stage" aria-label="OpenGeometry 3D preview"></div>
+        <aside class="panel">
+          <p class="eyebrow">OpenGeometry PoC</p>
+          <h1>保险理赔证据空间演示</h1>
+          <p>
+            用 OpenGeometry 的 WASM CAD 内核生成可交互几何体，再交给
+            Three.js 实时预览。这个实验不接入主控制台，只验证技术可行性。
+          </p>
+
+          <dl class="metrics">
+            <div>
+              <dt>WASM</dt>
+              <dd id="wasm-status">初始化中</dd>
+            </div>
+            <div>
+              <dt>几何体</dt>
+              <dd id="shape-count">0</dd>
+            </div>
+            <div>
+              <dt>像素检查</dt>
+              <dd id="pixel-status" data-canvas-state="pending">待检测</dd>
+            </div>
+          </dl>
+
+          <div class="legend">
+            <span><i class="swatch base"></i>理赔对象</span>
+            <span><i class="swatch risk"></i>异常区域</span>
+            <span><i class="swatch review"></i>人工复核点</span>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
