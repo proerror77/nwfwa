@@ -3221,7 +3221,7 @@ pre {
   display: grid;
   grid-template-columns: minmax(190px, 0.72fr) minmax(440px, 1.54fr) minmax(230px, 0.84fr);
   gap: 14px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .model-monitoring-brief,
@@ -3257,7 +3257,6 @@ pre {
 
 .model-monitoring-brief dt,
 .model-monitoring-brief dd,
-.model-monitoring-node span,
 .model-monitoring-meter span {
   color: var(--muted);
   font-size: 11px;
@@ -3268,125 +3267,154 @@ pre {
   overflow-wrap: anywhere;
 }
 
-.model-monitoring-map {
-  position: relative;
-  min-height: 380px;
-  overflow: hidden;
-  padding: 16px;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(111, 91, 213, 0.13) 0 18%, transparent 19%),
-    repeating-linear-gradient(0deg, rgba(111, 91, 213, 0.06) 0 1px, transparent 1px 30px),
-    repeating-linear-gradient(90deg, rgba(23, 105, 224, 0.055) 0 1px, transparent 1px 30px),
-    #f8fbff;
+.model-release-workbench {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background: #f8fbff;
   border: 1px solid #c7d9f1;
   border-radius: 8px;
 }
 
-.model-monitoring-link {
-  position: absolute;
-  left: 11%;
-  right: 11%;
-  top: 51%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #a9b9f2, transparent);
+.model-release-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+  justify-content: space-between;
 }
 
-.model-monitoring-link.diagonal-a {
-  transform: rotate(34deg);
+.model-release-head span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
 }
 
-.model-monitoring-link.diagonal-b {
-  transform: rotate(-34deg);
+.model-release-head strong {
+  color: #0c315f;
+  font-size: 15px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
-.model-monitoring-core,
-.model-monitoring-node {
-  position: absolute;
-  z-index: 2;
+.model-release-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.model-release-card {
+  min-width: 0;
+  overflow: hidden;
   background: #ffffff;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
-}
-
-.model-monitoring-core {
-  left: 50%;
-  top: 50%;
-  display: grid;
-  place-items: center;
-  width: 132px;
-  height: 132px;
-  padding: 14px;
-  text-align: center;
-  background: linear-gradient(180deg, #6f5bd5 0%, #243269 100%);
-  border: 6px solid #e8e5ff;
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-}
-
-.model-monitoring-core span,
-.model-monitoring-core strong {
-  color: #ffffff;
-}
-
-.model-monitoring-core strong {
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
-
-.model-monitoring-node {
-  display: grid;
-  gap: 6px;
-  width: 168px;
-  min-height: 96px;
-  padding: 11px;
   border-top: 4px solid #6f5bd5;
+  border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(15, 46, 89, 0.06);
 }
 
-.model-monitoring-node strong {
-  color: #0c315f;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
+.model-release-card.stable,
+.model-release-card.labels,
+.model-release-card.train {
+  border-top-color: #1f8f54;
 }
 
-.model-monitoring-node.top {
-  left: 50%;
-  top: 8%;
-  transform: translateX(-50%);
-}
-
-.model-monitoring-node.right {
-  right: 7%;
-  top: 31%;
-}
-
-.model-monitoring-node.bottom {
-  left: 50%;
-  bottom: 7%;
-  transform: translateX(-50%);
-}
-
-.model-monitoring-node.left {
-  left: 7%;
-  top: 31%;
-}
-
-.model-monitoring-node.lower-right {
-  right: 10%;
-  bottom: 15%;
-}
-
-.model-monitoring-node.drift {
+.model-release-card.watch {
   border-top-color: var(--amber);
 }
 
-.model-monitoring-node.shadow {
+.model-release-card.shadow {
   border-top-color: var(--blue);
 }
 
-.model-monitoring-node.labels,
-.model-monitoring-node.train {
-  border-top-color: #1f8f54;
+.model-release-card summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  min-height: 126px;
+  padding: 13px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.model-release-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.model-release-card summary::after {
+  content: "查看";
+  align-self: start;
+  width: fit-content;
+  padding: 5px 8px;
+  color: #2c3570;
+  background: #efedff;
+  border: 1px solid #d6d0ff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.model-release-card[open] summary::after {
+  content: "收起";
+  color: #146341;
+  background: #eaf8f1;
+  border-color: #b8e4ca;
+}
+
+.model-release-card summary:hover,
+.model-release-card[open] summary {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.model-release-card summary > span,
+.model-release-card summary > strong,
+.model-release-card summary > small {
+  grid-column: 1;
+}
+
+.model-release-card span,
+.model-release-card small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.model-release-card summary > strong {
+  color: #0c315f;
+  font-size: 19px;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.model-release-detail {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 13px 13px;
+}
+
+.model-release-card:not([open]) .model-release-detail {
+  display: none;
+}
+
+.model-release-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 9px;
+  min-width: 0;
+  padding: 9px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.model-release-row strong {
+  color: #0c315f;
+  font-size: 12px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .model-monitoring-meter {
@@ -6789,6 +6817,8 @@ pre {
   .bar-row,
   .rule-family-grid,
   .rule-family-rule-row,
+  .model-release-grid,
+  .model-release-row,
   .rule-candidate-workflow,
   .operator-queue,
   .ops-system-map,
@@ -6838,8 +6868,7 @@ pre {
   .runtime-signal-map::after,
   .evidence-pipeline-rail::before,
   .evidence-runtime-map::before,
-  .agent-blueprint-rail,
-  .model-monitoring-link {
+  .agent-blueprint-rail {
     display: none;
   }
 
