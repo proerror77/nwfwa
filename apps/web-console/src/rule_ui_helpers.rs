@@ -6,6 +6,46 @@ use crate::{
 use serde_json::Value;
 use yew::prelude::*;
 
+struct RulePackFamily {
+    label: &'static str,
+    caption: &'static str,
+    family_key: &'static str,
+    next_action: &'static str,
+}
+
+const RULE_PACK_FAMILIES: &[RulePackFamily] = &[
+    RulePackFamily {
+        label: "重复计费",
+        caption: "同服务 / 同金额",
+        family_key: "duplicate",
+        next_action: "检查重复提交窗口和同金额阈值",
+    },
+    RulePackFamily {
+        label: "早期高额理赔",
+        caption: "新保单 + 高金额",
+        family_key: "early",
+        next_action: "优先回测高金额阈值和影子验证结果",
+    },
+    RulePackFamily {
+        label: "机构同侪异常",
+        caption: "同组机构偏离",
+        family_key: "provider",
+        next_action: "对比同侪分位和机构画像证据",
+    },
+    RulePackFamily {
+        label: "诊断-项目不匹配",
+        caption: "编码一致性",
+        family_key: "diagnosis",
+        next_action: "补齐诊断、项目和编码解释证据",
+    },
+    RulePackFamily {
+        label: "医疗必要性证据缺口",
+        caption: "需要病历支撑",
+        family_key: "medical",
+        next_action: "确认病历、处置和必要性证据是否足够",
+    },
+];
+
 pub(crate) fn rule_performance_visual(performance: &[RulePerformance]) -> Html {
     if performance.is_empty() {
         return html! {};
@@ -66,18 +106,7 @@ pub(crate) fn rule_pack_matrix(snapshot: &RuleOpsSnapshot) -> Html {
                     </div>
                     <small>{format!("已覆盖规则族：{} / 5", covered_rule_pack_count(snapshot))}</small>
                 </aside>
-                <div class="rule-pack-map">
-                    <div class="rule-pack-link"></div>
-                    <div class="rule-pack-core">
-                        <span>{"L2"}</span>
-                        <strong>{"规则引擎"}</strong>
-                    </div>
-                    {rule_pack_family_node(snapshot, "重复计费", "同服务 / 同金额", "duplicate", "top")}
-                    {rule_pack_family_node(snapshot, "早期高额理赔", "新保单 + 高金额", "early", "right")}
-                    {rule_pack_family_node(snapshot, "机构同侪异常", "同组机构偏离", "provider", "bottom")}
-                    {rule_pack_family_node(snapshot, "诊断-项目不匹配", "编码一致性", "diagnosis", "left")}
-                    {rule_pack_family_node(snapshot, "医疗必要性证据缺口", "需要病历支撑", "medical", "lower-right")}
-                </div>
+                {rule_pack_workbench(snapshot)}
                 <aside class="rule-pack-legend">
                     <span class="eyebrow">{"人工安全生命周期"}</span>
                     {rule_pack_lifecycle_row("草稿", "沙箱 / 回测", "neutral")}
@@ -90,38 +119,141 @@ pub(crate) fn rule_pack_matrix(snapshot: &RuleOpsSnapshot) -> Html {
     }
 }
 
-fn rule_pack_family_node(
+fn rule_pack_workbench(snapshot: &RuleOpsSnapshot) -> Html {
+    let max_trigger_count = RULE_PACK_FAMILIES
+        .iter()
+        .map(|family| rule_pack_family_trigger_count(snapshot, family.family_key))
+        .max()
+        .unwrap_or(1)
+        .max(1);
+
+    html! {
+        <div class="rule-pack-workbench">
+            <div class="rule-pack-workbench-head">
+                <span>{"规则族工作台"}</span>
+                <strong>{"点击规则族查看版本、命中和下一步"}</strong>
+            </div>
+            <div class="rule-family-grid">
+                {for RULE_PACK_FAMILIES.iter().map(|family| {
+                    rule_pack_family_card(snapshot, family, max_trigger_count)
+                })}
+            </div>
+        </div>
+    }
+}
+
+fn rule_pack_family_card(
     snapshot: &RuleOpsSnapshot,
-    label: &'static str,
-    caption: &'static str,
-    family_key: &'static str,
-    position: &'static str,
+    family: &RulePackFamily,
+    max_trigger_count: u32,
 ) -> Html {
     let rules = snapshot
         .rules
         .iter()
-        .filter(|rule| rule_matches_family(rule, family_key))
+        .filter(|rule| rule_matches_family(rule, family.family_key))
         .collect::<Vec<_>>();
     let rule_count = rules.len();
-    let trigger_count = rules
+    let performances = rules
         .iter()
         .filter_map(|rule| rule_performance_for(&snapshot.performance, &rule.rule_id))
+        .collect::<Vec<_>>();
+    let trigger_count = performances
+        .iter()
         .map(|performance| performance.trigger_count)
         .sum::<u32>();
-    let precision = rules
-        .iter()
-        .filter_map(|rule| rule_performance_for(&snapshot.performance, &rule.rule_id))
-        .map(|performance| performance.precision)
-        .next();
-    let tone = if rule_count > 0 { "covered" } else { "gap" };
+    let precision = average_precision(&performances);
+    let false_positive_rate = average_false_positive_rate(&performances);
+    let tone = if rule_count == 0 {
+        "gap"
+    } else if false_positive_rate.is_some_and(|rate| rate > 0.25) {
+        "watch"
+    } else {
+        "covered"
+    };
+
     html! {
-        <div class={classes!("rule-pack-node", position, tone)}>
-            <span>{label}</span>
-            <strong>{if rule_count > 0 { format!("{rule_count} 条规则") } else { "缺口".into() }}</strong>
-            <small>{caption}</small>
-            <em>{format!("命中 {} / 精准率 {}", trigger_count, precision.map(percent_label).unwrap_or_else(|| "无".into()))}</em>
-        </div>
+        <details class={classes!("rule-family-card", tone)}>
+            <summary>
+                <span>{family.label}</span>
+                <strong>{if rule_count > 0 { format!("{rule_count} 条规则") } else { "待挖掘".into() }}</strong>
+                <small>{family.caption}</small>
+                <em>{format!(
+                    "命中 {} / 精准率 {}",
+                    trigger_count,
+                    precision.map(percent_label).unwrap_or_else(|| "无".into())
+                )}</em>
+                <div class="rule-family-meter">
+                    <i style={format!("width: {};", scaled_width(trigger_count, max_trigger_count))}></i>
+                </div>
+            </summary>
+            <div class="rule-family-detail">
+                <div class="summary-grid compact-summary-grid">
+                    <div><span>{"规则数"}</span><strong>{rule_count}</strong></div>
+                    <div><span>{"命中"}</span><strong>{trigger_count}</strong></div>
+                    <div><span>{"误报"}</span><strong>{false_positive_rate.map(percent_label).unwrap_or_else(|| "无".into())}</strong></div>
+                    <div><span>{"下一步"}</span><strong>{family.next_action}</strong></div>
+                </div>
+                if rules.is_empty() {
+                    <p class="empty">{"还没有可展示的规则版本。先从复核数据或模型解释里挖掘候选规则。"}</p>
+                } else {
+                    <div class="rule-family-rule-list">
+                        {for rules.iter().take(4).map(|rule| {
+                            let performance = rule_performance_for(&snapshot.performance, &rule.rule_id);
+                            html! {
+                                <div class="rule-family-rule-row">
+                                    <div>
+                                        <strong>{&rule.name}</strong>
+                                        <span>{format!("{} / v{} / {}", rule.rule_id, rule.latest_version, rule.status)}</span>
+                                    </div>
+                                    <small>{performance.map(|p| {
+                                        format!("命中 {} / 精准率 {}", p.trigger_count, percent_label(p.precision))
+                                    }).unwrap_or_else(|| "暂无命中数据".into())}</small>
+                                </div>
+                            }
+                        })}
+                    </div>
+                }
+            </div>
+        </details>
     }
+}
+
+fn average_precision(performances: &[&RulePerformance]) -> Option<f64> {
+    if performances.is_empty() {
+        None
+    } else {
+        Some(
+            performances
+                .iter()
+                .map(|performance| performance.precision)
+                .sum::<f64>()
+                / performances.len() as f64,
+        )
+    }
+}
+
+fn average_false_positive_rate(performances: &[&RulePerformance]) -> Option<f64> {
+    if performances.is_empty() {
+        None
+    } else {
+        Some(
+            performances
+                .iter()
+                .map(|performance| performance.false_positive_rate)
+                .sum::<f64>()
+                / performances.len() as f64,
+        )
+    }
+}
+
+fn rule_pack_family_trigger_count(snapshot: &RuleOpsSnapshot, family_key: &str) -> u32 {
+    snapshot
+        .rules
+        .iter()
+        .filter(|rule| rule_matches_family(rule, family_key))
+        .filter_map(|rule| rule_performance_for(&snapshot.performance, &rule.rule_id))
+        .map(|performance| performance.trigger_count)
+        .sum()
 }
 
 fn rule_pack_lifecycle_row(label: &str, value: &str, tone: &str) -> Html {
