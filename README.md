@@ -500,7 +500,7 @@ The seed includes:
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
 FWA_API_KEY=legacy-customer-secret \
-FWA_API_KEY_PRINCIPALS="aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*" \
+FWA_API_KEY_PRINCIPALS="aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*,ops:rules:read,ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review,ops:models:read" \
 FWA_SOURCE_SYSTEM="AiClaim Core" \
 FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
 cargo run --locked -p api-server
@@ -708,7 +708,7 @@ Common local settings:
 | --- | --- | --- |
 | `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/fwa` | API database connection |
 | `FWA_API_KEY` | `dev-secret` | Legacy single-key fallback when no principal map is configured |
-| `FWA_API_KEY_PRINCIPALS` | unset | Customer/API-principal map; use `aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*` for the TPA demo |
+| `FWA_API_KEY_PRINCIPALS` | unset | Customer/API-principal map; use `aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*,ops:rules:read,ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review,ops:models:read` for the TPA demo |
 | `FWA_SOURCE_SYSTEM` | `tpa-demo` | Source-system fallback; use `AiClaim Core` for the TPA demo |
 | `FWA_MODEL_SERVICE_URL` | `http://127.0.0.1:8001` | Configured ML scorer endpoint |
 | `FWA_MODEL_ARTIFACT_URI` | unset | Optional Rust JSON artifact scorer path; overrides `FWA_MODEL_SERVICE_URL` |

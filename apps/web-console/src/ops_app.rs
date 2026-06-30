@@ -5,6 +5,7 @@ use crate::ops_routing::{
     ops_page_from_hash, ops_set_hash, ops_set_hash_with_id, ops_sub_id_from_hash, OpsPage,
     OPS_NAV_GROUPS,
 };
+use crate::pages::{ModelsPage, RulesPage};
 use crate::state::{ApiKeyContext, Language};
 use wasm_bindgen::{closure::Closure, JsCast};
 use yew::prelude::*;
@@ -157,7 +158,7 @@ pub fn ops_app() -> Html {
                     />
                 </div>
 
-                // Navigation — 4 pages only
+                // Navigation
                 <nav class="module-nav" aria-label="FWA operations">
                     { for OPS_NAV_GROUPS.iter().flat_map(|g| g.pages()).map(|&page| {
                         let navigate = navigate.clone();
@@ -234,6 +235,12 @@ pub fn ops_app() -> Html {
                                 language={language}
                                 on_navigate={navigate.clone()}
                             />
+                        },
+                        OpsPage::RuleLab => html! {
+                            <RulesPage />
+                        },
+                        OpsPage::ModelGovernance => html! {
+                            <ModelsPage />
                         },
                     } }
                 </div>

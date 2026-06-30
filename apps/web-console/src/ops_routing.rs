@@ -8,8 +8,12 @@ pub(crate) enum OpsPage {
     ActionQueue,
     /// Single-case deep-dive workbench entered from ActionQueue.
     Investigate,
-    /// Improvement loop: reviewer feedback becomes concrete follow-up work.
+    /// Learning loop: review data becomes candidate rules, model versions, and releases.
     SystemLearning,
+    /// Rule workbench: discover, backtest, approve, publish, or roll back rules.
+    RuleLab,
+    /// Model workbench: inspect versions, retraining readiness, and release gates.
+    ModelGovernance,
 }
 
 impl OpsPage {
@@ -18,7 +22,9 @@ impl OpsPage {
             OpsPage::Dashboard => "今日概况",
             OpsPage::ActionQueue => "需要处理",
             OpsPage::Investigate => "调查工作台",
-            OpsPage::SystemLearning => "改进事项",
+            OpsPage::SystemLearning => "学习与发布",
+            OpsPage::RuleLab => "规则实验室",
+            OpsPage::ModelGovernance => "模型版本",
         }
     }
 
@@ -27,7 +33,9 @@ impl OpsPage {
             OpsPage::Dashboard => "Today",
             OpsPage::ActionQueue => "Work Queue",
             OpsPage::Investigate => "Case Workbench",
-            OpsPage::SystemLearning => "Worklist",
+            OpsPage::SystemLearning => "Learning",
+            OpsPage::RuleLab => "Rule Lab",
+            OpsPage::ModelGovernance => "Model Versions",
         }
     }
 
@@ -44,6 +52,8 @@ impl OpsPage {
             OpsPage::ActionQueue => "queue",
             OpsPage::Investigate => "investigate",
             OpsPage::SystemLearning => "governance",
+            OpsPage::RuleLab => "rules",
+            OpsPage::ModelGovernance => "models",
         }
     }
 
@@ -53,6 +63,8 @@ impl OpsPage {
             OpsPage::ActionQueue => "icon-inbox",
             OpsPage::Investigate => "icon-qa",
             OpsPage::SystemLearning => "icon-governance",
+            OpsPage::RuleLab => "icon-rules",
+            OpsPage::ModelGovernance => "icon-models",
         }
     }
 
@@ -61,7 +73,9 @@ impl OpsPage {
             OpsPage::Dashboard => "今天有哪些风险线索需要人处理",
             OpsPage::ActionQueue => "按下一步动作整理线索和案件",
             OpsPage::Investigate => "事实、证据、建议和审计同屏处理",
-            OpsPage::SystemLearning => "复核后沉淀的系统侧工作",
+            OpsPage::SystemLearning => "规则、模型和客户发布决策",
+            OpsPage::RuleLab => "挖掘、回测和发布规则版本",
+            OpsPage::ModelGovernance => "训练依据、模型版本和发布门禁",
         }
     }
 
@@ -70,7 +84,9 @@ impl OpsPage {
             OpsPage::Dashboard => "What needs human review today",
             OpsPage::ActionQueue => "Leads and cases grouped by next action",
             OpsPage::Investigate => "Facts, evidence, recommendation, and audit trail together",
-            OpsPage::SystemLearning => "System-side work from review outcomes",
+            OpsPage::SystemLearning => "Rules, models, and customer release decisions",
+            OpsPage::RuleLab => "Discover, backtest, and publish rule versions",
+            OpsPage::ModelGovernance => "Training evidence, model versions, and release gates",
         }
     }
 
@@ -114,6 +130,8 @@ pub(crate) const ALL_OPS_PAGES: &[OpsPage] = &[
     OpsPage::ActionQueue,
     OpsPage::Investigate,
     OpsPage::SystemLearning,
+    OpsPage::RuleLab,
+    OpsPage::ModelGovernance,
 ];
 
 pub(crate) const OPS_NAV_GROUPS: &[OpsNavGroup] = &[OpsNavGroup {
