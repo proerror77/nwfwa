@@ -564,6 +564,11 @@ Business:
 
 ## Recommended Implementation Sequence
 
+The repo-local `ui-ux-pro-max` design system lives at
+[`design-system/nwfwa-operations-studio/MASTER.md`](../../design-system/nwfwa-operations-studio/MASTER.md).
+Check page overrides under `design-system/nwfwa-operations-studio/pages/`
+before changing a UI surface.
+
 1. Add a reusable evidence chain component.
    Covers case, QA, medical review, rules, models, and audit.
 

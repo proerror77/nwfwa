@@ -47,6 +47,27 @@ button {
   cursor: pointer;
 }
 
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 20;
+  padding: 9px 12px;
+  color: #ffffff;
+  background: var(--blue);
+  border-radius: 8px;
+  transform: translateY(-140%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(23, 105, 224, 0.42);
+  outline-offset: 2px;
+}
+
 .app {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);

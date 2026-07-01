@@ -132,6 +132,9 @@ pub fn ops_app() -> Html {
     html! {
         <ContextProvider<ApiKeyContext> context={ApiKeyContext(api_key.clone())}>
         <div class="app">
+            <a class="skip-link" href="#main-content">
+                {tr(language, "Skip to review workspace", "跳到复核工作区")}
+            </a>
 
             // ── Sidebar ──────────────────────────────────────────────────────
             <aside class="sidebar">
@@ -191,7 +194,7 @@ pub fn ops_app() -> Html {
             </aside>
 
             // ── Workspace ────────────────────────────────────────────────────
-            <main class="workspace">
+            <main id="main-content" class="workspace">
                 <div class="workspace-topbar">
                     <div class="topbar-context">
                         <span class="eyebrow">{tr(language, "Claim-risk review", "理赔风险复核")}</span>
