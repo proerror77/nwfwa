@@ -382,11 +382,16 @@ fn conclusion_panel(
     let supplement_loading = matches!(&**supplement_state, ApiState::Loading);
     let shows_supplement = **selected_conclusion == Some(Conclusion::InsufficientEvidence);
     let has_supplement_docs = !supplement_docs.is_empty();
+    let has_conclusion = selected_conclusion.is_some();
+    let has_notes = !notes.trim().is_empty();
+    let has_refs = !evidence_refs.trim().is_empty();
+    let supplement_ready = !shows_supplement || has_supplement_docs;
+    let can_submit = !loading && has_conclusion && has_notes && has_refs && supplement_ready;
 
     html! {
         <div class="investigation-decision-panel">
             <div class="investigation-panel-header">
-                <h3 style="margin:0;font-size:0.95rem;color:var(--graphite);">{tr(language, "Investigation Recommendation", "调查建议")}</h3>
+                <h3 style="margin:0;font-size:0.95rem;color:var(--graphite);">{tr(language, "Review Decision Flow", "复核决策流")}</h3>
             </div>
             <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;">
 
@@ -409,8 +414,35 @@ fn conclusion_panel(
                 } else { html! {} } }
 
                 { if let Some(case) = case {
+                    let evidence_detail = if shows_supplement {
+                        tr(language, "Select requested documents before writeback", "先选择需补充资料，再写回结论")
+                    } else {
+                        tr(language, "Attach evidence refs for audit trail", "保留证据引用，支撑审计留痕")
+                    };
                     html! {
                         <>
+                        <div class="review-decision-flow">
+                            { decision_step("1", tr(language, "Case selected", "案件已选定"), &case.claim_id, "done") }
+                            { decision_step(
+                                "2",
+                                tr(language, "Recommendation", "选择调查建议"),
+                                (**selected_conclusion).map(|c| c.label(language)).unwrap_or_else(|| tr(language, "Pick one outcome", "请选择一个结论")),
+                                if has_conclusion { "done" } else { "current" },
+                            ) }
+                            { decision_step(
+                                "3",
+                                tr(language, "Evidence action", "证据动作"),
+                                evidence_detail,
+                                if has_conclusion && has_refs && supplement_ready { "done" } else if has_conclusion { "current" } else { "waiting" },
+                            ) }
+                            { decision_step(
+                                "4",
+                                tr(language, "Writeback", "写回结论"),
+                                if has_notes { tr(language, "Notes ready for audit", "备注已满足审计要求") } else { tr(language, "Investigation notes required", "需要填写调查备注") },
+                                if can_submit { "current" } else { "waiting" },
+                            ) }
+                        </div>
+
                         // Case basic info
                         <div style="background:var(--surface-muted);border:1px solid var(--line);border-radius:6px;padding:10px;">
                             <div style="display:grid;grid-template-columns:5rem 1fr;gap:4px 8px;font-size:0.8rem;">
@@ -569,18 +601,40 @@ fn conclusion_panel(
                         <button
                             style={format!(
                                 "background:{};color:var(--graphite);border:none;border-radius:6px;padding:10px 16px;font-size:0.88rem;font-weight:600;cursor:pointer;",
-                                if loading || selected_conclusion.is_none() { "var(--surface-strong)" } else { "#1a7a3c" }
+                                if can_submit { "#1a7a3c" } else { "var(--surface-strong)" }
                             )}
                             onclick={on_submit}
-                            disabled={loading || selected_conclusion.is_none()}
+                            disabled={!can_submit}
                         >
-                            { if loading { tr(language, "Submitting...", "提交中...") } else { tr(language, "Submit recommendation", "提交调查建议") } }
+                            { if loading {
+                                tr(language, "Submitting...", "提交中...")
+                            } else if !has_notes {
+                                tr(language, "Add investigation notes", "请先填写调查备注")
+                            } else if !has_refs {
+                                tr(language, "Attach evidence refs", "请先保留证据引用")
+                            } else if !supplement_ready {
+                                tr(language, "Select evidence to request", "请选择需补充资料")
+                            } else {
+                                tr(language, "Submit recommendation", "提交调查建议")
+                            } }
                         </button>
                         </>
                     }
                 } else {
                     html! { <p style="color:var(--muted);font-size:0.85rem;">{tr(language, "Select a case.", "请选择案件。")}</p> }
                 } }
+            </div>
+        </div>
+    }
+}
+
+fn decision_step(number: &str, label: &str, detail: &str, state: &str) -> Html {
+    html! {
+        <div class={classes!("review-decision-step", state.to_string())}>
+            <span>{number}</span>
+            <div>
+                <strong>{label}</strong>
+                <small>{detail}</small>
             </div>
         </div>
     }
@@ -950,6 +1004,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
         let api_key = api_key.clone();
         let selected_case = selected_case.clone();
         let selected_conclusion = selected_conclusion.clone();
+        let supplement_docs = supplement_docs.clone();
         let notes = notes.clone();
         let evidence_refs = evidence_refs.clone();
         let write_state = write_state.clone();
@@ -968,6 +1023,9 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
             if matches!(*write_state, ApiState::Loading) {
                 return;
             }
+            if conclusion == Conclusion::InsufficientEvidence && supplement_docs.is_empty() {
+                return;
+            }
 
             let notes_val = (*notes).trim().to_string();
             if notes_val.is_empty() {
@@ -979,6 +1037,9 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
+            if refs.is_empty() {
+                return;
+            }
 
             let payload = json!({
                 "claim_id":              case.claim_id,
