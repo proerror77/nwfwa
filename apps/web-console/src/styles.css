@@ -3219,9 +3219,28 @@ pre {
 
 .model-monitoring-cockpit {
   display: grid;
-  grid-template-columns: minmax(190px, 0.72fr) minmax(440px, 1.54fr) minmax(230px, 0.84fr);
+  grid-template-columns: minmax(220px, 0.48fr) minmax(520px, 1.52fr);
   gap: 14px;
   align-items: start;
+}
+
+.model-source-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 420px) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.model-source-bar h3 {
+  margin-bottom: 0;
+}
+
+.model-source-bar .form-grid {
+  margin: 0;
+}
+
+.model-source-bar .button-row {
+  margin: 0;
 }
 
 .model-monitoring-brief,
@@ -3234,6 +3253,10 @@ pre {
   background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.model-monitoring-actions {
+  display: none;
 }
 
 .model-monitoring-brief strong {
@@ -3333,7 +3356,7 @@ pre {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px 10px;
-  min-height: 126px;
+  min-height: 104px;
   padding: 13px;
   cursor: pointer;
   list-style: none;
@@ -6625,7 +6648,9 @@ pre {
   }
 
   .ops-command-panel,
+  .dashboard-command-row,
   .dashboard-mid-row,
+  .model-source-bar,
   .governance-card-grid {
     grid-template-columns: 1fr;
   }
@@ -6743,6 +6768,7 @@ pre {
   }
 
   .score-hero,
+  .dashboard-command-row,
   .prevention-banner,
   .perf-row,
   .action-counter-grid,
@@ -7975,6 +8001,63 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   background: var(--surface-muted) !important;
 }
 
+.investigation-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 132px);
+  min-height: 620px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.investigation-workbar {
+  flex-shrink: 0;
+  padding: 12px 18px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--line);
+}
+
+.investigation-workspace-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px minmax(480px, 1fr) 320px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.investigation-queue-panel,
+.investigation-decision-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.investigation-queue-panel {
+  border-right: 1px solid var(--line);
+}
+
+.investigation-decision-panel {
+  border-left: 1px solid var(--line);
+}
+
+.investigation-panel-header {
+  flex-shrink: 0;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.investigation-evidence-column {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 18px;
+  background: #f6f9fe;
+}
+
 .action-queue-page .queue-list {
   display: grid;
   gap: 10px;
@@ -8152,23 +8235,30 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .dashboard-layout {
   display: grid;
-  gap: 16px;
+  gap: 14px;
+}
+
+.dashboard-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  gap: 14px;
+  align-items: stretch;
 }
 
 .prevention-banner {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  background: linear-gradient(135deg, #ffffff 0%, #f5f9ff 100%);
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(15, 46, 89, 0.07);
+  box-shadow: 0 8px 22px rgba(15, 46, 89, 0.05);
 }
 
 .prevention-stat {
   min-width: 0;
-  padding: 18px 20px;
+  padding: 14px 16px;
 }
 
 .prevention-label,
@@ -8192,7 +8282,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   display: block;
   margin-top: 7px;
   color: var(--graphite);
-  font-size: 30px;
+  font-size: 25px;
   line-height: 1;
 }
 
@@ -8210,9 +8300,12 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .prevention-divider {
-  width: 1px;
-  margin: 16px 0;
-  background: var(--line);
+  display: none;
+}
+
+.prevention-stat:nth-child(3),
+.prevention-stat:nth-child(7) {
+  border-left: 1px solid var(--line);
 }
 
 .reviewer-workflow-strip {
@@ -8224,8 +8317,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .reviewer-workflow-step {
   position: relative;
   min-width: 0;
-  min-height: 112px;
-  padding: 13px 14px;
+  min-height: 92px;
+  padding: 11px 12px;
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -8251,7 +8344,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .reviewer-workflow-step strong {
   display: block;
-  margin: 8px 0 5px;
+  margin: 6px 0 4px;
   color: var(--graphite);
   font-size: 14px;
   line-height: 1.25;
@@ -8266,8 +8359,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .dashboard-mid-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 14px;
   align-items: start;
 }
 
@@ -8281,7 +8374,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .perf-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .perf-card,
@@ -8328,6 +8421,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .action-counters {
   display: grid;
+  align-content: start;
   gap: 12px;
 }
 
@@ -8339,13 +8433,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  align-items: stretch;
 }
 
 .action-counter-card {
   display: grid;
   gap: 5px;
-  min-height: 78px;
-  padding: 13px;
+  min-height: 96px;
+  padding: 15px;
   text-align: left;
   background: var(--surface-muted);
   border: 1px solid var(--line);
@@ -8369,7 +8464,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .action-count {
   color: var(--graphite);
-  font-size: 27px;
+  font-size: 34px;
   line-height: 1;
 }
 
@@ -8938,9 +9033,27 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   }
 
   .dashboard-mid-row,
+  .investigation-workspace-grid,
   .case-brief-panel,
   .governance-thesis {
     grid-template-columns: 1fr;
+  }
+
+  .investigation-shell {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .investigation-workspace-grid,
+  .investigation-queue-panel,
+  .investigation-decision-panel {
+    height: auto;
+    overflow: visible;
+  }
+
+  .investigation-evidence-column {
+    overflow: visible;
   }
 
   .case-brief-facts {

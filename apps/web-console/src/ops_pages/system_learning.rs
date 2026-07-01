@@ -197,8 +197,8 @@ fn governance_body(
                 </div>
                 <p>{tr(
                     language,
-                    "This page should not be a generic improvement list. Its job is to show how FWA learns from data: mine rules, validate rule versions, train candidate models, and prepare a release decision for the customer.",
-                    "这个页面不应该是泛泛的改进列表。它要说明 FWA 如何从数据里学习：挖掘规则、验证规则版本、训练候选模型，并准备给客户审批的发布方案。"
+                    "Operations owners use this lane to decide which reviewer feedback becomes a governed rule, which model version is safe to pilot, and which release package is ready for customer approval.",
+                    "运营负责人在这里判断：哪些复核反馈能变成受治理的规则，哪个模型版本可以试点，哪个发布包已经能交给客户审批。"
                 )}</p>
             </div>
 

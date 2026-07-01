@@ -324,16 +324,17 @@ fn dashboard_body(
 ) -> Html {
     html! {
         <div class="dashboard-layout">
-            // ── Top: prevention banner ──────────────────────────────────
-            { prevention_banner(s, language) }
+            // ── Top: reviewer command row ───────────────────────────────
+            <div class="dashboard-command-row">
+                { action_counters(s, on_queue.clone(), language) }
+                { prevention_banner(s, language) }
+            </div>
 
-            { reviewer_workflow_strip(language) }
-
-            // ── Middle row: left = performance + action, right = feed ───
+            // ── Evidence that explains why the queue changed ────────────
             <div class="dashboard-mid-row">
                 <div class="dashboard-left-col">
                     { system_performance_row(s, language) }
-                    { action_counters(s, on_queue, language) }
+                    { reviewer_workflow_strip(language) }
                 </div>
                 <div class="dashboard-right-col">
                     { live_intake_feed(s, language) }

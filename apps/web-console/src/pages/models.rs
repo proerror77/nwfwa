@@ -56,8 +56,11 @@ pub fn models_page() -> Html {
                 <span class="status-pill">{"模型治理"}</span>
             </div>
 
-            <section class="panel">
-                <h3>{"模型来源"}</h3>
+            <section class="panel model-source-bar">
+                <div>
+                    <p class="section-eyebrow">{"当前检查对象"}</p>
+                    <h3>{"模型发布准备度"}</h3>
+                </div>
                 <div class="form-grid">
                     <label>
                         {"模型标识"}

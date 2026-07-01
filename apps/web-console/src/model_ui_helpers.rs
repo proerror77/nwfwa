@@ -75,14 +75,14 @@ pub(crate) fn model_monitoring_cockpit(snapshot: &ModelOpsSnapshot) -> Html {
         <section class="panel result-stack">
             <div class="section-header">
                 <div>
-                    <h3>{"模型监控驾驶舱"}</h3>
-                    <p>{"面向试点演示的模型版本、漂移、影子证据、发布门禁、QA 标签和重训准备度视图，任何模型影响路由前都先在这里确认。"}</p>
+                    <h3>{"模型发布检查表"}</h3>
+                    <p>{"任何模型影响案件路由前，先确认版本、漂移、影子评估、QA 标签、发布门禁和阻塞项。"}</p>
                 </div>
                 <span class={classes!("status-token", status_tone(&snapshot.gates.decision))}>{&snapshot.gates.decision}</span>
             </div>
             <div class="model-monitoring-cockpit">
                 <aside class="model-monitoring-brief">
-                    <span class="eyebrow">{"当前候选模型"}</span>
+                    <span class="eyebrow">{"候选模型"}</span>
                     <strong>{&model_label}</strong>
                     <dl>
                         <div><dt>{"运行时"}</dt><dd>{active_model.map(|model| model.runtime_kind.as_str()).unwrap_or("运行时待定")}</dd></div>

@@ -282,8 +282,8 @@ fn queue_panel(
 ) -> Html {
     let count = cases.len();
     html! {
-        <div style="width:320px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;">
-            <div style="padding:16px;border-bottom:1px solid var(--line);flex-shrink:0;">
+        <div class="investigation-queue-panel">
+            <div class="investigation-panel-header">
                 <h3 style="margin:0;font-size:0.95rem;color:var(--graphite);">
                     {match language {
                         Language::En => format!("Investigation Queue ({count})"),
@@ -383,8 +383,8 @@ fn conclusion_panel(
     let has_supplement_docs = !supplement_docs.is_empty();
 
     html! {
-        <div style="width:340px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;">
-            <div style="padding:16px;border-bottom:1px solid var(--line);flex-shrink:0;">
+        <div class="investigation-decision-panel">
+            <div class="investigation-panel-header">
                 <h3 style="margin:0;font-size:0.95rem;color:var(--graphite);">{tr(language, "Investigation Recommendation", "调查建议")}</h3>
             </div>
             <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;">
@@ -1034,10 +1034,10 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
     let expanded = (*expanded_layers).clone();
 
     html! {
-        <div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--surface-muted);">
+        <div class="investigation-shell">
 
             // Top bar
-            <div style="flex-shrink:0;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:16px;">
+            <div class="investigation-workbar">
                 <div>
                     <h2 class="bilingual-title" style="margin:0;color:var(--graphite);">
                         <span>{tr(language, "Investigation Workbench", "调查工作台")}</span>
@@ -1047,13 +1047,13 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
             </div>
 
             // Three-column layout
-            <div style="flex:1;display:flex;overflow:hidden;">
+            <div class="investigation-workspace-grid">
 
                 // Left: Case queue (260px sticky)
                 { queue_panel(&queue_cases, &selected_case_id, snap_loading, language) }
 
                 // Center: Investigation panels (scrollable, flex 1)
-                <div style="flex:1;overflow-y:auto;padding:20px;">
+                <div class="investigation-evidence-column">
                     { if selected_case_id.is_empty() || selected_case.is_none() {
                         html! {
                             <div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:200px;">
