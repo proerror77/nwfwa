@@ -13,6 +13,7 @@ use crate::types::{
     CaseRecord, InvestigationContext, LeadRecord, LeadsCasesSnapshot, PilotWritebackResponse,
     TriageLeadRecord,
 };
+use crate::evidence_chain;
 use serde_json::json;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlTextAreaElement;
@@ -640,6 +641,25 @@ fn evidence_refs_from_package(package: &serde_json::Value) -> Vec<String> {
     }
 }
 
+fn evidence_refs_for_chain(ctx: &InvestigationContext) -> Vec<String> {
+    let mut refs = evidence_refs_from_package(&ctx.case.evidence_package);
+    if let Some(lead) = &ctx.lead {
+        for reference in &lead.evidence_refs {
+            if !refs.contains(reference) {
+                refs.push(reference.clone());
+            }
+        }
+    }
+    for event in &ctx.audit_events {
+        for reference in &event.evidence_refs {
+            if !refs.contains(reference) {
+                refs.push(reference.clone());
+            }
+        }
+    }
+    refs
+}
+
 fn case_brief_panel(ctx: &InvestigationContext, language: Language) -> Html {
     let case = &ctx.case;
     let evidence_count = evidence_refs_from_package(&case.evidence_package).len();
@@ -1089,6 +1109,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                                 html! {
                                     <>
                                     { case_brief_panel(&ctx, language) }
+                                    { evidence_chain(&evidence_refs_for_chain(&ctx), language) }
                                     { for layers.into_iter().enumerate().map(|(i, layer_html)| {
                                         let exp = expanded.get(i).copied().unwrap_or(false);
                                         let tog = on_layer_toggle.clone();

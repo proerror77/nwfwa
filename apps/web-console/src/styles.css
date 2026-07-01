@@ -8744,6 +8744,44 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   line-height: 1.35;
 }
 
+.evidence-chain {
+  margin-bottom: 12px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.evidence-chain-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.evidence-chain-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.evidence-chain-group span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.evidence-chain-group code {
+  overflow: hidden;
+  color: var(--graphite);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .governance-loop-layout {
   display: grid;
   gap: 16px;
@@ -9056,6 +9094,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .dashboard-mid-row,
   .investigation-workspace-grid,
   .case-brief-panel,
+  .evidence-chain-grid,
   .governance-thesis {
     grid-template-columns: 1fr;
   }
