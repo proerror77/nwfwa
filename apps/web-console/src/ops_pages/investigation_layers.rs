@@ -1407,3 +1407,76 @@ pub(crate) fn layer_ai_summary(ctx: &InvestigationContext, language: Language) -
         </div>
     }
 }
+
+// ── Layer 8: Audit Timeline ───────────────────────────────────────────────────
+
+pub(crate) fn layer_audit_timeline(ctx: &InvestigationContext, language: Language) -> Html {
+    html! {
+        <div class="evidence-card" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                <h4 style="margin:0;color:var(--graphite);font-size:1rem;">{tr(language, "⑧ Audit Timeline", "⑧ 审计时间线")}</h4>
+                <span style="font-size:0.72rem;background:var(--surface-strong);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 8px;">
+                    {audit_event_count(ctx.audit_events.len(), language)}
+                </span>
+            </div>
+
+            { if ctx.audit_events.is_empty() {
+                html! {
+                    <p style="margin:0;color:var(--muted);font-size:0.85rem;">
+                        {tr(language, "No audit events returned for this claim.", "当前理赔暂无审计事件。")}
+                    </p>
+                }
+            } else {
+                html! {
+                    <ol class="audit-timeline">
+                        { for ctx.audit_events.iter().map(|event| html! {
+                            <li>
+                                <div>
+                                    <strong>{localized_business_text(&event.event_type, language)}</strong>
+                                    <span>{localized_business_text(&event.event_status, language)}</span>
+                                </div>
+                                <p>{&event.summary}</p>
+                                <small>
+                                    {format!(
+                                        "{}: {} / {}: {} / {}: {}",
+                                        tr(language, "audit", "审计"),
+                                        event.audit_id,
+                                        tr(language, "run", "运行"),
+                                        event.run_id,
+                                        tr(language, "at", "时间"),
+                                        event.created_at.as_deref().unwrap_or_else(|| tr(language, "unknown", "未知"))
+                                    )}
+                                </small>
+                                <small>
+                                    {format!(
+                                        "{}: {}",
+                                        tr(language, "evidence refs", "证据引用"),
+                                        audit_ref_count(event.evidence_refs.len(), language)
+                                    )}
+                                </small>
+                            </li>
+                        }) }
+                    </ol>
+                }
+            }}
+
+            <div style="margin-top:14px;padding:6px 10px;background:var(--surface-strong);border:1px solid var(--line);border-radius:4px;font-size:0.75rem;color:var(--muted);">
+                {tr(language, "Use this trail to reconstruct scoring, investigation, writeback, and evidence access for compliance review.", "用于向合规复核还原评分、调查、写回和证据访问过程。")}
+            </div>
+        </div>
+    }
+}
+
+fn audit_event_count(count: usize, language: Language) -> String {
+    match language {
+        Language::En => format!("{count} events"),
+        Language::Zh => format!("{count} 个事件"),
+    }
+}
+
+fn audit_ref_count(count: usize, language: Language) -> String {
+    match language {
+        Language::En => format!("{count} refs"),
+        Language::Zh => format!("{count} 条"),
+    }
+}

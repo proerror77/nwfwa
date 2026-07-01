@@ -5,7 +5,7 @@ use crate::api::{
 use crate::formatting::{business_label, localized_business_text};
 use crate::i18n::tr;
 use crate::ops_pages::investigation_layers::{
-    layer_ai_summary, layer_association_network, layer_document_completeness,
+    layer_ai_summary, layer_association_network, layer_audit_timeline, layer_document_completeness,
     layer_member_behavior, layer_provider_analysis, layer_risk_signals, layer_similar_cases,
 };
 use crate::state::{use_api_key, ApiState, Language};
@@ -270,6 +270,11 @@ const LAYER_META: &[LayerMeta] = &[
         number: "⑦",
         title_en: "AI Investigation Summary",
         title_zh: "AI 调查摘要",
+    },
+    LayerMeta {
+        number: "⑧",
+        title_en: "Audit Timeline",
+        title_zh: "审计时间线",
     },
 ];
 
@@ -785,8 +790,8 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
     let selected_case_id = use_state(String::new);
     let ctx_state = use_state(|| ApiState::<InvestigationContext>::Idle);
 
-    // Layers 0–6, default: layers 0 and 1 expanded
-    let expanded_layers = use_state(|| vec![true, true, false, false, false, false, false]);
+    // Layers 0-7, default: layers 0 and 1 expanded.
+    let expanded_layers = use_state(|| vec![true, true, false, false, false, false, false, false]);
 
     // Conclusion form
     let selected_conclusion = use_state(|| Option::<Conclusion>::None);
@@ -1158,7 +1163,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                             },
                             ApiState::Ready(ctx) => {
                                 let ctx = ctx.clone();
-                                let layers: [Html; 7] = [
+                                let layers: [Html; 8] = [
                                     layer_document_completeness(&ctx, language),
                                     layer_risk_signals(&ctx, language),
                                     layer_member_behavior(&ctx, language),
@@ -1166,6 +1171,7 @@ pub fn case_investigation_page(props: &CaseInvestigationPageProps) -> Html {
                                     layer_association_network(&ctx, language),
                                     layer_similar_cases(&ctx, language),
                                     layer_ai_summary(&ctx, language),
+                                    layer_audit_timeline(&ctx, language),
                                 ];
                                 html! {
                                     <>
