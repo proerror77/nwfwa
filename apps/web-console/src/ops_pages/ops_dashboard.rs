@@ -258,60 +258,130 @@ fn live_intake_feed(s: &DashboardSummary, language: Language) -> Html {
     }
 }
 
-fn reviewer_workflow_strip(language: Language) -> Html {
-    let steps = [
-        (
-            tr(language, "Normalize", "进件归一"),
-            tr(
-                language,
-                "Claim, member, provider, and documents become one review context.",
-                "理赔、成员、机构和单据先合成同一个复核上下文。",
-            ),
-        ),
-        (
-            tr(language, "Explain", "解释风险"),
-            tr(
-                language,
-                "Rules, model signals, and similar cases must point to evidence.",
-                "规则、模型信号和相似案例都必须指向证据。",
-            ),
-        ),
-        (
-            tr(language, "Review", "人工判断"),
-            tr(
-                language,
-                "The system routes work; the reviewer records the recommendation.",
-                "系统负责分流，人负责给出可追溯建议。",
-            ),
-        ),
-        (
-            tr(language, "Audit", "审计留痕"),
-            tr(
-                language,
-                "Every decision keeps evidence refs and writeback status.",
-                "每次处理都留下证据引用和回写状态。",
-            ),
-        ),
-        (
-            tr(language, "Improve", "治理回流"),
-            tr(
-                language,
-                "QA outcomes tune rules, models, and queue policy.",
-                "QA 结果回流到规则、模型和队列策略。",
-            ),
-        ),
-    ];
+fn count_or_dash(value: u32) -> String {
+    if value == 0 {
+        "--".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn process_metric_row(label: &'static str, value: String, tone: &'static str) -> Html {
+    html! {
+        <div class="process-node-metric">
+            <span>{label}</span>
+            <strong class={tone}>{value}</strong>
+        </div>
+    }
+}
+
+fn process_state_card(
+    class_name: &'static str,
+    title: &'static str,
+    historical: String,
+    current: String,
+    duration: String,
+) -> Html {
+    html! {
+        <article class={classes!("process-state-card", class_name)}>
+            <div class="process-node-heading">
+                <span class="process-node-icon"></span>
+                <h3>{title}</h3>
+            </div>
+            <div class="process-node-divider"></div>
+            {process_metric_row("Historical count", historical, "neutral")}
+            {process_metric_row("Current count", current, "neutral")}
+            {process_metric_row("Historical duration", duration, "success")}
+        </article>
+    }
+}
+
+fn reviewer_process_map(s: &DashboardSummary, language: Language) -> Html {
+    let low_risk = s.rag_distribution.get("Green").copied().unwrap_or(0);
+    let watchlist = s.rag_distribution.get("Amber").copied().unwrap_or(0);
+    let high_risk = s.rag_distribution.get("Red").copied().unwrap_or(0);
+    let in_review = high_risk + s.case_sla.open_cases;
+    let total = s.suspected_claims;
+    let historical = total + s.investigation_results + s.qa_reviews;
+    let triage_hours = format!("{:.1}h", s.case_sla.average_time_to_triage_hours);
+    let closure_hours = if s.case_sla.closed_cases == 0 {
+        "--".to_string()
+    } else {
+        format!("{:.1}h", s.case_sla.average_time_to_closure_hours)
+    };
 
     html! {
-        <div class="reviewer-workflow-strip" aria-label={tr(language, "Reviewer workflow", "复核工作流")}>
-            { for steps.iter().enumerate().map(|(idx, (title, body))| html! {
-                <div class="reviewer-workflow-step">
-                    <span>{format!("{:02}", idx + 1)}</span>
-                    <strong>{title}</strong>
-                    <small>{body}</small>
+        <section class="process-map-panel">
+            <div class="process-map-toolbar">
+                <div>
+                    <span class="section-eyebrow">{tr(language, "Approval Process", "复核流程")}</span>
+                    <strong>{tr(language, "State flow", "状态流")}</strong>
                 </div>
-            }) }
-        </div>
+                <div class="process-map-toggles" aria-label={tr(language, "Process map output", "流程图输出")}>
+                    <span>{tr(language, "Selection", "选中")}</span>
+                    <span>{tr(language, "Graph", "图谱")}</span>
+                    <span class="active">{tr(language, "Deviations", "偏差")}</span>
+                    <span class="active">{tr(language, "Included", "纳入")}</span>
+                </div>
+            </div>
+
+            <div class="process-map-scroll">
+                <div class="process-map-canvas" role="img" aria-label={tr(language, "Reviewer state transition map", "复核状态流转图")}>
+                    <svg class="process-map-paths" viewBox="0 0 1100 390" aria-hidden="true">
+                        <path class="process-path included thick" d="M172 126 C 262 118, 308 188, 392 178" />
+                        <path class="process-path included" d="M568 184 C 672 214, 742 250, 838 292" />
+                        <path class="process-path success" d="M982 186 C 1016 198, 1016 258, 982 276" />
+                        <path class="process-path deviation" d="M174 122 C 390 132, 600 132, 838 138" />
+                        <path class="process-path deviation dashed" d="M568 174 C 688 154, 762 142, 838 138" />
+                        <path class="process-path deviation dashed" d="M568 186 C 680 204, 740 296, 838 292" />
+                    </svg>
+
+                    {process_state_card(
+                        "intake",
+                        tr(language, "Intake", "进件"),
+                        historical.to_string(),
+                        total.to_string(),
+                        triage_hours.clone(),
+                    )}
+                    {process_state_card(
+                        "scored",
+                        tr(language, "Scored", "已评分"),
+                        total.to_string(),
+                        count_or_dash(watchlist + high_risk),
+                        triage_hours,
+                    )}
+                    {process_state_card(
+                        "reviewing",
+                        tr(language, "In Review", "复核中"),
+                        in_review.to_string(),
+                        count_or_dash(s.case_sla.open_cases),
+                        closure_hours,
+                    )}
+                    {process_state_card(
+                        "cleared",
+                        tr(language, "Low Risk", "低风险"),
+                        low_risk.to_string(),
+                        low_risk.to_string(),
+                        "--".to_string(),
+                    )}
+                    {process_state_card(
+                        "confirmed",
+                        tr(language, "Confirmed", "已确认"),
+                        s.confirmed_fwa.to_string(),
+                        s.confirmed_fwa.to_string(),
+                        "--".to_string(),
+                    )}
+
+                    <span class="process-edge-badge included intake-score">{total}</span>
+                    <span class="process-edge-badge included score-review">{in_review}</span>
+                    <span class="process-edge-badge deviation intake-low">{low_risk}</span>
+                    <span class="process-edge-badge deviation score-low">{watchlist}</span>
+                    <span class="process-edge-badge deviation score-confirmed">{s.qa_reviews}</span>
+                    <span class="process-edge-badge danger review-confirmed">{s.confirmed_fwa}</span>
+                    <span class="process-edge-badge danger review-low">{s.case_sla.breached_cases}</span>
+                </div>
+            </div>
+        </section>
     }
 }
 
@@ -330,11 +400,12 @@ fn dashboard_body(
                 { prevention_banner(s, language) }
             </div>
 
+            { reviewer_process_map(s, language) }
+
             // ── Evidence that explains why the queue changed ────────────
             <div class="dashboard-mid-row">
                 <div class="dashboard-left-col">
                     { system_performance_row(s, language) }
-                    { reviewer_workflow_strip(language) }
                 </div>
                 <div class="dashboard-right-col">
                     { live_intake_feed(s, language) }
