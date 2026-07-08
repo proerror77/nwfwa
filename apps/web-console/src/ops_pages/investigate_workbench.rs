@@ -40,7 +40,11 @@ pub fn investigate_workbench_page(props: &InvestigateWorkbenchPageProps) -> Html
             // ── Existing investigation workbench (reused) ───────────────────
             // CaseInvestigationPage handles all the heavy lifting:
             // 7-layer evidence panels, conclusion form, API calls.
-            <CaseInvestigationPage language={language} />
+            <CaseInvestigationPage
+                language={language}
+                initial_case_id={props.initial_case_id.clone()}
+                on_done={props.on_done.clone()}
+            />
         </div>
     }
 }

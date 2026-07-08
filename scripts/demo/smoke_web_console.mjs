@@ -110,36 +110,32 @@ async function main() {
     const builtText = `${bundleText}\n${sourceText}`;
 
     for (const expected of [
-      "FWA PLATFORM",
-      "FWA Operations",
-      "Claims FWA Operations Console",
-      "FWA Platform",
-      "Live operations",
-      "实时运营",
-      // New 4-page navigation labels
-      "Overview",
-      "Action Queue",
-      "Investigate",
-      "System Governance",
-      "运营概况",
+      "FWA REVIEW WORKBENCH",
+      "理赔风险复核台",
+      "人工复核",
+      "Claim-risk review",
+      "理赔风险复核",
+      // Reviewer workbench navigation labels
+      "Today",
+      "Work Queue",
+      "Case Workbench",
+      "Learning",
+      "今日概况",
       "需要处理",
       "调查工作台",
-      "系统治理",
+      "学习与发布",
       "hashchange",
     ]) {
       assertContains(builtText, expected, "web console shell bundle");
     }
 
     for (const expectedPage of [
-      // New 4-page navigation
-      "Overview",
-      "Action Queue",
-      "Investigate",
-      "System Governance",
-      // Content still present in the reused inner pages
-      "Rule Library",
-      "Model Governance",
-      "QA Feedback",
+      "今日复核台",
+      "人工处理队列",
+      "调查工作台",
+      "学习与发布",
+      "规则实验室",
+      "模型治理",
     ]) {
       assertContains(builtText, expectedPage, "web console active route bundle");
     }
@@ -156,28 +152,21 @@ async function main() {
 
     for (const expectedPanel of [
       // Dashboard panels (new)
-      "Prevented today",
-      "Action needed",
-      "Live intake",
-      "Precision",
-      "SLA compliance",
+      "今天要点的动作",
+      "建议暂缓金额",
+      "队列变化原因",
+      "复核命中率",
+      "复核时效",
       // Inner pages still in bundle (reachable via SystemLearning and Investigate)
-      "Risk Signals",
-      "Provider 风险分析",
-      "AI Investigation Summary",
-      "Document Packets",
-      "Confirmed Knowledge Cases",
-      "Similar Case Search",
-      "Data Foundation Control",
-      "Rule Library",
-      "Rule Discovery Workbench",
-      "Backtest Evidence",
-      "Rule Promotion Gates",
-      "Model Monitoring Cockpit",
-      "Medical Review Queue",
-      "Investigation Package",
-      "Evidence Status",
-      "Assistive Boundary",
+      "风险信号",
+      "医疗机构风险分析",
+      "AI 调查摘要",
+      "挖掘候选规则",
+      "验证规则版本",
+      "模型发布检查表",
+      "发布检查工作台",
+      "证据引用",
+      "必须留痕",
     ]) {
       assertContains(builtText, expectedPanel, "web console active panel bundle");
     }

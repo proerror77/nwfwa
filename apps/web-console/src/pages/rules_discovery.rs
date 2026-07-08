@@ -90,7 +90,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
         Callback::from(move |_| {
             let Ok(contribution) = explanation_contribution.trim().parse::<f64>() else {
                 discovery_state.set(ApiState::Failed(
-                    "model contribution must be numeric".into(),
+                    "模型贡献值必须是数字".into(),
                 ));
                 return;
             };
@@ -178,7 +178,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
             };
             let Some(rule) = candidate_rule else {
                 backtest_state.set(ApiState::Failed(
-                    "select a discovered candidate first".into(),
+                    "请先选择一个已发现的候选规则".into(),
                 ));
                 return;
             };
@@ -265,7 +265,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
             };
             let Some(candidate) = candidate else {
                 save_state.set(ApiState::Failed(
-                    "select a discovered candidate before review".into(),
+                    "请先选择一个候选规则再进入审核".into(),
                 ));
                 return;
             };
@@ -279,7 +279,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
                 }
                 ApiState::Ready(backtest) => {
                     save_state.set(ApiState::Failed(format!(
-                        "selected candidate backtest is not eligible: {}",
+                        "所选候选规则回测未达到审核条件：{}",
                         if backtest.blockers.is_empty() {
                             backtest.promotion_recommendation.clone()
                         } else {
@@ -290,7 +290,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
                 }
                 _ => {
                     save_state.set(ApiState::Failed(
-                        "run an eligible backtest before saving this candidate for shadow".into(),
+                        "请先完成合格回测，再保存候选规则用于影子验证".into(),
                     ));
                     return;
                 }
@@ -358,7 +358,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
             };
             let Some(candidate) = candidate else {
                 review_state.set(ApiState::Failed(
-                    "select a discovered candidate before final review".into(),
+                    "请先选择一个候选规则再做最终审核".into(),
                 ));
                 return;
             };
@@ -368,7 +368,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
                 .any(|id| id == &candidate_rule_id)
             {
                 review_state.set(ApiState::Failed(
-                    "submit shadow evidence before accepting this candidate".into(),
+                    "接受候选规则前，请先提交影子验证证据".into(),
                 ));
                 return;
             }
@@ -382,7 +382,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
                 }
                 _ => {
                     review_state.set(ApiState::Failed(
-                        "run an eligible backtest before final candidate review".into(),
+                        "请先完成合格回测，再做最终候选规则审核".into(),
                     ));
                     return;
                 }
@@ -442,7 +442,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
             };
             let Some(candidate) = candidate else {
                 review_state.set(ApiState::Failed(
-                    "select a discovered candidate before review".into(),
+                    "请先选择一个候选规则再审核".into(),
                 ));
                 return;
             };
@@ -499,7 +499,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
                 ApiState::Ready(response) => response.clone(),
                 _ => {
                     shadow_state.set(ApiState::Failed(
-                        "run backtest before submitting shadow evidence".into(),
+                        "提交影子证据前请先运行回测".into(),
                     ));
                     return;
                 }
@@ -518,7 +518,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
                     .any(|id| id == &candidate_rule_id)
                 {
                     shadow_state.set(ApiState::Failed(
-                        "save the discovered candidate draft before submitting shadow evidence for it".into(),
+                        "请先保存候选规则草稿，再提交对应的影子证据".into(),
                     ));
                     return;
                 }
@@ -569,25 +569,25 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
 
     html! {
         <section class="panel result-stack">
-            <h3>{"Rule Discovery Workbench"}</h3>
+            <h3>{"规则发现工作台"}</h3>
             {rule_backfill_pipeline(&discovery_state, &backtest_state, &save_state, &shadow_state, &review_state)}
             <div class="form-grid">
-                {text_input("Gate Rule ID", &rule_id)}
-                {text_input("Model Key", &model_key)}
-                {text_input("Model Version", &model_version)}
-                {text_input("Explained Feature", &explanation_feature)}
-                {text_input("Contribution", &explanation_contribution)}
-                {text_input("Explanation Artifact", &feature_importance_uri)}
-                {text_input("Mining Dataset URI", &discovery_dataset_uri)}
-                {text_input("Label Column", &discovery_label_column)}
-                {text_input("Claim ID Column", &discovery_claim_id_column)}
-                {text_input("Feature Columns", &discovery_feature_fields)}
-                {text_input("Tree Depth", &discovery_tree_depth)}
-                {text_input("Reviewer", &rule_reviewer)}
-                {text_input("Review Evidence Refs", &rule_review_evidence_refs)}
+                {text_input("门禁规则 ID", &rule_id)}
+                {text_input("模型标识", &model_key)}
+                {text_input("模型版本", &model_version)}
+                {text_input("解释特征", &explanation_feature)}
+                {text_input("贡献值", &explanation_contribution)}
+                {text_input("解释产物", &feature_importance_uri)}
+                {text_input("挖掘数据集 URI", &discovery_dataset_uri)}
+                {text_input("标签列", &discovery_label_column)}
+                {text_input("理赔 ID 列", &discovery_claim_id_column)}
+                {text_input("特征列", &discovery_feature_fields)}
+                {text_input("树深度", &discovery_tree_depth)}
+                {text_input("审核人", &rule_reviewer)}
+                {text_input("审核证据引用", &rule_review_evidence_refs)}
             </div>
             <label class="full-field">
-                {"Inline Labeled Evaluation Dataset"}
+                {"内联标注评估数据集"}
                 <textarea
                     class="code-field"
                     value={(*evaluation_dataset_json).clone()}
@@ -600,7 +600,7 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
                 />
             </label>
             <label class="full-field">
-                {"Human Review Notes"}
+                {"人工审核备注"}
                 <textarea
                     value={(*rule_review_notes).clone()}
                     oninput={{
@@ -613,22 +613,22 @@ pub(crate) fn rules_discovery_workbench(props: &RulesDiscoveryProps) -> Html {
             </label>
             <div class="button-row">
                 <button onclick={discover_candidates} disabled={matches!(&*discovery_state, ApiState::Loading)}>
-                    {if matches!(&*discovery_state, ApiState::Loading) { "Discovering..." } else { "Discover candidates" }}
+                    {if matches!(&*discovery_state, ApiState::Loading) { "发现中..." } else { "发现候选规则" }}
                 </button>
                 <button onclick={backtest_candidate} disabled={!selected_candidate_available || matches!(&*backtest_state, ApiState::Loading)}>
-                    {if matches!(&*backtest_state, ApiState::Loading) { "Backtesting..." } else { "Run backtest" }}
+                    {if matches!(&*backtest_state, ApiState::Loading) { "回测中..." } else { "运行回测" }}
                 </button>
                 <button onclick={save_candidate_draft} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || matches!(&*save_state, ApiState::Loading)}>
-                    {if matches!(&*save_state, ApiState::Loading) { "Saving draft..." } else { "Save draft for shadow" }}
+                    {if matches!(&*save_state, ApiState::Loading) { "保存草稿中..." } else { "保存草稿用于影子验证" }}
                 </button>
                 <button onclick={submit_shadow_evidence} disabled={!can_submit_shadow_evidence || matches!(&*shadow_state, ApiState::Loading)}>
-                    {if matches!(&*shadow_state, ApiState::Loading) { "Submitting shadow..." } else { "Submit shadow evidence" }}
+                    {if matches!(&*shadow_state, ApiState::Loading) { "提交影子证据中..." } else { "提交影子证据" }}
                 </button>
                 <button onclick={accept_candidate} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || !selected_candidate_shadow_ready || matches!(&*review_state, ApiState::Loading)}>
-                    {if matches!(&*review_state, ApiState::Loading) { "Reviewing..." } else { "Accept after shadow evidence" }}
+                    {if matches!(&*review_state, ApiState::Loading) { "审核中..." } else { "影子验证后接受" }}
                 </button>
                 <button onclick={reject_candidate} disabled={!selected_candidate_available || matches!(&*review_state, ApiState::Loading)}>
-                    {"Reject selected candidate"}
+                    {"拒绝所选候选规则"}
                 </button>
             </div>
             {rule_candidate_review_state(&review_state)}

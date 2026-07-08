@@ -108,7 +108,7 @@ cd "$ROOT_DIR"
 exec env \\
   DATABASE_URL="$DATABASE_URL" \\
   FWA_API_KEY="${FWA_LOCAL_RUNTIME_LEGACY_API_KEY:-legacy-customer-secret}" \\
-  FWA_API_KEY_PRINCIPALS="${FWA_API_KEY_PRINCIPALS:-aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*}" \\
+  FWA_API_KEY_PRINCIPALS="${FWA_API_KEY_PRINCIPALS:-aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*,ops:rules:read,ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review,ops:models:read}" \\
   FWA_BIND_ADDR="$API_BIND_ADDR" \\
   FWA_DB_MAX_CONNECTIONS="${FWA_DB_MAX_CONNECTIONS:-16}" \\
   FWA_MAX_CONCURRENT_REQUESTS="${FWA_MAX_CONCURRENT_REQUESTS:-256}" \\

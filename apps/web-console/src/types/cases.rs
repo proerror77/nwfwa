@@ -150,11 +150,13 @@ pub(crate) struct SimilarCaseItem {
     pub(crate) case_id: String,
     pub(crate) scheme_family: String,
     pub(crate) similarity_score: f64,
+    #[serde(alias = "outcome")]
     pub(crate) final_outcome: Option<String>,
+    #[serde(default, alias = "matched_signals")]
     pub(crate) tags: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub(crate) struct SimilarCasesResponse {
-    pub(crate) cases: Vec<SimilarCaseItem>,
+    pub(crate) results: Vec<SimilarCaseItem>,
 }

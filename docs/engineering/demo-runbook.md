@@ -74,7 +74,7 @@ The seed includes:
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
 FWA_API_KEY=legacy-customer-secret \
-FWA_API_KEY_PRINCIPALS="aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*" \
+FWA_API_KEY_PRINCIPALS="aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*,ops:rules:read,ops:rules:write,ops:rules:approve,ops:rules:publish,ops:rules:review,ops:models:read" \
 FWA_SOURCE_SYSTEM="AiClaim Core" \
 FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
 cargo run --locked -p api-server

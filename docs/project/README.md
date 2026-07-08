@@ -2,8 +2,46 @@
 
 This folder is the detailed project handbook for `nwfwa`.
 
-Use it when you need to understand what the system does, which APIs exist, how
-the technical stack fits together, and what is ready for demo or pilot use.
+Use it when you need to understand what the system does, how the main workflows
+fit together, which APIs exist, and what is ready for demo or pilot use.
+
+## Start Here
+
+`nwfwa` is a health-insurance fraud, waste, and abuse operations platform. It is
+built for TPA, insurer, review, and compliance teams that need to turn incoming
+claim data into explainable risk review workflows.
+
+The project is not just an API catalog. The APIs are one interface to a larger
+system that covers:
+
+- claim intake and normalization;
+- risk scoring with rules, models, anomaly signals, provider context, clinical
+  checks, and document evidence;
+- lead, case, investigation, QA, and medical-review workflows;
+- rule lifecycle, model lifecycle, dataset lineage, and operational governance;
+- audit records that explain what happened and which evidence supported it.
+
+The shortest way to understand the product is:
+
+1. Read the [Product PRD](../product/fwa-risk-operations-prd.md) for the user
+   problem, decision boundary, and product modules.
+2. Read [Architecture](architecture.md) for the runtime shape and workflow map.
+3. Read [Operations Guide](operations-guide.md) when you want to run the local
+   demo.
+4. Use [API Reference](api-reference.md) only after you know which workflow or
+   integration surface you need.
+
+## Reader Guide
+
+| If you want to know... | Read |
+| --- | --- |
+| What this product is for | [Product PRD](../product/fwa-risk-operations-prd.md) |
+| How claims move through the system | [Architecture](architecture.md) |
+| How to run the local demo | [Operations Guide](operations-guide.md) |
+| What is implemented versus still customer-dependent | [PRD Coverage](prd-coverage.md) |
+| Which API endpoint to call | [API Reference](api-reference.md) |
+| How data is stored | [Data Model](data-model.md) |
+| How models and datasets are governed | [ML Pipeline Runbook](ml-pipeline-runbook.md) |
 
 ## Documents
 

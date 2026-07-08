@@ -1,3 +1,4 @@
+use crate::state::Language;
 use crate::{map_counts_label, AgentApprovalView};
 use std::collections::BTreeMap;
 use web_sys::HtmlInputElement;
@@ -18,6 +19,90 @@ pub(crate) fn case_action(label: &str, caption: &str, tone: &str) -> Html {
             <strong>{label}</strong>
             <span>{caption}</span>
         </div>
+    }
+}
+
+pub(crate) fn evidence_chain(refs: &[String], language: Language) -> Html {
+    let groups = [
+        ("claim", ref_label(language, "Claim", "理赔")),
+        ("audit", ref_label(language, "Audit", "审计")),
+        ("rule", ref_label(language, "Rule", "规则")),
+        ("model", ref_label(language, "Model", "模型")),
+        ("document", ref_label(language, "Document", "文件")),
+        ("similar", ref_label(language, "Similar case", "相似案例")),
+        ("other", ref_label(language, "Other", "其他")),
+    ];
+    html! {
+        <section class="evidence-chain">
+            <div class="section-header">
+                <div>
+                    <h3>{ref_label(language, "Evidence chain", "证据链")}</h3>
+                    <p>{ref_label(language, "Grouped refs used to explain this case and support final writeback.", "按类型整理本案解释和最终结论需要引用的证据。")}</p>
+                </div>
+                <span class="status-token strong">{evidence_refs_count(refs.len(), language)}</span>
+            </div>
+            { if refs.is_empty() {
+                html! { <p class="empty">{ref_label(language, "No evidence refs attached.", "暂无证据引用。")}</p> }
+            } else {
+                html! {
+                    <div class="evidence-chain-grid">
+                        { for groups.into_iter().map(|(kind, label)| evidence_chain_group(kind, label, refs)) }
+                    </div>
+                }
+            }}
+        </section>
+    }
+}
+
+fn evidence_chain_group(kind: &'static str, label: &'static str, refs: &[String]) -> Html {
+    let items = refs
+        .iter()
+        .filter(|reference| evidence_ref_kind(reference) == kind)
+        .collect::<Vec<_>>();
+    if items.is_empty() {
+        return html! {};
+    }
+    html! {
+        <div class="evidence-chain-group">
+            <span>{label}</span>
+            { for items.into_iter().take(4).map(|reference| html! { <code>{reference}</code> }) }
+        </div>
+    }
+}
+
+fn evidence_ref_kind(reference: &str) -> &'static str {
+    let reference = reference.to_ascii_lowercase();
+    if reference.starts_with("claim") || reference.starts_with("investigation_cases:") {
+        "claim"
+    } else if reference.starts_with("audit") {
+        "audit"
+    } else if reference.starts_with("rule") {
+        "rule"
+    } else if reference.starts_with("model") {
+        "model"
+    } else if reference.contains("document")
+        || reference.contains("medical_record")
+        || reference.contains("invoice")
+    {
+        "document"
+    } else if reference.starts_with("knowledge_cases:") || reference.starts_with("similar") {
+        "similar"
+    } else {
+        "other"
+    }
+}
+
+fn ref_label(language: Language, en: &'static str, zh: &'static str) -> &'static str {
+    match language {
+        Language::En => en,
+        Language::Zh => zh,
+    }
+}
+
+fn evidence_refs_count(count: usize, language: Language) -> String {
+    match language {
+        Language::En => format!("{count} refs"),
+        Language::Zh => format!("{count} 条引用"),
     }
 }
 
@@ -121,13 +206,5 @@ pub(crate) fn approval_count_label(approvals: &[AgentApprovalView]) -> String {
         "none".into()
     } else {
         format!("{} approval records", approvals.len())
-    }
-}
-
-pub(crate) fn yes_no(value: bool) -> &'static str {
-    if value {
-        "yes"
-    } else {
-        "no"
     }
 }

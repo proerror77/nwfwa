@@ -115,10 +115,10 @@ pub fn rules_page() -> Html {
         <section class="module-status">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"ML Rule Candidate Review"}</h2>
-                    <p>{"Review rules discovered from model explanations, offline mining, or QA feedback. Operators run backtests, inspect shadow gates, and accept or reject the candidate before it can enter the governed rule library."}</p>
+                    <h2>{"规则候选审核"}</h2>
+                    <p>{"审核由模型解释、离线挖掘或 QA 反馈发现的候选规则。运营人员需要先跑回测、检查影子验证，再决定是否进入受治理的规则库。"}</p>
                 </div>
-                <span class="status-pill">{"Human review gate"}</span>
+                <span class="status-pill">{"人工审核门禁"}</span>
             </div>
 
             <RulesDiscoveryWorkbench
@@ -129,26 +129,26 @@ pub fn rules_page() -> Html {
 
             <div class="button-row">
                 <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
-                    {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh gates" }}
+                    {if matches!(&*snapshot_state, ApiState::Loading) { "刷新中..." } else { "刷新门禁" }}
                 </button>
                 <button onclick={lifecycle_action("submit")} disabled={loading}>
-                    {"Submit"}
+                    {"提交"}
                 </button>
                 <button onclick={lifecycle_action("approve")} disabled={approve_disabled}>
-                    {"Approve"}
+                    {"批准"}
                 </button>
                 <button onclick={lifecycle_action("publish")} disabled={publish_disabled}>
-                    {"Publish"}
+                    {"发布"}
                 </button>
                 <button onclick={lifecycle_action("rollback")} disabled={rollback_disabled}>
-                    {"Rollback"}
+                    {"回滚"}
                 </button>
             </div>
 
             {match &*action_state {
                 ApiState::Idle => html! {},
-                ApiState::Loading => html! { <p>{"Running rule lifecycle action..."}</p> },
-                ApiState::Ready(_) => html! { <p class="success">{"Rule lifecycle action completed."}</p> },
+                ApiState::Loading => html! { <p>{"正在执行规则生命周期操作..."}</p> },
+                ApiState::Ready(_) => html! { <p class="success">{"规则生命周期操作已完成。"}</p> },
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
             }}
 

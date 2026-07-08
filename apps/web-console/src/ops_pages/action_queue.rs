@@ -6,6 +6,7 @@
 ///
 /// Clicking a case/lead fires `on_open_case` which navigates to the Investigate workbench.
 use crate::api::*;
+use crate::formatting::{business_label, localized_business_text};
 use crate::i18n::tr;
 use crate::state::{use_api_key, ApiState, Language};
 use crate::types::*;
@@ -24,12 +25,12 @@ enum QueueTab {
 impl QueueTab {
     fn label(self, language: Language) -> &'static str {
         match (self, language) {
-            (QueueTab::Investigate, Language::En) => "Investigate",
-            (QueueTab::Investigate, Language::Zh) => "待调查",
-            (QueueTab::PendingDocs, Language::En) => "Pending Docs",
-            (QueueTab::PendingDocs, Language::Zh) => "补件中",
-            (QueueTab::Medical, Language::En) => "Medical / Fraud Review",
-            (QueueTab::Medical, Language::Zh) => "医疗 / 欺诈复核",
+            (QueueTab::Investigate, Language::En) => "Decide risk leads",
+            (QueueTab::Investigate, Language::Zh) => "判断风险线索",
+            (QueueTab::PendingDocs, Language::En) => "Request evidence",
+            (QueueTab::PendingDocs, Language::Zh) => "追补证据",
+            (QueueTab::Medical, Language::En) => "Medical review",
+            (QueueTab::Medical, Language::Zh) => "医疗复核",
         }
     }
 }
@@ -65,6 +66,55 @@ fn sla_badge(sla: &str, language: Language) -> Html {
     html! { <span class={classes!("sla-chip", tone)}>{label}</span> }
 }
 
+fn status_label(status: &str, language: Language) -> String {
+    match (status, language) {
+        ("new", Language::Zh) => "新线索".to_string(),
+        ("triage" | "pending_triage", Language::Zh) => "待分诊".to_string(),
+        ("investigating", Language::Zh) => "调查中".to_string(),
+        ("pending_evidence", Language::Zh) => "待补证据".to_string(),
+        ("open", Language::Zh) => "待处理".to_string(),
+        _ => business_label(status),
+    }
+}
+
+fn scheme_label(scheme: &str, language: Language) -> String {
+    match (scheme, language) {
+        ("diagnosis_procedure_mismatch", Language::Zh) => "诊疗不匹配".to_string(),
+        ("high_amount", Language::Zh) => "金额异常".to_string(),
+        ("duplicate_claim", Language::Zh) => "重复理赔".to_string(),
+        ("provider_pattern", Language::Zh) => "机构模式异常".to_string(),
+        _ => localized_business_text(scheme, language),
+    }
+}
+
+fn next_action_label(status: &str, rag: &str, language: Language) -> &'static str {
+    match status {
+        "pending_evidence" => tr(language, "Ask for documents", "发起补件"),
+        "triage" | "new" | "pending_triage" => tr(language, "Open workbench", "进入调查"),
+        "investigating" => tr(language, "Finish recommendation", "形成建议"),
+        _ if rag.eq_ignore_ascii_case("red") => tr(language, "Review now", "立即复核"),
+        _ => tr(language, "Review", "复核"),
+    }
+}
+
+fn shorten_reason(reason: &str, language: Language) -> String {
+    let text = if reason.trim().is_empty() {
+        tr(
+            language,
+            "No reason text. Open the case and verify evidence refs.",
+            "暂无原因说明，进入案件核验证据引用。",
+        )
+        .to_string()
+    } else {
+        localized_business_text(reason, language)
+    };
+    if text.chars().count() > 120 {
+        format!("{}…", text.chars().take(120).collect::<String>())
+    } else {
+        text
+    }
+}
+
 // ── Tab 1: Investigate ────────────────────────────────────────────────────────
 
 fn investigate_tab(
@@ -73,7 +123,17 @@ fn investigate_tab(
     language: Language,
 ) -> Html {
     // Merge high-risk leads (not yet triaged) and investigating/pending_evidence cases.
-    let mut rows: Vec<(String, String, u8, String, String, String, String)> = Vec::new(); // (id, claim, score, rag, scheme, status, sla)
+    let mut rows: Vec<(
+        String,
+        String,
+        u8,
+        String,
+        String,
+        String,
+        String,
+        String,
+        usize,
+    )> = Vec::new(); // id, claim, score, rag, scheme, status, sla, reason, evidence count
 
     // High-risk leads awaiting triage
     for lead in &snapshot.leads {
@@ -88,6 +148,8 @@ fn investigate_tab(
                 lead.scheme_family.clone(),
                 tr(language, "Awaiting triage", "待分诊").to_string(),
                 String::new(),
+                shorten_reason(&lead.reason, language),
+                lead.evidence_refs.len(),
             ));
         }
     }
@@ -125,6 +187,12 @@ fn investigate_tab(
             c.scheme_family.clone(),
             c.status.clone(),
             c.sla_status.clone(),
+            shorten_reason(&c.routing_reason, language),
+            c.evidence_package
+                .get("evidence_refs")
+                .and_then(|v| v.as_array())
+                .map(|refs| refs.len())
+                .unwrap_or(0),
         ));
     }
 
@@ -136,9 +204,10 @@ fn investigate_tab(
 
     html! {
         <div class="queue-list">
-            { for rows.iter().map(|(id, claim, score, rag, scheme, status, sla)| {
+            { for rows.iter().map(|(id, claim, score, rag, scheme, status, sla, reason, evidence_count)| {
                 let id_val = id.clone();
                 let on_open = on_open.clone();
+                let next_action = next_action_label(status, rag, language);
                 html! {
                     <button
                         class="queue-row"
@@ -151,14 +220,24 @@ fn investigate_tab(
                         <div class="queue-row-body">
                             <div class="queue-row-top">
                                 <span class="queue-claim-id">{claim}</span>
-                                <span class="queue-scheme">{scheme}</span>
+                                <span class="queue-scheme">{scheme_label(scheme, language)}</span>
                             </div>
+                            <p class="queue-reason">
+                                <strong>{tr(language, "Why this is here", "进入队列原因")}</strong>
+                                {reason}
+                            </p>
                             <div class="queue-row-chips">
-                                <span class="status-chip">{status}</span>
+                                <span class="status-chip">{status_label(status, language)}</span>
+                                <span class="status-chip">
+                                    {match language {
+                                        Language::En => format!("{evidence_count} evidence refs"),
+                                        Language::Zh => format!("{evidence_count} 条证据引用"),
+                                    }}
+                                </span>
                                 { if !sla.is_empty() { sla_badge(sla, language) } else { html!{} } }
                             </div>
                         </div>
-                        <span class="queue-row-arrow">{"›"}</span>
+                        <span class="queue-next-action">{next_action}</span>
                     </button>
                 }
             }) }
@@ -204,12 +283,12 @@ fn pending_docs_tab(
                         <div class="queue-row-body" style="flex:1">
                             <div class="queue-row-top">
                                 <span class="queue-claim-id">{&c.claim_id}</span>
-                                <span class="queue-scheme">{&c.scheme_family}</span>
+                                <span class="queue-scheme">{scheme_label(&c.scheme_family, language)}</span>
                             </div>
                             { if !missing.is_empty() {
                                 html! {
                                     <div class="queue-missing-docs">
-                                        <span class="missing-label">{tr(language, "Missing:", "缺少：")}</span>
+                                        <span class="missing-label">{tr(language, "Missing evidence:", "缺少证据：")}</span>
                                         { for missing.iter().map(|d| html! {
                                             <span class="doc-chip warning">{d}</span>
                                         }) }
@@ -218,10 +297,10 @@ fn pending_docs_tab(
                             } else { html!{} } }
                             <div class="queue-row-chips">
                                 { sla_badge(&c.sla_status, language) }
-                                <span class="status-chip">{&c.assignee}</span>
+                                <span class="status-chip">{format!("{}: {}", tr(language, "Owner", "负责人"), &c.assignee)}</span>
                             </div>
                         </div>
-                        <span class="queue-row-arrow">{"›"}</span>
+                        <span class="queue-next-action">{tr(language, "Open request", "处理补件")}</span>
                     </button>
                 }
             }) }
@@ -247,8 +326,8 @@ fn medical_tab(items: &[MedicalReviewQueueItem], language: Language) -> Html {
                     _ => "neutral",
                 };
                 let route_label = match (item.review_route.as_str(), language) {
-                    ("fraud_investigation_review", Language::En) => "Fraud investigation",
-                    ("fraud_investigation_review", Language::Zh) => "欺诈调查",
+                    ("fraud_investigation_review", Language::En) => "Fraud review",
+                    ("fraud_investigation_review", Language::Zh) => "欺诈复核",
                     ("medical_review", Language::En) => "Medical review",
                     ("medical_review", Language::Zh) => "医疗复核",
                     (_, Language::En) => "Documentation",
@@ -278,7 +357,13 @@ fn medical_tab(items: &[MedicalReviewQueueItem], language: Language) -> Html {
                                 }
                             } else { html!{} } }
                             <div class="queue-row-chips">
-                                <span class="status-chip">{&item.review_status}</span>
+                                <span class="status-chip">{status_label(&item.review_status, language)}</span>
+                                <span class="status-chip">
+                                    {match language {
+                                        Language::En => format!("{} evidence refs", item.evidence_refs.len()),
+                                        Language::Zh => format!("{} 条证据引用", item.evidence_refs.len()),
+                                    }}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -378,8 +463,8 @@ pub fn action_queue_page(props: &ActionQueuePageProps) -> Html {
         <div class="ops-page action-queue-page">
             <div class="ops-page-header">
                 <div>
-                    <h2>{tr(language, "Action Queue", "需要处理")}</h2>
-                    <p class="muted">{tr(language, "Only items that need a human decision are shown here.", "只显示需要人工处理的案件。")}</p>
+                    <h2>{tr(language, "Human Work Queue", "人工处理队列")}</h2>
+                    <p class="muted">{tr(language, "Every row says why it is here, what evidence exists, and the next reviewer action.", "每一行都要说明：为什么进队列、证据是否够、下一步人要做什么。")}</p>
                 </div>
             </div>
 

@@ -2,32 +2,40 @@ use crate::state::Language;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OpsPage {
-    /// Default home — prevention KPIs, system health, action counters, live feed.
+    /// Default home: what needs review today and why it matters.
     Dashboard,
-    /// Items needing human action: 3 tabs (investigate / pending-evidence / medical).
+    /// Items needing human action: investigate / pending-evidence / medical.
     ActionQueue,
-    /// Single-case deep-dive workbench.  Entered from ActionQueue; returns to it on submit.
+    /// Single-case deep-dive workbench entered from ActionQueue.
     Investigate,
-    /// Governance: rule candidates (new fraud patterns), model updates, QA feedback.
+    /// Learning loop: review data becomes candidate rules, model versions, and releases.
     SystemLearning,
+    /// Rule workbench: discover, backtest, approve, publish, or roll back rules.
+    RuleLab,
+    /// Model workbench: inspect versions, retraining readiness, and release gates.
+    ModelGovernance,
 }
 
 impl OpsPage {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "运营概况",
+            OpsPage::Dashboard => "今日概况",
             OpsPage::ActionQueue => "需要处理",
             OpsPage::Investigate => "调查工作台",
-            OpsPage::SystemLearning => "系统治理",
+            OpsPage::SystemLearning => "学习与发布",
+            OpsPage::RuleLab => "规则实验室",
+            OpsPage::ModelGovernance => "模型版本",
         }
     }
 
     pub(crate) fn label_en(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "Overview",
-            OpsPage::ActionQueue => "Action Queue",
-            OpsPage::Investigate => "Investigate",
-            OpsPage::SystemLearning => "System Governance",
+            OpsPage::Dashboard => "Today",
+            OpsPage::ActionQueue => "Work Queue",
+            OpsPage::Investigate => "Case Workbench",
+            OpsPage::SystemLearning => "Learning",
+            OpsPage::RuleLab => "Rule Lab",
+            OpsPage::ModelGovernance => "Model Versions",
         }
     }
 
@@ -44,6 +52,8 @@ impl OpsPage {
             OpsPage::ActionQueue => "queue",
             OpsPage::Investigate => "investigate",
             OpsPage::SystemLearning => "governance",
+            OpsPage::RuleLab => "rules",
+            OpsPage::ModelGovernance => "models",
         }
     }
 
@@ -53,24 +63,30 @@ impl OpsPage {
             OpsPage::ActionQueue => "icon-inbox",
             OpsPage::Investigate => "icon-qa",
             OpsPage::SystemLearning => "icon-governance",
+            OpsPage::RuleLab => "icon-rules",
+            OpsPage::ModelGovernance => "icon-models",
         }
     }
 
     pub(crate) fn description(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "防损金额、精准率、系统健康与进件流水",
-            OpsPage::ActionQueue => "高风险待审 / 补件逾期 / 医疗复核",
-            OpsPage::Investigate => "单案调查，一眼判断，提交即返回队列",
-            OpsPage::SystemLearning => "新诈骗模式候选、模型更新、QA 反馈闭环",
+            OpsPage::Dashboard => "今天有哪些风险线索需要人处理",
+            OpsPage::ActionQueue => "按下一步动作整理线索和案件",
+            OpsPage::Investigate => "事实、证据、建议和审计同屏处理",
+            OpsPage::SystemLearning => "规则、模型和客户发布决策",
+            OpsPage::RuleLab => "挖掘、回测和发布规则版本",
+            OpsPage::ModelGovernance => "训练依据、模型版本和发布门禁",
         }
     }
 
     pub(crate) fn description_en(self) -> &'static str {
         match self {
-            OpsPage::Dashboard => "Prevention KPIs, precision, system health, live intake feed",
-            OpsPage::ActionQueue => "High-risk / pending-evidence / medical-review items",
-            OpsPage::Investigate => "Single-case deep dive; submit returns to queue",
-            OpsPage::SystemLearning => "New fraud pattern candidates, model updates, QA closure",
+            OpsPage::Dashboard => "What needs human review today",
+            OpsPage::ActionQueue => "Leads and cases grouped by next action",
+            OpsPage::Investigate => "Facts, evidence, recommendation, and audit trail together",
+            OpsPage::SystemLearning => "Rules, models, and customer release decisions",
+            OpsPage::RuleLab => "Discover, backtest, and publish rule versions",
+            OpsPage::ModelGovernance => "Training evidence, model versions, and release gates",
         }
     }
 
@@ -114,6 +130,8 @@ pub(crate) const ALL_OPS_PAGES: &[OpsPage] = &[
     OpsPage::ActionQueue,
     OpsPage::Investigate,
     OpsPage::SystemLearning,
+    OpsPage::RuleLab,
+    OpsPage::ModelGovernance,
 ];
 
 pub(crate) const OPS_NAV_GROUPS: &[OpsNavGroup] = &[OpsNavGroup {
