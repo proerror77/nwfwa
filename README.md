@@ -528,6 +528,9 @@ full demo script.
 
 ## Development
 
+For an optional local unit-test loop on the pure domain crates, see
+[Blaze development](docs/development/blaze.md). Standard validation stays on Cargo.
+
 ### Rust
 
 ```bash

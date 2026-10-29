@@ -115,6 +115,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
+          # ort-sys caches native archives outside target; restore both together.
+          prefix-key: v1-rust-with-ort
+          cache-directories: ~/.cache/ort.pyke.io
           cache-on-failure: true
       - run: cargo fetch --locked
       - run: cargo fmt --all -- --check
@@ -175,6 +178,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
+          # ort-sys caches native archives outside target; restore both together.
+          prefix-key: v1-rust-with-ort
+          cache-directories: ~/.cache/ort.pyke.io
           cache-on-failure: true
       - run: scripts/demo/seed_demo.sh
         env:
