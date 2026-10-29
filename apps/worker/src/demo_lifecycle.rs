@@ -660,7 +660,7 @@ fn write_demo_validation_report(
         "artifact_integrity_status": "passed",
         "feature_store_materialization_status": "passed",
         "rust_feature_set_status": "passed",
-        "rust_feature_set_manifest_uri": format!("data/rust-automl-demo/labeled_claim_risk/feature-set/feature_set_manifest.json"),
+        "rust_feature_set_manifest_uri": "data/rust-automl-demo/labeled_claim_risk/feature-set/feature_set_manifest.json",
         "segment_fairness_status": "passed",
         "model_artifact_evaluation_status": "passed",
         "onnx_parity_status": if onnx_runtime { "passed" } else { "not_required" },
